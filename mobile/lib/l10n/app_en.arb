@@ -1,0 +1,21 @@
+{
+  "@@locale": "en",
+  "appTitle": "DigiEntry",
+  "dashboardTitle": "Dashboard",
+  "welcomeBack": "Welcome back, {userName}",
+  "@welcomeBack": {
+    "placeholders": {
+      "userName": {
+        "type": "String"
+      }
+    }
+  },
+  "quickActions": "Quick Actions",
+  "reviewSync": "REVIEW & SYNC",
+  "unmappedItems": "UNMAPPED ITEMS",
+  "outOfStock": "OUT OF STOCK",
+  "totalSales": "TOTAL SALES",
+  "processNow": "Process Now",
+  "mapItems": "Map Items",
+  "restockList": "Restock List"
+}

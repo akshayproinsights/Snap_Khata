@@ -1,0 +1,87 @@
+﻿2026-02-28 12:07:23   warnings.warn(
+2026-02-28 12:07:23 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:07:23   warnings.warn(
+2026-02-28 12:07:23 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:07:23   warnings.warn(
+2026-02-28 12:07:23 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:07:23   warnings.warn(
+2026-02-28 12:18:18 POST 503 https://snap-khata-backend-qn7pjfq4sa-el.a.run.app/api/auth/login
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [2] [INFO] Starting gunicorn 21.2.0
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [2] [INFO] Listening at: http://0.0.0.0:8080 (2)
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [2] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [3] [INFO] Booting worker with pid: 3
+2026-02-28 12:18:19 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [4] [INFO] Booting worker with pid: 4
+2026-02-28 12:18:19 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [5] [INFO] Booting worker with pid: 5
+2026-02-28 12:18:19 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:18:19 [2026-02-28 12:18:19 +0000] [6] [INFO] Booting worker with pid: 6
+2026-02-28 12:18:19 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:18:24 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:18:24   warnings.warn(
+2026-02-28 12:18:24 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:18:24   warnings.warn(
+2026-02-28 12:18:24 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:18:24   warnings.warn(
+2026-02-28 12:18:24 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:18:24   warnings.warn(
+2026-02-28 12:19:21 POST 503 https://snap-khata-backend-qn7pjfq4sa-el.a.run.app/api/auth/login
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [2] [INFO] Starting gunicorn 21.2.0
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [2] [INFO] Listening at: http://0.0.0.0:8080 (2)
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [2] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [3] [INFO] Booting worker with pid: 3
+2026-02-28 12:19:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [4] [INFO] Booting worker with pid: 4
+2026-02-28 12:19:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [5] [INFO] Booting worker with pid: 5
+2026-02-28 12:19:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:22 [2026-02-28 12:19:22 +0000] [6] [INFO] Booting worker with pid: 6
+2026-02-28 12:19:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:27   warnings.warn(
+2026-02-28 12:19:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:27   warnings.warn(
+2026-02-28 12:19:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:27   warnings.warn(
+2026-02-28 12:19:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:27   warnings.warn(
+2026-02-28 12:19:47 POST 503 https://snap-khata-backend-qn7pjfq4sa-el.a.run.app/api/auth/login
+2026-02-28 12:19:47 [2026-02-28 12:19:47 +0000] [2] [INFO] Starting gunicorn 21.2.0
+2026-02-28 12:19:47 [2026-02-28 12:19:47 +0000] [2] [INFO] Listening at: http://0.0.0.0:8080 (2)
+2026-02-28 12:19:47 [2026-02-28 12:19:47 +0000] [2] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-02-28 12:19:47 [2026-02-28 12:19:47 +0000] [3] [INFO] Booting worker with pid: 3
+2026-02-28 12:19:47 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:47 [2026-02-28 12:19:47 +0000] [4] [INFO] Booting worker with pid: 4
+2026-02-28 12:19:47 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:48 [2026-02-28 12:19:48 +0000] [5] [INFO] Booting worker with pid: 5
+2026-02-28 12:19:48 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:48 [2026-02-28 12:19:48 +0000] [6] [INFO] Booting worker with pid: 6
+2026-02-28 12:19:48 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:19:53 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:53   warnings.warn(
+2026-02-28 12:19:53 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:53   warnings.warn(
+2026-02-28 12:19:53 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:53   warnings.warn(
+2026-02-28 12:19:53 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:19:53   warnings.warn(
+2026-02-28 12:20:21 POST 503 https://snap-khata-backend-qn7pjfq4sa-el.a.run.app/api/auth/login
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [2] [INFO] Starting gunicorn 21.2.0
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [2] [INFO] Listening at: http://0.0.0.0:8080 (2)
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [2] [INFO] Using worker: uvicorn.workers.UvicornWorker
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [3] [INFO] Booting worker with pid: 3
+2026-02-28 12:20:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [4] [INFO] Booting worker with pid: 4
+2026-02-28 12:20:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [5] [INFO] Booting worker with pid: 5
+2026-02-28 12:20:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:20:22 [2026-02-28 12:20:22 +0000] [6] [INFO] Booting worker with pid: 6
+2026-02-28 12:20:22 DigiEntry Backend is starting......Final Doneee..
+2026-02-28 12:20:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:20:27   warnings.warn(
+2026-02-28 12:20:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:20:27   warnings.warn(
+2026-02-28 12:20:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:20:27   warnings.warn(
+2026-02-28 12:20:27 /usr/local/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a supported version!
+2026-02-28 12:20:27   warnings.warn(

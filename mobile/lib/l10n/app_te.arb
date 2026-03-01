@@ -1,0 +1,21 @@
+{
+  "@@locale": "te",
+  "appTitle": "డిజీఎంట్రీ",
+  "dashboardTitle": "డాష్‌బోర్డ్",
+  "welcomeBack": "తిరిగి స్వాగతం, {userName}",
+  "@welcomeBack": {
+    "placeholders": {
+      "userName": {
+        "type": "String"
+      }
+    }
+  },
+  "quickActions": "త్వరిత చర్యలు",
+  "reviewSync": "సమీక్ష మరియు సమకాలీకరణ",
+  "unmappedItems": "మ్యాప్ చేయని అంశాలు",
+  "outOfStock": "స్టాక్ లేదు",
+  "totalSales": "మొత్తం విక్రయాలు",
+  "processNow": "ఇప్పుడే ప్రాసెస్ చేయండి",
+  "mapItems": "అంశాలను మ్యాప్ చేయండి",
+  "restockList": "రీస్టాక్ జాబితా"
+}

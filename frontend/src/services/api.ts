@@ -1,0 +1,350 @@
+import apiClient from '../lib/api';
+import { mapArrayToFrontend, mapArrayToBackend } from '../utils/columnMapping';
+
+export interface LoginCredentials {
+    username: string;
+    password: string;
+}
+
+export interface User {
+    username: string;
+    name?: string;
+    r2_bucket: string;
+    sheet_id: string;
+    dashboard_url?: string;
+}
+
+export interface LoginResponse {
+    access_token: string;
+    token_type: string;
+    user: User;
+}
+
+// Authentication
+export const authAPI = {
+    login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
+        const response = await apiClient.post('/api/auth/login', {
+            username: credentials.username,
+            password: credentials.password
+        });
+        return response.data;
+    },
+
+    getMe: async (): Promise<User> => {
+        const response = await apiClient.get('/api/auth/me');
+        return response.data;
+    },
+
+    logout: async (): Promise<void> => {
+        await apiClient.post('/api/auth/logout');
+        localStorage.removeItem('auth_token');
+    },
+};
+
+export interface UploadHistoryResponse {
+    summary: {
+        last_active_date: string | null;
+        last_receipt_number: string | null;
+        status: string;
+    };
+    history: {
+        date: string;
+        count: number;
+        receipt_ids: string[];
+    }[];
+}
+
+// Upload & Processing
+export const uploadAPI = {
+    uploadFiles: async (files: File[], onUploadProgress?: (progressEvent: any) => void) => {
+        const formData = new FormData();
+        files.forEach((file) => {
+            formData.append('files', file);
+        });
+
+        const response = await apiClient.post('/api/upload/files', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            onUploadProgress: onUploadProgress,
+        });
+        return response.data;
+    },
+
+    processInvoices: async (fileKeys: string[], forceUpload: boolean = false) => {
+        const response = await apiClient.post('/api/upload/process-files', {
+            file_keys: fileKeys,
+            force_upload: forceUpload,
+        });
+        return response.data;
+    },
+
+    getProcessStatus: async (taskId: string) => {
+        const response = await apiClient.get(`/api/upload/process/status/${taskId}`);
+        return response.data;
+    },
+
+    getRecentTask: async () => {
+        const response = await apiClient.get('/api/upload/recent-task');
+        return response.data;
+    },
+
+    getFileUrl: async (fileKey: string) => {
+        const response = await apiClient.get<any>(`/upload/file-url?file_key=${encodeURIComponent(fileKey)}`);
+        return response.data.url;
+    },
+
+    getUploadHistory: async (): Promise<UploadHistoryResponse> => {
+        const response = await apiClient.get<UploadHistoryResponse>('/api/upload/upload-history');
+        return response.data;
+    }
+};
+
+// Invoices
+export const invoicesAPI = {
+    getAll: async (params?: { limit?: number; offset?: number }) => {
+        const response = await apiClient.get('/api/invoices/', { params });
+        // Transform snake_case to Title Case for frontend
+        return {
+            ...response.data,
+            invoices: mapArrayToFrontend(response.data.invoices || [])
+        };
+    },
+
+    getStats: async () => {
+        const response = await apiClient.get('/api/invoices/stats');
+        return response.data;
+    },
+};
+
+// Review
+export const reviewAPI = {
+    getDates: async () => {
+        const response = await apiClient.get('/api/review/dates');
+        // Transform snake_case to Title Case for frontend
+        return {
+            ...response.data,
+            records: mapArrayToFrontend(response.data.records || [])
+        };
+    },
+
+    saveDates: async (records: any[]) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecords = mapArrayToBackend(records);
+        const response = await apiClient.put('/api/review/dates', { records: transformedRecords });
+        return response.data;
+    },
+
+    updateSingleDate: async (record: any) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecord = mapArrayToBackend([record])[0];
+        const response = await apiClient.put('/api/review/dates/update', transformedRecord);
+        return response.data;
+    },
+
+    getAmounts: async () => {
+        const response = await apiClient.get('/api/review/amounts');
+        // Transform snake_case to Title Case for frontend
+        return {
+            ...response.data,
+            records: mapArrayToFrontend(response.data.records || [])
+        };
+    },
+
+    saveAmounts: async (records: any[]) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecords = mapArrayToBackend(records);
+        const response = await apiClient.put('/api/review/amounts', { records: transformedRecords });
+        return response.data;
+    },
+
+    updateSingleAmount: async (record: any) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecord = mapArrayToBackend([record])[0];
+        const response = await apiClient.put('/api/review/amounts/update', transformedRecord);
+        return response.data;
+    },
+
+    deleteReceipt: async (receiptNumber: string) => {
+        const response = await apiClient.delete(`/api/review/receipt/${receiptNumber}`);
+        return response.data;
+    },
+
+    deleteRecord: async (rowId: string) => {
+        const response = await apiClient.delete(`/api/review/record/${rowId}`);
+        return response.data;
+    },
+
+    syncAndFinish: async () => {
+        const response = await apiClient.post('/api/review/sync-finish');
+        return response.data;
+    },
+
+
+
+    syncAndFinishWithProgress: (onProgress: (event: {
+        stage: string;
+        percentage: number;
+        message: string;
+        success?: boolean;
+        records_synced?: number;
+    }) => void): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            // Get token from localStorage (same as axios interceptor uses)
+            const token = localStorage.getItem('auth_token');
+
+            if (!token) {
+                reject(new Error('Not authenticated'));
+                return;
+            }
+
+            // CRITICAL FIX: Use apiClient.defaults.baseURL instead of import.meta.env.VITE_API_URL
+            // Handle case where baseURL is '/' (common in prod) to avoid '//api' which browsers treat as protocol-relative host
+            const rawBaseURL = apiClient.defaults.baseURL || 'http://localhost:8000';
+            const baseURL = rawBaseURL.endsWith('/') ? rawBaseURL.slice(0, -1) : rawBaseURL;
+            const url = `${baseURL}/api/review/sync-finish/stream?token=${encodeURIComponent(token)}`;
+            const eventSource = new EventSource(url);
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    onProgress(data);
+
+                    // Close connection on completion or error
+                    if (data.stage === 'complete') {
+                        eventSource.close();
+                        resolve();
+                    } else if (data.stage === 'error') {
+                        eventSource.close();
+                        reject(new Error(data.message));
+                    }
+                } catch (error) {
+                    console.error('Error parsing SSE event:', error);
+                    eventSource.close();
+                    reject(error);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                eventSource.close();
+                reject(new Error('Connection error during sync'));
+            };
+        });
+    },
+};
+
+// Verified Invoices
+export const verifiedAPI = {
+    getAll: async (params?: {
+        search?: string;
+        date_from?: string;
+        date_to?: string;
+        receipt_number?: string;
+        vehicle_number?: string;
+        customer_name?: string;
+        description?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
+        const response = await apiClient.get('/api/verified/', { params });
+        // Transform snake_case to Title Case for frontend
+        return {
+            ...response.data,
+            records: mapArrayToFrontend(response.data.records || [])
+        };
+    },
+
+    save: async (records: any[]) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecords = mapArrayToBackend(records);
+        const response = await apiClient.post('/api/verified/save', { records: transformedRecords });
+        return response.data;
+    },
+
+    updateSingleRow: async (record: any) => {
+        // Transform Title Case to snake_case for backend
+        const transformedRecord = mapArrayToBackend([record])[0];
+        const response = await apiClient.put('/api/verified/update', transformedRecord);
+        return response.data;
+    },
+
+    deleteBulk: async (rowIds: number[]) => {
+        const response = await apiClient.post('/api/verified/delete-bulk', {
+            row_ids: rowIds
+        });
+        return response.data;
+    },
+
+    export: async (format: 'csv' | 'excel' = 'csv') => {
+        const response = await apiClient.get('/api/verified/export', {
+            params: { format },
+        });
+        return response.data;
+    },
+
+    exportToExcel: async (filters: {
+        search?: string;
+        date_from?: string;
+        date_to?: string;
+        receipt_number?: string;
+        vehicle_number?: string;
+        customer_name?: string;
+        description?: string;
+    }) => {
+        const response = await apiClient.get('/api/verified/export', {
+            params: { ...filters, format: 'excel' },
+            responseType: 'blob',
+        });
+
+        // Create download link with proper Excel MIME type
+        const blob = new Blob([response.data], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `verified_invoices_${new Date().toISOString().split('T')[0]}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        return response.data;
+    },
+};
+
+// User Configuration
+export const configAPI = {
+    getConfig: async () => {
+        const response = await apiClient.get('/api/config');
+        return response.data;
+    },
+
+    getColumns: async () => {
+        const response = await apiClient.get('/api/config/columns');
+        return response.data;
+    },
+};
+
+// Mapping Sheet Upload
+export interface MappingSheetUploadResponse {
+    sheet_id: string;
+    image_url: string;
+    status: string;
+    message: string;
+    extracted_rows?: number;
+}
+
+
+export const mappingSheetAPI = {
+    upload: async (file: File): Promise<MappingSheetUploadResponse> => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await apiClient.post('/api/stock/mapping-sheets/upload', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    },
+};

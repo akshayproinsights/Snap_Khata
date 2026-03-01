@@ -1,0 +1,21 @@
+{
+  "@@locale": "ta",
+  "appTitle": "டிஜிஎன்ட்ரி",
+  "dashboardTitle": "டாஷ்போர்டு",
+  "welcomeBack": "மீண்டும் வருக, {userName}",
+  "@welcomeBack": {
+    "placeholders": {
+      "userName": {
+        "type": "String"
+      }
+    }
+  },
+  "quickActions": "விரைவான செயல்கள்",
+  "reviewSync": "மதிப்பாய்வு & ஒத்திசைவு",
+  "unmappedItems": "வரைபடமாக்கப்படாத உருப்படிகள்",
+  "outOfStock": "கையிருப்பு இல்லை",
+  "totalSales": "மொத்த விற்பனை",
+  "processNow": "இப்போது செயல்படுத்து",
+  "mapItems": "உருப்படிகளை வரைபடமாக்கு",
+  "restockList": "மறுசீரமைப்பு பட்டியல்"
+}

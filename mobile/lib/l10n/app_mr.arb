@@ -1,0 +1,21 @@
+{
+  "@@locale": "mr",
+  "appTitle": "डिजीएंट्री",
+  "dashboardTitle": "डॅशबोर्ड",
+  "welcomeBack": "परत आल्याबद्दल स्वागत आहे, {userName}",
+  "@welcomeBack": {
+    "placeholders": {
+      "userName": {
+        "type": "String"
+      }
+    }
+  },
+  "quickActions": "त्वरित क्रिया",
+  "reviewSync": "पुनरावलोकन आणि सिंक",
+  "unmappedItems": "मॅप न केलेले आयटम",
+  "outOfStock": "स्टॉकमध्ये नाही",
+  "totalSales": "एकूण विक्री",
+  "processNow": "आता प्रक्रिया करा",
+  "mapItems": "आयटम मॅप करा",
+  "restockList": "रेस्टॉक सूची"
+}

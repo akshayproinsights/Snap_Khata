@@ -1,0 +1,106 @@
+name: Hybrid Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # JOB 1: The "Traffic Controller" (Detects changes reliably)
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  # JOB 2: DEPLOY BACKEND (Only runs if Traffic Controller says "Yes")
+  deploy-backend:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Log in to Google Cloud
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Prepare Secrets
+        id: secrets
+        run: |
+          echo "users_b64=$(echo -n '${{ secrets.USERS_CONFIG_JSON }}' | base64 -w 0)" >> $GITHUB_OUTPUT
+          echo "gcp_b64=$(echo -n '${{ secrets.GCP_SA_KEY }}' | base64 -w 0)" >> $GITHUB_OUTPUT
+
+      # Deploy to Cloud Run
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: digientry-backend
+          source: ./backend
+          region: asia-south1
+          env_vars: |
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+            R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+            R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}
+            R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}
+            R2_PUBLIC_BASE_URL=${{ secrets.R2_PUBLIC_BASE_URL }}
+            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            USERS_CONFIG_JSON_BASE64=${{ steps.secrets.outputs.users_b64 }}
+            GCP_SERVICE_ACCOUNT_JSON_BASE64=${{ steps.secrets.outputs.gcp_b64 }}
+
+
+          flags: '--allow-unauthenticated'
+
+  # JOB 3: DEPLOY FRONTEND (Run AFTER Backend to ensure Service exists)
+  deploy-frontend:
+    needs: [detect-changes, deploy-backend]
+    if: ${{ always() && needs.detect-changes.outputs.frontend == 'true' && (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Log in to Google Cloud
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Verify Cloud Run Service Exists (Checking asia-south1)
+      - name: Verify Cloud Run Service
+        run: |
+          echo "Checking if Cloud Run service 'digientry-backend' exists..."
+          gcloud run services describe digientry-backend --region asia-south1 --format "value(status.url)" || echo "::warning::Service 'digientry-backend' not found or not accessible!"
+      
+      # FIX: Changed 'npm ci' to 'npm install' to prevent crashes.
+      # Uses .env.production for correct API URL
+      - name: Install & Build React
+        run: npm install && npm run build
+        working-directory: ./frontend
+        
+      - name: List Build Output
+        run: ls -R frontend/dist
+        
+      - name: Deploy to Firebase Hosting
+        env:
+          # Use the Service Account Key from secrets for authentication
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
+          PROJECT_ID: digientry-prod
+        run: |
+          # Write the secret key to a file
+          echo '${{ secrets.GCP_SA_KEY }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+          
+          # Deploy using firebase-tools CLI directly involved in project dependencies? 
+          # Or better: use npx to run the latest version to avoid version mismatches
+          npx firebase-tools@latest deploy --only hosting --project "$PROJECT_ID" --debug
