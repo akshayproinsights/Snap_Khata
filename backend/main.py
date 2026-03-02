@@ -71,7 +71,7 @@ app.add_middleware(
 # Startup Error Handling
 try:
     # Import routers
-    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes
+    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes
 except Exception as e:
     import traceback
     print("CRITICAL STARTUP ERROR: Failed to import routers", flush=True)
@@ -92,6 +92,7 @@ app.include_router(purchase_order_routes.router, prefix="/api/purchase-orders", 
 app.include_router(invoices.router, prefix="/api/invoices", tags=["Invoices"])
 app.include_router(review.router, prefix="/api/review", tags=["Review"])
 app.include_router(verified.router, prefix="/api/verified", tags=["Verified Invoices"])
+app.include_router(public_routes.router, prefix="/api/public", tags=["Public"])
 
 
 @app.get("/")

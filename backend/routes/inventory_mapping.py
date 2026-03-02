@@ -628,28 +628,46 @@ async def get_customer_item_suggestions(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get top 6-7 fuzzy matches from inventory_items for a customer item.
-    Uses rapidfuzz with ≥70% similarity threshold.
+    Get top 6-7 fuzzy matches from verified_invoices for a customer item.
+    Uses rapidfuzz with ≥40 similarity threshold.
     """
     username = current_user.get("username")
     db = get_database_client()
     
     try:
-        # Get all inventory items for this user
-        result = db.client.table("inventory_items")\
-            .select("id, description, part_number, qty, rate")\
+        # Get all unique customer items from verified_invoices for this user
+        result = db.client.table("verified_invoices")\
+            .select("description")\
             .eq("username", username)\
+            .eq("type", "Part")\
             .execute()
         
-        vendor_items = result.data or []
+        items = result.data or []
         
-        if not vendor_items:
-            logger.warning(f"No inventory items found for {username}")
+        if not items:
+            logger.warning(f"No verified invoice items found for {username}")
             return {
                 "success": True,
                 "suggestions": [],
                 "count": 0
             }
+            
+        # Extract unique descriptions
+        unique_descriptions = set()
+        for item in items:
+            desc = item.get("description")
+            if desc and desc.strip():
+                unique_descriptions.add(desc.strip())
+        
+        # Convert to vendor_items format expected by fuzzy matcher
+        vendor_items = [
+            {
+                "id": str(i),
+                "description": desc,
+                "part_number": ""
+            }
+            for i, desc in enumerate(unique_descriptions)
+        ]
         
         # Get fuzzy matches using rapidfuzz (threshold=40, limit=10)
         matches = get_fuzzy_matches(customer_item, vendor_items, threshold=40, limit=10)

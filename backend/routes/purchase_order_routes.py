@@ -501,6 +501,45 @@ async def get_purchase_order_history(
         logger.error(f"Error getting PO history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/suppliers")
+async def get_suppliers(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get unique supplier names from inventory items.
+    """
+    username = current_user.get("username")
+    db = get_database_client()
+    
+    try:
+        # Query distinct vendor names from inventory_items
+        # Fetching only vendor_name column to minimize data transfer
+        response = db.client.table("inventory_items")\
+            .select("vendor_name")\
+            .eq("username", username)\
+            .execute()
+            
+        items = response.data or []
+        
+        # Deduplicate and filter empty/None values
+        suppliers = list(set(
+            item.get("vendor_name") 
+            for item in items 
+            if item.get("vendor_name") and str(item.get("vendor_name")).strip() and str(item.get("vendor_name")).lower() != "nan"
+        ))
+        
+        # Sort alphabetically
+        suppliers.sort(key=lambda x: x.lower())
+        
+        return {
+            "success": True,
+            "suppliers": suppliers
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting suppliers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{po_id}/pdf")
 async def download_po_pdf(
     po_id: str,
@@ -900,45 +939,6 @@ async def quick_add_to_draft(
         raise
     except Exception as e:
         logger.error(f"Error quick adding to draft: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/suppliers")
-async def get_suppliers(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get unique supplier names from inventory items.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        # Query distinct vendor names from inventory_items
-        # Fetching only vendor_name column to minimize data transfer
-        response = db.client.table("inventory_items")\
-            .select("vendor_name")\
-            .eq("username", username)\
-            .execute()
-            
-        items = response.data or []
-        
-        # Deduplicate and filter empty/None values
-        suppliers = list(set(
-            item.get("vendor_name") 
-            for item in items 
-            if item.get("vendor_name") and str(item.get("vendor_name")).strip() and str(item.get("vendor_name")).lower() != "nan"
-        ))
-        
-        # Sort alphabetically
-        suppliers.sort(key=lambda x: x.lower())
-        
-        return {
-            "success": True,
-            "suppliers": suppliers
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting suppliers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================

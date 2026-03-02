@@ -103,7 +103,7 @@ class NotificationsPage extends ConsumerWidget {
       } else if (dayDiff == 1) {
         label = 'Yesterday';
       } else {
-        label = DateFormat('d MMMM yyyy').format(item.timestamp);
+        label = DateFormat('dd-MM-yyyy').format(item.timestamp);
       }
       groups.putIfAbsent(label, () => []).add(item);
     }

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/review/data/review_repository.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
@@ -53,6 +54,31 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
     fetchReviewData();
   }
 
+  /// Converts any exception to a concise, user-friendly message.
+  String _friendlyError(Object e) {
+    if (e is DioException) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return 'No internet connection. Please check your network and try again.';
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 500) {
+        return 'Server error. Please try again in a moment.';
+      } else if (statusCode == 400) {
+        return 'Invalid data. Please check your inputs and try again.';
+      } else if (statusCode == 401 || statusCode == 403) {
+        return 'Session expired. Please log in again.';
+      } else if (statusCode == 404) {
+        return 'Record not found. It may have already been deleted.';
+      } else if (statusCode != null) {
+        return 'Request failed (error $statusCode). Please try again.';
+      }
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
   Future<void> fetchReviewData() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -62,7 +88,7 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
       final grouped = _groupRecords(datesResult, amountsResult);
       state = state.copyWith(groups: grouped, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: _friendlyError(e));
     }
   }
 
@@ -114,7 +140,8 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
       }).toList();
       state = state.copyWith(groups: newGroups);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to update date: $e');
+      state = state.copyWith(
+          error: 'Could not update record. ${_friendlyError(e)}');
     }
   }
 
@@ -137,7 +164,8 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
       }).toList();
       state = state.copyWith(groups: newGroups);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to update amount: $e');
+      state = state.copyWith(
+          error: 'Could not update record. ${_friendlyError(e)}');
     }
   }
 
@@ -158,7 +186,8 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
       }).toList();
       state = state.copyWith(groups: newGroups);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to delete record: $e');
+      state = state.copyWith(
+          error: 'Could not delete record. ${_friendlyError(e)}');
     }
   }
 
@@ -168,24 +197,47 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token') ?? '';
 
+      String? syncError;
+
       await for (final progress
           in _repository.syncAndFinishWithProgress(token)) {
+        final stage = progress['stage'] as String? ?? '';
+        final pct = (progress['percentage'] as num? ?? 0).toInt();
+        final msg = progress['message'] as String? ?? '';
+
+        // 'working' is a keepalive heartbeat — update message but keep last
+        // real percentage so the progress bar doesn't jump backwards to -1
+        if (stage == 'working') {
+          final lastPct = state.syncProgress?.percentage ?? 0;
+          state = state.copyWith(
+            syncProgress: SyncProgress(stage, lastPct, msg),
+          );
+          continue;
+        }
+
         state = state.copyWith(
-          syncProgress: SyncProgress(
-            progress['stage'] ?? '',
-            progress['percentage'] ?? 0,
-            progress['message'] ?? '',
-          ),
+          syncProgress: SyncProgress(stage, pct.clamp(0, 100), msg),
         );
-        if (progress['stage'] == 'complete') {
+
+        if (stage == 'complete') break;
+
+        // Backend signalled an error — capture the message and stop
+        if (stage == 'error') {
+          syncError =
+              msg.isNotEmpty ? msg : 'Sync failed on server. Please retry.';
           break;
         }
+      }
+
+      if (syncError != null) {
+        state = state.copyWith(error: syncError);
+        return;
       }
 
       // Remove groups that were processed (refresh)
       await fetchReviewData();
     } catch (e) {
-      state = state.copyWith(error: 'Sync failed: $e');
+      state = state.copyWith(error: 'Sync failed. ${_friendlyError(e)}');
     } finally {
       state = state.copyWith(isSyncing: false, syncProgress: null);
     }
@@ -198,7 +250,8 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
           state.groups.where((g) => g.receiptNumber != receiptNumber).toList();
       state = state.copyWith(groups: newGroups);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to delete receipt: $e');
+      state = state.copyWith(
+          error: 'Could not delete receipt. ${_friendlyError(e)}');
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/data/current_stock_repository.dart';
@@ -62,6 +63,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(currentStockProvider);
+    final poState = ref.watch(purchaseOrderProvider);
     final NumberFormat currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
@@ -71,6 +73,44 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
         title: const Text('Current Stock',
             style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          // Cart Button
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(LucideIcons.shoppingCart),
+                tooltip: 'Purchase Orders',
+                onPressed: () => context.push('/purchase-orders'),
+              ),
+              if (poState.hasDraftItems)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppTheme.error,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${poState.draftCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           // Export button
           _isExporting
               ? const Padding(

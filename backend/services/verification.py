@@ -680,6 +680,13 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         if progress_callback:
             await progress_callback(stage, percentage, message)
     
+    # Helper to emit a keepalive "still working" update — critical for mobile on Indian 4G networks
+    # where NAT/proxy timeouts (typically 30-60s) can silently drop idle SSE connections.
+    async def keepalive(message: str = "Processing..."):
+        """Emit a heartbeat progress update to prevent SSE connection timeout on mobile."""
+        if progress_callback:
+            await progress_callback("working", -1, message)
+    
     results = {
         "success": False,
         "message": "",
@@ -692,8 +699,10 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         
         # 1. Read data from Supabase (returns list of dicts)
         invoices_data = get_all_invoices(username)
+        await keepalive("Fetched invoices, loading verification data...")
         dates_data = get_verification_dates(username)
         amounts_data = get_verification_amounts(username)
+        await keepalive("All data loaded, analyzing records...")
         
         if not invoices_data:
             logger.warning(f"No invoices found for user: {username}")
@@ -737,13 +746,34 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         df_date = df_date.rename(columns=verification_map)
         df_amount = df_amount.rename(columns=verification_map)
         
+        # ROBUSTNESS: Ensure 'Receipt Link' column always exists in all DataFrames.
+        # Supabase omits null columns from rows, so pandas may not create the column at all
+        # if ALL rows have null receipt_link. Guarantee the column exists with empty string default.
+        # NOTE: We only add 'Receipt Link' here (not 'Receipt Link_Orig')
+        # because Receipt Link_Orig is mapped from invoices.receipt_link, and adding it as
+        # empty string would cause the upsert to overwrite existing receipt_link values with ''.
+        # The existing fallback at REPAIR STEP 2 handles the missing Receipt Link_Orig case.
+        for _df_name, _df in [('df_raw', df_raw), ('df_date', df_date), ('df_amount', df_amount)]:
+            if 'Receipt Link' not in _df.columns:
+                _df['Receipt Link'] = ''
+                logger.warning(f"⚠️ 'Receipt Link' column missing from {_df_name} — added empty column (all rows had null receipt_link)")
+        
+        # Also ensure other critical columns exist in verification DataFrames (not df_raw which has full schema)
+        for _df_name, _df in [('df_date', df_date), ('df_amount', df_amount)]:
+            for _col in ['Receipt Number', 'Verification Status', 'Date', 'Description']:
+                if _col not in _df.columns:
+                    _df[_col] = ''
+                    logger.warning(f"⚠️ '{_col}' column missing from {_df_name} — added empty column")
+        # Ensure df_raw has critical columns too (these should always exist from invoices table)
+        for _col in ['Receipt Number', 'Description']:
+            if _col not in df_raw.columns:
+                df_raw[_col] = ''
+                logger.warning(f"⚠️ '{_col}' column missing from df_raw (invoices) — added empty column, check DB schema")
+        
         # Clean Receipt Number (.0 suffix)
-        if "Receipt Number" in df_raw.columns:
-            df_raw["Receipt Number"] = df_raw["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
-        if "Receipt Number" in df_date.columns:
-            df_date["Receipt Number"] = df_date["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
-        if "Receipt Number" in df_amount.columns:
-            df_amount["Receipt Number"] = df_amount["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
+        df_raw["Receipt Number"] = df_raw["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
+        df_date["Receipt Number"] = df_date["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
+        df_amount["Receipt Number"] = df_amount["Receipt Number"].astype(str).str.replace(r'\.0$', '', regex=True)
 
         # REPAIR STEP 1: Build a map of Receipt Number -> Receipt Link from all available sources
         # This fixes cases where invoices table has lost the link but verification tables still have it
@@ -814,34 +844,48 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
 
         corrections_made = False
         db = get_database_client()
-        
-        # 2. Apply date/receipt corrections
+        await emit_progress("correcting", 25, "Applying date and receipt corrections...")
         if 'Verification Status' in df_date.columns:
             date_done = df_date[df_date['Verification Status'].astype(str).str.lower() == 'done'].copy()
             
             if not date_done.empty:
                 logger.info(f"Applying {len(date_done)} date/receipt corrections")
-                date_done['Receipt Link_clean'] = date_done['Receipt Link'].astype(str).str.strip()
+                # ROBUST: Receipt Link may be empty/missing — always use str strip safely
+                date_done['Receipt Link_clean'] = date_done['Receipt Link'].fillna('').astype(str).str.strip()
                 date_done['Receipt Number'] = date_done['Receipt Number'].astype(str).str.replace(r'\.0$', '', regex=True)
                 date_done['Date'] = date_done['Date'].apply(normalize_date)
                 
+                # Pre-build a safe 'Receipt Link' series for df_raw (handles missing/null)
+                df_raw_link_series = df_raw['Receipt Link'].fillna('').astype(str).str.strip()
+                df_raw_recnum_series = df_raw['Receipt Number'].fillna('').astype(str).str.strip()
+                
                 for _, row in date_done.iterrows():
-                    link = row.get('Receipt Link_clean')
-                    new_rec_num = row.get('Receipt Number')
+                    link = row.get('Receipt Link_clean', '')
+                    new_rec_num = str(row.get('Receipt Number', '')).strip()
                     new_date = row.get('Date')
+                    old_rec_num = str(row.get('Receipt Number', '')).strip()
                     
-                    if not link:
+                    # Match strategy: try Receipt Link first, fall back to Receipt Number
+                    if link:
+                        mask = df_raw_link_series == link
+                    elif old_rec_num:
+                        # Fall back to Receipt Number matching when link is empty
+                        logger.warning(f"Receipt Link empty for done record, matching by Receipt Number: {old_rec_num}")
+                        mask = df_raw_recnum_series == old_rec_num
+                    else:
+                        logger.warning(f"Both Receipt Link and Receipt Number empty for done date record, skipping")
                         continue
                     
-                    mask = df_raw['Receipt Link'].astype(str).str.strip() == link
                     if mask.any():
                         if new_rec_num:
                             df_raw.loc[mask, 'Receipt Number'] = new_rec_num
                         if new_date:
                             df_raw.loc[mask, 'Date'] = new_date  # Already normalized to DD-MM-YYYY
-
                         corrections_made = True
+                    else:
+                        logger.warning(f"No matching invoice found for date correction: link='{link}', receipt='{old_rec_num}'")
 
+        await keepalive("Date corrections done, applying amount corrections...")
         # 3. Apply amount corrections
         if 'Verification Status' in df_amount.columns:
             amt_done = df_amount[df_amount['Verification Status'].astype(str).str.lower() == 'done'].copy()
@@ -849,35 +893,42 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             if not amt_done.empty:
                 logger.info(f"Applying {len(amt_done)} amount corrections")
                 
+                # Pre-build safe series for matching
+                df_raw_link_series = df_raw['Receipt Link'].fillna('').astype(str).str.strip()
+                df_raw_recnum_series = df_raw['Receipt Number'].fillna('').astype(str).str.strip()
+                df_raw_desc_series = df_raw['Description'].fillna('').astype(str).str.strip()
+                
                 for _, row in amt_done.iterrows():
                     link = str(row.get('Receipt Link', '')).strip()
+                    receipt_num = str(row.get('Receipt Number', '')).strip()
                     desc = str(row.get('Description', '')).strip()
                     new_qty = row.get('Quantity')
                     new_rate = row.get('Rate')
                     new_amt = row.get('Amount')
                     new_desc = row.get('Description')
                     
-                    if not link:
+                    # Match strategy: Receipt Link + Description first, fall back to Receipt Number + Description
+                    if link:
+                        mask = (df_raw_link_series == link) & (df_raw_desc_series == desc)
+                    elif receipt_num:
+                        logger.warning(f"Receipt Link empty for amount record, matching by Receipt Number+Desc: {receipt_num}")
+                        mask = (df_raw_recnum_series == receipt_num) & (df_raw_desc_series == desc)
+                    else:
+                        logger.warning(f"Both Receipt Link and Receipt Number empty for done amount record, skipping")
                         continue
 
-                    mask = (
-                        (df_raw['Receipt Link'].astype(str).str.strip() == link) & 
-                        (df_raw['Description'].astype(str).str.strip() == desc)
-                    )
-                    
                     if mask.any():
                         if pd.notna(new_desc) and str(new_desc).strip() != '' and str(new_desc).strip() != desc:
                             df_raw.loc[mask, 'Description'] = new_desc
-                        
                         if pd.notna(new_qty) and str(new_qty) != '':
                             df_raw.loc[mask, 'Quantity'] = new_qty
                         if pd.notna(new_rate) and str(new_rate) != '':
                             df_raw.loc[mask, 'Rate'] = new_rate
                         if pd.notna(new_amt) and str(new_amt) != '':
                             df_raw.loc[mask, 'Amount'] = new_amt
-                        
-
                         corrections_made = True
+                    else:
+                        logger.warning(f"No matching invoice for amount correction: link='{link}', receipt='{receipt_num}', desc='{desc[:30]}'")
 
         # 3B. Mark ALL receipts as "Verified" if they are fully Done
         # Collect Done and Pending receipt numbers from both sheets
@@ -929,6 +980,14 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                     corrections_made = True
 
 
+        # Build the column reverse map here (outside if block) so it's available for verified_invoices too
+        # FIX: The live Supabase 'invoices' table has 'receipt_link', NOT 'r2_file_path'.
+        # r2_file_path only exists in migration SQL files but was never created in production.
+        invoice_reverse_map = {v: k for k, v in column_map.items()}
+        invoice_reverse_map['Receipt Link'] = 'receipt_link'  # Map to actual DB column name
+        # Drop the intermediate 'Receipt Link_Orig' — only used during processing, not stored directly
+        invoice_reverse_map.pop('Receipt Link_Orig', None)
+
         # 4. Save updated invoices to Supabase
         if corrections_made:
             logger.info(f"Updating corrected invoice records in Supabase")
@@ -937,14 +996,11 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             if 'Date' in df_raw.columns:
                 df_raw['Date'] = safe_format_date_series(df_raw['Date'], output_format='%Y-%m-%d')
             
-            # Convert back to snake_case for Supabase (INVOICES Table)
-            # CRITICAL: We need specific reverse map for invoices usage
-            invoice_reverse_map = {v: k for k, v in column_map.items()}
-            # Manually fix specific columns for invoices table
-            invoice_reverse_map['Receipt Link'] = 'r2_file_path'  # Restore to r2_file_path
-            # NOTE: Receipt Link_Orig should map back to receipt_link, so we keep it in the map
-            
             df_raw_snake = df_raw.rename(columns=invoice_reverse_map)
+            
+            # Drop the intermediate helper column if it somehow survived the rename
+            if 'Receipt Link_Orig' in df_raw_snake.columns:
+                df_raw_snake = df_raw_snake.drop(columns=['Receipt Link_Orig'])
             
             # Clean NaN/Inf values (not JSON compliant)
             df_raw_snake = df_raw_snake.replace([float('inf'), float('-inf')], None)
@@ -973,7 +1029,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         await emit_progress("saving_verified", 80, "Saving verified invoices...")
         
         # Convert to snake_case for Verified Invoices
-        # Use same map as invoices - map Receipt Link back to r2_file_path
+        # invoice_reverse_map already maps 'Receipt Link' -> 'receipt_link'
         final_df_snake = final_df.rename(columns=invoice_reverse_map)
         
         # CRITICAL: 'Row_Id' was reverse-mapped to 'id', but we need it as 'row_id' for verified_invoices

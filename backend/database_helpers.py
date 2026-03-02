@@ -21,7 +21,7 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     float_fields = ['rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch']
     
     for key, value in row_dict.items():
-        if value is None or pd.isna(value):
+        if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
             row_dict[key] = None
             continue
             
@@ -331,7 +331,7 @@ def update_verification_records(username: str, table: str, data: List[Dict[str, 
     """
     Update verification records (replace all for user).
     
-    NOTE: This uses delete-all-then-insert pattern intentionally!
+    NOTE: This uses delete-all-then-batch-insert pattern intentionally!
     Verification tables need to remove "Done" records after Sync & Finish.
     The caller (verification.py) filters the data to only include records that should remain.
     
@@ -349,13 +349,25 @@ def update_verification_records(username: str, table: str, data: List[Dict[str, 
         # Delete existing records for this user (removes "Done" records)
         db.delete(table, {'username': username})
         
-        # Insert filtered records (only Pending/Duplicate)
-        for record in data:
-            record['username'] = username  # Ensure username is set
-            record = convert_numeric_types(record)
-            db.insert(table, record)
+        if not data:
+            logger.info(f"No records to reinsert into {table} for {username} (all Done records removed)")
+            return True
         
-        logger.info(f"Updated {len(data)} records in {table} for {username} (removed Done records)")
+        # Prepare all records: set username, clean numeric types
+        prepared = []
+        for record in data:
+            record = dict(record)  # Avoid mutating the caller's list
+            record['username'] = username
+            # Remove auto-generated fields that Supabase will re-assign on insert
+            record.pop('id', None)
+            record.pop('created_at', None)
+            record = convert_numeric_types(record)
+            prepared.append(record)
+        
+        # OPTIMIZED: Batch insert all remaining records in one Supabase call
+        # This is 10-50x faster than per-record inserts and avoids Cloud Run timeout
+        count = db.batch_upsert(table, prepared, batch_size=500)
+        logger.info(f"✅ Reinserted {count} records into {table} for {username} (Done records removed)")
         return True
     
     except Exception as e:

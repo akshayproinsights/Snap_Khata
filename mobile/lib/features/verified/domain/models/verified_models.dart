@@ -4,6 +4,7 @@ class VerifiedInvoice {
   final String date;
   final String customerName;
   final String vehicleNumber;
+  final String mobileNumber;
   final String description;
   final String type;
   final double quantity;
@@ -18,6 +19,7 @@ class VerifiedInvoice {
     required this.date,
     required this.customerName,
     required this.vehicleNumber,
+    required this.mobileNumber,
     required this.description,
     required this.type,
     required this.quantity,
@@ -42,6 +44,10 @@ class VerifiedInvoice {
           json['vehicle_number']?.toString() ??
           json['Vehicle Number']?.toString() ??
           json['Car Number']?.toString() ??
+          '',
+      mobileNumber: json['mobile_number']?.toString() ??
+          json['Mobile Number']?.toString() ??
+          json['mobile']?.toString() ??
           '',
       description: json['description']?.toString() ??
           json['Description']?.toString() ??
@@ -71,8 +77,9 @@ class VerifiedInvoice {
       'receipt_number': receiptNumber,
       'date': date,
       'customer_name': customerName,
-      'vehicle_number':
-          vehicleNumber, // Backend handles either car_number or vehicle_number
+      'car_number':
+          vehicleNumber, // Backend handles either car_number or vehicle_number, but update requires actual DB col
+      'mobile_number': mobileNumber,
       'description': description,
       'type': type,
       'quantity': quantity,
@@ -89,6 +96,7 @@ class VerifiedInvoice {
     String? date,
     String? customerName,
     String? vehicleNumber,
+    String? mobileNumber,
     String? description,
     String? type,
     double? quantity,
@@ -103,6 +111,7 @@ class VerifiedInvoice {
       date: date ?? this.date,
       customerName: customerName ?? this.customerName,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      mobileNumber: mobileNumber ?? this.mobileNumber,
       description: description ?? this.description,
       type: type ?? this.type,
       quantity: quantity ?? this.quantity,

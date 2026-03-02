@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/upload/data/upload_repository.dart';
+import 'package:mobile/features/upload/data/upload_persistence_service.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
 import 'package:mobile/core/routing/app_router.dart';
@@ -13,10 +14,10 @@ final uploadRepositoryProvider = Provider<UploadRepository>((ref) {
 });
 
 class UploadState {
-  /// NEW: rich per-file items (replaces plain XFile list)
+  /// Rich per-file items
   final List<UploadFileItem> fileItems;
 
-  /// Legacy compatibility — derived from fileItems
+  /// Legacy compatibility
   List<XFile> get selectedFiles =>
       fileItems.map((i) => XFile(i.path, name: i.name)).toList();
 
@@ -30,6 +31,9 @@ class UploadState {
   final bool isLoadingHistory;
   final String? historyError;
 
+  /// Active task ID — stored in-memory AND on disk for kill-recovery
+  final String? activeTaskId;
+
   UploadState({
     this.fileItems = const [],
     this.isUploading = false,
@@ -41,6 +45,7 @@ class UploadState {
     this.historyData,
     this.isLoadingHistory = false,
     this.historyError,
+    this.activeTaskId,
   });
 
   int get pendingCount =>
@@ -51,6 +56,9 @@ class UploadState {
       fileItems.where((f) => f.status == UploadFileStatus.done).length;
   bool get hasFiles => fileItems.isNotEmpty;
   bool get allDone => fileItems.isNotEmpty && doneCount == fileItems.length;
+
+  /// True when a task is actively running (upload OR processing)
+  bool get isActive => isUploading || isProcessing;
 
   UploadState copyWith({
     List<UploadFileItem>? fileItems,
@@ -63,6 +71,8 @@ class UploadState {
     UploadHistoryResponse? historyData,
     bool? isLoadingHistory,
     String? historyError,
+    String? activeTaskId,
+    bool clearActiveTaskId = false,
   }) {
     return UploadState(
       fileItems: fileItems ?? this.fileItems,
@@ -75,6 +85,8 @@ class UploadState {
       historyData: historyData ?? this.historyData,
       isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
       historyError: historyError,
+      activeTaskId:
+          clearActiveTaskId ? null : (activeTaskId ?? this.activeTaskId),
     );
   }
 }
@@ -83,8 +95,12 @@ class UploadNotifier extends StateNotifier<UploadState> {
   final UploadRepository _repository;
   final BackgroundTaskNotifier _backgroundTask;
   Timer? _pollingTimer;
+  int _consecutivePollingErrors = 0;
+  static const int _maxPollingErrors = 3;
 
   UploadNotifier(this._repository, this._backgroundTask) : super(UploadState());
+
+  // ─────────────────────────── History ────────────────────────────
 
   Future<void> loadHistory() async {
     state = state.copyWith(isLoadingHistory: true, historyError: null);
@@ -103,6 +119,17 @@ class UploadNotifier extends StateNotifier<UploadState> {
       );
     }
   }
+
+  Future<void> deleteHistoryBatch(List<String> receiptIds) async {
+    try {
+      await _repository.deleteHistoryBatch(receiptIds);
+      await loadHistory();
+    } catch (e) {
+      state = state.copyWith(historyError: 'Failed to delete batch: $e');
+    }
+  }
+
+  // ─────────────────────────── File management ────────────────────
 
   Future<void> addFiles(List<XFile> newFiles) async {
     final existingNames = state.fileItems.map((f) => f.name).toSet();
@@ -133,20 +160,83 @@ class UploadNotifier extends StateNotifier<UploadState> {
     state = state.copyWith(fileItems: updated);
   }
 
+  /// Safe clear — no-op when a task is active.
   void clearFiles() {
-    state = state.copyWith(fileItems: [], error: null, hasDuplicate: false);
+    if (state.isActive) return;
+    state = UploadState(
+      historyData: state.historyData,
+      isLoadingHistory: state.isLoadingHistory,
+      historyError: state.historyError,
+    );
   }
 
-  /// Retry only failed files
+  /// Force-clear regardless of active state (used in error/duplicate/cancel flows).
+  Future<void> forceReset() async {
+    _pollingTimer?.cancel();
+    _consecutivePollingErrors = 0;
+    await UploadPersistenceService.clearTask();
+    state = UploadState(
+      historyData: state.historyData,
+      isLoadingHistory: state.isLoadingHistory,
+      historyError: state.historyError,
+    );
+  }
+
+  // ─────────────────────────── Cold-launch recovery ───────────────
+
+  /// Called from app startup AND from UploadPage.initState.
+  /// Checks disk for a persisted task and re-attaches polling if found.
+  Future<void> resumeIfActive() async {
+    // 1. Already active in memory → just ensure polling is running
+    if (state.isProcessing && state.activeTaskId != null) {
+      if (_pollingTimer == null || !_pollingTimer!.isActive) {
+        _startPolling(state.activeTaskId!);
+      }
+      return;
+    }
+
+    // 2. Already done in memory → navigate to review
+    if (state.allDone) {
+      await forceReset();
+      AppRouter.router.go('/review');
+      return;
+    }
+
+    // 3. Cold launch: check disk for a task the app left behind
+    final savedTaskId = await UploadPersistenceService.loadActiveTaskId();
+    if (savedTaskId == null) return;
+
+    final fileCount = await UploadPersistenceService.loadActiveFileCount();
+
+    // Build placeholder file items so the loading overlay shows correct count
+    final placeholders = List.generate(
+      fileCount,
+      (i) => UploadFileItem(
+        path: '',
+        name: 'order',
+        status: UploadFileStatus.processing,
+      ),
+    );
+
+    state = state.copyWith(
+      fileItems: placeholders,
+      isProcessing: true,
+      isUploading: false,
+      activeTaskId: savedTaskId,
+    );
+
+    // Re-attach polling — the backend is still running
+    _startPolling(savedTaskId);
+  }
+
+  // ─────────────────────────── Upload flow ────────────────────────
+
   Future<void> retryFailed() async {
     final failed = state.fileItems
         .where((f) => f.status == UploadFileStatus.failed)
         .toList();
-    if (failed.isEmpty) {
-      return;
-    }
+    if (failed.isEmpty) return;
 
-    // Reset failed items to idle
     final updated = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.failed) {
         return item.copyWith(status: UploadFileStatus.idle);
@@ -154,11 +244,9 @@ class UploadNotifier extends StateNotifier<UploadState> {
       return item;
     }).toList();
     state = state.copyWith(fileItems: updated, error: null);
-
     await uploadAndProcess();
   }
 
-  /// Force-upload all duplicates (bypass duplicate check)
   Future<void> forceUpload() async {
     final updated = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.duplicate) {
@@ -172,6 +260,9 @@ class UploadNotifier extends StateNotifier<UploadState> {
   }
 
   Future<void> uploadAndProcess({bool force = false}) async {
+    // Guard: don't start a second upload if one is already active
+    if (state.isActive) return;
+
     final toUpload = state.fileItems
         .where((f) => f.status == UploadFileStatus.idle)
         .toList();
@@ -197,7 +288,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
     try {
       final xFiles = toUpload.map((f) => XFile(f.path, name: f.name)).toList();
 
-      // 1. Upload files
+      // 1. Upload files to R2
       final fileKeys = await _repository.uploadFiles(
         xFiles,
         onProgress: (sent, total) {
@@ -205,7 +296,7 @@ class UploadNotifier extends StateNotifier<UploadState> {
         },
       );
 
-      // Mark as processing
+      // Transition to processing phase
       final processing = state.fileItems.map((item) {
         if (item.status == UploadFileStatus.uploading) {
           return item.copyWith(status: UploadFileStatus.processing);
@@ -218,127 +309,174 @@ class UploadNotifier extends StateNotifier<UploadState> {
         isProcessing: true,
       );
 
-      // 2. Start OCR processing
+      // 2. Start AI processing
       final initialStatus =
           await _repository.processInvoices(fileKeys, forceUpload: force);
-      state = state.copyWith(processingStatus: initialStatus);
 
-      // Handle immediate duplicate detection
+      // ✅ Persist task to disk — survives app kills
+      await UploadPersistenceService.saveTask(
+        initialStatus.taskId,
+        fileCount: toUpload.length,
+      );
+
+      state = state.copyWith(
+        processingStatus: initialStatus,
+        activeTaskId: initialStatus.taskId,
+      );
+
+      // Immediate duplicate detection
       if (initialStatus.status == 'duplicate_detected') {
-        final dup = state.fileItems.map((item) {
-          if (item.status == UploadFileStatus.processing) {
-            return item.copyWith(status: UploadFileStatus.duplicate);
-          }
-          return item;
-        }).toList();
-        state = state.copyWith(
-          fileItems: dup,
-          isProcessing: false,
-          hasDuplicate: true,
-        );
+        await _handleDuplicate();
         return;
       }
 
       // 3. Poll for completion
       _startPolling(initialStatus.taskId);
     } catch (e) {
-      final errorString = e.toString();
-      if (errorString.contains('DioException') ||
-          errorString.contains('SocketException')) {
-        // Queue offline
-        await SyncQueueService()
-            .queueUpload(toUpload.map((f) => f.path).toList());
-        final queued = state.fileItems.map((item) {
-          if (item.status == UploadFileStatus.uploading ||
-              item.status == UploadFileStatus.processing) {
-            return item.copyWith(
-              status: UploadFileStatus.failed,
-              errorMessage: 'Queued for sync when online',
-            );
-          }
-          return item;
-        }).toList();
-        state = state.copyWith(
-          fileItems: queued,
-          isUploading: false,
-          isProcessing: false,
-        );
-        _backgroundTask.completeTask('Offline: Queued for sync');
-      } else {
-        final failed = state.fileItems.map((item) {
-          if (item.status == UploadFileStatus.uploading ||
-              item.status == UploadFileStatus.processing) {
-            return item.copyWith(
-              status: UploadFileStatus.failed,
-              errorMessage: errorString.replaceAll('Exception: ', ''),
-            );
-          }
-          return item;
-        }).toList();
-        state = state.copyWith(
-          fileItems: failed,
-          isUploading: false,
-          isProcessing: false,
-          error: errorString.replaceAll('Exception: ', ''),
-        );
-      }
+      await _handleUploadError(e.toString(), toUpload);
     }
   }
 
+  // ─────────────────────────── Polling ────────────────────────────
+
   void _startPolling(String taskId) {
-    _backgroundTask.startTask('Processing Invoices via OCR...');
+    _backgroundTask.startTask('Processing your orders…');
+    _consecutivePollingErrors = 0;
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       try {
         final status = await _repository.getProcessStatus(taskId);
+        _consecutivePollingErrors = 0; // reset on success
         state = state.copyWith(processingStatus: status);
         _backgroundTask.updateTask(status.message);
 
         if (status.status == 'completed') {
           timer.cancel();
-          final done = state.fileItems.map((item) {
-            if (item.status == UploadFileStatus.processing) {
-              return item.copyWith(status: UploadFileStatus.done);
-            }
-            return item;
-          }).toList();
-          state = state.copyWith(fileItems: done, isProcessing: false);
-          _backgroundTask.completeTaskWithAction(
-            'Invoices Ready for Review',
-            'Review',
-            () => AppRouter.router.push('/review'),
-          );
+          await _handleCompleted();
         } else if (status.status == 'failed') {
           timer.cancel();
-          final failed = state.fileItems.map((item) {
-            if (item.status == UploadFileStatus.processing) {
-              return item.copyWith(
-                  status: UploadFileStatus.failed,
-                  errorMessage: status.message);
-            }
-            return item;
-          }).toList();
-          state = state.copyWith(fileItems: failed, isProcessing: false);
-          _backgroundTask.completeTask('OCR processing failed');
+          await _handleProcessingFailed(status.message);
         } else if (status.status == 'duplicate_detected') {
           timer.cancel();
-          final dup = state.fileItems.map((item) {
-            if (item.status == UploadFileStatus.processing) {
-              return item.copyWith(status: UploadFileStatus.duplicate);
-            }
-            return item;
-          }).toList();
-          state = state.copyWith(
-              fileItems: dup, isProcessing: false, hasDuplicate: true);
-          _backgroundTask.completeTask('Duplicate invoice detected');
+          await _handleDuplicate();
         }
       } catch (e) {
-        timer.cancel();
-        state =
-            state.copyWith(isProcessing: false, error: 'Polling failed: $e');
-        _backgroundTask.completeTask('Error during processing');
+        _consecutivePollingErrors++;
+        // Swallow transient errors — only give up after 3 consecutive failures
+        if (_consecutivePollingErrors >= _maxPollingErrors) {
+          timer.cancel();
+          await UploadPersistenceService.clearTask();
+          state = state.copyWith(
+            isProcessing: false,
+            error:
+                'Network issue — please check your connection and try again.',
+            clearActiveTaskId: true,
+          );
+          _backgroundTask.completeTask('Connection issue during processing');
+        }
       }
     });
+  }
+
+  // ─────────────────────────── Terminal state handlers ────────────
+
+  Future<void> _handleCompleted() async {
+    await UploadPersistenceService.clearTask(); // ✅ clean up disk
+    final done = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.processing) {
+        return item.copyWith(status: UploadFileStatus.done);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      fileItems: done,
+      isProcessing: false,
+      clearActiveTaskId: true,
+    );
+    _backgroundTask.completeTaskWithAction(
+      'Orders ready to review!',
+      'Review',
+      () => AppRouter.router.go('/review'),
+    );
+  }
+
+  Future<void> _handleProcessingFailed(String message) async {
+    await UploadPersistenceService.clearTask();
+    final failed = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.processing) {
+        return item.copyWith(
+            status: UploadFileStatus.failed, errorMessage: message);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      fileItems: failed,
+      isProcessing: false,
+      clearActiveTaskId: true,
+    );
+    _backgroundTask.completeTask('Processing failed');
+  }
+
+  Future<void> _handleDuplicate() async {
+    await UploadPersistenceService.clearTask();
+    final dup = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.processing) {
+        return item.copyWith(status: UploadFileStatus.duplicate);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      fileItems: dup,
+      isProcessing: false,
+      hasDuplicate: true,
+      clearActiveTaskId: true,
+    );
+    _backgroundTask.completeTask('Duplicate order detected');
+  }
+
+  Future<void> _handleUploadError(
+      String errorString, List<UploadFileItem> toUpload) async {
+    await UploadPersistenceService.clearTask();
+    if (errorString.contains('DioException') ||
+        errorString.contains('SocketException')) {
+      await SyncQueueService()
+          .queueUpload(toUpload.map((f) => f.path).toList());
+      final queued = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading ||
+            item.status == UploadFileStatus.processing) {
+          return item.copyWith(
+            status: UploadFileStatus.failed,
+            errorMessage: 'Queued for sync when online',
+          );
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        fileItems: queued,
+        isUploading: false,
+        isProcessing: false,
+        clearActiveTaskId: true,
+      );
+      _backgroundTask.completeTask('Offline: Queued for sync');
+    } else {
+      final failed = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading ||
+            item.status == UploadFileStatus.processing) {
+          return item.copyWith(
+            status: UploadFileStatus.failed,
+            errorMessage: errorString.replaceAll('Exception: ', ''),
+          );
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        fileItems: failed,
+        isUploading: false,
+        isProcessing: false,
+        error: errorString.replaceAll('Exception: ', ''),
+        clearActiveTaskId: true,
+      );
+    }
   }
 
   @override

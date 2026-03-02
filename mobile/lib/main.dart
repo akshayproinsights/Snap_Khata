@@ -13,6 +13,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/core/notifications/notification_service.dart';
+import 'package:mobile/features/upload/data/upload_persistence_service.dart';
+import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
 @pragma('vm:entry-point')
@@ -97,11 +99,29 @@ void main() async {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Cold-launch recovery: if the app was killed while processing orders,
+    // re-attach polling immediately so the user sees the loading overlay.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final hasTask = await UploadPersistenceService.hasActiveTask();
+      if (hasTask) {
+        ref.read(uploadProvider.notifier).resumeIfActive();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentLocale = ref.watch(localeProvider);
     final themeMode = ref.watch(themeProvider);
 

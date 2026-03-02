@@ -55,31 +55,44 @@ class ReviewRepository {
 
   // Handle SSE Server-Sent Events roughly mapping to frontend syncAndFinishWithProgress
   Stream<Map<String, dynamic>> syncAndFinishWithProgress(String token) async* {
-    final baseURL = _dio.options.baseUrl.endsWith('/')
-        ? _dio.options.baseUrl.substring(0, _dio.options.baseUrl.length - 1)
-        : _dio.options.baseUrl;
-
-    final url =
-        '$baseURL/api/review/sync-finish/stream?token=${Uri.encodeComponent(token)}';
+    // Use a relative path — Dio will prepend the baseUrl automatically.
+    // CRITICAL: Set receiveTimeout to Duration.zero (no timeout) for SSE.
+    // The default 30s receiveTimeout kills the connection before sync finishes.
+    final sseUrl =
+        '/api/review/sync-finish/stream?token=${Uri.encodeComponent(token)}';
 
     final response = await _dio.get<ResponseBody>(
-      url,
-      options: Options(responseType: ResponseType.stream),
+      sseUrl,
+      options: Options(
+        responseType: ResponseType.stream,
+        receiveTimeout: Duration.zero, // ← No timeout for long-running SSE
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      ),
     );
 
     final stream = response.data?.stream;
     if (stream == null) return;
 
+    String buffer = '';
     await for (final chunk in stream) {
-      final decoded = utf8.decode(chunk);
-      // Basic SSE parser
-      final lines = decoded.split('\n');
-      for (final line in lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            final jsonStr = line.substring(6);
-            yield jsonDecode(jsonStr);
-          } catch (_) {}
+      buffer += utf8.decode(chunk, allowMalformed: true);
+
+      while (buffer.contains('\n\n')) {
+        final index = buffer.indexOf('\n\n');
+        final message = buffer.substring(0, index);
+        buffer = buffer.substring(index + 2);
+
+        final lines = message.split('\n');
+        for (final line in lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              final jsonStr = line.substring(6);
+              yield jsonDecode(jsonStr);
+            } catch (_) {}
+          }
         }
       }
     }

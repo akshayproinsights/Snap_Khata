@@ -169,7 +169,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              DateFormat('dd MMM').format(date),
+                              DateFormat('dd-MM-yyyy').format(date),
                               style: const TextStyle(
                                   color: AppTheme.textSecondary, fontSize: 9),
                             ),
@@ -223,7 +223,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                             index < data.length ? data[index].date : '';
                         final date = DateTime.tryParse(dateStr);
                         final label = date != null
-                            ? DateFormat('MMM dd').format(date)
+                            ? DateFormat('dd-MM-yyyy').format(date)
                             : dateStr;
                         return LineTooltipItem(
                           '$label\n${fullFormat.format(s.y)}',

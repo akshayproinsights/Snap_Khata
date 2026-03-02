@@ -87,4 +87,15 @@ class UploadRepository {
       throw Exception('Failed to fetch upload history: $e');
     }
   }
+
+  Future<void> deleteHistoryBatch(List<String> receiptNumbers) async {
+    try {
+      await _dio.post(
+        '/api/upload/history/delete-batch',
+        data: {'receipt_numbers': receiptNumbers},
+      );
+    } catch (e) {
+      throw Exception('Failed to delete history batch: $e');
+    }
+  }
 }

@@ -10,6 +10,7 @@ import 'package:mobile/features/purchase_orders/presentation/providers/purchase_
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:printing/printing.dart';
+import 'package:mobile/features/purchase_orders/utils/pdf_generator.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -103,17 +104,16 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
             const Tab(text: 'History'),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'po_fab',
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          context.pushNamed('create-po');
-        },
-        backgroundColor: AppTheme.primary,
-        icon: const Icon(LucideIcons.plus, color: Colors.white),
-        label: const Text('Add Item',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.plus),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.pushNamed('create-po');
+            },
+            tooltip: 'Add Item',
+          ),
+        ],
       ),
       body: TabBarView(
         controller: _tabs,
@@ -173,53 +173,10 @@ class _DraftTab extends ConsumerWidget {
 
     return Column(
       children: [
-        // Summary bar
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${state.draft.totalItems} items in draft',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primary)),
-                  if (state.draft.totalEstimatedCost > 0)
-                    Text(
-                        'Est. cost: ${currency.format(state.draft.totalEstimatedCost)}',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppTheme.textSecondary)),
-                ],
-              ),
-              ElevatedButton.icon(
-                onPressed: state.hasDraftItems
-                    ? () => _showProceedSheet(context, ref, state.suppliers)
-                    : null,
-                icon: const Icon(LucideIcons.fileCheck, size: 16),
-                label: const Text('Proceed'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-              ),
-            ],
-          ),
-        ),
-
         // Items list
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
             itemCount: state.draft.items.length,
             itemBuilder: (context, i) {
               final item = state.draft.items[i];
@@ -227,6 +184,14 @@ class _DraftTab extends ConsumerWidget {
             },
           ),
         ),
+
+        // Cart Bottom Bar
+        if (state.hasDraftItems)
+          _CartBottomBar(
+            currency: currency,
+            onPlaceOrder: () =>
+                _showProceedSheet(context, ref, state.suppliers),
+          ),
       ],
     );
   }
@@ -238,6 +203,79 @@ class _DraftTab extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ProceedPoSheet(suppliers: suppliers),
+    );
+  }
+}
+
+// ─── Cart Bottom Bar ──────────────────────────────────────────────────────────
+
+class _CartBottomBar extends ConsumerWidget {
+  final NumberFormat currency;
+  final VoidCallback onPlaceOrder;
+
+  const _CartBottomBar({
+    required this.currency,
+    required this.onPlaceOrder,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(purchaseOrderProvider);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, -4),
+            blurRadius: 10,
+          )
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Total (${state.draft.totalItems} items)',
+                      style: const TextStyle(
+                          fontSize: 13, color: AppTheme.textSecondary)),
+                  Text(currency.format(state.draft.totalEstimatedCost),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: state.hasDraftItems ? onPlaceOrder : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Place Order',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(width: 8),
+                  Icon(LucideIcons.arrowRight, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -434,8 +472,6 @@ class _ProceedPoSheet extends ConsumerStatefulWidget {
 
 class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
   final _notesCtrl = TextEditingController();
-  String? _selectedSupplier;
-  bool _customSupplier = false;
   final _customSupplierCtrl = TextEditingController();
 
   @override
@@ -471,48 +507,44 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
             const SizedBox(height: 20),
 
             // Supplier
-            if (widget.suppliers.isNotEmpty && !_customSupplier) ...[
-              const Text('Supplier',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _selectedSupplier,
-                hint: const Text('Select supplier'),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-                items: [
-                  ...widget.suppliers
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                  const DropdownMenuItem(
-                      value: '__custom__', child: Text('+ Type manually...')),
-                ],
-                onChanged: (v) {
-                  if (v == '__custom__') {
-                    setState(() => _customSupplier = true);
-                  } else {
-                    setState(() => _selectedSupplier = v);
-                  }
-                },
-              ),
-            ] else ...[
-              const Text('Supplier Name',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _customSupplierCtrl,
-                decoration: InputDecoration(
-                  hintText: 'e.g. Kaviraj Sales',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-              ),
-            ],
+            const Text('Supplier Name',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            Autocomplete<String>(
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return widget.suppliers;
+                }
+                return widget.suppliers.where((String option) {
+                  return option
+                      .toLowerCase()
+                      .contains(textEditingValue.text.toLowerCase());
+                });
+              },
+              onSelected: (String selection) {
+                _customSupplierCtrl.text = selection;
+              },
+              // fieldViewBuilder to style the text field
+              fieldViewBuilder: (context, textEditingController, focusNode,
+                  onFieldSubmitted) {
+                // Keep the underlying controller in sync so we can easily get the text on submit
+                textEditingController.addListener(() {
+                  _customSupplierCtrl.text = textEditingController.text;
+                });
+                return TextField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: 'Select or type supplier...',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    suffixIcon: const Icon(LucideIcons.chevronDown, size: 20),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 14),
 
             // Notes
@@ -562,11 +594,9 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
 
   Future<void> _onGenerate() async {
     HapticFeedback.mediumImpact();
-    final supplier = _customSupplier
-        ? (_customSupplierCtrl.text.trim().isEmpty
-            ? null
-            : _customSupplierCtrl.text.trim())
-        : _selectedSupplier;
+    final supplier = _customSupplierCtrl.text.trim().isEmpty
+        ? null
+        : _customSupplierCtrl.text.trim();
 
     final request = ProceedToPORequest(
       supplierName: supplier,
@@ -667,20 +697,26 @@ class _PoSuccessSheet extends ConsumerWidget {
                         final history = ref.read(purchaseOrderProvider).history;
                         final po =
                             history.firstWhere((p) => p.poNumber == poNumber);
-                        final bytes = await ref
+
+                        final details = await ref
                             .read(purchaseOrderRepositoryProvider)
-                            .getPdf(po.id);
-                        if (bytes != null) {
+                            .getPurchaseOrderDetails(po.id);
+
+                        if (details != null) {
+                          final bytes =
+                              await MaterialRequestPdfGenerator.generate(
+                                  details, 'Adnak',
+                                  notes: po.notes);
                           await Printing.sharePdf(
                               bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
                         } else {
                           if (context.mounted) {
                             AppToast.showError(
-                                context, 'Failed to download PDF');
+                                context, 'Failed to generate PDF');
                           }
                         }
                       } catch (e) {
-                        debugPrint('PO not found in history: $e');
+                        debugPrint('PDF generation error: $e');
                       }
                     },
                   ),
@@ -773,42 +809,20 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
   Future<void> _reshareWhatsApp() async {
     HapticFeedback.lightImpact();
     final po = widget.po;
-    final message =
-        'Hi! Sharing our Purchase Order *${po.poNumber}* via DigiEntry.\n'
-        'Supplier: ${po.supplierName ?? "—"}\n'
-        'Items: ${po.totalItems}\n'
-        'Est. Cost: ${widget.currency.format(po.totalEstimatedCost)}\n'
-        'Date: ${po.poDate}\n'
-        'Please confirm receipt and provide delivery timeline. Thank you!';
-    final encoded = Uri.encodeComponent(message);
-    final uri = Uri.parse('https://wa.me/?text=$encoded');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 
-  Future<void> _sharePdf() async {
-    HapticFeedback.lightImpact();
-    final po = widget.po;
-    final bytes = await ref.read(purchaseOrderRepositoryProvider).getPdf(po.id);
-    if (bytes != null) {
+    final details = await ref
+        .read(purchaseOrderRepositoryProvider)
+        .getPurchaseOrderDetails(po.id);
+
+    if (details != null) {
+      final bytes = await MaterialRequestPdfGenerator.generate(details, 'Adnak',
+          notes: po.notes);
       await Printing.sharePdf(bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
     } else {
-      if (mounted) AppToast.showError(context, 'Failed to download PDF');
+      if (mounted) {
+        AppToast.showError(context, 'Failed to generate PDF for sharing');
+      }
     }
-  }
-
-  void _copyPoNumber() {
-    HapticFeedback.selectionClick();
-    Clipboard.setData(ClipboardData(text: widget.po.poNumber));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Copied ${widget.po.poNumber}'),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
   }
 
   Future<void> _deletePo() async {
@@ -981,6 +995,15 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                     children: [
                       Expanded(
                         child: _ActionButton(
+                          icon: LucideIcons.list,
+                          label: 'Details',
+                          color: const Color(0xFF0EA5E9),
+                          onTap: _viewDetails,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _ActionButton(
                           icon: LucideIcons.messageCircle,
                           label: 'WhatsApp',
                           color: const Color(0xFF25D366),
@@ -988,48 +1011,6 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: _ActionButton(
-                          icon: LucideIcons.fileText,
-                          label: 'PDF',
-                          color: AppTheme.primary,
-                          onTap: _sharePdf,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _ActionButton(
-                          icon: LucideIcons.list,
-                          label: 'Details',
-                          color: const Color(0xFF0EA5E9),
-                          onTap: _viewDetails,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _ActionButton(
-                          icon: LucideIcons.copy,
-                          label: 'Copy PO #',
-                          color: AppTheme.textSecondary,
-                          onTap: _copyPoNumber,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (po.notes != null && po.notes!.isNotEmpty) ...[
-                        Expanded(
-                          child: _ActionButton(
-                            icon: LucideIcons.stickyNote,
-                            label: 'Notes',
-                            color: AppTheme.warning,
-                            onTap: () => _showNotes(context, po.notes!),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       Expanded(
                         child: _ActionButton(
                           icon: LucideIcons.trash2,
@@ -1045,31 +1026,6 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  void _showNotes(BuildContext context, String notes) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Notes — ${widget.po.poNumber}',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Text(notes,
-                style: const TextStyle(
-                    fontSize: 14, color: AppTheme.textSecondary)),
-          ],
-        ),
       ),
     );
   }

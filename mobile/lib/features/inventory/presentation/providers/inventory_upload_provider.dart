@@ -102,7 +102,7 @@ class InventoryUploadNotifier extends StateNotifier<InventoryUploadState> {
           isUploading: false, isProcessing: true, uploadProgress: 0.0);
 
       // Process phase
-      _backgroundTask.startTask('Processing Inventory Bills...');
+      _backgroundTask.startTask('Processing Inventory Orders...');
       await _dio.post(
         '/api/inventory/process',
         data: {
@@ -124,8 +124,8 @@ class InventoryUploadNotifier extends StateNotifier<InventoryUploadState> {
           'message': 'Inventory processed successfully'
         },
       );
-      _backgroundTask.completeTaskWithAction('Inventory Bills Ready', 'Mapping',
-          () {
+      _backgroundTask
+          .completeTaskWithAction('Inventory Orders Ready', 'Mapping', () {
         AppRouter.router.push('/inventory-mapping');
       });
     } catch (e) {

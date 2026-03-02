@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
@@ -9,6 +10,7 @@ class RecentTasksList extends StatelessWidget {
   final UploadHistoryResponse? historyData;
   final bool isLoading;
   final String? error;
+  final void Function(List<String>)? onDeleteBatch;
 
   const RecentTasksList({
     super.key,
@@ -16,6 +18,7 @@ class RecentTasksList extends StatelessWidget {
     this.historyData,
     this.isLoading = false,
     this.error,
+    this.onDeleteBatch,
   });
 
   String _formatDate(String dateStr) {
@@ -32,7 +35,7 @@ class RecentTasksList extends StatelessWidget {
         return 'Yesterday';
       }
 
-      return DateFormat('E, d MMM').format(date); // e.g., Wed, 21 Jan
+      return DateFormat('dd-MM-yyyy').format(date); // e.g., 21-01-2024
     } catch (_) {
       return dateStr;
     }
@@ -114,7 +117,7 @@ class RecentTasksList extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
         child: Center(
           child: Text(
-            'No upload history yet. Upload your first sales bill to get started!',
+            'No upload history yet. Upload your first sales order to get started!',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           ),
@@ -163,72 +166,102 @@ class RecentTasksList extends StatelessWidget {
               return Theme(
                 data: Theme.of(context)
                     .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  iconColor: AppTheme.primary,
-                  collapsedIconColor: AppTheme.textSecondary,
-                  tilePadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                  childrenPadding: EdgeInsets.zero,
-                  title: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: GestureDetector(
+                  onLongPress: onDeleteBatch != null
+                      ? () {
+                          HapticFeedback.heavyImpact();
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Delete Recent Uploads?'),
+                              content: const Text(
+                                  'Are you sure you want to permanently delete this batch of uploaded orders? This action cannot be undone.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    onDeleteBatch!(item.receiptIds);
+                                  },
+                                  style: TextButton.styleFrom(
+                                      foregroundColor: AppTheme.error),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      : null,
+                  child: ExpansionTile(
+                    iconColor: AppTheme.primary,
+                    collapsedIconColor: AppTheme.textSecondary,
+                    tilePadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                    childrenPadding: EdgeInsets.zero,
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDate(item.date),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary),
+                        ),
+                        Text(
+                          item.count.toString(),
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary),
+                        ),
+                      ],
+                    ),
                     children: [
-                      Text(
-                        _formatDate(item.date),
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary),
-                      ),
-                      Text(
-                        item.count.toString(),
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Receipt IDs:',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: item.receiptIds.map((id) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    id,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.primary),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Receipt IDs:',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.textSecondary),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: item.receiptIds.map((id) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  id,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.primary),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ), // End ExpansionTile
+                ), // End GestureDetector
               );
             },
           ),

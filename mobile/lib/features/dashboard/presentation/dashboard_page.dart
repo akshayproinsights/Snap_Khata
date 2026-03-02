@@ -1,19 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
-import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
-import 'package:mobile/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
-import 'package:mobile/features/notifications/presentation/providers/notification_provider.dart';
-import 'package:mobile/shared/widgets/metric_card.dart';
-import 'package:mobile/shared/widgets/shimmer_placeholders.dart';
-import 'package:intl/intl.dart';
-import 'package:mobile/features/dashboard/presentation/widgets/sales_trend_chart.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
+const _kGreen = Color(0xFF1B8A2A);
+const _kGreenBg = Color(0xFFE8F5E9);
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -22,77 +22,66 @@ class DashboardPage extends ConsumerStatefulWidget {
   ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends ConsumerState<DashboardPage> {
+class _DashboardPageState extends ConsumerState<DashboardPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(verifiedProvider.notifier).fetchRecords();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dashboardState = ref.watch(dashboardProvider);
     final userState = ref.watch(authProvider);
-
-    final String userName =
-        userState.user?.name ?? userState.user?.username ?? 'User';
-
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final String shopName =
+        userState.user?.name ?? userState.user?.username ?? 'My Shop';
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        titleSpacing: 16,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: AppTheme.surface,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Dashboard',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-            Text('Welcome back, $userName',
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.normal)),
+            Text(
+              '${_getGreeting()}, $shopName',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: AppTheme.textPrimary,
+                  ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
+        centerTitle: false,
         actions: [
-          // Bell badge
-          Consumer(
-            builder: (context, ref, _) {
-              final unread = ref.watch(unreadCountProvider);
-              return Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(LucideIcons.bell),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      context.pushNamed('notifications');
-                    },
-                  ),
-                  if (unread > 0)
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        constraints:
-                            const BoxConstraints(minWidth: 18, minHeight: 18),
-                        decoration: const BoxDecoration(
-                          color: AppTheme.error,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          unread > 99 ? '99+' : '$unread',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(LucideIcons.logOut),
             onPressed: () async {
+              HapticFeedback.lightImpact();
               await ref.read(authProvider.notifier).logout();
               if (context.mounted) {
                 context.go('/login');
@@ -100,638 +89,196 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             },
           ),
         ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(dashboardProvider.notifier).refreshDashboard();
-        },
-        child: _buildBody(dashboardState, currencyFormat),
-      ),
-    );
-  }
-
-  Widget _buildBody(DashboardState state, NumberFormat currencyFormat) {
-    if (state.isLoading && state.kpis == null) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Quick Actions',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.6,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: List.generate(4, (index) => const MetricCardShimmer()),
-            ),
-            const SizedBox(height: 32),
-            const ChartShimmer(),
-            const SizedBox(height: 32),
-            const ChartShimmer(),
+        bottom: TabBar(
+          controller: _tabController,
+          labelStyle: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+          unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
+          indicatorSize: TabBarIndicatorSize.label,
+          indicatorColor: AppTheme.primary,
+          labelColor: AppTheme.primary,
+          unselectedLabelColor: AppTheme.textSecondary,
+          tabs: const [
+            Tab(text: 'Recent Orders'),
+            Tab(text: 'Party Details'),
           ],
         ),
-      );
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          _RecentOrdersTab(),
+          _PartyDetailsTab(),
+        ],
+      ),
+      floatingActionButton: SizedBox(
+        height: 54,
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            // In the new app, navigating to upload represents Snap New Order
+            context.pushNamed('upload');
+          },
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.camera_alt_rounded, size: 22),
+          label: Text(
+            'Snap New Order',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
+                  color: Colors.white,
+                ),
+          ),
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tab 1 – Recent Orders
+// ─────────────────────────────────────────────────────────────
+
+class _RecentOrdersTab extends ConsumerWidget {
+  const _RecentOrdersTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(verifiedProvider);
+
+    if (state.isLoading && state.records.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    if (state.error != null && state.kpis == null) {
+    if (state.error != null && state.records.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(LucideIcons.alertCircle,
-                color: AppTheme.error, size: 48),
-            const SizedBox(height: 16),
-            Text('Failed to load dashboard: ${state.error}',
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () =>
-                  ref.read(dashboardProvider.notifier).refreshDashboard(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
+          child: Text('Error: ${state.error}',
+              style: const TextStyle(color: AppTheme.error)));
     }
 
-    final pendingSalesCount =
-        state.kpis?.pendingActions.currentValue.toInt() ?? 0;
+    // 1. Group records by receiptNumber (fallback to date)
+    final Map<String, InvoiceGroup> groups = {};
 
-    // Calculate unmapped items safely
-    int unmappedCount = 0;
-    if (state.rawStockLevels != null &&
-        state.rawStockLevels!['items'] != null) {
-      final items = state.rawStockLevels!['items'] as List;
-      unmappedCount = items
-          .where((item) =>
-              item['customer_items'] == null ||
-              item['customer_items'] == false ||
-              item['customer_items'].toString().trim().isEmpty)
-          .length;
-    }
+    int todayReceipts = 0;
+    double todayRevenue = 0.0;
+    final now = DateTime.now();
 
-    final outOfStockCount = state.stockSummary?.outOfStockCount ?? 0;
-    final totalSales = state.kpis?.totalRevenue.currentValue ?? 0;
-    final salesChange = state.kpis?.totalRevenue.changePercent;
+    for (var record in state.records) {
+      final String groupId = record.receiptNumber.isNotEmpty
+          ? record.receiptNumber
+          : (record.date.isNotEmpty ? record.date : record.uploadDate);
+      final String safeId = groupId.isNotEmpty ? groupId : record.rowId;
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Period Selector + Filter Row ─────────────────────────────────
-          Row(
-            children: [
-              Expanded(child: _PeriodSelector(activePeriod: state.period)),
-              const SizedBox(width: 8),
-              _FilterToggleButton(
-                isExpanded: state.filtersExpanded,
-                activeFilterCount: state.activeFilterCount,
-              ),
-            ],
-          ),
-
-          // ── Active Filter Chips ──────────────────────────────────────────
-          if (state.hasActiveFilters) _ActiveFilterChips(state: state),
-
-          // ── Advanced Filters Panel ───────────────────────────────────────
-          if (state.filtersExpanded) ...[
-            const SizedBox(height: 8),
-            const _AdvancedFiltersPanel(),
-          ],
-
-          const SizedBox(height: 16),
-
-          // ── Quick Action KPIs ────────────────────────────────────────────
-          const Text('Quick Actions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          _buildActionCardsGrid(
-            pendingSalesCount: pendingSalesCount,
-            unmappedItemsCount: unmappedCount,
-            outOfStockCount: outOfStockCount,
-            totalSales: totalSales,
-            salesChange: salesChange,
-            currencyFormat: currencyFormat,
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Inventory Command Center ─────────────────────────────────────
-          const _DashboardCommandCenter(),
-
-          const SizedBox(height: 24),
-
-          // ── Sales Trend Chart ─────────────────────────────────────────────
-          SalesTrendChart(
-            data: state.dailySales ?? [],
-            isLoading: state.isLoading && state.dailySales == null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionCardsGrid({
-    required int pendingSalesCount,
-    required int unmappedItemsCount,
-    required int outOfStockCount,
-    required double totalSales,
-    required double? salesChange,
-    required NumberFormat currencyFormat,
-  }) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.8,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        MetricCard(
-          title: 'REVIEW & SYNC',
-          value: pendingSalesCount.toString(),
-          icon: LucideIcons.scanLine,
-          theme: MetricTheme.blue,
-          actionLabel: 'Process Now',
-          onAction: () {
-            HapticFeedback.lightImpact();
-            context.pushNamed('review');
-          },
-        ),
-        MetricCard(
-          title: 'UNMAPPED ITEMS',
-          value: unmappedItemsCount.toString(),
-          icon: LucideIcons.packageX,
-          theme: MetricTheme.amber,
-          actionLabel: 'Map Items',
-          onAction: () {
-            HapticFeedback.lightImpact();
-            context.pushNamed('inventory-item-mapping');
-          },
-        ),
-        MetricCard(
-          title: 'OUT OF STOCK',
-          value: outOfStockCount.toString(),
-          icon: LucideIcons.alertTriangle,
-          theme: MetricTheme.red,
-          actionLabel: 'Restock List',
-          isLinkAction: true,
-          onAction: () {
-            HapticFeedback.lightImpact();
-            context.pushNamed('current-stock');
-          },
-        ),
-        MetricCard(
-          title: 'TOTAL SALES',
-          value: currencyFormat.format(totalSales),
-          icon: LucideIcons.indianRupee,
-          theme: MetricTheme.green,
-          trendValue: salesChange,
-        ),
-      ]
-          .animate(interval: 50.ms)
-          .fade(duration: 300.ms)
-          .scale(curve: Curves.easeOutBack, duration: 400.ms),
-    );
-  }
-}
-
-// ─── Period Selector ──────────────────────────────────────────────────────────
-
-class _PeriodSelector extends ConsumerWidget {
-  final DashboardPeriod activePeriod;
-  const _PeriodSelector({required this.activePeriod});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: DashboardPeriod.values.map((period) {
-          final isActive = period == activePeriod;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (!isActive) {
-                  HapticFeedback.selectionClick();
-                  ref.read(dashboardProvider.notifier).changePeriod(period);
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                decoration: BoxDecoration(
-                  color: isActive ? AppTheme.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(
-                  period.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.white : AppTheme.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ─── Filter Toggle Button ─────────────────────────────────────────────────────
-
-class _FilterToggleButton extends ConsumerWidget {
-  final bool isExpanded;
-  final int activeFilterCount;
-  const _FilterToggleButton(
-      {required this.isExpanded, required this.activeFilterCount});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Material(
-      color: isExpanded ? AppTheme.primary : AppTheme.surface,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          HapticFeedback.selectionClick();
-          ref.read(dashboardProvider.notifier).toggleFiltersExpanded();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isExpanded ? AppTheme.primary : AppTheme.border,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                LucideIcons.sliders,
-                size: 16,
-                color: isExpanded ? Colors.white : AppTheme.textSecondary,
-              ),
-              if (activeFilterCount > 0) ...[
-                const SizedBox(width: 5),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: isExpanded
-                        ? Colors.white.withOpacity(0.25)
-                        : AppTheme.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$activeFilterCount',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Active Filter Chips ──────────────────────────────────────────────────────
-
-class _ActiveFilterChips extends ConsumerWidget {
-  final DashboardState state;
-  const _ActiveFilterChips({required this.state});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(dashboardProvider.notifier);
-
-    Widget chip(String label, VoidCallback onRemove) => Container(
-          margin: const EdgeInsets.only(right: 6, top: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.25)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary)),
-              const SizedBox(width: 5),
-              GestureDetector(
-                onTap: onRemove,
-                child: const Icon(LucideIcons.x,
-                    size: 12, color: AppTheme.primary),
-              ),
-            ],
-          ),
+      if (!groups.containsKey(safeId)) {
+        groups[safeId] = InvoiceGroup(
+          receiptNumber: record.receiptNumber,
+          date: record.date.isNotEmpty ? record.date : record.uploadDate,
+          receiptLink: record.receiptLink,
+          customerName: record.customerName,
+          vehicleNumber: record.vehicleNumber,
+          mobileNumber: record.mobileNumber,
         );
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          if (state.customerFilter.isNotEmpty)
-            chip('Customer: ${state.customerFilter}', () {
-              notifier.setCustomerFilter('');
-              notifier.applyFilters();
-            }),
-          if (state.vehicleFilter.isNotEmpty)
-            chip('Vehicle: ${state.vehicleFilter}', () {
-              notifier.setVehicleFilter('');
-              notifier.applyFilters();
-            }),
-          if (state.partNumberFilter.isNotEmpty)
-            chip('Item: ${state.partNumberFilter}', () {
-              notifier.setPartNumberFilter('');
-              notifier.applyFilters();
-            }),
-          GestureDetector(
-            onTap: notifier.clearFilters,
-            child: Container(
-              margin: const EdgeInsets.only(right: 6, top: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppTheme.error.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.error.withOpacity(0.25)),
-              ),
-              child: const Text('Clear All',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.error)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Advanced Filters Panel ───────────────────────────────────────────────────
-
-class _AdvancedFiltersPanel extends ConsumerStatefulWidget {
-  const _AdvancedFiltersPanel();
-
-  @override
-  ConsumerState<_AdvancedFiltersPanel> createState() =>
-      _AdvancedFiltersPanelState();
-}
-
-class _AdvancedFiltersPanelState extends ConsumerState<_AdvancedFiltersPanel> {
-  late final TextEditingController _customerCtrl;
-  late final TextEditingController _vehicleCtrl;
-  late final TextEditingController _partCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    final s = ref.read(dashboardProvider);
-    _customerCtrl = TextEditingController(text: s.customerFilter);
-    _vehicleCtrl = TextEditingController(text: s.vehicleFilter);
-    _partCtrl = TextEditingController(text: s.partNumberFilter);
-  }
-
-  @override
-  void dispose() {
-    _customerCtrl.dispose();
-    _vehicleCtrl.dispose();
-    _partCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notifier = ref.read(dashboardProvider.notifier);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Filter Dashboard Data',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          _FilterField(
-            controller: _customerCtrl,
-            hint: 'e.g. Ravi Motors',
-            icon: LucideIcons.user,
-            label: 'Customer',
-          ),
-          const SizedBox(height: 8),
-          _FilterField(
-            controller: _vehicleCtrl,
-            hint: 'e.g. MH12AB1234',
-            icon: LucideIcons.car,
-            label: 'Vehicle',
-          ),
-          const SizedBox(height: 8),
-          _FilterField(
-            controller: _partCtrl,
-            hint: 'Item or part name',
-            icon: LucideIcons.package,
-            label: 'Part / Item',
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    _customerCtrl.clear();
-                    _vehicleCtrl.clear();
-                    _partCtrl.clear();
-                    notifier.clearFilters();
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.textSecondary,
-                    side: const BorderSide(color: AppTheme.border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Clear'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    HapticFeedback.mediumImpact();
-                    notifier.setCustomerFilter(_customerCtrl.text.trim());
-                    notifier.setVehicleFilter(_vehicleCtrl.text.trim());
-                    notifier.setPartNumberFilter(_partCtrl.text.trim());
-                    notifier.applyFilters();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Apply Filters'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final String label;
-  final IconData icon;
-  const _FilterField({
-    required this.controller,
-    required this.hint,
-    required this.label,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(fontSize: 13),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        hintStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-        prefixIcon: Icon(icon, size: 16, color: AppTheme.textSecondary),
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: AppTheme.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: AppTheme.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: AppTheme.primary),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Dashboard Inventory Command Center ───────────────────────────────────────
-
-class _DashboardCommandCenter extends ConsumerStatefulWidget {
-  const _DashboardCommandCenter();
-
-  @override
-  ConsumerState<_DashboardCommandCenter> createState() =>
-      _DashboardCommandCenterState();
-}
-
-class _DashboardCommandCenterState
-    extends ConsumerState<_DashboardCommandCenter> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-  bool _isSearching = false;
-  List<Map<String, dynamic>> _results = [];
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _search(String q) async {
-    setState(() {
-      _query = q;
-      _isSearching = q.isNotEmpty;
-    });
-    if (q.isEmpty) {
-      setState(() {
-        _results = [];
-        _isSearching = false;
-      });
-      return;
+      }
+      groups[safeId]!.items.add(record);
+      groups[safeId]!.totalAmount += record.amount;
     }
-    try {
-      final raw = await ref.read(dashboardRepositoryProvider).getStockLevels();
-      final items = (raw['items'] as List? ?? []);
-      final lower = q.toLowerCase();
-      setState(() {
-        _results = items
-            .where((item) {
-              final name = item.itemName?.toString().toLowerCase() ?? '';
-              final part = item.partNumber?.toString().toLowerCase() ?? '';
-              return name.contains(lower) || part.contains(lower);
-            })
-            .take(20)
-            .map<Map<String, dynamic>>((item) {
-              return {
-                'part_number': item.partNumber ?? '',
-                'item_name': item.itemName ?? '',
-                'current_stock': (item.currentStock as num?)?.toDouble() ?? 0.0,
-                'reorder_point': (item.reorderPoint as num?)?.toDouble() ?? 0.0,
-                'priority': item.priority ?? '',
-                'unit_value': (item.unitValue as num?)?.toDouble(),
-              };
-            })
-            .toList();
-        _isSearching = false;
+
+    // Sort descending by date
+    final sortedGroups = groups.values.toList()
+      ..sort((a, b) {
+        final dA = DateTime.tryParse(a.date) ?? DateTime(0);
+        final dB = DateTime.tryParse(b.date) ?? DateTime(0);
+        return dB.compareTo(dA);
       });
-    } catch (e) {
-      setState(() => _isSearching = false);
+
+    // Calculate Today's Sale
+    final List<InvoiceGroup> todayGroups = [];
+    for (var group in sortedGroups) {
+      final dt = DateTime.tryParse(group.date) ?? DateTime(0);
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+        todayReceipts++;
+        todayRevenue += group.totalAmount;
+        todayGroups.add(group);
+      }
     }
+
+    final itemCount = sortedGroups.isEmpty ? 2 : sortedGroups.length + 1;
+
+    return RefreshIndicator(
+      onRefresh: () async => ref.read(verifiedProvider.notifier).fetchRecords(),
+      child: ListView.separated(
+        padding:
+            const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 90),
+        itemCount: itemCount,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _QuickLinksSection(
+              todayReceipts: todayReceipts,
+              todayRevenue: todayRevenue,
+              todayGroups: todayGroups,
+            );
+          }
+
+          if (sortedGroups.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 24.0),
+              child: Text(
+                'No verified orders yet.\nSnap a new order to get started!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+              ),
+            );
+          }
+
+          final group = sortedGroups[index - 1];
+          return _DashboardInvoiceGroupTile(group: group);
+        },
+      ),
+    );
   }
+}
+
+// ── Dashboard Group Tile ─────────────────────────────────────────────────────
+
+class _DashboardInvoiceGroupTile extends ConsumerWidget {
+  final InvoiceGroup group;
+
+  const _DashboardInvoiceGroupTile({required this.group});
 
   @override
-  Widget build(BuildContext context) {
-    final dashState = ref.watch(dashboardProvider);
-    // Fallback: show low-stock alert items when no search
-    final alertItems = dashState.stockAlerts
-        .map((a) => {
-              'part_number': a.partNumber,
-              'item_name': a.itemName,
-              'current_stock': a.currentStock,
-              'reorder_point': a.reorderPoint,
-              'priority': '',
-              'unit_value': null,
-            })
-        .toList();
-    final displayItems = _query.isEmpty ? alertItems : _results;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    final String displayName = group.customerName.isNotEmpty
+        ? group.customerName
+        : (group.vehicleNumber.isNotEmpty
+            ? group.vehicleNumber
+            : 'Unknown Customer');
+    final String vehicleInfo =
+        (group.vehicleNumber.isNotEmpty && group.customerName.isNotEmpty)
+            ? ' (${group.vehicleNumber})'
+            : '';
+
+    final dt = DateTime.tryParse(group.date) ?? DateTime.now();
+
+    const Color statusColor = _kGreen;
+    const Color statusBg = _kGreenBg;
+    final String statusLabel =
+        group.receiptNumber.isNotEmpty ? '#${group.receiptNumber}' : 'Verified';
+
+    final String initial = displayName[0].toUpperCase();
+    final bool isUnknown = group.customerName.isEmpty ||
+        group.customerName.toLowerCase() == 'unknown';
 
     return Container(
       decoration: BoxDecoration(
@@ -740,262 +287,935 @@ class _DashboardCommandCenterState
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            context.pushNamed('order-detail', extra: group);
+          },
+          onLongPress: () {
+            HapticFeedback.heavyImpact();
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Delete Recent Order?'),
+                content: const Text(
+                    'Are you sure you want to permanently delete this order and all its items? This action cannot be undone.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      final rowIds = group.items.map((i) => i.rowId).toList();
+                      if (rowIds.isNotEmpty) {
+                        ref.read(verifiedProvider.notifier).deleteBulk(rowIds);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Order deleted successfully.'),
+                            backgroundColor: AppTheme.success,
+                          ),
+                        );
+                      }
+                    },
+                    style:
+                        TextButton.styleFrom(foregroundColor: AppTheme.error),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isUnknown
+                        ? Colors.blue.withOpacity(0.1)
+                        : AppTheme.primary.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: isUnknown ? Colors.blue : AppTheme.primary,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$displayName$vehicleInfo',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            LucideIcons.calendar,
+                            size: 12,
+                            color: AppTheme.textSecondary.withOpacity(0.7),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatDate(dt),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      currencyFormat.format(group.totalAmount),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: -0.3,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: const TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays == 0 && now.day == dt.day) return 'Today';
+    if (diff.inDays == 1 || (diff.inDays == 0 && now.day != dt.day)) {
+      return 'Yesterday';
+    }
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tab 2 – Party Details
+// ─────────────────────────────────────────────────────────────
+
+class _PartyDetailsTab extends ConsumerStatefulWidget {
+  const _PartyDetailsTab();
+
+  @override
+  ConsumerState<_PartyDetailsTab> createState() => _PartyDetailsTabState();
+}
+
+class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
+  String _searchQuery = '';
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String val) {
+    setState(() {
+      _searchQuery = val;
+    });
+
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      // Trigger backend search for full table check
+      ref
+          .read(verifiedProvider.notifier)
+          .fetchRecords(search: val.isNotEmpty ? val : null);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(verifiedProvider);
+
+    if (state.isLoading && state.records.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.error != null && state.records.isEmpty) {
+      return Center(
+          child: Text('Error: ${state.error}',
+              style: const TextStyle(color: AppTheme.error)));
+    }
+
+    // Aggregate records grouped by vehicle number (when present), else by customer name
+    final Map<String, _PartySummary> summaries = {};
+    for (var record in state.records) {
+      // Filter logic
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final matchesName = record.customerName.toLowerCase().contains(query);
+        final matchesVehicle =
+            record.vehicleNumber.toLowerCase().contains(query);
+        final matchesMobile = record.mobileNumber.toLowerCase().contains(query);
+        if (!matchesName && !matchesVehicle && !matchesMobile) continue;
+      }
+
+      final String vehicle = record.vehicleNumber;
+      final String custName = record.customerName;
+
+      // Group purely by vehicle number when available; otherwise by customer name
+      final String key = vehicle.isNotEmpty
+          ? vehicle
+          : (custName.isNotEmpty ? custName : 'Unknown');
+
+      if (!summaries.containsKey(key)) {
+        summaries[key] = _PartySummary(
+          vehicleNumber: vehicle,
+          customerName: custName,
+          latestReceipt: record.receiptNumber,
+          totalAmount: 0,
+        );
+      } else {
+        // Keep the best (non-empty) customer name seen for this vehicle
+        if (summaries[key]!.customerName.isEmpty && custName.isNotEmpty) {
+          summaries[key]!.customerName = custName;
+        }
+      }
+
+      summaries[key]!.totalAmount += record.amount;
+
+      // Use receiptNumber if available, otherwise fallback to date/uploadDate for uniqueness
+      final String uniqueJobId = record.receiptNumber.isNotEmpty
+          ? record.receiptNumber
+          : (record.date.isNotEmpty ? record.date : record.uploadDate);
+
+      if (uniqueJobId.isNotEmpty) {
+        summaries[key]!.receipts.add(uniqueJobId);
+      } else {
+        // Absolute fallback, just count it if we have no other identifier
+        summaries[key]!.receipts.add(record.rowId);
+      }
+    }
+
+    final partyList = summaries.values.toList()
+      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    return Column(
+      children: [
+        if (state.records.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search by name, vehicle, or mobile',
+                hintStyle:
+                    TextStyle(color: AppTheme.textSecondary.withOpacity(0.6)),
+                prefixIcon: const Icon(LucideIcons.search,
+                    color: AppTheme.textSecondary),
+                filled: true,
+                fillColor: AppTheme.surface,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppTheme.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppTheme.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: AppTheme.primary, width: 2),
+                ),
+              ),
+              onChanged: _onSearchChanged,
+            ),
+          ),
+        Expanded(
+          child: partyList.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Text(
+                      _searchQuery.isNotEmpty
+                          ? 'No parties found for "$_searchQuery".'
+                          : 'No parties yet.\nSnap a new order to build your ledger.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: AppTheme.textSecondary, fontSize: 16),
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async =>
+                      ref.read(verifiedProvider.notifier).fetchRecords(),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(
+                        left: 12, right: 12, top: 12, bottom: 90),
+                    itemCount: partyList.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final party = partyList[index];
+
+                      // Display: "CustomerName (VehicleNo)" or just "VehicleNo" or customer name
+                      final String displayTitle = party.vehicleNumber.isNotEmpty
+                          ? (party.customerName.isNotEmpty &&
+                                  party.customerName != party.vehicleNumber
+                              ? '${party.customerName} (${party.vehicleNumber})'
+                              : party.vehicleNumber)
+                          : party.customerName;
+
+                      final initial = displayTitle.isNotEmpty
+                          ? displayTitle[0].toUpperCase()
+                          : '?';
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: AppTheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          leading: CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppTheme.primary.withOpacity(0.12),
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.primary,
+                                fontSize: 20,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            displayTitle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              '${party.orderCount} Order(s)',
+                              style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          trailing: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                currencyFormat.format(party.totalAmount),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _kGreenBg,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  party.latestReceipt.isNotEmpty
+                                      ? '#${party.latestReceipt}'
+                                      : 'Ledger',
+                                  style: const TextStyle(
+                                    color: _kGreen,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            // Navigate using vehicleNumber as primary key when available
+                            context.pushNamed(
+                              'party-ledger',
+                              extra: {
+                                'customerName': party.customerName,
+                                'vehicleNumber': party.vehicleNumber,
+                              },
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PartySummary {
+  final String vehicleNumber;
+  String customerName; // Best customer name seen for this vehicle
+  final String latestReceipt;
+  double totalAmount;
+  final Set<String> receipts = {}; // Track unique invoice IDs
+
+  /// Display name: "CustomerName (VehicleNo)" or just vehicle/customer
+  String get name => vehicleNumber.isNotEmpty
+      ? (customerName.isNotEmpty && customerName != vehicleNumber
+          ? customerName
+          : vehicleNumber)
+      : customerName;
+
+  int get orderCount => receipts.isNotEmpty ? receipts.length : 0;
+
+  _PartySummary({
+    required this.vehicleNumber,
+    required this.customerName,
+    required this.latestReceipt,
+    required this.totalAmount,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Quick Links Section
+// ─────────────────────────────────────────────────────────────
+
+class _QuickLinksSection extends ConsumerWidget {
+  final int todayReceipts;
+  final double todayRevenue;
+  final List<InvoiceGroup> todayGroups;
+
+  const _QuickLinksSection({
+    required this.todayReceipts,
+    required this.todayRevenue,
+    required this.todayGroups,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Get counts
+    final reviewCount = ref.watch(reviewProvider).groups.length;
+    final poDraftCount = ref.watch(purchaseOrderProvider).draftCount;
+
+    final currencyFormat =
+        NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: const Icon(LucideIcons.shoppingCart,
-                      size: 16, color: AppTheme.primary),
+          Text(
+            'Quick Links',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
                 ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Quick Reorder',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold)),
-                      Text('Search & add items directly to PO',
-                          style: TextStyle(
-                              fontSize: 11, color: AppTheme.textSecondary)),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    context.pushNamed('purchase-orders');
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.clipboardCheck,
+                color: const Color(0xFFEF4444), // Red
+                title: 'Review',
+                badgeCount: reviewCount,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.pushNamed('review');
+                },
+              ),
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.refreshCcw,
+                color: const Color(0xFF3B82F6), // Blue
+                title: 'Quick Reorder',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.pushNamed('current-stock');
+                },
+              ),
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.shoppingCart,
+                color: const Color(0xFF0EA5E9), // Light Blue
+                title: 'PO',
+                badgeCount: poDraftCount,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.pushNamed('purchase-orders');
+                },
+              ),
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.indianRupee,
+                color: const Color(0xFF10B981), // Emerald
+                title: 'Today\'s Sale',
+                subtitle:
+                    '${currencyFormat.format(todayRevenue)}\n($todayReceipts receipt${todayReceipts == 1 ? '' : 's'})',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _TodaySaleSheet(
+                      groups: todayGroups,
+                      totalRevenue: todayRevenue,
                     ),
-                    child: const Text('View PO',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primary)),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionItem({
+    required BuildContext context,
+    required IconData icon,
+    required Color color,
+    required String title,
+    String? subtitle,
+    int badgeCount = 0,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 24),
                   ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFEF4444).withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        constraints:
+                            const BoxConstraints(minWidth: 20, minHeight: 20),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            height: 1.1,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                        fontSize: 9,
+                      ),
+                  maxLines: 2,
                 ),
               ],
-            ),
+            ],
           ),
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: TextField(
-              controller: _searchCtrl,
-              style: const TextStyle(fontSize: 13),
-              onChanged: _search,
-              decoration: InputDecoration(
-                hintText: 'Search by item name or part number...',
-                hintStyle: const TextStyle(
-                    fontSize: 12, color: AppTheme.textSecondary),
-                prefixIcon: _isSearching
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 1.5)))
-                    : const Icon(LucideIcons.search,
-                        size: 16, color: AppTheme.textSecondary),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(LucideIcons.x,
-                            size: 14, color: AppTheme.textSecondary),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _search('');
-                        },
-                      )
-                    : null,
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                filled: true,
-                fillColor: AppTheme.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppTheme.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppTheme.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppTheme.primary),
-                ),
-              ),
-            ),
-          ),
-          // Items
-          if (displayItems.isEmpty && !_isSearching)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Center(
-                child: Text('All items in stock! 🎉',
-                    style:
-                        TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              itemCount: displayItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (context, i) =>
-                  _CommandCenterItemRow(item: displayItems[i]),
-            ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _CommandCenterItemRow extends ConsumerStatefulWidget {
-  final Map<String, dynamic> item;
-  const _CommandCenterItemRow({required this.item});
+// ─────────────────────────────────────────────────────────────
+// Today's Sale Bottom Sheet
+// ─────────────────────────────────────────────────────────────
 
-  @override
-  ConsumerState<_CommandCenterItemRow> createState() =>
-      _CommandCenterItemRowState();
-}
+class _TodaySaleSheet extends StatelessWidget {
+  final List<InvoiceGroup> groups;
+  final double totalRevenue;
 
-class _CommandCenterItemRowState extends ConsumerState<_CommandCenterItemRow> {
-  bool _adding = false;
+  const _TodaySaleSheet({
+    required this.groups,
+    required this.totalRevenue,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final partNumber = item['part_number'] as String? ?? '';
-    final itemName = item['item_name'] as String? ?? '';
-    final stock = (item['current_stock'] as num?)?.toDouble() ?? 0;
-    final reorder = (item['reorder_point'] as num?)?.toDouble() ?? 0;
-    final priority = item['priority'] as String? ?? '';
-
-    final isOut = stock <= 0;
-    final isLow = !isOut && stock < reorder;
-    final statusColor = isOut
-        ? AppTheme.error
-        : isLow
-            ? AppTheme.warning
-            : AppTheme.success;
-    final statusLabel = isOut
-        ? 'Out'
-        : isLow
-            ? 'Low'
-            : 'OK';
-
-    final poState = ref.watch(purchaseOrderProvider);
-    final alreadyInDraft =
-        poState.draft.items.any((i) => i.partNumber == partNumber);
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final screenH = MediaQuery.of(context).size.height;
+    const emerald = Color(0xFF10B981);
+    const emeraldLight = Color(0xFFD1FAE5);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+      constraints: BoxConstraints(maxHeight: screenH * 0.82),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (priority.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          // Handle bar
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(5),
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
               ),
-              child: Text(priority,
-                  style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.primary)),
             ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
               children: [
-                Text(itemName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
-                Text(partNumber,
-                    style: const TextStyle(
-                        fontSize: 10, color: AppTheme.textSecondary)),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: emeraldLight,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(LucideIcons.indianRupee,
+                      color: emerald, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Today's Sale",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        '${groups.length} unique receipt${groups.length == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      currencyFormat.format(totalRevenue),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
+                        color: emerald,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      'Total Revenue',
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '$statusLabel ${stock.toStringAsFixed(0)}',
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: statusColor),
-            ),
-          ),
-          if (alreadyInDraft)
-            const Icon(LucideIcons.checkCircle,
-                size: 18, color: AppTheme.success)
-          else
-            GestureDetector(
-              onTap: _adding
-                  ? null
-                  : () async {
-                      HapticFeedback.lightImpact();
-                      setState(() => _adding = true);
-                      await ref
-                          .read(purchaseOrderProvider.notifier)
-                          .quickAddFromDashboard(item);
-                      if (mounted) setState(() => _adding = false);
+
+          // Divider
+          Divider(height: 1, color: Colors.grey.shade100),
+
+          // Receipts list
+          Flexible(
+            child: groups.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.packageOpen,
+                            size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No sales recorded today',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Snap a new order to get started!',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    shrinkWrap: true,
+                    itemCount: groups.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      final String displayName = group.customerName.isNotEmpty
+                          ? group.customerName
+                          : (group.vehicleNumber.isNotEmpty
+                              ? group.vehicleNumber
+                              : 'Unknown Customer');
+                      final String initial = displayName[0].toUpperCase();
+                      final String receiptLabel = group.receiptNumber.isNotEmpty
+                          ? '#${group.receiptNumber}'
+                          : 'No Receipt #';
+                      final int itemCount = group.items.length;
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: Colors.grey.shade100, width: 1),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          child: Row(
+                            children: [
+                              // Avatar
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: emerald.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: emerald,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Info
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: Color(0xFF111827),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: emeraldLight,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            receiptLabel,
+                                            style: const TextStyle(
+                                              color: emerald,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 10,
+                                              letterSpacing: 0.2,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '$itemCount item${itemCount == 1 ? '' : 's'}',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade500,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Amount
+                              Text(
+                                currencyFormat.format(group.totalAmount),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  color: Color(0xFF111827),
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
                     },
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: _adding
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 1.5, color: AppTheme.primary))
-                    : const Icon(LucideIcons.plus,
-                        size: 14, color: AppTheme.primary),
-              ),
-            ),
+                  ),
+          ),
         ],
       ),
     );

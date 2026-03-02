@@ -800,6 +800,8 @@ def convert_to_dataframe_rows(
         row["quantity"] = qty
         row["rate"] = rate
         row["amount"] = amount
+        row["receipt_number_confidence"] = float(header.get("receipt_number_confidence", 100))
+        row["date_confidence"] = float(header.get("date_confidence", 100))
         
         # Industry-specific columns (automobile) - with text normalization
         # IMPORTANT: Use exact column names from invoices table schema
@@ -1342,6 +1344,13 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
             if pd.isna(row.get('_parsed_date')):
                 findings.append("Missing Date")
             
+            # Confidence Checks
+            if row.get('receipt_number_confidence', 100) < 85:
+                findings.append("Low Receipt Number Confidence")
+            
+            if row.get('date_confidence', 100) < 85:
+                findings.append("Low Date Confidence")
+            
             # 3. Duplicate Receipt Number (if same receipt number appears more than once)
             receipt_num = row.get('receipt_number', '')
             if receipt_num:
@@ -1397,7 +1406,9 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     'row_id': row.get('row_id'),
                     'receipt_number_bbox': row.get('receipt_number_bbox'),
                     'date_bbox': row.get('date_bbox'),
-                    'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox')
+                    'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
+                    'customer_name': row.get('customer'),
+                    'mobile_number': row.get('mobile_number')
                 }
                 db.insert('verification_dates', date_row)
                 date_insert_count += 1
@@ -1484,7 +1495,9 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                         'receipt_link': row.get('receipt_link'),
                         'row_id': row.get('row_id'),
                         'line_item_row_bbox': row.get('line_item_row_bbox'),  # Only use row-level bbox
-                        'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox')
+                        'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
+                        'customer_name': row.get('customer'),
+                        'mobile_number': row.get('mobile_number')
                     }
                     
                     # Log if we're missing header_id (for debugging)

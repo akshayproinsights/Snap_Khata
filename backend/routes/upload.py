@@ -566,6 +566,56 @@ async def get_recent_sales_task(
         raise HTTPException(status_code=500, detail=f"Failed to fetch recent task: {str(e)}")
 
 
+class BatchDeleteRequest(BaseModel):
+    receipt_numbers: List[str]
+
+@router.post("/history/delete-batch")
+async def delete_history_batch(
+    request: BatchDeleteRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Delete a batch of receipts from review and staging tables.
+    Used for deleting recent order lists.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="No username in token")
+        
+    try:
+        db = get_database_client()
+        total_deleted = 0
+        
+        tables_to_clean = [
+            'invoices',              # Staging table
+            'verification_dates',    # Review table for dates/receipts
+            'verification_amounts'   # Review table for line items
+        ]
+        
+        for receipt_number in request.receipt_numbers:
+            # Clean up '#' prefix if present
+            clean_receipt = str(receipt_number).replace('#', '')
+            for table_name in tables_to_clean:
+                try:
+                    result = db.delete(table_name, {'username': username, 'receipt_number': clean_receipt})
+                    if result:
+                        deleted_count = len(result) if isinstance(result, list) else 1
+                        total_deleted += deleted_count
+                        logger.info(f"Deleted {deleted_count} records from {table_name} for receipt {clean_receipt}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning {table_name} for receipt {clean_receipt}: {e}")
+                    continue
+                    
+        return {
+            "success": True,
+            "message": f"Deleted records for {len(request.receipt_numbers)} receipts",
+            "records_deleted": total_deleted
+        }
+    except Exception as e:
+        logger.error(f"Error in deleting history batch: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete batch: {str(e)}")
+
+
 def process_invoices_sync(
     task_id: str,
     file_keys: List[str],  # These are temp paths now

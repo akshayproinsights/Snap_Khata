@@ -13,6 +13,7 @@ import InventoryUploadPage from './pages/InventoryUploadPage';
 import VerifyPartsPage from './pages/VerifyPartsPage';
 import InventoryMappedPage from './pages/InventoryMappedPage';
 import CurrentStockPage from './pages/CurrentStockPage';
+import PublicReceiptPage from './pages/PublicReceiptPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/receipt/:id" element={<PublicReceiptPage />} />
               <Route
                 path="/"
                 element={

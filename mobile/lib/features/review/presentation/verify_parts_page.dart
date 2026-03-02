@@ -369,7 +369,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _buildInlineField(
-                        label: 'Net Bill',
+                        label: 'Net Order',
                         initialValue: item.netBill.toString(),
                         isNumber: true,
                         onSubmitted: (v) => ref

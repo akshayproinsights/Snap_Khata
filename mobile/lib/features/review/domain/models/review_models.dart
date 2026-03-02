@@ -14,6 +14,36 @@ class ReviewRecord {
   final List<double>? combinedBbox;
   final List<double>? lineItemBbox;
   final bool isHeader; // Derived
+  final String? customerName;
+  final String? mobileNumber;
+  final String? auditFindings;
+
+  // New helper getter for validation hoisting
+  bool get hasError {
+    if (verificationStatus.toLowerCase() == 'duplicate receipt number') {
+      return true;
+    }
+    if (amountMismatch != null && amountMismatch!.abs() > 0.01) {
+      return true;
+    }
+    if (receiptNumber.trim().isEmpty) {
+      return true;
+    }
+    if (isHeader && date.trim().isEmpty) {
+      return true;
+    }
+    return false;
+  }
+
+  bool get hasReceiptDoubt {
+    return auditFindings != null &&
+        auditFindings!.contains('Low Receipt Number Confidence');
+  }
+
+  bool get hasDateDoubt {
+    return auditFindings != null &&
+        auditFindings!.contains('Low Date Confidence');
+  }
 
   ReviewRecord({
     required this.rowId,
@@ -31,6 +61,9 @@ class ReviewRecord {
     this.combinedBbox,
     this.lineItemBbox,
     required this.isHeader,
+    this.customerName,
+    this.mobileNumber,
+    this.auditFindings,
   });
 
   factory ReviewRecord.fromJson(Map<String, dynamic> json,
@@ -39,7 +72,7 @@ class ReviewRecord {
       rowId: (json['row_id'] ?? json['Row_Id'])?.toString() ?? '',
       receiptNumber:
           (json['receipt_number'] ?? json['Receipt Number'])?.toString() ?? '',
-      date: (json['date'] ?? json['Date'])?.toString() ?? '',
+      date: _toIndianDate((json['date'] ?? json['Date'])?.toString() ?? ''),
       description:
           (json['description'] ?? json['Description'])?.toString() ?? '',
       amount: double.tryParse(
@@ -62,7 +95,31 @@ class ReviewRecord {
       combinedBbox: _parseBbox(json['date_and_receipt_combined_bbox']),
       lineItemBbox: _parseBbox(json['line_item_row_bbox']),
       isHeader: isHeaderType,
+      customerName: json['customer_name']?.toString() ??
+          json['Customer Name']?.toString(),
+      mobileNumber: json['mobile_number']?.toString() ??
+          json['Mobile Number']?.toString(),
+      auditFindings: json['audit_findings']?.toString() ??
+          json['Audit Findings']?.toString(),
     );
+  }
+
+  /// Converts a Supabase ISO date string (yyyy-MM-dd or yyyy-MM-ddTHH:mm:ss...)
+  /// to Indian display format (dd-MM-yyyy).
+  /// If the string is already in dd-MM-yyyy format, it is returned unchanged.
+  static String _toIndianDate(String raw) {
+    if (raw.isEmpty) return raw;
+    // Already in dd-MM-yyyy format (e.g. "25-02-2026")
+    final ddMMyyyy = RegExp(r'^\d{2}-\d{2}-\d{4}$');
+    if (ddMMyyyy.hasMatch(raw)) return raw;
+    // ISO format: yyyy-MM-dd or yyyy-MM-ddTHH:mm:ssZ
+    try {
+      final dt = DateTime.parse(raw);
+      final day = dt.day.toString().padLeft(2, '0');
+      final month = dt.month.toString().padLeft(2, '0');
+      return '$day-$month-${dt.year}';
+    } catch (_) {}
+    return raw; // unknown format – display as-is
   }
 
   static List<double>? _parseBbox(dynamic bboxJson) {
@@ -96,6 +153,9 @@ class ReviewRecord {
       'receipt_number_bbox': receiptNumberBbox,
       'date_and_receipt_combined_bbox': combinedBbox,
       'line_item_row_bbox': lineItemBbox,
+      'customer_name': customerName,
+      'mobile_number': mobileNumber,
+      'audit_findings': auditFindings,
     };
   }
 }
@@ -118,5 +178,17 @@ class InvoiceReviewGroup {
           .map((item) => item.verificationStatus.toLowerCase() == 'done'),
     ];
     return allComplete.isNotEmpty && allComplete.every((isDone) => isDone);
+  }
+
+  bool get hasError {
+    if (header != null && header!.hasError) return true;
+    return lineItems.any((item) => item.hasError);
+  }
+
+  // Helper for UI badging (Pending, Error, Synced/Done)
+  String get status {
+    if (hasError) return 'Error';
+    if (isComplete) return 'Done';
+    return 'Pending';
   }
 }

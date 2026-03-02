@@ -171,7 +171,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Upload Vendor Bills or CSV',
+              'Upload Vendor Orders or CSV',
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -179,7 +179,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Snap a photo, select from gallery,\nor upload a CSV/PDF bill.',
+              'Snap a photo, select from gallery,\nor upload a CSV/PDF order.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
             ),
@@ -203,7 +203,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Selected Bills (${files.length})',
+              Text('Selected Orders (${files.length})',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 16)),
               IconButton(
@@ -312,8 +312,8 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage> {
               children: [
                 Text(
                   state.isProcessing
-                      ? 'Processing Bills...'
-                      : 'Uploading Bills...',
+                      ? 'Processing Orders...'
+                      : 'Uploading Orders...',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(

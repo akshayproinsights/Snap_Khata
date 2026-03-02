@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
 import 'package:mobile/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
-import 'package:mobile/features/review/presentation/review_invoice_details_page.dart';
+import 'package:mobile/features/review/presentation/pending_receipts_page.dart';
+import 'package:mobile/features/review/presentation/receipt_review_page.dart';
 import 'package:mobile/features/review/presentation/review_dates_page.dart';
 import 'package:mobile/features/review/presentation/review_amounts_page.dart';
 import 'package:mobile/features/review/presentation/verify_parts_page.dart';
@@ -20,6 +21,10 @@ import 'package:mobile/features/purchase_orders/presentation/create_po_page.dart
 import 'package:mobile/features/notifications/presentation/notifications_page.dart';
 import 'package:mobile/core/routing/app_shell.dart';
 import 'package:mobile/features/settings/presentation/settings_page.dart';
+import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
+import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/features/review/domain/models/review_models.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -81,7 +86,16 @@ class AppRouter {
         path: '/review',
         name: 'review',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ReviewInvoiceDetailsPage(),
+        builder: (context, state) => const PendingReceiptsPage(),
+      ),
+      GoRoute(
+        path: '/receipt-review',
+        name: 'receipt-review',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final group = state.extra as InvoiceReviewGroup;
+          return ReceiptReviewPage(group: group);
+        },
       ),
       GoRoute(
         path: '/review-dates',
@@ -138,6 +152,18 @@ class AppRouter {
         builder: (context, state) => const VendorMappingPage(),
       ),
       GoRoute(
+        path: '/party-ledger',
+        name: 'party-ledger',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>?;
+          return PartyLedgerPage(
+            customerName: extras?['customerName'] as String? ?? 'Unknown',
+            vehicleNumber: extras?['vehicleNumber'] as String? ?? '',
+          );
+        },
+      ),
+      GoRoute(
         path: '/inventory-upload',
         name: 'inventory-upload',
         parentNavigatorKey: _rootNavigatorKey,
@@ -160,6 +186,15 @@ class AppRouter {
         name: 'notifications',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const NotificationsPage(),
+      ),
+      GoRoute(
+        path: '/order-detail',
+        name: 'order-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final group = state.extra as InvoiceGroup;
+          return OrderDetailPage(group: group);
+        },
       ),
     ],
   );

@@ -4,7 +4,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_mapped_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_mapped_provider.dart';
-import 'package:intl/intl.dart';
 
 class InventoryMappedPage extends ConsumerWidget {
   const InventoryMappedPage({super.key});
@@ -226,38 +225,6 @@ class InventoryMappedPage extends ConsumerWidget {
                               fontSize: 14, fontWeight: FontWeight.w500)),
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Stock / Reorder',
-                        style: TextStyle(
-                            fontSize: 10, color: AppTheme.textSecondary)),
-                    Text(
-                        '${entry.stock?.toString() ?? '-'} / ${entry.reorder?.toString() ?? '-'}',
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Mapped On',
-                        style: TextStyle(
-                            fontSize: 10, color: AppTheme.textSecondary)),
-                    Text(
-                        entry.createdAt != null
-                            ? DateFormat('MMM dd, yyyy')
-                                .format(entry.createdAt!)
-                            : '-',
-                        style: const TextStyle(fontSize: 12)),
-                  ],
                 ),
                 IconButton(
                   onPressed: () => _handleUnmap(context, ref, entry),

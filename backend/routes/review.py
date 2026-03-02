@@ -19,6 +19,24 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _normalize_date_for_supabase(date_str: str) -> str:
+    """
+    Convert an Indian-format date (dd-MM-yyyy) to Supabase-compatible ISO format (yyyy-MM-dd).
+    If the date is already in ISO format or cannot be parsed, it is returned unchanged.
+    """
+    if not date_str:
+        return date_str
+    # Try Indian format first (dd-MM-yyyy)
+    from datetime import datetime
+    for fmt_in, fmt_out in [('%d-%m-%Y', '%Y-%m-%d'), ('%d/%m/%Y', '%Y-%m-%d')]:
+        try:
+            return datetime.strptime(date_str, fmt_in).strftime(fmt_out)
+        except ValueError:
+            pass
+    # Already ISO or unknown — return as-is
+    return date_str
+
+
 class ReviewData(BaseModel):
     """Review data model"""
     records: List[Dict[str, Any]]
@@ -142,9 +160,14 @@ async def update_single_review_date(
             'created_at', 'model_used', 'model_accuracy', 'input_tokens',
             'output_tokens', 'total_tokens', 'cost_inr', 'fallback_attempted',
             'fallback_reason', 'processing_errors', 'date_and_receipt_combined_bbox',
-            'receipt_number_bbox', 'date_bbox'
+            'receipt_number_bbox', 'date_bbox', 'customer_name', 'mobile_number'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
+        
+        # Normalize date to ISO format (yyyy-MM-dd) that Supabase requires
+        if 'date' in update_data and update_data['date']:
+            update_data['date'] = _normalize_date_for_supabase(update_data['date'])
+            logger.info(f"Normalized date to: {update_data['date']}")
         
         # UPDATE 1: Update the header record itself
         db.update('verification_dates', update_data, {'username': username, 'row_id': row_id})
@@ -419,7 +442,7 @@ async def update_single_review_amount(
             'cost_inr', 'fallback_attempted', 'fallback_reason',
             'processing_errors', 'line_item_row_bbox', 'date_and_receipt_combined_bbox',
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
-            'rate_bbox', 'amount_bbox'
+            'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -539,14 +562,26 @@ async def sync_and_finish_stream(
                 run_sync_verified_logic_supabase(username, progress_callback=progress_callback)
             )
             
+            # Track last heartbeat time - send SSE comment every 5s to prevent
+            # NAT/proxy idle timeout on Indian mobile networks (typical timeout: 30-60s)
+            import time
+            last_heartbeat = time.monotonic()
+            HEARTBEAT_INTERVAL = 5  # seconds
+            
             # Stream events as they arrive
             while not sync_task.done():
                 try:
-                    # Wait for next event with timeout
-                    event = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                    # Wait for next event with short timeout so we can send heartbeats
+                    event = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
                     yield f"data: {json.dumps(event)}\n\n"
+                    last_heartbeat = time.monotonic()  # Reset heartbeat timer on real event
                 except asyncio.TimeoutError:
-                    # No event ready, continue waiting
+                    # No event ready - send SSE heartbeat comment if interval elapsed
+                    now = time.monotonic()
+                    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                        # SSE comment (colon prefix) - keeps connection alive, ignored by EventSource
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
                     continue
             
             # Drain any remaining events from queue

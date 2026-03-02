@@ -4,7 +4,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
+import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/shared/widgets/receipt_card.dart';
+import 'package:intl/intl.dart';
 
 class ReviewDatesPage extends ConsumerStatefulWidget {
   const ReviewDatesPage({super.key});
@@ -49,6 +51,11 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<ReviewState>(reviewProvider, (previous, next) {
+      if (next.error != null && next.error != previous?.error) {
+        AppToast.showError(context, next.error!, title: 'Update Failed');
+      }
+    });
     final state = ref.watch(reviewProvider);
 
     int pending = 0;
@@ -119,12 +126,6 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                       value: state.syncProgress?.percentage != null
                           ? state.syncProgress!.percentage / 100
                           : null,
-                    ),
-                  if (state.error != null)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(state.error!,
-                          style: const TextStyle(color: AppTheme.error)),
                     ),
                   Expanded(
                     child: filteredRecords.isEmpty
@@ -423,39 +424,71 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        initialValue: record.date,
-                        decoration: InputDecoration(
-                          labelText: 'Date (YYYY-MM-DD)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: isSuccessDate
-                                ? const BorderSide(color: AppTheme.success)
-                                : const BorderSide(),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: isSuccessDate
-                                ? const BorderSide(
-                                    color: AppTheme.success, width: 2)
-                                : const BorderSide(
-                                    color: AppTheme.primary, width: 2),
-                          ),
-                          isDense: true,
-                          filled: isSuccessDate,
-                          fillColor: AppTheme.success.withOpacity(0.05),
-                        ),
-                        onFieldSubmitted: (val) {
-                          if (val != record.date) {
-                            final newRecord = _updateRecordWithRebuiltFields(
-                                record,
-                                date: val);
-                            ref
-                                .read(reviewProvider.notifier)
-                                .updateDateRecord(newRecord);
-                            _triggerSuccess('\${record.rowId}-date');
+                      InkWell(
+                        onTap: () async {
+                          DateTime? initialDate;
+                          try {
+                            if (record.date.isNotEmpty) {
+                              try {
+                                initialDate = DateFormat('dd-MM-yyyy')
+                                    .parseStrict(record.date);
+                              } catch (e) {
+                                initialDate = DateTime.parse(record.date);
+                              }
+                            }
+                          } catch (_) {}
+
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: initialDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+
+                          if (picked != null) {
+                            final formattedDate =
+                                DateFormat('dd-MM-yyyy').format(picked);
+                            if (formattedDate != record.date) {
+                              final newRecord = _updateRecordWithRebuiltFields(
+                                  record,
+                                  date: formattedDate);
+                              ref
+                                  .read(reviewProvider.notifier)
+                                  .updateDateRecord(newRecord);
+                              _triggerSuccess('\${record.rowId}-date');
+                            }
                           }
                         },
+                        child: IgnorePointer(
+                          child: TextFormField(
+                            // ignore: prefer_const_constructors
+                            key: ValueKey('date_\${record.date}'),
+                            initialValue: record.date,
+                            readOnly: true,
+                            decoration: InputDecoration(
+                              labelText: 'Date (DD-MM-YYYY)',
+                              suffixIcon:
+                                  const Icon(LucideIcons.calendar, size: 16),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: isSuccessDate
+                                    ? const BorderSide(color: AppTheme.success)
+                                    : const BorderSide(),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: isSuccessDate
+                                    ? const BorderSide(
+                                        color: AppTheme.success, width: 2)
+                                    : const BorderSide(
+                                        color: AppTheme.primary, width: 2),
+                              ),
+                              isDense: true,
+                              filled: isSuccessDate,
+                              fillColor: AppTheme.success.withOpacity(0.05),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),

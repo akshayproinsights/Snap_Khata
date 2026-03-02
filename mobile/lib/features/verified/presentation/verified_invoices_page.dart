@@ -463,9 +463,9 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     (context, index) {
                       final keys = groups.keys.toList();
                       final key = keys[index];
-                      final bills = groups[key]!;
+                      final orders = groups[key]!;
                       final isExpanded = _expandedGroups.contains(key);
-                      return _buildGroupSection(key, bills, isExpanded);
+                      return _buildGroupSection(key, orders, isExpanded);
                     },
                     childCount: groups.keys.length,
                   ),
@@ -736,7 +736,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                 decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(20)),
-                child: Text('${items.length} bills · $groupCount groups',
+                child: Text('${items.length} orders · $groupCount groups',
                     style: const TextStyle(
                         color: AppTheme.textSecondary,
                         fontSize: 12,
@@ -752,8 +752,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   // ─── Grouped list section ────────────────────────────────────────────────────
 
   Widget _buildGroupSection(
-      String groupKey, List<VerifiedInvoice> bills, bool isExpanded) {
-    final totalAmount = bills.fold<double>(0, (sum, b) => sum + b.amount);
+      String groupKey, List<VerifiedInvoice> orders, bool isExpanded) {
+    final totalAmount = orders.fold<double>(0, (sum, b) => sum + b.amount);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -817,7 +817,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                   color: AppTheme.textPrimary)),
                           const SizedBox(height: 4),
                           Text(
-                              '${bills.length} item${bills.length == 1 ? '' : 's'}',
+                              '${orders.length} item${orders.length == 1 ? '' : 's'}',
                               style: const TextStyle(
                                   fontSize: 13,
                                   color: AppTheme.textSecondary,
@@ -852,7 +852,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
               ),
             ),
 
-            // ── Bills inside group ─────────────────────────────────────────
+            // ── Orders inside group ─────────────────────────────────────────
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.fastOutSlowIn,
@@ -861,13 +861,13 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     ? const BoxConstraints()
                     : const BoxConstraints(maxHeight: 0),
                 child: Column(
-                  children: bills.asMap().entries.map((entry) {
+                  children: orders.asMap().entries.map((entry) {
                     final i = entry.key;
-                    final bill = entry.value;
+                    final order = entry.value;
                     return Column(
                       children: [
-                        _buildBillRow(bill),
-                        if (i < bills.length - 1)
+                        _buildBillRow(order),
+                        if (i < orders.length - 1)
                           Divider(
                               height: 1,
                               indent: 64,
@@ -884,7 +884,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     );
   }
 
-  // ─── Individual bill row inside an expanded group ─────────────────────────
+  // ─── Individual order row inside an expanded group ─────────────────────────
 
   Widget _buildBillRow(VerifiedInvoice record) {
     final isSelected = _selectedIds.contains(record.rowId);
@@ -926,7 +926,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
               ),
             ),
 
-            // Bill details
+            // Order details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
