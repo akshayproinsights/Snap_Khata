@@ -27,7 +27,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Delete line item?'),
         content: const Text(
-            'Are you sure you want to delete this line item? This will remove it from the system.'),
+            'Are you sure you want to delete this line item? This will remove it permanently.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -227,7 +227,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withOpacity(0.05),
+        color: AppTheme.primary.withValues(alpha: 0.05),
         border: const Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Column(
@@ -299,7 +299,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: textColor.withOpacity(0.3)),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
       ),
       child: Text(text,
           style: TextStyle(
@@ -325,7 +325,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4)),
         ],
@@ -515,7 +515,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
         ),
         isDense: true,
         filled: isSuccess,
-        fillColor: AppTheme.success.withOpacity(0.05),
+        fillColor: AppTheme.success.withValues(alpha: 0.05),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
@@ -572,9 +572,9 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: statusColor.withOpacity(0.3)),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(

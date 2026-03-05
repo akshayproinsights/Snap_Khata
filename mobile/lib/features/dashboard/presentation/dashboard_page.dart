@@ -287,7 +287,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -295,141 +295,158 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            context.pushNamed('order-detail', extra: group);
-          },
-          onLongPress: () {
-            HapticFeedback.heavyImpact();
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete Recent Order?'),
-                content: const Text(
-                    'Are you sure you want to permanently delete this order and all its items? This action cannot be undone.'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      final rowIds = group.items.map((i) => i.rowId).toList();
-                      if (rowIds.isNotEmpty) {
-                        ref.read(verifiedProvider.notifier).deleteBulk(rowIds);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Order deleted successfully.'),
-                            backgroundColor: AppTheme.success,
-                          ),
-                        );
-                      }
-                    },
-                    style:
-                        TextButton.styleFrom(foregroundColor: AppTheme.error),
-                    child: const Text('Delete'),
-                  ),
-                ],
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: isUnknown
-                        ? Colors.blue.withOpacity(0.1)
-                        : AppTheme.primary.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initial,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: isUnknown ? Colors.blue : AppTheme.primary,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$displayName$vehicleInfo',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              borderRadius:
+                  group.receiptLink.isNotEmpty || group.receiptNumber.isNotEmpty
+                      ? const BorderRadius.vertical(top: Radius.circular(16))
+                      : BorderRadius.circular(16),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                context.pushNamed('order-detail', extra: group);
+              },
+              onLongPress: () {
+                HapticFeedback.heavyImpact();
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Recent Order?'),
+                    content: const Text(
+                        'Are you sure you want to permanently delete this order and all its items? This action cannot be undone.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            LucideIcons.calendar,
-                            size: 12,
-                            color: AppTheme.textSecondary.withOpacity(0.7),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatDate(dt),
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppTheme.textSecondary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                          ),
-                        ],
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          final rowIds =
+                              group.items.map((i) => i.rowId).toList();
+                          if (rowIds.isNotEmpty) {
+                            ref
+                                .read(verifiedProvider.notifier)
+                                .deleteBulk(rowIds);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Order deleted successfully.'),
+                                backgroundColor: AppTheme.success,
+                              ),
+                            );
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.error),
+                        child: const Text('Delete'),
                       ),
                     ],
                   ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                );
+              },
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
                   children: [
-                    Text(
-                      currencyFormat.format(group.totalAmount),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.textPrimary,
-                            letterSpacing: -0.3,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(6),
+                        color: isUnknown
+                            ? Colors.blue.withValues(alpha: 0.1)
+                            : AppTheme.primary.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
                       ),
+                      alignment: Alignment.center,
                       child: Text(
-                        statusLabel,
-                        style: const TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10,
-                          letterSpacing: 0.2,
+                        initial,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: isUnknown ? Colors.blue : AppTheme.primary,
+                          fontSize: 18,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$displayName$vehicleInfo',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                LucideIcons.calendar,
+                                size: 12,
+                                color: AppTheme.textSecondary.withValues(alpha: 0.7),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDate(dt),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          currencyFormat.format(group.totalAmount),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: AppTheme.textPrimary,
+                                    letterSpacing: -0.3,
+                                  ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: statusBg,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: const TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 10,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -560,7 +577,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
               decoration: InputDecoration(
                 hintText: 'Search by name, vehicle, or mobile',
                 hintStyle:
-                    TextStyle(color: AppTheme.textSecondary.withOpacity(0.6)),
+                    TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.6)),
                 prefixIcon: const Icon(LucideIcons.search,
                     color: AppTheme.textSecondary),
                 filled: true,
@@ -629,91 +646,120 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                           border: Border.all(color: AppTheme.border),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          leading: CircleAvatar(
-                            radius: 24,
-                            backgroundColor: AppTheme.primary.withOpacity(0.12),
-                            child: Text(
-                              initial,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primary,
-                                fontSize: 20,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            displayTitle,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Text(
-                              '${party.orderCount} Order(s)',
-                              style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                          trailing: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                currencyFormat.format(party.totalAmount),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                      color: AppTheme.textPrimary,
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              // Navigate using vehicleNumber as primary key when available
+                              context.pushNamed(
+                                'party-ledger',
+                                extra: {
+                                  'customerName': party.customerName,
+                                  'vehicleNumber': party.vehicleNumber,
+                                },
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primary.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
                                     ),
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: _kGreenBg,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  party.latestReceipt.isNotEmpty
-                                      ? '#${party.latestReceipt}'
-                                      : 'Ledger',
-                                  style: const TextStyle(
-                                    color: _kGreen,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 10,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      initial,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.primary,
+                                        fontSize: 18,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          displayTitle,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                  fontWeight: FontWeight.w700),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${party.orderCount} Order(s)',
+                                          style: const TextStyle(
+                                              color: AppTheme.textSecondary,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        currencyFormat
+                                            .format(party.totalAmount),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                              color: AppTheme.textPrimary,
+                                              letterSpacing: -0.3,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: _kGreenBg,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          party.latestReceipt.isNotEmpty
+                                              ? '#${party.latestReceipt}'
+                                              : 'Ledger',
+                                          style: const TextStyle(
+                                            color: _kGreen,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 10,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            // Navigate using vehicleNumber as primary key when available
-                            context.pushNamed(
-                              'party-ledger',
-                              extra: {
-                                'customerName': party.customerName,
-                                'vehicleNumber': party.vehicleNumber,
-                              },
-                            );
-                          },
                         ),
                       );
                     },
@@ -770,9 +816,6 @@ class _QuickLinksSection extends ConsumerWidget {
     final reviewCount = ref.watch(reviewProvider).groups.length;
     final poDraftCount = ref.watch(purchaseOrderProvider).draftCount;
 
-    final currencyFormat =
-        NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹');
-
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -782,7 +825,7 @@ class _QuickLinksSection extends ConsumerWidget {
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -820,7 +863,7 @@ class _QuickLinksSection extends ConsumerWidget {
                 title: 'Quick Reorder',
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  context.pushNamed('current-stock');
+                  context.pushNamed('quick-reorder');
                 },
               ),
               _buildActionItem(
@@ -839,8 +882,6 @@ class _QuickLinksSection extends ConsumerWidget {
                 icon: LucideIcons.indianRupee,
                 color: const Color(0xFF10B981), // Emerald
                 title: 'Today\'s Sale',
-                subtitle:
-                    '${currencyFormat.format(todayRevenue)}\n($todayReceipts receipt${todayReceipts == 1 ? '' : 's'})',
                 onTap: () {
                   HapticFeedback.lightImpact();
                   showModalBottomSheet(
@@ -886,7 +927,7 @@ class _QuickLinksSection extends ConsumerWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(icon, color: color, size: 24),
@@ -904,7 +945,7 @@ class _QuickLinksSection extends ConsumerWidget {
                           border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFEF4444).withOpacity(0.3),
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -1135,7 +1176,7 @@ class _TodaySaleSheet extends StatelessWidget {
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: emerald.withOpacity(0.1),
+                                  color: emerald.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,

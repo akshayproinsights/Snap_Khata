@@ -35,7 +35,7 @@ const LoginPage: React.FC = () => {
                 <div className="relative z-10 w-full max-w-3xl mt-12">
                     <img
                         src="/login-panel.png"
-                        alt="DigiEntry - Simply upload bills, we do the rest"
+                        alt="SnapKhata - Simply upload bills, we do the rest"
                         className="w-full h-auto object-contain"
                     />
                 </div>
@@ -48,8 +48,8 @@ const LoginPage: React.FC = () => {
                     <div className="text-center mb-8">
                         <div className="flex items-center justify-center mb-6">
                             <img
-                                src="/digientry_logo.png"
-                                alt="DigiEntry - Smart Digital Munim"
+                                src="/snapkhata_logo.png"
+                                alt="SnapKhata - Smart Digital Munim"
                                 className="w-[200px] h-auto object-contain"
                             />
                         </div>

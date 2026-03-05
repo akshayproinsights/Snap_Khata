@@ -70,7 +70,7 @@ class ReceiptCard extends StatelessWidget {
           border: Border.all(color: AppTheme.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             )
@@ -132,7 +132,7 @@ class ReceiptCard extends StatelessWidget {
                             border: Border.all(color: Colors.white, width: 1),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 2,
                               ),
                             ],
@@ -148,8 +148,8 @@ class ReceiptCard extends StatelessWidget {
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: onTap,
-                      splashColor: Colors.black.withOpacity(0.1),
-                      highlightColor: Colors.black.withOpacity(0.05),
+                      splashColor: Colors.black.withValues(alpha: 0.1),
+                      highlightColor: Colors.black.withValues(alpha: 0.05),
                     ),
                   ),
                 ),
@@ -191,7 +191,7 @@ class _BBoxPainter extends CustomPainter {
 
       // Fill
       final fillPaint = Paint()
-        ..color = color.withOpacity(0.15)
+        ..color = color.withValues(alpha: 0.15)
         ..style = PaintingStyle.fill;
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(2)),
@@ -200,7 +200,7 @@ class _BBoxPainter extends CustomPainter {
 
       // Stroke
       final strokePaint = Paint()
-        ..color = color.withOpacity(0.8)
+        ..color = color.withValues(alpha: 0.8)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0;
       canvas.drawRRect(

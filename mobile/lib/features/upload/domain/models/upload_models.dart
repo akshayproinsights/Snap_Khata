@@ -48,12 +48,12 @@ class UploadFileItem {
 
 class UploadTaskStatus {
   final String taskId;
-  final String
-      status; // 'processing', 'completed', 'failed', 'duplicate_detected'
+  final String status; // 'processing', 'completed', 'failed'
   final String message;
   final int total;
   final int processed;
   final int failed;
+  final int skipped; // duplicates auto-skipped (FIX-3)
   final List<dynamic>? duplicates;
 
   UploadTaskStatus({
@@ -63,6 +63,7 @@ class UploadTaskStatus {
     required this.total,
     required this.processed,
     required this.failed,
+    this.skipped = 0,
     this.duplicates,
   });
 
@@ -74,6 +75,7 @@ class UploadTaskStatus {
       total: json['progress']?['total'] ?? 0,
       processed: json['progress']?['processed'] ?? 0,
       failed: json['progress']?['failed'] ?? 0,
+      skipped: json['progress']?['skipped'] ?? json['skipped_count'] ?? 0,
       duplicates: json['duplicates'],
     );
   }

@@ -1,6 +1,6 @@
 """
 Supabase database client wrapper.
-Handles all database operations for DigiEntry.
+Handles all database operations for SnapKhata.
 """
 import os
 from typing import Optional, Dict, Any, List

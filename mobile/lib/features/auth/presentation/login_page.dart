@@ -6,6 +6,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -54,12 +55,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     height: 80,
                     width: 200,
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Center(
                       child: Text(
-                        'DigiEntry',
+                        'SnapKhata',
                         style: TextStyle(
                           color: AppTheme.primary,
                           fontSize: 28,
@@ -104,7 +105,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     border: Border.all(color: AppTheme.border),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 24,
                         offset: const Offset(0, 12),
                       ),
@@ -191,16 +192,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppTheme.success.withOpacity(0.1),
+                          color: AppTheme.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: AppTheme.success.withOpacity(0.3)),
+                              color: AppTheme.success.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(LucideIcons.messageCircle,
-                                color: AppTheme.success, size: 20),
+                            const FaIcon(FontAwesomeIcons.whatsapp,
+                                size: 20, color: Colors.green),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(

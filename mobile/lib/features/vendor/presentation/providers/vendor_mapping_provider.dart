@@ -58,18 +58,21 @@ class VendorMappingState {
   }
 }
 
-class VendorMappingNotifier extends StateNotifier<VendorMappingState> {
-  final VendorMappingRepository _repository;
+class VendorMappingNotifier extends Notifier<VendorMappingState> {
+  late final VendorMappingRepository _repository;
   Timer? _pollingTimer;
 
-  VendorMappingNotifier(this._repository) : super(VendorMappingState()) {
-    fetchExportData();
-  }
-
   @override
-  void dispose() {
-    _pollingTimer?.cancel();
-    super.dispose();
+  VendorMappingState build() {
+    _repository = ref.watch(vendorMappingRepositoryProvider);
+
+    ref.onDispose(() {
+      _pollingTimer?.cancel();
+    });
+
+    // Initialize data asynchronously after build
+    Future.microtask(() => fetchExportData());
+    return VendorMappingState();
   }
 
   Future<void> fetchExportData() async {
@@ -222,6 +225,5 @@ class VendorMappingNotifier extends StateNotifier<VendorMappingState> {
 }
 
 final vendorMappingProvider =
-    StateNotifierProvider<VendorMappingNotifier, VendorMappingState>((ref) {
-  return VendorMappingNotifier(ref.watch(vendorMappingRepositoryProvider));
-});
+    NotifierProvider<VendorMappingNotifier, VendorMappingState>(
+        VendorMappingNotifier.new);

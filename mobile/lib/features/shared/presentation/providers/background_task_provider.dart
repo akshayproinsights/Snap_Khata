@@ -29,8 +29,11 @@ class BackgroundTaskState {
   }
 }
 
-class BackgroundTaskNotifier extends StateNotifier<BackgroundTaskState> {
-  BackgroundTaskNotifier() : super(BackgroundTaskState());
+class BackgroundTaskNotifier extends Notifier<BackgroundTaskState> {
+  @override
+  BackgroundTaskState build() {
+    return BackgroundTaskState();
+  }
 
   void startTask(String message) {
     state = BackgroundTaskState(isProcessing: true, message: message);
@@ -54,7 +57,7 @@ class BackgroundTaskNotifier extends StateNotifier<BackgroundTaskState> {
     // Auto clear after 5 seconds if no action is provided
     if (actionLabel == null && onAction == null) {
       Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) clearTask();
+        clearTask();
       });
     }
   }
@@ -78,6 +81,5 @@ class BackgroundTaskNotifier extends StateNotifier<BackgroundTaskState> {
 }
 
 final backgroundTaskProvider =
-    StateNotifierProvider<BackgroundTaskNotifier, BackgroundTaskState>((ref) {
-  return BackgroundTaskNotifier();
-});
+    NotifierProvider<BackgroundTaskNotifier, BackgroundTaskState>(
+        BackgroundTaskNotifier.new);

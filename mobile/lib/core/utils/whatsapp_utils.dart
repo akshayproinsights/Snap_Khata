@@ -40,20 +40,19 @@ class WhatsAppUtils {
     switch (status) {
       case OrderPaymentStatus.unpaid:
         return 'Hi $customerName,\n'
-            'Your order from *$businessName* is ready. Please check the attached link for full details.\n'
+            'Your order from *$businessName* is ready. Please check the receipt link for full details.\n'
             '⚠️ *Amount Due: $totalFmt*\n'
             'Thank you for choosing *$businessName*.';
 
       case OrderPaymentStatus.partiallyPaid:
         return 'Hi $customerName,\n'
-            'We have received your advance for *Order #$orderNumber*. The detailed order snapshot is attached.\n'
+            'We have received your advance for *Order #$orderNumber*. The detailed order snapshot is at the link below.\n'
             '⏳ *Balance Pending: $pendingFmt*';
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi $customerName,\n'
-            'Your order *#$orderNumber* with *$businessName* is confirmed! 🎉\n'
-            '✅ *Amount Paid: $totalFmt*\n'
-            'Please find your final receipt attached. Thank you for doing business with us!';
+            'Your order with $businessName has been successfully generated.\n'
+            '💳 Amount Paid: $totalFmt';
     }
   }
 
@@ -66,7 +65,7 @@ class WhatsAppUtils {
 
   /// Builds a wa.me deep link for the given phone and message.
   ///
-  /// Example: https://wa.me/91XXXXXXXXXX?text=<url_encoded_message>
+  /// Example: https://wa.me/91XXXXXXXXXX?text=`url_encoded_message`
   static Uri buildWaMeUri({
     required String phone,
     required String message,

@@ -64,7 +64,7 @@ class NotificationService {
   static void _storeMessage(RemoteMessage message) {
     final notification = message.notification;
     final title =
-        notification?.title ?? message.data['title'] as String? ?? 'DigiEntry';
+        notification?.title ?? message.data['title'] as String? ?? 'SnapKhata';
     final body = notification?.body ?? message.data['body'] as String? ?? '';
 
     _container?.read(notificationProvider.notifier).addFromFirebase(

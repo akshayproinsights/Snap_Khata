@@ -7,9 +7,11 @@ const _kDarkModeKey = 'dark_mode_enabled';
 
 /// Riverpod provider that manages the app's theme mode.
 /// Persists user choice to SharedPreferences.
-class ThemeNotifier extends StateNotifier<ThemeMode> {
-  ThemeNotifier() : super(ThemeMode.light) {
+class ThemeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() {
     _loadFromPrefs();
+    return ThemeMode.light;
   }
 
   Future<void> _loadFromPrefs() async {
@@ -27,6 +29,5 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
   bool get isDark => state == ThemeMode.dark;
 }
 
-final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>(
-  (ref) => ThemeNotifier(),
-);
+final themeProvider =
+    NotifierProvider<ThemeNotifier, ThemeMode>(ThemeNotifier.new);

@@ -6,7 +6,6 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/data/current_stock_repository.dart';
 import 'package:mobile/features/inventory/domain/models/current_stock_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/current_stock_provider.dart';
-import 'package:intl/intl.dart';
 import 'package:mobile/shared/widgets/shimmer_placeholders.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
@@ -41,15 +40,9 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
         priorityFilter:
             state.priorityFilter == 'all' ? null : state.priorityFilter,
       );
-      // share_plus v10 API
-      await Share.shareXFiles(
-        [
-          XFile(filePath,
-              mimeType:
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        ],
-        subject: 'DigiEntry Stock Export',
-        text: 'Stock register exported from DigiEntry',
+      // share_plus API
+      await SharePlus.instance.share(
+        ShareParams(uri: Uri.file(filePath)),
       );
     } catch (e) {
       if (mounted) {
@@ -64,8 +57,6 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(currentStockProvider);
     final poState = ref.watch(purchaseOrderProvider);
-    final NumberFormat currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -289,41 +280,6 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-
-                      // ── Stats row ──
-                      Row(
-                        children: [
-                          Expanded(
-                              child: _buildStatCard(
-                                  'Value',
-                                  currencyFormat
-                                      .format(state.summary.totalStockValue),
-                                  Colors.blue)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                              child: _buildStatCard(
-                                  'Items',
-                                  state.summary.totalItems.toString(),
-                                  Colors.purple)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                              child: _buildStatCard(
-                                  'Low Stock',
-                                  state.summary.lowStockItems.toString(),
-                                  Colors.orange)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                              child: _buildStatCard(
-                                  'Out of Stock',
-                                  state.summary.outOfStock.toString(),
-                                  Colors.red)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -344,7 +300,8 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               color: AppTheme.surface,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                  color: AppTheme.border.withOpacity(0.5)),
+                                  color:
+                                      AppTheme.border.withValues(alpha: 0.5)),
                             ),
                             child: const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -461,33 +418,6 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, MaterialColor color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: color.shade700)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStockCard(BuildContext context, WidgetRef ref, StockLevel item) {
     final onHandValue = item.currentStock + (item.manualAdjustment ?? 0);
     final isOutOfStock = onHandValue <= 0;
@@ -515,7 +445,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
         border: Border.all(color: isOnHandLow ? statusBorder : AppTheme.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2))
         ],
@@ -549,11 +479,11 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                                   horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
                                 color: _priorityColor(item.priority!)
-                                    .withOpacity(0.12),
+                                    .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                     color: _priorityColor(item.priority!)
-                                        .withOpacity(0.5)),
+                                        .withValues(alpha: 0.5)),
                               ),
                               child: Text(
                                 item.priority!,
@@ -668,8 +598,8 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                         const Text('Add to PO', style: TextStyle(fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primary,
-                      side:
-                          BorderSide(color: AppTheme.primary.withOpacity(0.5)),
+                      side: BorderSide(
+                          color: AppTheme.primary.withValues(alpha: 0.5)),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -1165,7 +1095,7 @@ class _StatusChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : AppTheme.surface,
+          color: selected ? color.withValues(alpha: 0.15) : AppTheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
               color: selected ? color : AppTheme.border,
@@ -1230,7 +1160,7 @@ class _PriorityChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : AppTheme.surface,
+          color: selected ? color.withValues(alpha: 0.15) : AppTheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
               color: selected ? color : AppTheme.border,

@@ -24,11 +24,14 @@ class NotificationState {
   }
 }
 
-class NotificationNotifier extends StateNotifier<NotificationState> {
-  final NotificationRepository _repo;
+class NotificationNotifier extends Notifier<NotificationState> {
+  late final NotificationRepository _repo;
 
-  NotificationNotifier(this._repo) : super(NotificationState.empty()) {
-    _reload();
+  @override
+  NotificationState build() {
+    _repo = ref.watch(notificationRepositoryProvider);
+    Future.microtask(() => _reload());
+    return NotificationState.empty();
   }
 
   void _reload() {
@@ -82,10 +85,8 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 }
 
 final notificationProvider =
-    StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
-  final repo = ref.watch(notificationRepositoryProvider);
-  return NotificationNotifier(repo);
-});
+    NotifierProvider<NotificationNotifier, NotificationState>(
+        NotificationNotifier.new);
 
 /// Simple count-only provider used by bell badge — avoids rebuilding entire page
 final unreadCountProvider = Provider<int>((ref) {

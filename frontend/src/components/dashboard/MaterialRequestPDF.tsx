@@ -167,8 +167,8 @@ const MaterialRequestPDF: React.FC<MaterialRequestPDFProps> = ({
                             <div className="flex flex-col items-center">
                                 <div className="border-2 border-gray-200 rounded-xl p-3 bg-white flex flex-col items-center shadow-sm min-w-[140px]">
                                     <img
-                                        src="/digientry_seal.png"
-                                        alt="DigiEntry"
+                                        src="/snapkhata_seal.png"
+                                        alt="SnapKhata"
                                         className="h-14 object-contain mb-1" /* Increased size */
                                     />
                                     {/* Text labels removed for Top 1% cleaner look */}

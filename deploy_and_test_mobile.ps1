@@ -2,17 +2,6 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "Starting deployment process..." -ForegroundColor Cyan
-
-# 1. Deploy backend
-Write-Host "`n[1/3] Deploying backend to Cloud Run..." -ForegroundColor Yellow
-Set-Location -Path "c:\Users\MSi\Documents\Superbase\backend"
-gcloud run deploy snap-khata-backend --source . --region asia-south1 --allow-unauthenticated --quiet
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Backend deployment failed."
-    exit $LASTEXITCODE
-}
-Write-Host "Backend deployment successful!" -ForegroundColor Green
 
 # 2. Build Flutter APK
 Write-Host "`n[2/3] Building Flutter APK..." -ForegroundColor Yellow

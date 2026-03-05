@@ -61,11 +61,14 @@ class InventoryMappingState {
   }
 }
 
-class InventoryMappingNotifier extends StateNotifier<InventoryMappingState> {
-  final InventoryMappingRepository _repository;
+class InventoryMappingNotifier extends Notifier<InventoryMappingState> {
+  late final InventoryMappingRepository _repository;
 
-  InventoryMappingNotifier(this._repository) : super(InventoryMappingState()) {
-    fetchItems(page: 1);
+  @override
+  InventoryMappingState build() {
+    _repository = ref.watch(inventoryMappingRepositoryProvider);
+    Future.microtask(() => fetchItems(page: 1));
+    return InventoryMappingState();
   }
 
   Future<void> fetchItems({required int page, bool? showCompleted}) async {
@@ -195,8 +198,5 @@ class InventoryMappingNotifier extends StateNotifier<InventoryMappingState> {
 }
 
 final inventoryMappingProvider =
-    StateNotifierProvider<InventoryMappingNotifier, InventoryMappingState>(
-        (ref) {
-  return InventoryMappingNotifier(
-      ref.watch(inventoryMappingRepositoryProvider));
-});
+    NotifierProvider<InventoryMappingNotifier, InventoryMappingState>(
+        InventoryMappingNotifier.new);

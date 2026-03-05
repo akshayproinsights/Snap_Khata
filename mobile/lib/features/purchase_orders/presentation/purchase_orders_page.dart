@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -8,7 +9,6 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:printing/printing.dart';
 import 'package:mobile/features/purchase_orders/utils/pdf_generator.dart';
 
@@ -155,7 +155,7 @@ class _DraftTab extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(LucideIcons.shoppingCart,
-                size: 56, color: AppTheme.textSecondary.withOpacity(0.4)),
+                size: 56, color: AppTheme.textSecondary.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             const Text('Draft is empty',
                 style: TextStyle(
@@ -228,7 +228,7 @@ class _CartBottomBar extends ConsumerWidget {
         color: AppTheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             offset: const Offset(0, -4),
             blurRadius: 10,
           )
@@ -299,7 +299,7 @@ class _DraftItemCard extends ConsumerWidget {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppTheme.error.withOpacity(0.1),
+          color: AppTheme.error.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(LucideIcons.trash2, color: AppTheme.error),
@@ -329,7 +329,7 @@ class _DraftItemCard extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    color: priorityColor.withOpacity(0.12),
+                    color: priorityColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(item.priority,
@@ -372,14 +372,31 @@ class _DraftItemCard extends ConsumerWidget {
                               color: AppTheme.primary)),
                   ],
                 ),
-                // Qty stepper
-                _QtyStepper(
-                  value: item.reorderQty,
-                  onChanged: (qty) {
-                    ref
-                        .read(purchaseOrderProvider.notifier)
-                        .updateQty(item.partNumber, qty);
-                  },
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(LucideIcons.trash2,
+                          size: 18, color: AppTheme.error),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        ref
+                            .read(purchaseOrderProvider.notifier)
+                            .removeItem(item.partNumber);
+                      },
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      constraints: const BoxConstraints(),
+                    ),
+                    // Qty stepper
+                    _QtyStepper(
+                      value: item.reorderQty,
+                      onChanged: (qty) {
+                        ref
+                            .read(purchaseOrderProvider.notifier)
+                            .updateQty(item.partNumber, qty);
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -616,10 +633,6 @@ class _PoSuccessSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final message =
-        'Hi! I am sharing our Purchase Order *$poNumber* generated via DigiEntry. '
-        'Please confirm receipt and provide delivery timeline. Thank you!';
-
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.surface,
@@ -633,7 +646,7 @@ class _PoSuccessSheet extends ConsumerWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: AppTheme.success.withOpacity(0.12),
+              color: AppTheme.success.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(LucideIcons.checkCircle,
@@ -650,78 +663,48 @@ class _PoSuccessSheet extends ConsumerWidget {
                   color: AppTheme.primary)),
           const SizedBox(height: 8),
           const Text(
-              'Your PO has been saved. Share it with your supplier via WhatsApp.',
+              'Your PO has been saved. Share it with your supplier as a PDF.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(LucideIcons.messageCircle, size: 18),
-                    label: const Text('WhatsApp',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: const Color(0xFF25D366),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _shareWhatsApp(message);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(LucideIcons.fileText, size: 18),
-                    label: const Text('PDF',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      try {
-                        final history = ref.read(purchaseOrderProvider).history;
-                        final po =
-                            history.firstWhere((p) => p.poNumber == poNumber);
+            child: ElevatedButton.icon(
+              icon: const Icon(LucideIcons.fileText, size: 18),
+              label: const Text('Send PDF',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                try {
+                  final history = ref.read(purchaseOrderProvider).history;
+                  final po = history.firstWhere((p) => p.poNumber == poNumber);
 
-                        final details = await ref
-                            .read(purchaseOrderRepositoryProvider)
-                            .getPurchaseOrderDetails(po.id);
+                  final details = await ref
+                      .read(purchaseOrderRepositoryProvider)
+                      .getPurchaseOrderDetails(po.id);
 
-                        if (details != null) {
-                          final bytes =
-                              await MaterialRequestPdfGenerator.generate(
-                                  details, 'Adnak',
-                                  notes: po.notes);
-                          await Printing.sharePdf(
-                              bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
-                        } else {
-                          if (context.mounted) {
-                            AppToast.showError(
-                                context, 'Failed to generate PDF');
-                          }
-                        }
-                      } catch (e) {
-                        debugPrint('PDF generation error: $e');
-                      }
-                    },
-                  ),
-                ),
-              ],
+                  if (details != null) {
+                    final bytes = await MaterialRequestPdfGenerator.generate(
+                        details, 'Adnak',
+                        notes: po.notes);
+                    await Printing.sharePdf(
+                        bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
+                  } else {
+                    if (context.mounted) {
+                      AppToast.showError(context, 'Failed to generate PDF');
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('PDF generation error: $e');
+                }
+              },
             ),
           ),
           const SizedBox(height: 10),
@@ -733,14 +716,6 @@ class _PoSuccessSheet extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _shareWhatsApp(String message) async {
-    final encoded = Uri.encodeComponent(message);
-    final uri = Uri.parse('https://wa.me/?text=$encoded');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 }
 
@@ -760,7 +735,7 @@ class _HistoryTab extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(LucideIcons.clipboardList,
-                size: 56, color: AppTheme.textSecondary.withOpacity(0.4)),
+                size: 56, color: AppTheme.textSecondary.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             const Text('No purchase orders yet',
                 style: TextStyle(
@@ -893,13 +868,14 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color:
-              _expanded ? AppTheme.primary.withOpacity(0.3) : AppTheme.border,
+          color: _expanded
+              ? AppTheme.primary.withValues(alpha: 0.3)
+              : AppTheme.border,
         ),
         boxShadow: _expanded
             ? [
                 BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.06),
+                    color: AppTheme.primary.withValues(alpha: 0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2))
               ]
@@ -922,7 +898,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
+                      color: AppTheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(LucideIcons.fileText,
@@ -960,7 +936,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
+                          color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(po.statusLabel,
@@ -1004,7 +980,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _ActionButton(
-                          icon: LucideIcons.messageCircle,
+                          icon: FontAwesomeIcons.whatsapp,
                           label: 'WhatsApp',
                           color: const Color(0xFF25D366),
                           onTap: _reshareWhatsApp,
@@ -1032,12 +1008,12 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String label;
   final Color color;
   final VoidCallback onTap;
   const _ActionButton({
-    required this.icon,
+    this.icon,
     required this.label,
     required this.color,
     required this.onTap,
@@ -1050,13 +1026,13 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 16, color: color),
+            if (icon != null) Icon(icon, size: 16, color: color),
             const SizedBox(height: 3),
             Text(label,
                 style: TextStyle(
@@ -1160,8 +1136,8 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color:
-                                            AppTheme.primary.withOpacity(0.1),
+                                        color: AppTheme.primary
+                                            .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       alignment: Alignment.center,

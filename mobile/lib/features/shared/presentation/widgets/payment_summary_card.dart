@@ -1,0 +1,532 @@
+import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+
+enum GstMode { included, excluded, none }
+
+class PaymentSummaryItem {
+  final String rowId;
+  final String description;
+  final double amount;
+
+  const PaymentSummaryItem({
+    required this.rowId,
+    required this.description,
+    required this.amount,
+  });
+}
+
+class PaymentSummaryCard extends StatelessWidget {
+  final GstMode gstMode;
+  final Set<String> taxableRowIds; // row IDs marked as Parts (taxable)
+  final double partsSubtotal; // sum of taxable items
+  final double laborSubtotal; // sum of non-taxable items
+  final double gstAmount; // GST on partsSubtotal only
+  final double grandTotal; // parts + labor + GST (if excluded)
+  final double originalTotal; // original total from header or simple sum
+  final List<PaymentSummaryItem> lineItems;
+  final void Function(GstMode) onGstModeChanged;
+  final void Function(String rowId, bool taxable) onToggleTaxable;
+
+  const PaymentSummaryCard({
+    super.key,
+    required this.gstMode,
+    required this.taxableRowIds,
+    required this.partsSubtotal,
+    required this.laborSubtotal,
+    required this.gstAmount,
+    required this.grandTotal,
+    required this.originalTotal,
+    required this.lineItems,
+    required this.onGstModeChanged,
+    required this.onToggleTaxable,
+  });
+
+  String _fmt(double v) {
+    final s = v.toStringAsFixed(2);
+    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isGstInvoice = gstMode != GstMode.none;
+    final hasLabor = laborSubtotal > 0.01;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isGstInvoice
+              ? [const Color(0xFF0F172A), const Color(0xFF1E3A5F)]
+              : [const Color(0xFF0F172A), const Color(0xFF1A2A3A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Card Header ─────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(LucideIcons.receipt,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Payment Summary',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    Text(
+                      isGstInvoice
+                          ? 'GST Invoice @18% on Parts'
+                          : 'Order Summary',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Invoice Type Toggle ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  _TypePill(
+                    label: '📋 Order Summary',
+                    selected: gstMode == GstMode.none,
+                    onTap: () => onGstModeChanged(GstMode.none),
+                  ),
+                  const SizedBox(width: 4),
+                  _TypePill(
+                    label: '🧾 GST Invoice',
+                    selected: isGstInvoice,
+                    onTap: () => onGstModeChanged(GstMode.included),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Include / Exclude sub-toggle ─────────────────────────────────
+          if (isGstInvoice) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    _GstModePill(
+                      label: 'Included in price',
+                      sublabel: 'GST inside bill total',
+                      selected: gstMode == GstMode.included,
+                      onTap: () => onGstModeChanged(GstMode.included),
+                    ),
+                    const SizedBox(width: 4),
+                    _GstModePill(
+                      label: 'Exclude (add on top)',
+                      sublabel: 'GST added to total',
+                      selected: gstMode == GstMode.excluded,
+                      onTap: () => onGstModeChanged(GstMode.excluded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // ── Per-item Part / Labor toggles ────────────────────────────────
+          if (lineItems.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.tag,
+                      color: Color(0xFF94A3B8), size: 13),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Mark each item as Part or Labor',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...lineItems.map((item) {
+              final isTaxable = taxableRowIds.contains(item.rowId);
+              return Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
+                  children: [
+                    // Item name
+                    Expanded(
+                      child: Text(
+                        item.description.isEmpty ? 'Item' : item.description,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Amount
+                    Text(
+                      '₹${_fmt(item.amount)}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Part / Labor chip row
+                    _ItemTypePill(
+                      isPart: true,
+                      selected: isTaxable,
+                      onTap: () => onToggleTaxable(item.rowId, true),
+                    ),
+                    const SizedBox(width: 4),
+                    _ItemTypePill(
+                      isPart: false,
+                      selected: !isTaxable,
+                      onTap: () => onToggleTaxable(item.rowId, false),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Divider ──────────────────────────────────────────────────────
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: Colors.white.withValues(alpha: 0.1),
+          ),
+
+          // ── Amount Breakdown ─────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              children: [
+                _AmountRow(
+                  label: 'Parts Subtotal',
+                  value: '₹${_fmt(partsSubtotal)}',
+                  labelColor: Colors.white.withValues(alpha: 0.7),
+                  valueColor: Colors.white.withValues(alpha: 0.9),
+                ),
+                if (hasLabor) ...[
+                  const SizedBox(height: 8),
+                  _AmountRow(
+                    label: 'Labor / Service (no GST)',
+                    value: '₹${_fmt(laborSubtotal)}',
+                    labelColor: Colors.white.withValues(alpha: 0.45),
+                    valueColor: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ],
+                if (isGstInvoice) ...[
+                  const SizedBox(height: 10),
+                  _AmountRow(
+                    label: gstMode == GstMode.included
+                        ? 'GST @18% on Parts (included within)'
+                        : 'GST @18% on Parts (excluded, added on top)',
+                    value: gstMode == GstMode.included
+                        ? '₹${_fmt(gstAmount)} ✓'
+                        : '+ ₹${_fmt(gstAmount)}',
+                    labelColor: const Color(0xFFFBBF24),
+                    valueColor: const Color(0xFFFBBF24),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Container(height: 1, color: Colors.white.withValues(alpha: 0.15)),
+                const SizedBox(height: 14),
+                // Grand Total
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total Amount',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    Text(
+                      '₹${_fmt(grandTotal)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+                // Excluded GST delta notice
+                if (gstMode == GstMode.excluded &&
+                    grandTotal > originalTotal) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.alertTriangle,
+                            color: Color(0xFFFBBF24), size: 13),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Excluded GST adds ₹${_fmt(gstAmount)} on parts — '
+                            'new total ₹${_fmt(grandTotal)} '
+                            '(original: ₹${_fmt(originalTotal)})',
+                            style: const TextStyle(
+                              color: Color(0xFFFBBF24),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (gstMode == GstMode.included) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'GST @18% on parts is already included within the prices.',
+                    style: TextStyle(
+                      color: Colors.greenAccent.withValues(alpha: 0.75),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small chip to mark a line item as Part (taxable) or Labor (no GST).
+class _ItemTypePill extends StatelessWidget {
+  final bool isPart; // true = Part, false = Labor
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ItemTypePill({
+    required this.isPart,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isPart ? '\u2699\uFE0F Part' : '\uD83D\uDD27 Labor';
+    final selectedColor =
+        isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color:
+              selected ? selectedColor.withValues(alpha: 0.85) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? selectedColor : Colors.white.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : Colors.white38,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypePill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TypePill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: selected ? const Color(0xFF0F172A) : Colors.white54,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GstModePill extends StatelessWidget {
+  final String label;
+  final String sublabel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _GstModePill({
+    required this.label,
+    required this.sublabel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          decoration: BoxDecoration(
+            color:
+                selected ? Colors.amber.withValues(alpha: 0.85) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Column(
+            children: [
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? const Color(0xFF0F172A) : Colors.white54,
+                ),
+              ),
+              Text(
+                sublabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: selected
+                      ? const Color(0xFF0F172A).withValues(alpha: 0.7)
+                      : Colors.white30,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AmountRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color labelColor;
+  final Color valueColor;
+
+  const _AmountRow({
+    required this.label,
+    required this.value,
+    required this.labelColor,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(color: labelColor, fontSize: 13),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}

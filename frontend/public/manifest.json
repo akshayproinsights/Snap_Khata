@@ -1,14 +1,14 @@
 {
-    "short_name": "DigiEntry",
-    "name": "DigiEntry: Smart Digital Munim",
+    "short_name": "SnapKhata",
+    "name": "SnapKhata: Smart Digital Munim",
     "icons": [
         {
-            "src": "/digientry-icon-large.png",
+            "src": "/snapkhata-icon-large.png",
             "type": "image/png",
             "sizes": "192x192"
         },
         {
-            "src": "/digientry-icon-large.png",
+            "src": "/snapkhata-icon-large.png",
             "type": "image/png",
             "sizes": "512x512"
         }

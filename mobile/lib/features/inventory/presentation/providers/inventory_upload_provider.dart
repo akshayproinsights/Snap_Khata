@@ -1,146 +1,620 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart';
-import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/core/routing/app_router.dart';
+import 'package:mobile/core/network/sync_queue_service.dart';
+import 'package:mobile/features/inventory/data/inventory_persistence_service.dart';
+import 'package:mobile/features/inventory/data/inventory_upload_repository.dart';
 import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
+import 'package:mobile/features/upload/domain/models/upload_models.dart';
+
+// ─────────────────── State ───────────────────────────────────────────────────
 
 class InventoryUploadState {
-  final List<XFile> selectedFiles;
+  /// Rich per-file items
+  final List<UploadFileItem> fileItems;
+
+  /// Legacy compatibility
+  List<XFile> get selectedFiles =>
+      fileItems.map((i) => XFile(i.path, name: i.name)).toList();
+
   final bool isUploading;
   final bool isProcessing;
   final double uploadProgress;
+  final UploadTaskStatus? processingStatus;
   final String? error;
-  final Map<String, dynamic>? processingStatus;
+
+  /// Active task ID — stored in-memory AND on disk for kill-recovery
+  final String? activeTaskId;
+
+  /// True while the provider is checking disk / backend for an active task.
+  /// The UI MUST show a loading screen (NOT the camera) while this is true.
+  final bool isRestoringState;
 
   InventoryUploadState({
-    this.selectedFiles = const [],
+    this.fileItems = const [],
     this.isUploading = false,
     this.isProcessing = false,
     this.uploadProgress = 0.0,
-    this.error,
     this.processingStatus,
+    this.error,
+    this.activeTaskId,
+    this.isRestoringState = true,
   });
 
+  int get pendingCount =>
+      fileItems.where((f) => f.status == UploadFileStatus.idle).length;
+  int get failedCount =>
+      fileItems.where((f) => f.status == UploadFileStatus.failed).length;
+  int get doneCount =>
+      fileItems.where((f) => f.status == UploadFileStatus.done).length;
+  bool get hasFiles => fileItems.isNotEmpty;
+  bool get allDone => fileItems.isNotEmpty && doneCount == fileItems.length;
+
+  /// True when a task is actively running (upload OR processing)
+  bool get isActive => isUploading || isProcessing;
+
   InventoryUploadState copyWith({
-    List<XFile>? selectedFiles,
+    List<UploadFileItem>? fileItems,
     bool? isUploading,
     bool? isProcessing,
     double? uploadProgress,
+    UploadTaskStatus? processingStatus,
     String? error,
-    Map<String, dynamic>? processingStatus,
+    String? activeTaskId,
+    bool clearActiveTaskId = false,
+    bool? isRestoringState,
   }) {
     return InventoryUploadState(
-      selectedFiles: selectedFiles ?? this.selectedFiles,
+      fileItems: fileItems ?? this.fileItems,
       isUploading: isUploading ?? this.isUploading,
       isProcessing: isProcessing ?? this.isProcessing,
       uploadProgress: uploadProgress ?? this.uploadProgress,
-      error: error,
       processingStatus: processingStatus ?? this.processingStatus,
+      error: error,
+      activeTaskId:
+          clearActiveTaskId ? null : (activeTaskId ?? this.activeTaskId),
+      isRestoringState: isRestoringState ?? this.isRestoringState,
     );
   }
 }
 
-class InventoryUploadNotifier extends StateNotifier<InventoryUploadState> {
-  final Dio _dio;
-  final BackgroundTaskNotifier _backgroundTask;
+// ─────────────────── Notifier ────────────────────────────────────────────────
 
-  InventoryUploadNotifier(
-      {Dio? dio, required BackgroundTaskNotifier backgroundTask})
-      : _dio = dio ?? ApiClient().dio,
-        _backgroundTask = backgroundTask,
-        super(InventoryUploadState());
+class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
+  late final InventoryUploadRepository _repository;
+  late final BackgroundTaskNotifier _backgroundTask;
+  Timer? _pollingTimer;
+  int _consecutivePollingErrors = 0;
+  static const int _maxPollingErrors = 3;
 
-  void addFiles(List<XFile> files) {
+  @override
+  InventoryUploadState build() {
+    _repository = ref.watch(inventoryUploadRepositoryProvider);
+    _backgroundTask = ref.watch(backgroundTaskProvider.notifier);
+    return InventoryUploadState();
+  }
+
+  // ─────────────────────────── File management ────────────────────
+
+  Future<void> addFiles(List<XFile> newFiles) async {
+    final existingNames = state.fileItems.map((f) => f.name).toSet();
+    final newItems = <UploadFileItem>[];
+
+    for (final file in newFiles) {
+      if (existingNames.contains(file.name)) continue;
+      int? size;
+      try {
+        size = await File(file.path).length();
+      } catch (_) {}
+      newItems.add(UploadFileItem(
+        path: file.path,
+        name: file.name,
+        sizeBytes: size,
+      ));
+    }
+
     state = state.copyWith(
-      selectedFiles: [...state.selectedFiles, ...files],
+      fileItems: [...state.fileItems, ...newItems],
       error: null,
-      processingStatus: null,
     );
   }
 
   void removeFile(int index) {
-    final newFiles = List<XFile>.from(state.selectedFiles)..removeAt(index);
-    state = state.copyWith(selectedFiles: newFiles);
+    final updated = List<UploadFileItem>.from(state.fileItems);
+    updated.removeAt(index);
+    state = state.copyWith(fileItems: updated);
   }
 
+  /// Safe clear — no-op when a task is active OR restoring.
   void clearFiles() {
-    state = InventoryUploadState();
+    if (state.isActive || state.isRestoringState) return;
+    state = InventoryUploadState(isRestoringState: false);
   }
 
-  Future<void> uploadAndProcess() async {
-    if (state.selectedFiles.isEmpty) return;
+  /// Force-clear regardless of active state.
+  Future<void> forceReset() async {
+    _pollingTimer?.cancel();
+    _consecutivePollingErrors = 0;
+    await InventoryPersistenceService.clearTask();
+    state = InventoryUploadState(isRestoringState: false);
+  }
+
+  /// Called when the page confirms an active backend task but the provider
+  /// doesn't know about it (state was lost on navigation/kill).
+  void forceIntoProcessingState(String taskId, int fileCount) {
+    if (state.isProcessing && state.activeTaskId == taskId) {
+      return; // already tracking
+    }
+
+    final placeholders = List.generate(
+      fileCount,
+      (i) => UploadFileItem(
+        path: '',
+        name: 'invoice',
+        status: UploadFileStatus.processing,
+      ),
+    );
 
     state = state.copyWith(
+      fileItems: placeholders,
+      isProcessing: true,
+      isUploading: false,
+      activeTaskId: taskId,
+      isRestoringState: false,
+    );
+
+    InventoryPersistenceService.saveTask(taskId, fileCount: fileCount);
+
+    if (_pollingTimer == null || !_pollingTimer!.isActive) {
+      _startPolling(taskId);
+    }
+  }
+
+  // ─────────────── Cold-launch & warm-resume recovery ─────────────
+
+  /// Three-layer recovery — called from initState AND AppLifecycleState.resumed.
+  ///   1. In-memory state check (instant)
+  ///   2. Disk persistence check (SharedPreferences — fast)
+  ///   3. Backend check (getRecentTask API — bulletproof)
+  Future<void> resumeIfActive() async {
+    // ── Layer 1: In-memory checks ──────────────────────────────────
+
+    if (state.isUploading) {
+      state = state.copyWith(isRestoringState: false);
+      return;
+    }
+
+    if (state.isProcessing && state.activeTaskId != null) {
+      if (_pollingTimer == null || !_pollingTimer!.isActive) {
+        _startPolling(state.activeTaskId!);
+      }
+      state = state.copyWith(isRestoringState: false);
+      return;
+    }
+
+    if (state.allDone) {
+      state = state.copyWith(isRestoringState: false);
+      await forceReset();
+      AppRouter.router.go('/inventory-review');
+      return;
+    }
+
+    final hasStuckUploading =
+        state.fileItems.any((f) => f.status == UploadFileStatus.uploading);
+    if (hasStuckUploading) {
+      final recovered = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading) {
+          return item.copyWith(status: UploadFileStatus.idle);
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        fileItems: recovered,
+        isUploading: false,
+        isProcessing: false,
+        error: null,
+        isRestoringState: false,
+      );
+      return;
+    }
+
+    // ── Layer 2+3 require async — set restoring flag FIRST ─────────
+    state = state.copyWith(isRestoringState: true);
+
+    // ── Layer 2: Disk persistence check ────────────────────────────
+
+    final savedTaskId = await InventoryPersistenceService.loadActiveTaskId();
+    if (savedTaskId != null) {
+      // CRITICAL: Verify the task is still actually in-progress on the backend
+      // before re-entering the processing state. If it already completed/failed
+      // (e.g. app was killed after backend finished but before clearTask() ran),
+      // we must clear disk and show the camera — not loop forever.
+      try {
+        final latestStatus = await _repository.getProcessStatus(savedTaskId);
+        if (latestStatus.status == 'completed') {
+          await InventoryPersistenceService.clearTask();
+          state = state.copyWith(isRestoringState: false);
+          // Navigate to inventory review since the task is done
+          AppRouter.router.go('/inventory-review');
+          return;
+        } else if (latestStatus.status == 'failed') {
+          await InventoryPersistenceService.clearTask();
+          state = state.copyWith(isRestoringState: false);
+          return;
+        } else if (latestStatus.status == 'processing' ||
+            latestStatus.status == 'queued') {
+          // Task is still running — but cross-check against the most-recent
+          // task in case this saved ID is stale (app was killed mid-processing
+          // and a newer upload already finished before we got here).
+          try {
+            final recentTask = await _repository.getRecentTask();
+            final recentId = recentTask['task_id'] as String? ?? '';
+            final recentStatus = recentTask['status'] as String? ?? '';
+            if (recentId.isNotEmpty &&
+                recentId != savedTaskId &&
+                recentStatus == 'completed') {
+              // A newer task already completed — this saved ID is an orphan.
+              await InventoryPersistenceService.clearTask();
+              state = state.copyWith(isRestoringState: false);
+              AppRouter.router.go('/inventory-review');
+              return;
+            }
+          } catch (_) {
+            // Ignore — fall through and resume polling the saved task
+          }
+        }
+      } catch (_) {
+        // Network error — assume still in progress and resume normally
+      }
+
+      final fileCount = await InventoryPersistenceService.loadActiveFileCount();
+      final placeholders = List.generate(
+        fileCount,
+        (i) => UploadFileItem(
+          path: '',
+          name: 'invoice',
+          status: UploadFileStatus.processing,
+        ),
+      );
+      state = state.copyWith(
+        fileItems: placeholders,
+        isProcessing: true,
+        isUploading: false,
+        activeTaskId: savedTaskId,
+        isRestoringState: false,
+      );
+      _startPolling(savedTaskId);
+      return;
+    }
+
+    final hasUploadPhase = await InventoryPersistenceService.hasUploadPhase();
+    if (hasUploadPhase) {
+      final filePaths =
+          await InventoryPersistenceService.loadUploadPhaseFiles();
+      if (filePaths.isNotEmpty) {
+        final items = filePaths.map((p) {
+          final name = p.split('/').last.split('\\').last;
+          return UploadFileItem(
+              path: p, name: name, status: UploadFileStatus.idle);
+        }).toList();
+        state = state.copyWith(
+          fileItems: items,
+          isUploading: false,
+          isProcessing: false,
+          error: null,
+          isRestoringState: false,
+        );
+        await uploadAndProcess();
+        return;
+      } else {
+        await InventoryPersistenceService.clearUploadPhase();
+      }
+    }
+
+    // ── Layer 3: Backend check — ultimate source of truth ───────────
+    try {
+      final recentTask = await _repository.getRecentTask();
+      final taskStatus = recentTask['status'] as String? ?? '';
+      final taskId = recentTask['task_id'] as String? ?? '';
+
+      if (taskId.isNotEmpty &&
+          (taskStatus == 'processing' ||
+              taskStatus == 'queued' ||
+              taskStatus == 'uploading')) {
+        final progress = recentTask['progress'] as Map<String, dynamic>? ?? {};
+        final total = progress['total'] as int? ?? 1;
+
+        final placeholders = List.generate(
+          total,
+          (i) => UploadFileItem(
+            path: '',
+            name: 'invoice',
+            status: UploadFileStatus.processing,
+          ),
+        );
+
+        await InventoryPersistenceService.saveTask(taskId, fileCount: total);
+
+        state = state.copyWith(
+          fileItems: placeholders,
+          isProcessing: true,
+          isUploading: false,
+          activeTaskId: taskId,
+          isRestoringState: false,
+        );
+        _startPolling(taskId);
+        return;
+      }
+    } catch (_) {
+      // Network error — fall through to idle
+    }
+
+    // ── Nothing active anywhere — show camera page ─────────────────
+    state = state.copyWith(isRestoringState: false);
+  }
+
+  // ─────────────────────────── Upload flow ────────────────────────
+
+  Future<void> retryFailed() async {
+    final failed = state.fileItems
+        .where((f) => f.status == UploadFileStatus.failed)
+        .toList();
+    if (failed.isEmpty) return;
+
+    final updated = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.failed) {
+        return item.copyWith(status: UploadFileStatus.idle);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(fileItems: updated, error: null);
+    await uploadAndProcess();
+  }
+
+  Future<void> uploadAndProcess({bool force = false}) async {
+    if (state.isActive) return;
+
+    final toUpload = state.fileItems
+        .where((f) => f.status == UploadFileStatus.idle)
+        .toList();
+    if (toUpload.isEmpty) return;
+
+    // Mark all pending as uploading
+    final uploading = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.idle) {
+        return item.copyWith(status: UploadFileStatus.uploading);
+      }
+      return item;
+    }).toList();
+
+    state = state.copyWith(
+      fileItems: uploading,
       isUploading: true,
       error: null,
-      uploadProgress: 0.1,
+      uploadProgress: 0.0,
+      processingStatus: null,
+    );
+
+    // ✅ Persist upload-phase BEFORE starting the R2 upload
+    await InventoryPersistenceService.saveUploadPhase(
+      toUpload.map((f) => f.path).toList(),
     );
 
     try {
-      final formData = FormData();
-      for (var file in state.selectedFiles) {
-        formData.files.add(MapEntry(
-          'files',
-          await MultipartFile.fromFile(file.path, filename: file.name),
-        ));
-      }
+      final xFiles = toUpload.map((f) => XFile(f.path, name: f.name)).toList();
 
-      // Upload phase
-      final uploadResponse = await _dio.post(
-        '/api/inventory/upload', // Assuming this is the inventory upload endpoint
-        data: formData,
-        onSendProgress: (num sent, num total) {
+      // 1. Upload files to R2
+      final fileKeys = await _repository.uploadFiles(
+        xFiles,
+        onProgress: (sent, total) {
           state = state.copyWith(uploadProgress: sent / total);
         },
       );
 
-      final fileKeys =
-          List<String>.from(uploadResponse.data['uploaded_files'] ?? []);
-
+      // Transition to processing phase
+      final processing = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading) {
+          return item.copyWith(status: UploadFileStatus.processing);
+        }
+        return item;
+      }).toList();
       state = state.copyWith(
-          isUploading: false, isProcessing: true, uploadProgress: 0.0);
-
-      // Process phase
-      _backgroundTask.startTask('Processing Inventory Orders...');
-      await _dio.post(
-        '/api/inventory/process',
-        data: {
-          'file_keys': fileKeys,
-          'force_upload': false,
-        },
+        fileItems: processing,
+        isUploading: false,
+        isProcessing: true,
       );
 
-      // final taskId = processResponse.data['task_id'];
+      // 2. Start AI processing
+      final initialStatus =
+          await _repository.processInvoices(fileKeys, forceUpload: force);
 
-      // Simulating polling for completion for simplicity here,
-      // actual implementation might use WebSockets or periodic polling.
-      await Future.delayed(const Duration(seconds: 2));
+      // ✅ Persist task to disk (also clears upload-phase)
+      await InventoryPersistenceService.saveTask(
+        initialStatus.taskId,
+        fileCount: toUpload.length,
+      );
 
       state = state.copyWith(
-        isProcessing: false,
-        processingStatus: {
-          'status': 'completed',
-          'message': 'Inventory processed successfully'
-        },
+        processingStatus: initialStatus,
+        activeTaskId: initialStatus.taskId,
       );
-      _backgroundTask
-          .completeTaskWithAction('Inventory Orders Ready', 'Mapping', () {
-        AppRouter.router.push('/inventory-mapping');
-      });
+
+      // 3. Poll for completion
+      _startPolling(initialStatus.taskId);
     } catch (e) {
+      await _handleUploadError(e.toString(), toUpload);
+    }
+  }
+
+  // ─────────────────────────── Polling ────────────────────────────
+
+  // ── Max poll time before giving up (5 minutes) ────────────────────────────
+  static const int _maxPollMinutes = 5;
+
+  void _startPolling(String taskId) {
+    _backgroundTask.startTask('Processing your inventory…');
+    _consecutivePollingErrors = 0;
+    _pollingTimer?.cancel();
+
+    // Adaptive initial delay: Gemini needs ~3–5s per invoice.
+    // We wait (fileCount * 3s, clamped 10s–45s) before the periodic timer.
+    final fileCount = state.fileItems.length;
+    final initialDelaySeconds = (fileCount * 3).clamp(10, 45);
+
+    // Record when polling began so we can enforce a hard timeout.
+    final pollStartTime = DateTime.now();
+
+    Future.delayed(Duration(seconds: initialDelaySeconds), () {
+      _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+        // ── Hard timeout guard ──────────────────────────────────────────────
+        final elapsed = DateTime.now().difference(pollStartTime);
+        if (elapsed.inMinutes >= _maxPollMinutes) {
+          timer.cancel();
+          await InventoryPersistenceService.clearTask();
+          state = state.copyWith(
+            isProcessing: false,
+            error: null, // silent reset — task may have completed on server
+            clearActiveTaskId: true,
+            isRestoringState: false,
+          );
+          _backgroundTask.completeTask(
+              'Inventory processing timed out. Pull down to refresh.');
+          return;
+        }
+
+        try {
+          final status = await _repository.getProcessStatus(taskId);
+          _consecutivePollingErrors = 0;
+          state = state.copyWith(processingStatus: status);
+          _backgroundTask.updateTask(status.message);
+
+          if (status.status == 'completed') {
+            timer.cancel();
+            await _handleCompleted(status);
+          } else if (status.status == 'failed') {
+            timer.cancel();
+            await _handleProcessingFailed(status.message);
+          }
+        } catch (e) {
+          _consecutivePollingErrors++;
+          if (_consecutivePollingErrors >= _maxPollingErrors) {
+            timer.cancel();
+            await InventoryPersistenceService.clearTask();
+            state = state.copyWith(
+              isProcessing: false,
+              error:
+                  'Network issue — please check your connection and try again.',
+              clearActiveTaskId: true,
+            );
+            _backgroundTask
+                .completeTask('Connection issue during inventory processing');
+          }
+        }
+      });
+    });
+  }
+
+  // ─────────────────────────── Terminal state handlers ────────────
+
+  Future<void> _handleCompleted([UploadTaskStatus? status]) async {
+    await InventoryPersistenceService.clearTask();
+    final done = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.processing) {
+        return item.copyWith(status: UploadFileStatus.done);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      fileItems: done,
+      isProcessing: false,
+      clearActiveTaskId: true,
+    );
+
+    // Build banner message with duplicate-skip summary
+    final skipped = status?.skipped ?? 0;
+    final bannerMsg = skipped > 0
+        ? 'Inventory ready! ($skipped duplicate${skipped == 1 ? '' : 's'} skipped)'
+        : 'Inventory ready to review!';
+
+    _backgroundTask.completeTaskWithAction(
+      bannerMsg,
+      'Review Inventory',
+      () => AppRouter.router.go('/inventory-review'),
+    );
+  }
+
+  Future<void> _handleProcessingFailed(String message) async {
+    await InventoryPersistenceService.clearTask();
+    final failed = state.fileItems.map((item) {
+      if (item.status == UploadFileStatus.processing) {
+        return item.copyWith(
+            status: UploadFileStatus.failed, errorMessage: message);
+      }
+      return item;
+    }).toList();
+    state = state.copyWith(
+      fileItems: failed,
+      isProcessing: false,
+      clearActiveTaskId: true,
+    );
+    _backgroundTask.completeTask('Inventory processing failed');
+  }
+
+  Future<void> _handleUploadError(
+      String errorString, List<UploadFileItem> toUpload) async {
+    await InventoryPersistenceService.clearTask();
+    if (errorString.contains('DioException') ||
+        errorString.contains('SocketException')) {
+      await SyncQueueService()
+          .queueUpload(toUpload.map((f) => f.path).toList());
+      final queued = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading ||
+            item.status == UploadFileStatus.processing) {
+          return item.copyWith(
+            status: UploadFileStatus.failed,
+            errorMessage: 'Queued for sync when online',
+          );
+        }
+        return item;
+      }).toList();
       state = state.copyWith(
+        fileItems: queued,
         isUploading: false,
         isProcessing: false,
-        error: 'Failed to upload inventory: \${e.toString()}',
+        clearActiveTaskId: true,
       );
-      _backgroundTask.completeTask('Error processing inventory.');
+      _backgroundTask.completeTask('Offline: Queued for sync');
+    } else {
+      final failed = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.uploading ||
+            item.status == UploadFileStatus.processing) {
+          return item.copyWith(
+            status: UploadFileStatus.failed,
+            errorMessage: errorString.replaceAll('Exception: ', ''),
+          );
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        fileItems: failed,
+        isUploading: false,
+        isProcessing: false,
+        clearActiveTaskId: true,
+      );
+      _backgroundTask.completeTask('Inventory upload error');
     }
   }
 }
 
-final inventoryUploadProvider =
-    StateNotifierProvider<InventoryUploadNotifier, InventoryUploadState>((ref) {
-  final backgroundTask = ref.watch(backgroundTaskProvider.notifier);
-  return InventoryUploadNotifier(backgroundTask: backgroundTask);
+// ─────────────────── Providers ───────────────────────────────────────────────
+
+final inventoryUploadRepositoryProvider =
+    Provider<InventoryUploadRepository>((ref) {
+  return InventoryUploadRepository();
 });
+
+final inventoryUploadProvider =
+    NotifierProvider<InventoryUploadNotifier, InventoryUploadState>(
+        InventoryUploadNotifier.new);

@@ -85,17 +85,35 @@ class DashboardRepository {
   }
 
   // Fallback for missing items from stock levels API similar to React
-  Future<Map<String, dynamic>> getStockLevels() async {
+  Future<Map<String, dynamic>> getStockLevels({
+    int? limit,
+    int? offset,
+    String? search,
+  }) async {
+    final Map<String, dynamic> queryParams = {};
+    if (limit != null) queryParams['limit'] = limit;
+    if (offset != null) queryParams['offset'] = offset;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
     try {
-      final response = await _dio.get('/api/stock/levels');
-      final cacheBox = Hive.box('dashboard_cache');
-      cacheBox.put('stock_levels', response.data);
+      final response = await _dio.get(
+        '/api/stock/levels',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      // Only cache if it's the default full fetch without pagination to not overwrite default cache
+      if (limit == null && search == null) {
+        final cacheBox = Hive.box('dashboard_cache');
+        cacheBox.put('stock_levels', response.data);
+      }
       return response.data;
     } catch (e) {
-      final cacheBox = Hive.box('dashboard_cache');
-      final cached = cacheBox.get('stock_levels');
-      if (cached != null) {
-        return Map<String, dynamic>.from(cached as Map);
+      if (limit == null && search == null) {
+        final cacheBox = Hive.box('dashboard_cache');
+        final cached = cacheBox.get('stock_levels');
+        if (cached != null) {
+          return Map<String, dynamic>.from(cached as Map);
+        }
       }
       throw Exception('Failed to fetch stock levels: $e');
     }

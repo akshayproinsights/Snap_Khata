@@ -17,7 +17,7 @@ class ShimmerPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: AppTheme.border.withOpacity(0.5),
+      baseColor: AppTheme.border.withValues(alpha: 0.5),
       highlightColor: AppTheme.surface,
       child: Container(
         width: width,
@@ -42,7 +42,7 @@ class MetricCardShimmer extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
       ),
       child: const Row(
         children: [
@@ -78,7 +78,7 @@ class ChartShimmer extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,

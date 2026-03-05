@@ -67,19 +67,23 @@ class CurrentStockState {
   }
 }
 
-class CurrentStockNotifier extends StateNotifier<CurrentStockState> {
-  final CurrentStockRepository _repository;
+class CurrentStockNotifier extends Notifier<CurrentStockState> {
+  late final CurrentStockRepository _repository;
   Timer? _recalcTimer;
 
-  CurrentStockNotifier(this._repository) : super(CurrentStockState()) {
-    fetchData();
-    triggerRecalculation(); // Initial recalculation
-  }
-
   @override
-  void dispose() {
-    _recalcTimer?.cancel();
-    super.dispose();
+  CurrentStockState build() {
+    _repository = ref.watch(currentStockRepositoryProvider);
+
+    ref.onDispose(() {
+      _recalcTimer?.cancel();
+    });
+
+    Future.microtask(() {
+      fetchData();
+      triggerRecalculation(); // Initial recalculation
+    });
+    return CurrentStockState();
   }
 
   Future<void> fetchData() async {
@@ -101,6 +105,31 @@ class CurrentStockNotifier extends StateNotifier<CurrentStockState> {
       final itemsData = results[0] as Map<String, dynamic>;
       final summary = results[1] as StockSummary;
       final items = itemsData['items'] as List<StockLevel>;
+
+      // Apply Quick Reorder Sorting
+      items.sort((a, b) {
+        final stockA = a.currentStock + (a.manualAdjustment ?? 0);
+        final stockB = b.currentStock + (b.manualAdjustment ?? 0);
+
+        // Priority 1: Negative stock items first
+        if (stockA < 0 && stockB >= 0) return -1;
+        if (stockB < 0 && stockA >= 0) return 1;
+
+        // Priority 2: Zero stock items second
+        if (stockA == 0 && stockB > 0) return -1;
+        if (stockB == 0 && stockA > 0) return 1;
+
+        // Priority 3: Low stock items third
+        final aIsLow = stockA > 0 && stockA <= a.reorderPoint;
+        final bIsLow = stockB > 0 && stockB <= b.reorderPoint;
+
+        if (aIsLow && !bIsLow) return -1;
+        if (bIsLow && !aIsLow) return 1;
+
+        // Default: maintain original order (by name)
+        return a.internalItemName.compareTo(b.internalItemName);
+      });
+
       final total = itemsData['total'] as int? ?? items.length;
 
       state = state.copyWith(
@@ -130,10 +159,35 @@ class CurrentStockNotifier extends StateNotifier<CurrentStockState> {
       );
 
       final newItems = itemsData['items'] as List<StockLevel>;
-      final total =
-          itemsData['total'] as int? ?? state.items.length + newItems.length;
 
       final updatedItems = [...state.items, ...newItems];
+
+      // Re-apply sorting for all items
+      updatedItems.sort((a, b) {
+        final stockA = a.currentStock + (a.manualAdjustment ?? 0);
+        final stockB = b.currentStock + (b.manualAdjustment ?? 0);
+
+        // Priority 1: Negative stock items first
+        if (stockA < 0 && stockB >= 0) return -1;
+        if (stockB < 0 && stockA >= 0) return 1;
+
+        // Priority 2: Zero stock items second
+        if (stockA == 0 && stockB > 0) return -1;
+        if (stockB == 0 && stockA > 0) return 1;
+
+        // Priority 3: Low stock items third
+        final aIsLow = stockA > 0 && stockA <= a.reorderPoint;
+        final bIsLow = stockB > 0 && stockB <= b.reorderPoint;
+
+        if (aIsLow && !bIsLow) return -1;
+        if (bIsLow && !aIsLow) return 1;
+
+        // Default: maintain original order (by name)
+        return a.internalItemName.compareTo(b.internalItemName);
+      });
+
+      final total =
+          itemsData['total'] as int? ?? state.items.length + newItems.length;
 
       state = state.copyWith(
         items: updatedItems,
@@ -288,6 +342,5 @@ class CurrentStockNotifier extends StateNotifier<CurrentStockState> {
 }
 
 final currentStockProvider =
-    StateNotifierProvider<CurrentStockNotifier, CurrentStockState>((ref) {
-  return CurrentStockNotifier(ref.watch(currentStockRepositoryProvider));
-});
+    NotifierProvider<CurrentStockNotifier, CurrentStockState>(
+        CurrentStockNotifier.new);

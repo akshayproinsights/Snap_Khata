@@ -52,3 +52,4 @@ rapidfuzz==3.6.1
 # Database Client
 supabase
 httpx
+google-cloud-tasks

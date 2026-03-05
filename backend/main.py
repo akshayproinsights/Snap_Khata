@@ -2,7 +2,7 @@
 Main FastAPI application.
 Handles routing, middleware, and application lifecycle.
 """
-print("DigiEntry Backend is starting......Final Doneee..")
+print("SnapKhata Backend is starting......Final Doneee..")
 # Final check done yep done yes git yep done api done yesss
 # Initial deployment trigger done yeah d addddd
 from fastapi import FastAPI
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="DigiEntry API",
+    title="SnapKhata API",
     description="Backend API for Invoice Processing and Management",
     version="2.0.0"
 )
@@ -99,7 +99,7 @@ app.include_router(public_routes.router, prefix="/api/public", tags=["Public"])
 async def root():
     """Root endpoint"""
     return {
-        "message": "DigiEntry API",
+        "message": "SnapKhata API",
         "version": "2.0.0",
         "status": "running"
     }
@@ -144,14 +144,14 @@ async def db_check():
 @app.on_event("startup")
 async def startup_event():
     """Application startup"""
-    logger.info("DigiEntry API starting up...")
+    logger.info("SnapKhata API starting up...")
     logger.info(f"CORS origins: {config.settings.cors_origins}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown"""
-    logger.info("DigiEntry API shutting down...")
+    logger.info("SnapKhata API shutting down...")
 
 
 if __name__ == "__main__":

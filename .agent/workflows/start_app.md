@@ -1,8 +1,8 @@
 ---
-description: Start the Invoice Insights Hub application (Backend & Frontend)
+description: Start the SnapKhata application (Backend & Frontend)
 ---
 
-# Start Invoice Insights Hub
+# Start SnapKhata
 
 ## Backend (Terminal 1)
 

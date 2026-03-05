@@ -85,11 +85,14 @@ class DashboardState {
   }
 }
 
-class DashboardNotifier extends StateNotifier<DashboardState> {
-  final DashboardRepository _repository;
+class DashboardNotifier extends Notifier<DashboardState> {
+  late final DashboardRepository _repository;
 
-  DashboardNotifier(this._repository) : super(DashboardState()) {
-    refreshDashboard();
+  @override
+  DashboardState build() {
+    _repository = ref.watch(dashboardRepositoryProvider);
+    Future.microtask(() => refreshDashboard());
+    return DashboardState();
   }
 
   String _daysAgo(int days) {
@@ -184,7 +187,4 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
 }
 
 final dashboardProvider =
-    StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
-  final repository = ref.watch(dashboardRepositoryProvider);
-  return DashboardNotifier(repository);
-});
+    NotifierProvider<DashboardNotifier, DashboardState>(DashboardNotifier.new);

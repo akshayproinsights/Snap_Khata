@@ -105,14 +105,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       final filePath = '${dir.path}/verified_invoices_$timestamp.xlsx';
       await File(filePath).writeAsBytes(bytes as List<int>);
 
-      await Share.shareXFiles(
-        [
-          XFile(filePath,
-              mimeType:
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        ],
-        subject: 'DigiEntry Verified Invoices Export',
-        text: 'Verified invoices exported from DigiEntry',
+      await SharePlus.instance.share(
+        ShareParams(uri: Uri.file(filePath)),
       );
     } catch (e) {
       if (mounted) {
@@ -295,13 +289,15 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                           top: -50,
                           child: CircleAvatar(
                               radius: 100,
-                              backgroundColor: Colors.white.withOpacity(0.05))),
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.05))),
                       Positioned(
                           right: 100,
                           bottom: -20,
                           child: CircleAvatar(
                               radius: 40,
-                              backgroundColor: Colors.white.withOpacity(0.1))),
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.1))),
 
                       SafeArea(
                         child: Padding(
@@ -387,10 +383,10 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: AppTheme.error.withOpacity(0.1),
+                            color: AppTheme.error.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: AppTheme.error.withOpacity(0.3))),
+                                color: AppTheme.error.withValues(alpha: 0.3))),
                         child: Row(
                           children: [
                             const Icon(LucideIcons.alertCircle,
@@ -424,7 +420,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.05),
+                          color: AppTheme.primary.withValues(alpha: 0.05),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(LucideIcons.fileSearch,
@@ -488,7 +484,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           )
@@ -641,7 +637,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.3),
+                        color: AppTheme.primary.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3))
                   ]
@@ -678,9 +674,10 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08),
+                color: AppTheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.primary.withOpacity(0.2))),
+                border:
+                    Border.all(color: AppTheme.primary.withValues(alpha: 0.2))),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -763,7 +760,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
         border: Border.all(color: Colors.grey.shade200, width: 1),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 16,
               offset: const Offset(0, 6)),
         ],
@@ -787,7 +784,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: isExpanded
-                      ? AppTheme.primary.withOpacity(0.03)
+                      ? AppTheme.primary.withValues(alpha: 0.03)
                       : Colors.white,
                   border: Border(
                       bottom: BorderSide(
@@ -800,7 +797,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                          color: AppTheme.primary.withOpacity(0.1),
+                          color: AppTheme.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12)),
                       child: Icon(_groupBy.icon,
                           size: 20, color: AppTheme.primary),
@@ -909,7 +906,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         color: isSelected
-            ? AppTheme.primary.withOpacity(0.04)
+            ? AppTheme.primary.withValues(alpha: 0.04)
             : Colors.transparent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -952,8 +949,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                         decoration: BoxDecoration(
                             color: typeBg,
                             borderRadius: BorderRadius.circular(8),
-                            border:
-                                Border.all(color: typeColor.withOpacity(0.2))),
+                            border: Border.all(
+                                color: typeColor.withValues(alpha: 0.2))),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1034,7 +1031,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                               child: Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                      color: AppTheme.primary.withOpacity(0.1),
+                                      color: AppTheme.primary
+                                          .withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(8)),
                                   child: const Icon(LucideIcons.share2,
                                       size: 16, color: AppTheme.primary)),

@@ -17,7 +17,7 @@ def main():
              break
              
         password = input(f"Enter Password for {username}: ").strip()
-        r2_bucket = input(f"Enter R2 Bucket Name for {username} (e.g. digientry-adnak): ").strip()
+        r2_bucket = input(f"Enter R2 Bucket Name for {username} (e.g. snapkhata-adnak): ").strip()
         sheet_id = input(f"Enter Google Sheet ID for {username} (optional): ").strip()
         dashboard_url = input(f"Enter Dashboard URL for {username} (optional): ").strip()
         

@@ -25,9 +25,6 @@ class CustomerItem {
   final String? normalizedDescription;
   final int? variationCount;
   final List<CustomerItemVariation>? variations;
-  // Stock-mapping fields
-  final int? stockLevelId;
-  final String? partNumber;
 
   CustomerItem({
     required this.customerItem,
@@ -36,8 +33,6 @@ class CustomerItem {
     this.normalizedDescription,
     this.variationCount,
     this.variations,
-    this.stockLevelId,
-    this.partNumber,
   });
 
   factory CustomerItem.fromJson(Map<String, dynamic> json) {
@@ -52,8 +47,47 @@ class CustomerItem {
               .map((v) => CustomerItemVariation.fromJson(v))
               .toList()
           : null,
-      stockLevelId: json['stock_level_id'],
-      partNumber: json['part_number'],
+    );
+  }
+
+  /// All raw name strings (including main + all variations)
+  List<String> get allVariationDescriptions {
+    if (variations == null || variations!.isEmpty) return [customerItem];
+    return variations!.map((v) => v.originalDescription).toList();
+  }
+}
+
+class MappedItem {
+  final int? id;
+  final String customerItem;
+  final String? normalizedDescription;
+  final String? vendorDescription;
+  final String? vendorPartNumber;
+  final int priority;
+  final String status;
+  final String? mappedOn;
+
+  MappedItem({
+    this.id,
+    required this.customerItem,
+    this.normalizedDescription,
+    this.vendorDescription,
+    this.vendorPartNumber,
+    this.priority = 0,
+    required this.status,
+    this.mappedOn,
+  });
+
+  factory MappedItem.fromJson(Map<String, dynamic> json) {
+    return MappedItem(
+      id: json['id'],
+      customerItem: json['customer_item'] ?? '',
+      normalizedDescription: json['normalized_description'],
+      vendorDescription: json['vendor_description'],
+      vendorPartNumber: json['vendor_part_number'],
+      priority: json['priority'] ?? 0,
+      status: json['status'] ?? 'Pending',
+      mappedOn: json['mapped_on'],
     );
   }
 }

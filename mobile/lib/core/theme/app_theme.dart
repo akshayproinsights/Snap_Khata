@@ -25,11 +25,9 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: const ColorScheme.light(
         primary: primary,
-        background: background,
         surface: surface,
         error: error,
         onPrimary: Colors.white,
-        onBackground: textPrimary,
         onSurface: textPrimary,
         onError: Colors.white,
       ),
@@ -81,7 +79,7 @@ class AppTheme {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surface,
         elevation: 1,
         shape: RoundedRectangleBorder(
@@ -99,11 +97,9 @@ class AppTheme {
       brightness: Brightness.dark,
       colorScheme: const ColorScheme.dark(
         primary: primary,
-        background: darkBackground,
         surface: darkSurface,
         error: error,
         onPrimary: Colors.white,
-        onBackground: darkTextPrimary,
         onSurface: darkTextPrimary,
         onError: Colors.white,
       ),
@@ -155,7 +151,7 @@ class AppTheme {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: darkSurface,
         elevation: 1,
         shape: RoundedRectangleBorder(

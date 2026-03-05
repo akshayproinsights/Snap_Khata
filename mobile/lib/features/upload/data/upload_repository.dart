@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:mobile/core/network/api_client.dart';
+import 'package:mobile/core/utils/image_compress_service.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 
 class UploadRepository {
@@ -12,9 +13,14 @@ class UploadRepository {
   Future<List<String>> uploadFiles(List<XFile> files,
       {Function(int, int)? onProgress}) async {
     try {
+      // ── Compress all images on-device in parallel BEFORE uploading ──────────
+      // Typical savings: 3-8 MB camera photo -> ~200-500 KB JPEG
+      // This is the single biggest speed improvement for mobile uploads.
+      final compressedFiles = await ImageCompressService.compressFiles(files);
+
       final formData = FormData();
 
-      for (var file in files) {
+      for (var file in compressedFiles) {
         formData.files.add(MapEntry(
           'files',
           await MultipartFile.fromFile(file.path, filename: file.name),

@@ -39,11 +39,14 @@ class InventoryMappedState {
       entries.where((e) => e.status == 'Skip' || e.status == 'Skipped').length;
 }
 
-class InventoryMappedNotifier extends StateNotifier<InventoryMappedState> {
-  final InventoryMappedRepository _repository;
+class InventoryMappedNotifier extends Notifier<InventoryMappedState> {
+  late final InventoryMappedRepository _repository;
 
-  InventoryMappedNotifier(this._repository) : super(InventoryMappedState()) {
-    fetchEntries();
+  @override
+  InventoryMappedState build() {
+    _repository = ref.watch(inventoryMappedRepositoryProvider);
+    Future.microtask(() => fetchEntries());
+    return InventoryMappedState();
   }
 
   Future<void> fetchEntries() async {
@@ -71,6 +74,5 @@ class InventoryMappedNotifier extends StateNotifier<InventoryMappedState> {
 }
 
 final inventoryMappedProvider =
-    StateNotifierProvider<InventoryMappedNotifier, InventoryMappedState>((ref) {
-  return InventoryMappedNotifier(ref.watch(inventoryMappedRepositoryProvider));
-});
+    NotifierProvider<InventoryMappedNotifier, InventoryMappedState>(
+        InventoryMappedNotifier.new);

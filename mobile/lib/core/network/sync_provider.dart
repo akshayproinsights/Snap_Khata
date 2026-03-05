@@ -8,11 +8,13 @@ class SyncState {
   SyncState({required this.pendingCount, this.isSyncing = false});
 }
 
-class SyncNotifier extends StateNotifier<SyncState> {
+class SyncNotifier extends Notifier<SyncState> {
   late final Box _box;
 
-  SyncNotifier() : super(SyncState(pendingCount: 0)) {
-    _init();
+  @override
+  SyncState build() {
+    Future.microtask(() => _init());
+    return SyncState(pendingCount: 0);
   }
 
   void _init() {
@@ -30,6 +32,5 @@ class SyncNotifier extends StateNotifier<SyncState> {
   }
 }
 
-final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
-  return SyncNotifier();
-});
+final syncProvider =
+    NotifierProvider<SyncNotifier, SyncState>(SyncNotifier.new);

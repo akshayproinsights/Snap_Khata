@@ -57,11 +57,14 @@ class PurchaseOrderState {
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
-class PurchaseOrderNotifier extends StateNotifier<PurchaseOrderState> {
-  final PurchaseOrderRepository _repo;
+class PurchaseOrderNotifier extends Notifier<PurchaseOrderState> {
+  late final PurchaseOrderRepository _repo;
 
-  PurchaseOrderNotifier(this._repo) : super(PurchaseOrderState()) {
-    loadDraft();
+  @override
+  PurchaseOrderState build() {
+    _repo = ref.watch(purchaseOrderRepositoryProvider);
+    Future.microtask(() => loadDraft());
+    return PurchaseOrderState();
   }
 
   Future<void> loadDraft() async {
@@ -211,7 +214,5 @@ class PurchaseOrderNotifier extends StateNotifier<PurchaseOrderState> {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 final purchaseOrderProvider =
-    StateNotifierProvider<PurchaseOrderNotifier, PurchaseOrderState>((ref) {
-  final repo = ref.watch(purchaseOrderRepositoryProvider);
-  return PurchaseOrderNotifier(repo);
-});
+    NotifierProvider<PurchaseOrderNotifier, PurchaseOrderState>(
+        PurchaseOrderNotifier.new);

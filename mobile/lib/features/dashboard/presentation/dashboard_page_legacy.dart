@@ -397,7 +397,7 @@ class _FilterToggleButton extends ConsumerWidget {
                       const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
                     color: isExpanded
-                        ? Colors.white.withOpacity(0.25)
+                        ? Colors.white.withValues(alpha: 0.25)
                         : AppTheme.primary,
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -432,9 +432,9 @@ class _ActiveFilterChips extends ConsumerWidget {
           margin: const EdgeInsets.only(right: 6, top: 8),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.08),
+            color: AppTheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.25)),
+            border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -479,9 +479,9 @@ class _ActiveFilterChips extends ConsumerWidget {
               margin: const EdgeInsets.only(right: 6, top: 8),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: AppTheme.error.withOpacity(0.08),
+                color: AppTheme.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.error.withOpacity(0.25)),
+                border: Border.all(color: AppTheme.error.withValues(alpha: 0.25)),
               ),
               child: const Text('Clear All',
                   style: TextStyle(
@@ -536,7 +536,7 @@ class _AdvancedFiltersPanelState extends ConsumerState<_AdvancedFiltersPanel> {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -741,7 +741,7 @@ class _DashboardCommandCenterState
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2)),
         ],
@@ -757,7 +757,7 @@ class _DashboardCommandCenterState
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
+                    color: AppTheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: const Icon(LucideIcons.shoppingCart,
@@ -780,16 +780,16 @@ class _DashboardCommandCenterState
                 GestureDetector(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    context.pushNamed('purchase-orders');
+                    context.pushNamed('quick-reorder');
                   },
                   child: Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.08),
+                      color: AppTheme.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text('View PO',
+                    child: const Text('View All',
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -927,7 +927,7 @@ class _CommandCenterItemRowState extends ConsumerState<_CommandCenterItemRow> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08),
+                color: AppTheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(5),
               ),
               child: Text(priority,
@@ -955,7 +955,7 @@ class _CommandCenterItemRowState extends ConsumerState<_CommandCenterItemRow> {
             margin: const EdgeInsets.symmetric(horizontal: 8),
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -984,7 +984,7 @@ class _CommandCenterItemRowState extends ConsumerState<_CommandCenterItemRow> {
               child: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
+                  color: AppTheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _adding

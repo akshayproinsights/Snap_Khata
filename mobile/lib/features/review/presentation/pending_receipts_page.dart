@@ -10,7 +10,12 @@ import 'package:mobile/features/review/presentation/providers/review_provider.da
 import 'package:mobile/shared/widgets/app_toast.dart';
 
 class PendingReceiptsPage extends ConsumerStatefulWidget {
-  const PendingReceiptsPage({super.key});
+  final int skippedCount;
+
+  const PendingReceiptsPage({
+    super.key,
+    this.skippedCount = 0,
+  });
 
   @override
   ConsumerState<PendingReceiptsPage> createState() =>
@@ -66,6 +71,35 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                if (widget.skippedCount > 0)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('⏭️', style: TextStyle(fontSize: 18)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'We skipped ${widget.skippedCount} image${widget.skippedCount > 1 ? 's' : ''} since they were already uploaded.',
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF92400E),
+                                height: 1.4,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
                 _buildProgressHeader(
                     groups.length, doneCount, pendingCount, errorCount),
                 if (state.isSyncing)
@@ -175,9 +209,9 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -224,7 +258,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
               color: status == 'Error' ? Colors.red.shade200 : AppTheme.border),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ],

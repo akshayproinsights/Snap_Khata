@@ -29,7 +29,7 @@ class InteractiveImageGallery extends StatefulWidget {
       PageRouteBuilder(
         opaque: false,
         barrierDismissible: true,
-        barrierColor: Colors.black.withOpacity(0.9),
+        barrierColor: Colors.black.withValues(alpha: 0.9),
         pageBuilder: (context, _, __) {
           return InteractiveImageGallery(
             imageUrls: imageUrls,
@@ -180,7 +180,7 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                    colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
                   ),
                 ),
                 child: Row(

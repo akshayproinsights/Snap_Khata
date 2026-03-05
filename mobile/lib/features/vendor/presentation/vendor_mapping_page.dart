@@ -236,7 +236,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Upload photos of your completed mapping sheets. Our AI will extract the data automatically.',
+                    'Upload photos of your completed mapping sheets. Data will be extracted automatically.',
                     style:
                         TextStyle(color: Colors.amber.shade800, fontSize: 13),
                   ),

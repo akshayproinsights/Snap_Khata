@@ -133,7 +133,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.06),
+                    color: AppTheme.primary.withValues(alpha: 0.06),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(LucideIcons.uploadCloud,
@@ -363,9 +363,9 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppTheme.warning.withOpacity(0.08),
+              color: AppTheme.warning.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+              border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
@@ -423,9 +423,9 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.success.withOpacity(0.06),
+          color: AppTheme.success.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+          border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -473,9 +473,9 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.error.withOpacity(0.06),
+              color: AppTheme.error.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.error.withOpacity(0.3)),
+              border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -566,9 +566,9 @@ class _FileCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: item.status == UploadFileStatus.failed
-              ? AppTheme.error.withOpacity(0.4)
+              ? AppTheme.error.withValues(alpha: 0.4)
               : item.status == UploadFileStatus.done
-                  ? AppTheme.success.withOpacity(0.4)
+                  ? AppTheme.success.withValues(alpha: 0.4)
                   : AppTheme.border,
         ),
       ),
@@ -611,7 +611,7 @@ class _FileCard extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.12),
+                          color: statusColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(

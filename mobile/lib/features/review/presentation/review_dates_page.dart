@@ -226,7 +226,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withOpacity(0.05),
+        color: AppTheme.primary.withValues(alpha: 0.05),
         border: const Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Column(
@@ -298,7 +298,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: textColor.withOpacity(0.3)),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
       ),
       child: Text(text,
           style: TextStyle(
@@ -346,7 +346,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
         border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4)),
         ],
@@ -409,7 +409,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                           ),
                           isDense: true,
                           filled: isSuccessReceipt,
-                          fillColor: AppTheme.success.withOpacity(0.05),
+                          fillColor: AppTheme.success.withValues(alpha: 0.05),
                         ),
                         onFieldSubmitted: (val) {
                           if (val != record.receiptNumber) {
@@ -485,7 +485,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                               ),
                               isDense: true,
                               filled: isSuccessDate,
-                              fillColor: AppTheme.success.withOpacity(0.05),
+                              fillColor: AppTheme.success.withValues(alpha: 0.05),
                             ),
                           ),
                         ),
@@ -558,9 +558,9 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: statusColor.withOpacity(0.3)),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(

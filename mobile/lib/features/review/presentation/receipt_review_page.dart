@@ -8,6 +8,11 @@ import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'package:mobile/features/shared/presentation/widgets/payment_summary_card.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
@@ -19,6 +24,89 @@ class ReceiptReviewPage extends ConsumerStatefulWidget {
 }
 
 class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
+  // ── GST / Payment Summary state ──────────────────────────────────────────
+  GstMode _gstMode = GstMode.none;
+
+  /// Row IDs of line items the user has marked as taxable (Parts).
+  /// Defaults to ALL items being taxable — user unticks Labor/Service items.
+  Set<String> _taxableRowIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    // Default: mark all line items as taxable
+    _taxableRowIds = widget.group.lineItems.map((i) => i.rowId).toSet();
+    _loadPersistedSettings();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final receipt = widget.group.receiptNumber;
+
+    // Load GST mode
+    final savedMode = prefs.getString('gst_mode_$receipt');
+    if (savedMode != null && mounted) {
+      setState(() {
+        _gstMode = GstMode.values.firstWhere(
+          (e) => e.name == savedMode,
+          orElse: () => GstMode.none,
+        );
+      });
+    }
+
+    // Load taxable item overrides (stored as comma-separated row IDs)
+    final savedTaxable = prefs.getString('gst_taxable_$receipt');
+    if (savedTaxable != null && mounted) {
+      setState(() {
+        _taxableRowIds =
+            savedTaxable.isEmpty ? <String>{} : savedTaxable.split(',').toSet();
+      });
+    }
+  }
+
+  Future<void> _saveGstMode(GstMode mode) async {
+    setState(() => _gstMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('gst_mode_${widget.group.receiptNumber}', mode.name);
+  }
+
+  Future<void> _toggleTaxable(String rowId, bool taxable) async {
+    setState(() {
+      if (taxable) {
+        _taxableRowIds.add(rowId);
+      } else {
+        _taxableRowIds.remove(rowId);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'gst_taxable_${widget.group.receiptNumber}',
+      _taxableRowIds.join(','),
+    );
+  }
+
+  // ── GST computed helpers (on PARTS only) ─────────────────────────────────
+  double _partsSubtotal(InvoiceReviewGroup group) => group.lineItems
+      .where((i) => _taxableRowIds.contains(i.rowId))
+      .fold(0.0, (s, i) => s + i.amount);
+
+  double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
+      .where((i) => !_taxableRowIds.contains(i.rowId))
+      .fold(0.0, (s, i) => s + i.amount);
+
+  double _gstAmount(double partsSubtotal) {
+    if (_gstMode == GstMode.excluded) return partsSubtotal * 0.18;
+    if (_gstMode == GstMode.included) return partsSubtotal * 18 / 118;
+    return 0;
+  }
+
+  double _totalAfterGst(InvoiceReviewGroup group) {
+    final parts = _partsSubtotal(group);
+    final labor = _laborSubtotal(group);
+    if (_gstMode == GstMode.excluded) return parts + _gstAmount(parts) + labor;
+    return parts + labor; // included or none: total unchanged
+  }
+
   void _showFullImage(String imageUrl) {
     Navigator.push(
       context,
@@ -48,42 +136,59 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
+  String _formatAmount(double? amount) {
+    if (amount == null) return '';
+    String formatted = amount.toStringAsFixed(2);
+    if (formatted.endsWith('.00')) {
+      return formatted.substring(0, formatted.length - 3);
+    }
+    return formatted;
+  }
+
   void _markAllDone() {
     final group = widget.group;
     final header = group.header;
-    if (header != null && header.verificationStatus != 'Done') {
-      final newRecord = ReviewRecord(
-          rowId: header.rowId,
-          receiptNumber: header.receiptNumber,
-          date: header.date,
-          description: header.description,
-          amount: header.amount,
-          verificationStatus: 'Done',
-          receiptLink: header.receiptLink,
-          dateBbox: header.dateBbox,
-          receiptNumberBbox: header.receiptNumberBbox,
-          combinedBbox: header.combinedBbox,
-          lineItemBbox: header.lineItemBbox,
-          isHeader: header.isHeader);
-      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-    }
+    final hasAnyError = group.hasError;
 
-    for (var item in group.lineItems) {
-      if (item.verificationStatus != 'Done') {
+    if (!hasAnyError) {
+      if (header != null && header.verificationStatus != 'Done') {
         final newRecord = ReviewRecord(
-            rowId: item.rowId,
-            receiptNumber: item.receiptNumber,
-            date: item.date,
-            description: item.description,
-            amount: item.amount,
+            rowId: header.rowId,
+            receiptNumber: header.receiptNumber,
+            date: header.date,
+            description: header.description,
+            amount: header.amount,
             verificationStatus: 'Done',
-            receiptLink: item.receiptLink,
-            dateBbox: item.dateBbox,
-            receiptNumberBbox: item.receiptNumberBbox,
-            combinedBbox: item.combinedBbox,
-            lineItemBbox: item.lineItemBbox,
-            isHeader: item.isHeader);
-        ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+            receiptLink: header.receiptLink,
+            dateBbox: header.dateBbox,
+            receiptNumberBbox: header.receiptNumberBbox,
+            combinedBbox: header.combinedBbox,
+            lineItemBbox: header.lineItemBbox,
+            isHeader: header.isHeader,
+            auditFindings: header.auditFindings);
+        ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+      }
+
+      for (var item in group.lineItems) {
+        if (item.verificationStatus != 'Done') {
+          final newRecord = ReviewRecord(
+              rowId: item.rowId,
+              receiptNumber: item.receiptNumber,
+              date: item.date,
+              description: item.description,
+              amount: item.amount,
+              verificationStatus: 'Done',
+              receiptLink: item.receiptLink,
+              dateBbox: item.dateBbox,
+              receiptNumberBbox: item.receiptNumberBbox,
+              combinedBbox: item.combinedBbox,
+              lineItemBbox: item.lineItemBbox,
+              isHeader: item.isHeader,
+              quantity: item.quantity,
+              rate: item.rate,
+              amountMismatch: item.amountMismatch);
+          ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+        }
       }
     }
 
@@ -117,31 +222,49 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         title: Text('Receipt #${group.receiptNumber}'),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.share2),
+            icon: const FaIcon(FontAwesomeIcons.whatsapp,
+                color: AppTheme.primary),
             onPressed: () async {
-              // Calculate total amount from line items if available, else from header amount
-              final double totalAmount = group.header?.amount ??
-                  group.lineItems
-                      .fold<double>(0.0, (sum, item) => sum + item.amount);
+              // Calculate total amount from line items, fallback to header amount if line items total is zero
+              double totalAmount = _totalAfterGst(group);
+              if (totalAmount == 0.0 && group.header != null) {
+                totalAmount = group.header!.amount;
+              }
+
+              final gstParam =
+                  _gstMode == GstMode.none ? '' : '&gst_mode=${_gstMode.name}';
+
+              final authState = ref.read(authProvider);
+              final usernameParam = authState.user?.username != null
+                  ? '&u=${authState.user!.username}'
+                  : '';
 
               final shareUrl =
-                  'https://mydigientry.com/receipt/${group.receiptNumber}';
+                  'https://mydigientry.com/receipt.html?id=${group.receiptNumber}$gstParam$usernameParam';
+
+              final prefs = await SharedPreferences.getInstance();
+              final shopName = prefs.getString('shop_title')?.isNotEmpty == true
+                  ? prefs.getString('shop_title')!
+                  : 'Our Shop';
 
               final caption = WhatsAppUtils.getWhatsAppCaption(
-                status: OrderPaymentStatus
-                    .fullyPaid, // Default to paid/ready for review
-                customerName: header?.customerName ??
-                    'Customer', // Use backend customer name if available
-                businessName:
-                    'Business', // Default to generic, but should really be pulled from user session/store
+                status: OrderPaymentStatus.fullyPaid,
+                customerName: header?.customerName?.isNotEmpty == true
+                    ? header!.customerName!
+                    : 'Customer',
+                businessName: shopName,
                 orderNumber: group.receiptNumber,
                 totalAmount: totalAmount,
               );
-              final message = '$caption\n\n📋 View full order:\n$shareUrl';
+              final message =
+                  '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— $shopName';
 
               // Open custom input dialog for phone number (pre-filled if available from DB)
               final phoneController =
                   TextEditingController(text: header?.mobileNumber ?? '');
+
+              if (!context.mounted) return;
+
               final result = await showDialog<String>(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -224,7 +347,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
+                          color: Colors.black.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Row(
@@ -268,7 +391,28 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             style: TextStyle(color: AppTheme.textSecondary))),
                   ),
                 ...sortedLineItems.map((item) => _buildLineItemCard(item)),
-                const SizedBox(height: 80),
+                const SizedBox(height: 16),
+                // ── Payment Summary ──────────────────────────────────────
+                PaymentSummaryCard(
+                  gstMode: _gstMode,
+                  taxableRowIds: _taxableRowIds,
+                  partsSubtotal: _partsSubtotal(group),
+                  laborSubtotal: _laborSubtotal(group),
+                  gstAmount: _gstAmount(_partsSubtotal(group)),
+                  grandTotal: _totalAfterGst(group),
+                  originalTotal: group.header?.amount ??
+                      (_partsSubtotal(group) + _laborSubtotal(group)),
+                  lineItems: group.lineItems
+                      .map((item) => PaymentSummaryItem(
+                            rowId: item.rowId,
+                            description: item.description,
+                            amount: item.amount,
+                          ))
+                      .toList(),
+                  onGstModeChanged: _saveGstMode,
+                  onToggleTaxable: _toggleTaxable,
+                ),
+                const SizedBox(height: 100),
               ],
             ),
           ),
@@ -280,14 +424,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         child: SizedBox(
           width: double.infinity,
           child: FloatingActionButton.extended(
-            onPressed: hasAnyError ? null : _markAllDone,
-            backgroundColor: hasAnyError ? Colors.grey.shade400 : Colors.green,
+            onPressed: _markAllDone,
+            backgroundColor: hasAnyError ? Colors.orange : Colors.green,
             foregroundColor: Colors.white,
-            elevation: hasAnyError ? 0 : 4,
-            icon:
-                Icon(hasAnyError ? LucideIcons.alertCircle : LucideIcons.check),
+            elevation: 4,
+            icon: Icon(
+                hasAnyError ? LucideIcons.alertTriangle : LucideIcons.check),
             label: Text(
-              hasAnyError ? 'Fix Errors to Continue' : 'Mark as Done',
+              hasAnyError ? 'Save with Errors' : 'Mark as Done',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -344,7 +488,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           Row(
             children: [
               Expanded(
-                child: TextFormField(
+                flex: 9,
+                child: DebouncedReviewField(
                   initialValue: header.receiptNumber,
                   decoration: _inputDecoration('Receipt No.').copyWith(
                     errorText:
@@ -367,7 +512,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         ? Colors.red.shade50
                         : Colors.white,
                   ),
-                  onFieldSubmitted: (val) {
+                  onSaved: (val) {
                     if (val != header.receiptNumber) {
                       final newRecord = ReviewRecord(
                           rowId: header.rowId,
@@ -392,6 +537,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               ),
               const SizedBox(width: 12),
               Expanded(
+                flex: 11,
                 child: InkWell(
                   onTap: () async {
                     DateTime? initialDate;
@@ -518,14 +664,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             children: [
               Expanded(
                 flex: 3,
-                child: TextFormField(
+                child: DebouncedReviewField(
                   initialValue: item.description,
                   decoration: _inputDecoration('Description').copyWith(
                     errorText:
                         item.description.trim().isEmpty ? 'Required' : null,
                   ),
                   maxLines: null,
-                  onFieldSubmitted: (val) {
+                  onSaved: (val) {
                     if (val != item.description) {
                       final newRecord = ReviewRecord(
                           rowId: item.rowId,
@@ -553,19 +699,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               const SizedBox(width: 8),
               Expanded(
                 flex: 2,
-                child: TextFormField(
-                  initialValue: item.amount.toStringAsFixed(2),
+                child: DebouncedReviewField(
+                  initialValue: _formatAmount(item.amount),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, color: AppTheme.primary),
                   decoration: _inputDecoration('Total (₹)'),
-                  onFieldSubmitted: (val) {
+                  onSaved: (val) {
                     final newAmount = double.tryParse(val);
                     if (newAmount != null && newAmount != item.amount) {
-                      // Recalculate mismatch if quantity and rate exist. Assuming we trust the user overriding the total.
-                      // Alternatively just clear amountMismatch.
                       final newRecord = ReviewRecord(
                           rowId: item.rowId,
                           receiptNumber: item.receiptNumber,
@@ -596,12 +740,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             Row(
               children: [
                 Expanded(
-                    child: TextFormField(
-                  initialValue: item.quantity?.toStringAsFixed(2),
+                    child: DebouncedReviewField(
+                  initialValue: _formatAmount(item.quantity),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: _inputDecoration('Qty'),
-                  onFieldSubmitted: (val) {
+                  onSaved: (val) {
                     final newQty = double.tryParse(val);
                     if (newQty != null) {
                       // recalculate mismatch
@@ -634,12 +778,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       style: TextStyle(color: AppTheme.textSecondary)),
                 ),
                 Expanded(
-                    child: TextFormField(
-                  initialValue: item.rate?.toStringAsFixed(2),
+                    child: DebouncedReviewField(
+                  initialValue: _formatAmount(item.rate),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: _inputDecoration('Rate (₹)'),
-                  onFieldSubmitted: (val) {
+                  onSaved: (val) {
                     final newRate = double.tryParse(val);
                     if (newRate != null && item.quantity != null) {
                       final newMismatch =
@@ -714,3 +858,110 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 }
+
+class DebouncedReviewField extends StatefulWidget {
+  final String initialValue;
+  final InputDecoration decoration;
+  final TextInputType? keyboardType;
+  final TextAlign textAlign;
+  final TextStyle? style;
+  final int? maxLines;
+  final ValueChanged<String> onSaved;
+
+  const DebouncedReviewField({
+    super.key,
+    required this.initialValue,
+    required this.decoration,
+    this.keyboardType,
+    this.textAlign = TextAlign.start,
+    this.style,
+    this.maxLines = 1,
+    required this.onSaved,
+  });
+
+  @override
+  State<DebouncedReviewField> createState() => _DebouncedReviewFieldState();
+}
+
+class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
+  late TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+  Timer? _debounceTimer;
+  String _lastSavedValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _lastSavedValue = widget.initialValue;
+    _controller = TextEditingController(text: widget.initialValue);
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant DebouncedReviewField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue &&
+        _lastSavedValue != widget.initialValue) {
+      if (!_focusNode.hasFocus) {
+        _controller.text = widget.initialValue;
+        _lastSavedValue = widget.initialValue;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) {
+      _saveCurrentValue();
+    }
+  }
+
+  void _onChanged(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(seconds: 4), () {
+      _saveCurrentValue();
+    });
+  }
+
+  void _saveCurrentValue() {
+    _debounceTimer?.cancel();
+    final currentValue = _controller.text;
+    if (currentValue != _lastSavedValue) {
+      _lastSavedValue = currentValue;
+      widget.onSaved(currentValue);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focusNode,
+      decoration: widget.decoration,
+      keyboardType: widget.keyboardType,
+      textAlign: widget.textAlign,
+      style: widget.style,
+      maxLines: widget.maxLines,
+      onChanged: _onChanged,
+      onFieldSubmitted: (_) {
+        _saveCurrentValue();
+      },
+      onTapOutside: (event) {
+        _focusNode.unfocus();
+      },
+      textInputAction: TextInputAction.done,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// END
+// ─────────────────────────────────────────────────────────────────────────────

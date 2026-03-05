@@ -10,7 +10,7 @@
             {
                 "source": "/api/**",
                 "run": {
-                    "serviceId": "digientry-backend",
+                    "serviceId": "snap-khata-backend",
                     "region": "asia-south1"
                 }
             },

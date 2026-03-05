@@ -60,7 +60,7 @@ class NotificationsPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.06),
+              color: AppTheme.primary.withValues(alpha: 0.06),
               shape: BoxShape.circle,
             ),
             child: const Icon(LucideIcons.bellOff,
@@ -205,7 +205,7 @@ class _NotificationCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppTheme.error.withOpacity(0.1),
+          color: AppTheme.error.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(14),
         ),
         child: const Icon(LucideIcons.trash2, color: AppTheme.error),
@@ -220,11 +220,11 @@ class _NotificationCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: item.isRead
                 ? AppTheme.surface
-                : AppTheme.primary.withOpacity(0.04),
+                : AppTheme.primary.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color:
-                  item.isRead ? AppTheme.border : typeColor.withOpacity(0.25),
+                  item.isRead ? AppTheme.border : typeColor.withValues(alpha: 0.25),
               width: item.isRead ? 1 : 1.5,
             ),
           ),
@@ -236,7 +236,7 @@ class _NotificationCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: typeColor.withOpacity(0.12),
+                  color: typeColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(typeIcon, color: typeColor, size: 20),
@@ -254,7 +254,7 @@ class _NotificationCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: typeColor.withOpacity(0.1),
+                            color: typeColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(item.typeLabel,

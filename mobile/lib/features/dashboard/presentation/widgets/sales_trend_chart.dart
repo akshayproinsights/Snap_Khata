@@ -93,7 +93,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _showBreakdown
-                        ? AppTheme.primary.withOpacity(0.12)
+                        ? AppTheme.primary.withValues(alpha: 0.12)
                         : AppTheme.background,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
@@ -262,7 +262,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
           ? BarAreaData(show: false)
           : BarAreaData(
               show: true,
-              color: color.withOpacity(0.08),
+              color: color.withValues(alpha: 0.08),
             ),
     );
   }

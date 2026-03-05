@@ -37,7 +37,6 @@ class MetricCard extends StatelessWidget {
       case MetricTheme.green:
         return const Color(0xFFBBF7D0);
       case MetricTheme.defaultTheme:
-      default:
         return AppTheme.border;
     }
   }
@@ -53,7 +52,6 @@ class MetricCard extends StatelessWidget {
       case MetricTheme.green:
         return const Color(0xFFDCFCE7);
       case MetricTheme.defaultTheme:
-      default:
         return const Color(0xFFF3F4F6);
     }
   }
@@ -69,7 +67,6 @@ class MetricCard extends StatelessWidget {
       case MetricTheme.green:
         return const Color(0xFF16A34A);
       case MetricTheme.defaultTheme:
-      default:
         return const Color(0xFF4B5563);
     }
   }
@@ -88,7 +85,7 @@ class MetricCard extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 2,
             offset: const Offset(0, 1),
           ),
@@ -190,7 +187,7 @@ class MetricCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 2,
                               offset: const Offset(0, 1),
                             )

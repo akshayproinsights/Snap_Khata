@@ -100,7 +100,6 @@ class _MobileTextFieldState extends State<MobileTextField> {
       case InputState.editing:
         return AppTheme.warning;
       case InputState.idle:
-      default:
         return AppTheme.border;
     }
   }
@@ -128,7 +127,6 @@ class _MobileTextFieldState extends State<MobileTextField> {
           tooltip: 'Save',
         );
       case InputState.idle:
-      default:
         return null;
     }
   }

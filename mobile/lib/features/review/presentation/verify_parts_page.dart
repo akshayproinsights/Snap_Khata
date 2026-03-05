@@ -141,7 +141,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
           if (_showFilters) _buildFiltersRow(),
           if (_selectedIds.isNotEmpty)
             Container(
-              color: AppTheme.primary.withOpacity(0.1),
+              color: AppTheme.primary.withValues(alpha: 0.1),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -265,7 +265,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
             width: isSelected ? 2 : 1),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 4)),
         ],

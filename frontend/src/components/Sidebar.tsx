@@ -223,12 +223,12 @@ const Sidebar: React.FC = () => {
                     <>
                         <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
                             <img
-                                src="/digientry-icon.png"
-                                alt="DigiEntry Icon"
+                                src="/snapkhata-icon.png"
+                                alt="SnapKhata Icon"
                                 className="h-11 w-11 object-contain flex-shrink-0"
                             />
                             <div className="flex flex-col min-w-0">
-                                <span className="text-xl font-bold text-gray-900 leading-tight">DigiEntry</span>
+                                <span className="text-xl font-bold text-gray-900 leading-tight">SnapKhata</span>
                                 <span className="text-xs text-gray-500 leading-tight whitespace-nowrap">Smart Digital Munim</span>
                             </div>
                         </Link>
@@ -242,10 +242,10 @@ const Sidebar: React.FC = () => {
                     </>
                 ) : (
                     <div className="flex items-center justify-center">
-                        <Link to="/" className="flex items-center justify-center p-1" title="DigiEntry Home">
+                        <Link to="/" className="flex items-center justify-center p-1" title="SnapKhata Home">
                             <img
-                                src="/digientry-icon.png"
-                                alt="DigiEntry"
+                                src="/snapkhata-icon.png"
+                                alt="SnapKhata"
                                 className="h-10 w-10 object-contain hover:opacity-80 transition-opacity"
                             />
                         </Link>

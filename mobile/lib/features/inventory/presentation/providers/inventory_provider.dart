@@ -29,11 +29,14 @@ class InventoryState {
   }
 }
 
-class InventoryNotifier extends StateNotifier<InventoryState> {
-  final InventoryRepository _repository;
+class InventoryNotifier extends Notifier<InventoryState> {
+  late final InventoryRepository _repository;
 
-  InventoryNotifier(this._repository) : super(InventoryState()) {
-    fetchItems();
+  @override
+  InventoryState build() {
+    _repository = ref.watch(inventoryRepositoryProvider);
+    Future.microtask(() => fetchItems());
+    return InventoryState();
   }
 
   Future<void> fetchItems({bool showAll = false}) async {
@@ -45,6 +48,9 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
+
+  /// Alias for refreshing all items (showAll: true).
+  Future<void> refresh() => fetchItems(showAll: true);
 
   Future<void> updateItem(int id, Map<String, dynamic> updates) async {
     try {
@@ -93,6 +99,4 @@ class InventoryNotifier extends StateNotifier<InventoryState> {
 }
 
 final inventoryProvider =
-    StateNotifierProvider<InventoryNotifier, InventoryState>((ref) {
-  return InventoryNotifier(ref.watch(inventoryRepositoryProvider));
-});
+    NotifierProvider<InventoryNotifier, InventoryState>(InventoryNotifier.new);

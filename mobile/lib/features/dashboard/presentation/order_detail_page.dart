@@ -6,6 +6,12 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mobile/features/shared/presentation/widgets/payment_summary_card.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -53,10 +59,87 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   List<ItemDetailCtrl> itemCtrls = [];
 
+  // GST State
+  GstMode _gstMode = GstMode.none;
+  Set<String> _taxableRowIds = {};
+
   @override
   void initState() {
     super.initState();
     _initControllers();
+    _initGstDefaults();
+    _loadPersistedSettings();
+  }
+
+  void _initGstDefaults() {
+    // Default all parts to taxable
+    _taxableRowIds = widget.group.items.map((i) => i.rowId).toSet();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final receipt = widget.group.receiptNumber;
+
+    final savedMode = prefs.getString('gst_mode_order_$receipt');
+    if (savedMode != null && mounted) {
+      setState(() {
+        _gstMode = GstMode.values.firstWhere(
+          (e) => e.name == savedMode,
+          orElse: () => GstMode.none,
+        );
+      });
+    }
+
+    final savedTaxable = prefs.getString('gst_taxable_order_$receipt');
+    if (savedTaxable != null && mounted) {
+      setState(() {
+        _taxableRowIds =
+            savedTaxable.isEmpty ? <String>{} : savedTaxable.split(',').toSet();
+      });
+    }
+  }
+
+  Future<void> _saveGstMode(GstMode mode) async {
+    setState(() => _gstMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'gst_mode_order_${widget.group.receiptNumber}', mode.name);
+  }
+
+  Future<void> _toggleTaxable(String rowId, bool taxable) async {
+    setState(() {
+      if (taxable) {
+        _taxableRowIds.add(rowId);
+      } else {
+        _taxableRowIds.remove(rowId);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'gst_taxable_order_${widget.group.receiptNumber}',
+      _taxableRowIds.join(','),
+    );
+  }
+
+  double _partsSubtotal(InvoiceGroup group) => group.items
+      .where((i) => _taxableRowIds.contains(i.rowId))
+      .fold(0.0, (s, i) => s + i.amount);
+
+  double _laborSubtotal(InvoiceGroup group) => group.items
+      .where((i) => !_taxableRowIds.contains(i.rowId))
+      .fold(0.0, (s, i) => s + i.amount);
+
+  double _gstAmount(double partsSubtotal) {
+    if (_gstMode == GstMode.excluded) return partsSubtotal * 0.18;
+    if (_gstMode == GstMode.included) return partsSubtotal * 18 / 118;
+    return 0;
+  }
+
+  double _totalAfterGst(InvoiceGroup group) {
+    final parts = _partsSubtotal(group);
+    final labor = _laborSubtotal(group);
+    if (_gstMode == GstMode.excluded) return parts + _gstAmount(parts) + labor;
+    return parts + labor;
   }
 
   void _initControllers() {
@@ -184,6 +267,101 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 onPressed: () => _showReceiptDialog(context),
               ),
             ),
+          if (!isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: const FaIcon(FontAwesomeIcons.whatsapp,
+                    color: AppTheme.primary),
+                tooltip: 'Share Receipt on WhatsApp',
+                onPressed: () async {
+                  HapticFeedback.lightImpact();
+
+                  final gstParam = _gstMode == GstMode.none
+                      ? ''
+                      : '&gst_mode=${_gstMode.name}';
+
+                  final authState = ref.read(authProvider);
+                  final usernameParam = authState.user?.username != null
+                      ? '&u=${authState.user!.username}'
+                      : '';
+
+                  final link =
+                      'https://mydigientry.com/receipt.html?id=${widget.group.receiptNumber}$gstParam$usernameParam';
+
+                  final customerNameMsg = widget
+                              .group.customerName.isNotEmpty &&
+                          widget.group.customerName.toLowerCase() != 'unknown'
+                      ? widget.group.customerName
+                      : 'Customer';
+
+                  final prefs = await SharedPreferences.getInstance();
+                  final shopName =
+                      prefs.getString('shop_title')?.isNotEmpty == true
+                          ? prefs.getString('shop_title')!
+                          : 'Our Shop';
+
+                  final caption = WhatsAppUtils.getWhatsAppCaption(
+                    status: OrderPaymentStatus.fullyPaid,
+                    customerName: customerNameMsg,
+                    businessName: shopName,
+                    orderNumber: widget.group.receiptNumber.isNotEmpty
+                        ? widget.group.receiptNumber
+                        : 'Recent',
+                    totalAmount: _totalAfterGst(widget.group),
+                  );
+                  final message =
+                      '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— $shopName';
+
+                  final phoneController =
+                      TextEditingController(text: widget.group.mobileNumber);
+
+                  if (!context.mounted) return;
+
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Share Receipt'),
+                      content: TextField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer Phone Number',
+                          prefixText: '+91 ',
+                          hintText: 'e.g. 9876543210',
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.pop(context, phoneController.text),
+                          child: const Text('Share to WhatsApp'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (result != null && result.isNotEmpty && context.mounted) {
+                    final opened = await WhatsAppUtils.openWhatsAppChat(
+                      phone: result,
+                      message: message,
+                    );
+
+                    if (!opened && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Could not open WhatsApp. Please ensure it is installed.')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -297,8 +475,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.04),
-              border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
+              color: AppTheme.primary.withValues(alpha: 0.04),
+              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -310,7 +488,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.1),
+                          color: AppTheme.primary.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4))
                     ],
@@ -558,57 +736,26 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // 4. Totals & Receipt
   // ─────────────────────────────────────────────────────────────
   Widget _buildTotalsCard() {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    final hasLink = widget.group.receiptLink.isNotEmpty &&
-        widget.group.receiptLink != 'null';
-
-    return Container(
-      color: Colors.white,
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Total Amount',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary)),
-              Text(
-                currencyFormat.format(widget.group.totalAmount),
-                style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.primary),
-              ),
-            ],
-          ),
-          if (hasLink && !isEditing) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Divider(),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  foregroundColor: AppTheme.primary,
-                  side: const BorderSide(color: AppTheme.primary, width: 1.5),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () => _showReceiptDialog(context),
-                icon: const Icon(LucideIcons.eye),
-                label: const Text('View Original Receipt',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ]
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: PaymentSummaryCard(
+        gstMode: _gstMode,
+        taxableRowIds: _taxableRowIds,
+        partsSubtotal: _partsSubtotal(widget.group),
+        laborSubtotal: _laborSubtotal(widget.group),
+        gstAmount: _gstAmount(_partsSubtotal(widget.group)),
+        grandTotal: _totalAfterGst(widget.group),
+        originalTotal: widget.group.totalAmount,
+        lineItems: widget.group.items
+            .map((item) => PaymentSummaryItem(
+                  rowId: item.rowId,
+                  description:
+                      item.description.isNotEmpty ? item.description : 'Item',
+                  amount: item.amount,
+                ))
+            .toList(),
+        onGstModeChanged: _saveGstMode,
+        onToggleTaxable: _toggleTaxable,
       ),
     );
   }

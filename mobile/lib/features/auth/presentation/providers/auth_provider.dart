@@ -40,11 +40,14 @@ class AuthState {
 }
 
 // StateNotifier for AuthState
-class AuthNotifier extends StateNotifier<AuthState> {
-  final AuthRepository _repository;
+class AuthNotifier extends Notifier<AuthState> {
+  late final AuthRepository _repository;
 
-  AuthNotifier(this._repository) : super(AuthState(isLoading: true)) {
-    _checkInitialAuth();
+  @override
+  AuthState build() {
+    _repository = ref.watch(authRepositoryProvider);
+    Future.microtask(() => _checkInitialAuth());
+    return AuthState(isLoading: true);
   }
 
   Future<void> _checkInitialAuth() async {
@@ -109,7 +112,5 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 // The global provider for authentication state
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final repository = ref.watch(authRepositoryProvider);
-  return AuthNotifier(repository);
-});
+final authProvider =
+    NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);

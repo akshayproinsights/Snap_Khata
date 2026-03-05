@@ -6,7 +6,7 @@
 ![Supabase](https://img.shields.io/badge/database-Supabase-3ECF8E)
 ![AI](https://img.shields.io/badge/AI-Gemini_Pro_%26_Flash-8E75B2)
 
-**DigiEntry** is an intelligent, automated invoice processing system designed to streamline data extraction, verification, and management. Leveraging Google's **Gemini AI models**, it extracts critical details from invoice images with high accuracy and provides a seamless review interface.
+**SnapKhata** is an intelligent, automated invoice processing system designed to streamline data extraction, verification, and management. Leveraging Google's **Gemini AI models**, it extracts critical details from invoice images with high accuracy and provides a seamless review interface.
 
 ---
 

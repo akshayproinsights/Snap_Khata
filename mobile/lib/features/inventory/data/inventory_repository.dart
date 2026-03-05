@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/core/utils/image_compress_service.dart';
+import 'package:cross_file/cross_file.dart';
 
 class InventoryRepository {
   final Dio _dio;
@@ -34,8 +36,12 @@ class InventoryRepository {
   // Upload APIs
   Future<Map<String, dynamic>> uploadFiles(List<dynamic> files,
       {Function(int, int)? onProgress}) async {
+    // ── Compress all images on-device in parallel BEFORE uploading ──────────
+    final xFiles = files.map((e) => e as XFile).toList();
+    final compressedFiles = await ImageCompressService.compressFiles(xFiles);
+
     final formData = FormData();
-    for (var file in files) {
+    for (var file in compressedFiles) {
       formData.files.add(MapEntry(
         'files',
         await MultipartFile.fromFile(file.path, filename: file.name),

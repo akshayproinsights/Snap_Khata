@@ -10,14 +10,17 @@ import 'package:mobile/features/review/presentation/review_amounts_page.dart';
 import 'package:mobile/features/review/presentation/verify_parts_page.dart';
 import 'package:mobile/features/verified/presentation/verified_invoices_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_upload_page.dart';
-import 'package:mobile/features/inventory/presentation/inventory_hub_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_mapping_page.dart';
+import 'package:mobile/features/inventory/presentation/inventory_main_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_item_mapping_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_mapped_page.dart';
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
+import 'package:mobile/features/inventory/presentation/inventory_invoice_review_page.dart';
 import 'package:mobile/features/inventory/presentation/current_stock_page.dart';
 import 'package:mobile/features/vendor/presentation/vendor_mapping_page.dart';
 import 'package:mobile/features/purchase_orders/presentation/purchase_orders_page.dart';
 import 'package:mobile/features/purchase_orders/presentation/create_po_page.dart';
+import 'package:mobile/features/purchase_orders/presentation/quick_reorder_page.dart';
 import 'package:mobile/features/notifications/presentation/notifications_page.dart';
 import 'package:mobile/core/routing/app_shell.dart';
 import 'package:mobile/features/settings/presentation/settings_page.dart';
@@ -56,18 +59,9 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/upload',
-                name: 'upload',
-                builder: (context, state) => const UploadPage(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/inventory-hub',
-                name: 'inventory-hub',
-                builder: (context, state) => const InventoryHubPage(),
+                path: '/inventory',
+                name: 'inventory',
+                builder: (context, state) => const InventoryMainPage(),
               ),
             ],
           ),
@@ -83,10 +77,20 @@ class AppRouter {
         ],
       ),
       GoRoute(
+        path: '/upload',
+        name: 'upload',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const UploadPage(),
+      ),
+      GoRoute(
         path: '/review',
         name: 'review',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const PendingReceiptsPage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final skippedCount = extra?['skippedCount'] as int? ?? 0;
+          return PendingReceiptsPage(skippedCount: skippedCount);
+        },
       ),
       GoRoute(
         path: '/receipt-review',
@@ -164,6 +168,21 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: '/inventory-review',
+        name: 'inventory-review',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const InventoryReviewPage(),
+      ),
+      GoRoute(
+        path: '/inventory-invoice-review',
+        name: 'inventory-invoice-review',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final bundle = state.extra as InventoryInvoiceBundle;
+          return InventoryInvoiceReviewPage(bundle: bundle);
+        },
+      ),
+      GoRoute(
         path: '/inventory-upload',
         name: 'inventory-upload',
         parentNavigatorKey: _rootNavigatorKey,
@@ -180,6 +199,12 @@ class AppRouter {
         name: 'create-po',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const CreatePoPage(),
+      ),
+      GoRoute(
+        path: '/quick-reorder',
+        name: 'quick-reorder',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const QuickReorderPage(),
       ),
       GoRoute(
         path: '/notifications',

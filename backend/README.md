@@ -1,6 +1,6 @@
-# DigiEntry Backend
+# SnapKhata Backend
 
-FastAPI backend for the DigiEntry application.
+FastAPI backend for the SnapKhata application.
 
 ## Setup
 

@@ -29,10 +29,14 @@ class VerifiedState {
   }
 }
 
-class VerifiedNotifier extends StateNotifier<VerifiedState> {
-  final VerifiedRepository _repository;
+class VerifiedNotifier extends Notifier<VerifiedState> {
+  late final VerifiedRepository _repository;
 
-  VerifiedNotifier(this._repository) : super(VerifiedState());
+  @override
+  VerifiedState build() {
+    _repository = ref.watch(verifiedRepositoryProvider);
+    return VerifiedState();
+  }
 
   Future<void> fetchRecords({
     String? search,
@@ -97,6 +101,4 @@ class VerifiedNotifier extends StateNotifier<VerifiedState> {
 }
 
 final verifiedProvider =
-    StateNotifierProvider<VerifiedNotifier, VerifiedState>((ref) {
-  return VerifiedNotifier(ref.watch(verifiedRepositoryProvider));
-});
+    NotifierProvider<VerifiedNotifier, VerifiedState>(VerifiedNotifier.new);

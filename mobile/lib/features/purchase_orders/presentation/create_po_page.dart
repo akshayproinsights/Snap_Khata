@@ -70,9 +70,10 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.06),
+                  color: AppTheme.primary.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                  border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.2)),
                 ),
                 child: const Row(
                   children: [
@@ -193,7 +194,7 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
               _label('Priority'),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _priority,
+                initialValue: _priority,
                 decoration: _decoration(''),
                 items: _priorities
                     .map((p) => DropdownMenuItem(
@@ -210,7 +211,7 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
               const SizedBox(height: 6),
               if (suppliers.isNotEmpty)
                 DropdownButtonFormField<String>(
-                  value: _selectedSupplier,
+                  initialValue: _selectedSupplier,
                   hint: const Text('Select or leave blank'),
                   decoration: _decoration(''),
                   items: suppliers

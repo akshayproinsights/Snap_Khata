@@ -47,11 +47,14 @@ class SyncProgress {
   SyncProgress(this.stage, this.percentage, this.message);
 }
 
-class ReviewNotifier extends StateNotifier<ReviewState> {
-  final ReviewRepository _repository;
+class ReviewNotifier extends Notifier<ReviewState> {
+  late final ReviewRepository _repository;
 
-  ReviewNotifier(this._repository) : super(ReviewState()) {
-    fetchReviewData();
+  @override
+  ReviewState build() {
+    _repository = ref.watch(reviewRepositoryProvider);
+    Future.microtask(() => fetchReviewData());
+    return ReviewState();
   }
 
   /// Converts any exception to a concise, user-friendly message.
@@ -257,6 +260,4 @@ class ReviewNotifier extends StateNotifier<ReviewState> {
 }
 
 final reviewProvider =
-    StateNotifierProvider<ReviewNotifier, ReviewState>((ref) {
-  return ReviewNotifier(ref.watch(reviewRepositoryProvider));
-});
+    NotifierProvider<ReviewNotifier, ReviewState>(ReviewNotifier.new);

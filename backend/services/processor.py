@@ -298,14 +298,11 @@ def process_single_invoice(
     
     logger.debug(f"Loaded prompt for user {username}, length: {len(system_instruction)}")
     
-    # Load image
-    tmp_path = None
+    # Load image directly from bytes — no temp file disk I/O needed
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
-            tmp.write(image_bytes)
-            tmp_path = tmp.name
-        
-        img = Image.open(tmp_path)
+        from io import BytesIO
+        img = Image.open(BytesIO(image_bytes))
+        img.load()  # force decode into memory before BytesIO goes out of scope
         print(f"\n{'='*80}", flush=True)
         print(f">>> PROCESSING IMAGE: {filename}", flush=True)
         print(f"{'='*80}\n", flush=True)
@@ -544,10 +541,9 @@ def process_single_invoice(
                 
                 return data
         
-    finally:
-        # Cleanup temp file
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    except Exception as outer_err:
+        print(f"\n[ERROR] Processing failed for {filename}: {outer_err}\n", flush=True)
+        logger.error(f"Unhandled exception processing {filename}: {outer_err}")
     
     # If we got here, both models failed completely
     print(f"\n[ERROR] Processing failed for {filename}\n", flush=True)
@@ -1068,6 +1064,8 @@ def process_invoices_batch(
                         'calculated_amount',    # Only for verification tables  
                         'review_status',       # Not in invoices table
                         'confidence',          # Not in invoices
+                        'receipt_number_confidence', # Not in invoices
+                        'date_confidence',     # Not in invoices
                         'receipt_number_bbox', # Not in invoices
                         'date_bbox',           # Not in invoices
                         'date_and_receipt_combined_bbox',  # Not in invoices
@@ -1307,6 +1305,22 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
         if df_new.empty:
             logger.info("No rows to create verification records for")
             return
+            
+        def sanitize_for_supabase(obj):
+            """Recursively clean objects for Supabase JSON serialization."""
+            if isinstance(obj, float):
+                if pd.isna(obj):
+                    return None
+                if obj.is_integer():
+                    return int(obj)
+                return obj
+            elif obj is pd.NA:
+                return None
+            elif isinstance(obj, dict):
+                return {k: sanitize_for_supabase(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [sanitize_for_supabase(i) for i in obj]
+            return obj
         
         # =============================================
         # VERIFY DATES - With Audit Findings Logic
@@ -1393,11 +1407,21 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
         
         # Insert date verification records into Supabase
         date_insert_count = 0
-        for _, row in date_records.iterrows():
+        for _, raw_row in date_records.iterrows():
             try:
+                row = raw_row.to_dict()
+                
+                receipt_num = row.get('receipt_number')
+                if receipt_num is not None and not pd.isna(receipt_num):
+                    receipt_num = str(receipt_num)
+                    if receipt_num.endswith('.0'):
+                        receipt_num = receipt_num[:-2]
+                else:
+                    receipt_num = None
+
                 date_row = {
                     'username': username,
-                    'receipt_number': row.get('receipt_number'),
+                    'receipt_number': receipt_num,
                     'date': row.get('date'),
                     'audit_findings': row.get('audit_findings'),
                     'verification_status': row.get('verification_status'),
@@ -1410,10 +1434,12 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     'customer_name': row.get('customer'),
                     'mobile_number': row.get('mobile_number')
                 }
+                date_row = sanitize_for_supabase(date_row)
+                
                 db.insert('verification_dates', date_row)
                 date_insert_count += 1
             except Exception as e:
-                logger.error(f"Failed to insert date verification record: {e}")
+                logger.error(f"Failed to insert date verification record for receipt {row.get('receipt_number')}: {e}")
         
         logger.info(f"Created {date_insert_count} date verification records in Supabase")
         
@@ -1475,9 +1501,17 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
             
             # Insert amount verification records into Supabase WITH header_id
             amount_insert_count = 0
-            for _, row in amount_records.iterrows():
+            for _, raw_row in amount_records.iterrows():
                 try:
+                    row = raw_row.to_dict()
+
                     receipt_num = row.get('receipt_number')
+                    if receipt_num is not None and not pd.isna(receipt_num):
+                        receipt_num = str(receipt_num)
+                        if receipt_num.endswith('.0'):
+                            receipt_num = receipt_num[:-2]
+                    else:
+                        receipt_num = None
                     
                     # NEW: Get header_id from our map
                     header_id = header_ids_map.get(receipt_num) if header_ids_map else None
@@ -1499,6 +1533,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                         'customer_name': row.get('customer'),
                         'mobile_number': row.get('mobile_number')
                     }
+                    amount_row = sanitize_for_supabase(amount_row)
                     
                     # Log if we're missing header_id (for debugging)
                     if not header_id:
@@ -1507,7 +1542,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     db.insert('verification_amounts', amount_row)
                     amount_insert_count += 1
                 except Exception as e:
-                    logger.error(f"Failed to insert amount verification record: {e}")
+                    logger.error(f"Failed to insert amount verification record for receipt {row.get('receipt_number')}: {e}")
             
             logger.info(f"Created {amount_insert_count} amount verification records in Supabase (filtered: amount_mismatch > 0)")
         else:

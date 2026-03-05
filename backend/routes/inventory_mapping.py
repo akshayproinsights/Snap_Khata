@@ -622,6 +622,41 @@ async def get_unmapped_customer_items(
 
 
 
+@router.get("/customer-items/mapped")
+async def get_mapped_customer_items(
+    search: str = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get all items from inventory_mapped table (status=Added/Done/Skipped).
+    Used by the mobile app Mapped tab to show what has already been mapped.
+    """
+    username = current_user.get("username")
+    db = get_database_client()
+
+    try:
+        query = db.client.table("inventory_mapped")\
+            .select("id, customer_item, normalized_description, vendor_item_id, vendor_description, vendor_part_number, priority, status, mapped_on, created_at")\
+            .eq("username", username)\
+            .order("mapped_on", desc=True)
+
+        if search:
+            query = query.ilike("customer_item", f"%{search}%")
+
+        result = query.execute()
+        items = result.data or []
+
+        return {
+            "success": True,
+            "items": items,
+            "count": len(items)
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting mapped items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/customer-items/suggestions")
 async def get_customer_item_suggestions(
     customer_item: str = Query(...),

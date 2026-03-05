@@ -1,0 +1,45 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for Telugu (`te`).
+class AppLocalizationsTe extends AppLocalizations {
+  AppLocalizationsTe([String locale = 'te']) : super(locale);
+
+  @override
+  String get appTitle => 'డిజీఎంట్రీ';
+
+  @override
+  String get dashboardTitle => 'డాష్‌బోర్డ్';
+
+  @override
+  String welcomeBack(String userName) {
+    return 'తిరిగి స్వాగతం, $userName';
+  }
+
+  @override
+  String get quickActions => 'త్వరిత చర్యలు';
+
+  @override
+  String get reviewSync => 'సమీక్ష మరియు సమకాలీకరణ';
+
+  @override
+  String get unmappedItems => 'మ్యాప్ చేయని అంశాలు';
+
+  @override
+  String get outOfStock => 'స్టాక్ లేదు';
+
+  @override
+  String get totalSales => 'మొత్తం విక్రయాలు';
+
+  @override
+  String get processNow => 'ఇప్పుడే ప్రాసెస్ చేయండి';
+
+  @override
+  String get mapItems => 'అంశాలను మ్యాప్ చేయండి';
+
+  @override
+  String get restockList => 'రీస్టాక్ జాబితా';
+}

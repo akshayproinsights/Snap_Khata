@@ -7,7 +7,7 @@ import 'package:mobile/core/network/sync_queue_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 import 'package:mobile/core/localization/locale_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -49,7 +49,6 @@ void main() async {
   try {
     Workmanager().initialize(
       callbackDispatcher,
-      isInDebugMode: false,
     );
   } catch (e) {
     debugPrint('Workmanager init failed (non-fatal): $e');
@@ -126,14 +125,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp.router(
-      title: 'DigiEntry',
+      title: 'SnapKhata',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       routerConfig: AppRouter.router,
       debugShowCheckedModeBanner: false,
       locale: currentLocale,
-      localizationsDelegates: const [
+      localizationsDelegates: [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

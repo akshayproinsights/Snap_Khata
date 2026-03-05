@@ -35,7 +35,7 @@ const SimpleOrderList: React.FC<SimpleOrderListProps> = ({
                 {/* Top Left: App Name */}
                 <div>
                     <h1 className="text-gray-400 font-medium tracking-widest uppercase text-sm">
-                        DIGIENTRY
+                        SNAPKHATA
                     </h1>
                 </div>
 

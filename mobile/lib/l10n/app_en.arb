@@ -1,7 +1,7 @@
 {
   "@@locale": "en",
-  "appTitle": "DigiEntry",
-  "dashboardTitle": "Dashboard",
+  "appTitle": "SnapKhata",
+  "dashboardTitle": "HOME",
   "welcomeBack": "Welcome back, {userName}",
   "@welcomeBack": {
     "placeholders": {

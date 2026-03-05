@@ -22,15 +22,21 @@ class UploadPage extends ConsumerStatefulWidget {
 }
 
 class _UploadPageState extends ConsumerState<UploadPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   bool _flashOn = false;
   final ImagePicker _picker = ImagePicker();
 
+  /// ── LOCAL guard: true until we've confirmed with the backend that
+  ///    no task is active. The camera page CANNOT render while this is true.
+  bool _isCheckingBackend = true;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -39,27 +45,91 @@ class _UploadPageState extends ConsumerState<UploadPage>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Re-attach overlay if processing is still running, or navigate to
-    // review if it completed while the user was away.
+    // ── APPROACH 1 (Provider): re-attach overlay via state management
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(uploadProvider.notifier).resumeIfActive();
     });
+
+    // ── APPROACH 2 (Direct): ask the backend directly — bulletproof
+    _checkBackendForActiveTask();
+  }
+
+  /// Called whenever the app lifecycle changes (foreground/background).
+  /// When the user comes back from another app, we run BOTH approaches.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) {
+      // APPROACH 1: Provider-based resume
+      ref.read(uploadProvider.notifier).resumeIfActive();
+      // APPROACH 2: Direct backend check — sets local guard immediately
+      if (mounted) {
+        setState(() => _isCheckingBackend = true);
+      }
+      _checkBackendForActiveTask();
+    }
+  }
+
+  /// ── APPROACH 2: Direct backend API call ──────────────────────────
+  /// Calls getRecentTask() to ask the server if there is any active
+  /// processing/queued/uploading task. If yes, forces the provider into
+  /// the processing state so the overlay shows. If no, clears the guard.
+  /// This is completely independent of SharedPreferences or in-memory state.
+  Future<void> _checkBackendForActiveTask() async {
+    try {
+      final repo = ref.read(uploadRepositoryProvider);
+      final recentTask = await repo.getRecentTask();
+
+      if (!mounted) return;
+
+      final taskStatus = recentTask['status'] as String? ?? '';
+      final taskId = recentTask['task_id'] as String? ?? '';
+
+      if (taskId.isNotEmpty &&
+          (taskStatus == 'processing' ||
+              taskStatus == 'queued' ||
+              taskStatus == 'uploading')) {
+        // ✅ Backend says there IS an active task — force the provider
+        //    into processing mode so the loading overlay shows.
+        final progress = recentTask['progress'] as Map<String, dynamic>? ?? {};
+        final total = progress['total'] as int? ?? 1;
+
+        final notifier = ref.read(uploadProvider.notifier);
+        // Only force-set if the provider doesn't already know
+        final currentState = ref.read(uploadProvider);
+        if (!currentState.isProcessing && !currentState.isUploading) {
+          notifier.forceIntoProcessingState(taskId, total);
+        }
+      }
+    } catch (_) {
+      // Network error — can't reach backend. Fall through; the provider's
+      // disk-based check is the fallback.
+    }
+
+    if (mounted) {
+      setState(() => _isCheckingBackend = false);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     super.dispose();
   }
 
   Future<void> _capture(CameraController cam) async {
+    // Block capture while backend is processing
+    final s = ref.read(uploadProvider);
+    if (s.isActive || _isCheckingBackend) return;
+
     try {
       HapticFeedback.mediumImpact();
       final xFile = await cam.takePicture();
       await ref.read(uploadProvider.notifier).addFiles([xFile]);
     } catch (e) {
       if (mounted) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Capture failed: $e')),
         );
@@ -68,6 +138,10 @@ class _UploadPageState extends ConsumerState<UploadPage>
   }
 
   Future<void> _pickGallery() async {
+    // Block gallery while backend is processing
+    final s = ref.read(uploadProvider);
+    if (s.isActive || _isCheckingBackend) return;
+
     try {
       final List<XFile> pickedFiles = await _picker.pickMultiImage(
         imageQuality: 80,
@@ -77,6 +151,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
       }
     } catch (e) {
       if (mounted) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gallery error: $e')),
         );
@@ -89,19 +164,19 @@ class _UploadPageState extends ConsumerState<UploadPage>
     final state = ref.watch(uploadProvider);
 
     // Auto-navigate to review when everything is done
-    ref.listen(uploadProvider, (previous, next) {
+    ref.listen(uploadProvider, (previous, next) async {
       if (next.allDone && (previous?.allDone != true)) {
-        Future.delayed(const Duration(milliseconds: 600), () {
-          if (mounted) {
-            ref.read(uploadProvider.notifier).clearFiles();
-            context.go('/review');
-          }
-        });
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (!context.mounted) return;
+        ref.read(uploadProvider.notifier).clearFiles();
+        context.go('/review');
       }
     });
 
-    if (state.hasDuplicate ||
-        (state.failedCount > 0 && state.pendingCount == 0)) {
+    // (Duplicate review logic removed)
+
+    // ── Actual upload error (not duplicate) ───────────────────────────────
+    if (state.failedCount > 0 && state.pendingCount == 0) {
       return Scaffold(
         backgroundColor: AppTheme.background,
         appBar: _buildBasicAppBar(),
@@ -121,6 +196,55 @@ class _UploadPageState extends ConsumerState<UploadPage>
       return Scaffold(
         backgroundColor: Colors.black,
         body: _LoadingOverlay(fileItems: state.fileItems),
+      );
+    }
+
+    // Prevent brief camera flash while resumeIfActive() resolves:
+    // If any file is stuck in 'uploading' status but flags say idle,
+    // it means the upload was interrupted and recovery is in-flight.
+    // Show the overlay until the async check completes.
+    final hasStuckFiles =
+        state.fileItems.any((f) => f.status == UploadFileStatus.uploading);
+    if (hasStuckFiles) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _LoadingOverlay(fileItems: state.fileItems),
+      );
+    }
+
+    // ── LOCAL guard (Approach 2): while the direct backend API call
+    //    is still in-flight, show a loading screen. This is independent
+    //    of the provider and covers the async gap from initState/resume.
+    // ── PROVIDER guard (Approach 1): while restoring state from disk,
+    //    show a loading screen so the user NEVER sees the camera page
+    //    when backend processing is active.
+    if (_isCheckingBackend || state.isRestoringState) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF0066FF),
+                  strokeWidth: 3,
+                ),
+              ),
+              SizedBox(height: 20),
+              Text(
+                'Checking for active orders…',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -306,7 +430,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Colors.black.withOpacity(0.85), Colors.transparent],
+          colors: [Colors.black.withValues(alpha: 0.85), Colors.transparent],
         ),
       ),
       child: Column(
@@ -335,7 +459,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
                         Border.all(color: const Color(0xFF0066FF), width: 4),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF0066FF).withOpacity(0.45),
+                        color: const Color(0xFF0066FF).withValues(alpha: 0.45),
                         blurRadius: 20,
                         spreadRadius: 4,
                       ),
@@ -396,13 +520,13 @@ class _UploadPageState extends ConsumerState<UploadPage>
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: state.isActive
-                      ? AppTheme.primary.withOpacity(0.55)
+                      ? AppTheme.primary.withValues(alpha: 0.55)
                       : AppTheme.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 8,
-                  shadowColor: AppTheme.primary.withOpacity(0.5),
+                  shadowColor: AppTheme.primary.withValues(alpha: 0.5),
                 ),
               ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.5),
             ),
@@ -421,27 +545,25 @@ class _UploadPageState extends ConsumerState<UploadPage>
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.error.withOpacity(0.1),
+              color: AppTheme.error.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(LucideIcons.alertTriangle,
                 size: 56, color: AppTheme.error),
           ),
           const SizedBox(height: 24),
-          Text(
-            state.hasDuplicate ? 'Duplicate Invoice(s)' : 'Upload Failed',
-            style: const TextStyle(
+          const Text(
+            'Upload Failed',
+            style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 12),
-          Text(
-            state.hasDuplicate
-                ? 'Some invoices seem to have already been uploaded previously.'
-                : 'There was an issue processing your invoices.',
+          const Text(
+            'There was an issue processing your invoices.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 32),
           Row(
@@ -467,20 +589,13 @@ class _UploadPageState extends ConsumerState<UploadPage>
                 child: ElevatedButton.icon(
                   onPressed: () {
                     HapticFeedback.mediumImpact();
-                    if (state.hasDuplicate) {
-                      ref.read(uploadProvider.notifier).forceUpload();
-                    } else {
-                      ref.read(uploadProvider.notifier).retryFailed();
-                    }
+                    ref.read(uploadProvider.notifier).retryFailed();
                   },
                   icon: const Icon(LucideIcons.refreshCw, size: 18),
-                  label:
-                      Text(state.hasDuplicate ? 'Force Upload' : 'Retry Data'),
+                  label: const Text('Retry Data'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: state.hasDuplicate
-                        ? AppTheme.warning
-                        : AppTheme.primary,
+                    backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
@@ -495,37 +610,110 @@ class _UploadPageState extends ConsumerState<UploadPage>
   }
 
   Widget _buildSuccessView() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: AppTheme.success.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(LucideIcons.checkCircle2,
-              size: 64, color: AppTheme.success),
-        ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
-        const SizedBox(height: 24),
-        const Text(
-          'Processing Complete',
-          style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.success),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Navigating to review screen...',
-          style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
-        ),
-        const SizedBox(height: 32),
-        const CircularProgressIndicator(color: AppTheme.success),
-      ],
-    ).animate().fadeIn();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ── Celebration icon ──
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.success.withValues(alpha: 0.12),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.success.withValues(alpha: 0.35),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+            child: const Icon(LucideIcons.checkCircle2,
+                size: 72, color: AppTheme.success),
+          )
+              .animate()
+              .scale(
+                  duration: 500.ms,
+                  curve: Curves.easeOutBack,
+                  begin: const Offset(0.5, 0.5))
+              .then()
+              .shimmer(duration: 800.ms, color: AppTheme.success),
+
+          const SizedBox(height: 28),
+
+          // ── Headline ──
+          const Text(
+            '✅  Your order is ready!',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.success,
+              letterSpacing: -0.5,
+            ),
+            textAlign: TextAlign.center,
+          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 12),
+
+          // ── Subtext ──
+          const Text(
+            'Great job! You can now move around freely.\nLet\'s go check your order.',
+            style: TextStyle(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ).animate().fadeIn(delay: 350.ms),
+
+          const SizedBox(height: 40),
+
+          // ── CTA Button ──
+          SizedBox(
+            width: double.infinity,
+            height: 58,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                ref.read(uploadProvider.notifier).clearFiles();
+                context.go('/review');
+              },
+              icon: const Icon(Icons.checklist_rounded,
+                  color: Colors.white, size: 22),
+              label: const Text(
+                'Review My Order  →',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.success,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                elevation: 10,
+                shadowColor: AppTheme.success.withValues(alpha: 0.5),
+              ),
+            ),
+          ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.3, end: 0),
+
+          const SizedBox(height: 16),
+
+          // ── Small note ──
+          const Text(
+            'Taking you to review automatically...',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ).animate().fadeIn(delay: 700.ms),
+        ],
+      ),
+    );
   }
 }
+
+// _DuplicateReviewScreen and helper widgets removed
 
 class _CircleBtn extends StatelessWidget {
   final IconData icon;
@@ -550,7 +738,7 @@ class _CircleBtn extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: iconColor ?? Colors.white, size: 26),
@@ -582,7 +770,7 @@ class _ScanOverlay extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF0066FF).withOpacity(0.85),
+              color: const Color(0xFF0066FF).withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Text(
@@ -617,7 +805,7 @@ class _FramePainter extends CustomPainter {
     final b = t + fh;
 
     // Dim overlay outside frame
-    final dim = Paint()..color = Colors.black.withOpacity(0.42);
+    final dim = Paint()..color = Colors.black.withValues(alpha: 0.42);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, t), dim);
     canvas.drawRect(Rect.fromLTWH(0, b, size.width, size.height - b), dim);
     canvas.drawRect(Rect.fromLTWH(0, t, l, fh), dim);
@@ -696,22 +884,32 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     ),
   ];
 
-  static const _tips = [
-    '💡 Tip: You can upload multiple orders at the same time',
+  static const _uploadTips = [
+    '⚠️  Keep the app open — closing it will cancel your upload',
+    '📶 Make sure your internet is on during upload',
+    '🖼️  Clear, well-lit photos upload faster',
+  ];
+
+  static const _processingTips = [
+    '💡 You can freely use other tabs while we read the order',
+    '💡 Tip: Upload multiple orders at the same time to save time',
     '💡 Tip: Clear photos give faster, more accurate results',
-    '💡 Tip: All your orders will be ready to review after this',
     '💡 Tip: You can tap any order to edit details before saving',
   ];
 
-  int _stepIndex = 0;
+  /// Tracks the highest step we've shown — never goes backwards.
+  int _highWaterStep = 0;
   int _tipIndex = 0;
   bool _wasUploading = true; // track phase transition for haptic
+
+  /// When processing animation started — used for time-based minimum step
+  /// so the UI always makes progress even before the first poll arrives.
+  DateTime? _processingStartTime;
 
   late final AnimationController _processingBarController;
   late final AnimationController _phaseTransitionController;
   late final Animation<double> _phaseTransitionAnim;
 
-  StreamSubscription<dynamic>? _stepSub;
   StreamSubscription<dynamic>? _tipSub;
 
   @override
@@ -736,28 +934,62 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     _tipSub = Stream.periodic(const Duration(seconds: 4)).listen((_) {
       if (mounted) {
         setState(() {
-          _tipIndex = (_tipIndex + 1) % _tips.length;
+          // Use the larger list length so index never overflows either list
+          final maxLen = _processingTips.length > _uploadTips.length
+              ? _processingTips.length
+              : _uploadTips.length;
+          _tipIndex = (_tipIndex + 1) % maxLen;
         });
+      }
+    });
+
+    // ── Auto-start processing animation when overlay is created already
+    //    in processing state (e.g. resumed from background / backend check).
+    //    Without this, the step animation and progress bar never start.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final st = ref.read(uploadProvider);
+      if (st.isProcessing && !st.isUploading) {
+        _wasUploading = false; // skip the upload→processing transition
+        _startProcessingAnimation();
       }
     });
   }
 
   void _startProcessingAnimation() {
+    _processingStartTime = DateTime.now();
     _processingBarController.forward();
-    _stepSub = Stream.periodic(const Duration(milliseconds: 2400)).listen((_) {
-      if (mounted) {
-        setState(() {
-          if (_stepIndex < _processingSteps.length - 1) {
-            _stepIndex++;
-          }
-        });
-      }
-    });
+  }
+
+  /// Compute the step index from REAL backend data + a time-based floor.
+  ///  - `serverRatio` = processed / total (0.0 – 1.0)
+  ///  - time-based floor: advance 1 step per ~3s as a minimum,
+  ///    capped at step 2 (so we never race ahead of the server)
+  /// The result never goes backwards (high-water mark).
+  int _computeStepIndex(double serverRatio) {
+    final maxIdx = _processingSteps.length - 1;
+
+    // Server-driven step: map 0.0→1.0 to step indices
+    final serverStep = (serverRatio * maxIdx).floor().clamp(0, maxIdx);
+
+    // Time-based minimum floor: ~1 step per 3 seconds, max step 2
+    int timeStep = 0;
+    if (_processingStartTime != null) {
+      final elapsed =
+          DateTime.now().difference(_processingStartTime!).inMilliseconds;
+      timeStep = (elapsed / 3000).floor().clamp(0, 2);
+    }
+
+    // Take the max of server and time, but never go backwards
+    final computed = serverStep > timeStep ? serverStep : timeStep;
+    if (computed > _highWaterStep) {
+      _highWaterStep = computed;
+    }
+    return _highWaterStep;
   }
 
   @override
   void dispose() {
-    _stepSub?.cancel();
     _tipSub?.cancel();
     _processingBarController.dispose();
     _phaseTransitionController.dispose();
@@ -780,162 +1012,283 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
       _startProcessingAnimation();
     }
 
-    // ── Processing bar blended progress ──
-    final procStepProgress = (_stepIndex + 1) / _processingSteps.length;
-    // Also use actual poll data if available
+    // ── Compute real progress from backend polling data ──
     double procServerProgress = 0;
     if (processingStatus != null && processingStatus.total > 0) {
       procServerProgress =
           (processingStatus.processed / processingStatus.total).clamp(0.0, 1.0);
     }
 
-    final currentStep = _processingSteps[_stepIndex];
+    // ── Step index driven by REAL data, not a blind timer ──
+    final stepIndex = _computeStepIndex(procServerProgress);
+    final currentStep = _processingSteps[stepIndex];
+    final procStepProgress = (stepIndex + 1) / _processingSteps.length;
+
+    // ── "Finishing up" state: step 6 reached but backend still processing ──
+    final isFinishingUp = stepIndex >= _processingSteps.length - 1 &&
+        procServerProgress < 1.0 &&
+        isProcessing;
+
     final fileCount = widget.fileItems.length;
+
+    // Only show thumbnail strip when items have real file paths
+    final hasRealFiles = widget.fileItems.any((f) => f.path.isNotEmpty);
+
+    // Pick the right tips list
+    final tips = isUploading ? _uploadTips : _processingTips;
+    final safeTipIndex = _tipIndex % tips.length;
 
     return Container(
       decoration: const BoxDecoration(color: Colors.black),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 32),
+        child: Column(
+          children: [
+            // ── TOP BANNER: context-sensitive ──────────────────────────
+            _UploadPhaseBanner(isUploading: isUploading),
 
-                // ── Phase pill indicator ──
-                _PhasePill(isUploading: isUploading),
-
-                const SizedBox(height: 40),
-
-                // ── Thumbnail strip of uploaded orders ──
-                if (widget.fileItems.isNotEmpty)
-                  _ThumbnailStrip(fileItems: widget.fileItems),
-
-                const SizedBox(height: 40),
-
-                // ── Main animated icon / ring ──
-                _PhaseIcon(
-                  isUploading: isUploading,
-                  uploadProgress: uploadProgress,
-                  phaseAnim: _phaseTransitionAnim,
-                ),
-
-                const SizedBox(height: 36),
-
-                // ── Title ──
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 500),
-                  child: Text(
-                    isUploading
-                        ? 'Sending your order${fileCount > 1 ? 's' : ''}'
-                        : currentStep.title,
-                    key: ValueKey(
-                        isUploading ? 'upload_title' : 'step_$_stepIndex'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
+            Expanded(
+              child: SafeArea(
+                top: false, // banner already handles top padding
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.of(context).size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom -
+                          56, // banner height approx
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 20),
 
-                const SizedBox(height: 10),
+                            // ── Phase pill indicator ──
+                            _PhasePill(isUploading: isUploading),
 
-                // ── Subtitle ──
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 500),
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.12),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    isUploading
-                        ? 'Please keep the app open — this will only take a moment'
-                        : currentStep.sub,
-                    key: ValueKey(
-                        isUploading ? 'upload_sub' : 'sub_$_stepIndex'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.55),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
+                            const SizedBox(height: 20),
 
-                const SizedBox(height: 36),
+                            // ── Thumbnail strip ──
+                            if (hasRealFiles)
+                              _ThumbnailStrip(fileItems: widget.fileItems),
 
-                // ── Progress bar ──
-                _ProgressBar(
-                  isUploading: isUploading,
-                  uploadProgress: uploadProgress,
-                  procStepProgress: procStepProgress,
-                  procServerProgress: procServerProgress,
-                  processingBarAnim: _processingBarController,
-                ),
+                            const SizedBox(height: 20),
 
-                const SizedBox(height: 14),
+                            // ── Main animated icon / ring ──
+                            _PhaseIcon(
+                              isUploading: isUploading,
+                              uploadProgress: uploadProgress,
+                              phaseAnim: _phaseTransitionAnim,
+                            ),
 
-                // ── Percentage label ──
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    isUploading
-                        ? '${(uploadProgress * 100).toInt()}% uploaded'
-                        : 'Step ${_stepIndex + 1} of ${_processingSteps.length}',
-                    key: ValueKey(isUploading
-                        ? 'pct_${(uploadProgress * 100).toInt()}'
-                        : 'step_lbl_$_stepIndex'),
-                    style: TextStyle(
-                      color: const Color(0xFF0066FF).withOpacity(0.85),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
+                            const SizedBox(height: 24),
 
-                const Spacer(),
+                            // ── Title ──
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 500),
+                              child: Text(
+                                isUploading
+                                    ? 'Sending your order${fileCount > 1 ? 's' : ''}'
+                                    : isFinishingUp
+                                        ? 'Finishing up…'
+                                        : currentStep.title,
+                                key: ValueKey(isUploading
+                                    ? 'upload_title'
+                                    : 'step_${stepIndex}_$isFinishingUp'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.3,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
 
-                // ── Rotating tips ticker ──
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 600),
-                  child: Container(
-                    key: ValueKey('tip_$_tipIndex'),
-                    margin: const EdgeInsets.only(bottom: 24),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: Colors.white.withOpacity(0.08), width: 1),
-                    ),
-                    child: Text(
-                      _tips[_tipIndex],
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.45),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
+                            const SizedBox(height: 8),
+
+                            // ── Subtitle ──
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 500),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(
+                                opacity: anim,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.12),
+                                    end: Offset.zero,
+                                  ).animate(anim),
+                                  child: child,
+                                ),
+                              ),
+                              child: Text(
+                                isUploading
+                                    ? 'Your photo is being sent. Do NOT close the app right now.'
+                                    : isFinishingUp
+                                        ? 'Just a few more seconds — saving your data'
+                                        : currentStep.sub,
+                                key: ValueKey(isUploading
+                                    ? 'upload_sub'
+                                    : 'sub_${stepIndex}_$isFinishingUp'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isUploading
+                                      ? Colors.amber.shade300
+                                      : Colors.white.withValues(alpha: 0.55),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // ── Progress bar ──
+                            _ProgressBar(
+                              isUploading: isUploading,
+                              uploadProgress: uploadProgress,
+                              procStepProgress: procStepProgress,
+                              procServerProgress: procServerProgress,
+                              processingBarAnim: _processingBarController,
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            // ── Percentage label ──
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: Text(
+                                isUploading
+                                    ? '${(uploadProgress * 100).toInt()}% uploaded'
+                                    : isFinishingUp
+                                        ? '${(procServerProgress * 100).toInt()}% complete'
+                                        : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
+                                key: ValueKey(isUploading
+                                    ? 'pct_${(uploadProgress * 100).toInt()}'
+                                    : 'step_lbl_${stepIndex}_$isFinishingUp'),
+                                style: TextStyle(
+                                  color: isUploading
+                                      ? Colors.amber.shade400
+                                      : const Color(0xFF0066FF)
+                                          .withValues(alpha: 0.85),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+
+                            // ── Upload warning box ──
+                            if (isUploading) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade900
+                                      .withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: Colors.red.shade600, width: 1),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded,
+                                        color: Colors.orangeAccent, size: 16),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Leaving now will cancel your upload',
+                                        style: TextStyle(
+                                          color: Colors.orangeAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // ── "Go to HOME" escape during processing ──
+                            if (!isUploading) ...[
+                              const SizedBox(height: 16),
+                              TextButton.icon(
+                                onPressed: () {
+                                  if (context.mounted) {
+                                    context.go('/dashboard');
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.home_outlined,
+                                  color: Colors.lightBlueAccent,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Go to HOME — we\'ll notify you when done',
+                                  style: TextStyle(
+                                    color: Colors.lightBlueAccent,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            const Spacer(),
+
+                            // ── Rotating tips ticker ──
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 600),
+                              child: Container(
+                                key: ValueKey(
+                                    'tip_${isUploading}_$safeTipIndex'),
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isUploading
+                                      ? Colors.amber.shade900
+                                          .withValues(alpha: 0.25)
+                                      : Colors.white.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isUploading
+                                        ? Colors.amber.shade700
+                                            .withValues(alpha: 0.5)
+                                        : Colors.white.withValues(alpha: 0.08),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  tips[safeTipIndex],
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isUploading
+                                        ? Colors.amber.shade300
+                                        : Colors.white.withValues(alpha: 0.45),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -952,9 +1305,10 @@ class _PhasePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
+        color: Colors.white.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border:
+            Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -992,7 +1346,7 @@ class _PillChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: active ? Colors.white : Colors.white.withOpacity(0.35),
+          color: active ? Colors.white : Colors.white.withValues(alpha: 0.35),
           fontSize: 13,
           fontWeight: active ? FontWeight.w700 : FontWeight.w500,
         ),
@@ -1008,15 +1362,19 @@ class _ThumbnailStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Only render items that have a real file path
+    final validItems = fileItems.where((f) => f.path.isNotEmpty).toList();
+    if (validItems.isEmpty) return const SizedBox.shrink();
+
     return SizedBox(
       height: 72,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         shrinkWrap: true,
-        itemCount: fileItems.length,
+        itemCount: validItems.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final item = fileItems[index];
+          final item = validItems[index];
           return ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: Stack(
@@ -1026,12 +1384,22 @@ class _ThumbnailStrip extends StatelessWidget {
                   width: 54,
                   height: 72,
                   fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 54,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.image_not_supported,
+                        color: Colors.white38, size: 22),
+                  ),
                 ),
                 // Subtle darkening overlay so thumbnails don't distract
                 Container(
                   width: 54,
                   height: 72,
-                  color: Colors.black.withOpacity(0.25),
+                  color: Colors.black.withValues(alpha: 0.25),
                 ),
               ],
             ),
@@ -1042,7 +1410,7 @@ class _ThumbnailStrip extends StatelessWidget {
   }
 }
 
-// ── Animated center icon: upload arrow ↔ reading checkmark ──
+// ── Animated center icon: upload lock ↔ reading ──
 class _PhaseIcon extends StatelessWidget {
   final bool isUploading;
   final double uploadProgress;
@@ -1056,6 +1424,12 @@ class _PhaseIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isUploading) {
+      // Amber pulsing lock ring during upload
+      return _PulsingLockIcon(uploadProgress: uploadProgress);
+    }
+
+    // Blue reading icon during processing
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 600),
       transitionBuilder: (child, anim) => ScaleTransition(
@@ -1063,51 +1437,150 @@ class _PhaseIcon extends StatelessWidget {
         child: FadeTransition(opacity: anim, child: child),
       ),
       child: Container(
-        key: ValueKey(isUploading ? 'upload_icon' : 'reading_icon'),
+        key: const ValueKey('reading_icon'),
         width: 88,
         height: 88,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFF0066FF).withOpacity(0.12),
+          color: const Color(0xFF0066FF).withValues(alpha: 0.12),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0066FF).withOpacity(0.25),
+              color: const Color(0xFF0066FF).withValues(alpha: 0.25),
               blurRadius: 32,
               spreadRadius: 6,
             ),
           ],
           border: Border.all(
-              color: const Color(0xFF0066FF).withOpacity(0.3), width: 2),
+              color: const Color(0xFF0066FF).withValues(alpha: 0.3), width: 2),
         ),
-        child: isUploading
-            ? Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: CircularProgressIndicator(
-                      value: uploadProgress > 0 ? uploadProgress : null,
-                      color: const Color(0xFF0066FF),
-                      strokeWidth: 4,
-                      strokeCap: StrokeCap.round,
-                      backgroundColor: Colors.white.withOpacity(0.1),
-                    ),
-                  ),
-                  Icon(
-                    Icons.cloud_upload_outlined,
-                    color: const Color(0xFF0066FF).withOpacity(0.9),
-                    size: 28,
-                  ),
-                ],
-              )
-            : const Icon(
-                Icons.document_scanner_outlined,
-                color: Color(0xFF0066FF),
-                size: 38,
-              ),
+        child: const Icon(
+          Icons.auto_stories_rounded,
+          color: Color(0xFF0066FF),
+          size: 38,
+        ),
       ),
     );
+  }
+}
+
+/// Amber pulsing lock ring — used during the upload phase.
+class _PulsingLockIcon extends StatefulWidget {
+  final double uploadProgress;
+  const _PulsingLockIcon({required this.uploadProgress});
+
+  @override
+  State<_PulsingLockIcon> createState() => _PulsingLockIconState();
+}
+
+class _PulsingLockIconState extends State<_PulsingLockIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.18).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+    _opacity = Tween<double>(begin: 0.4, end: 0.9).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, __) => Stack(
+        alignment: Alignment.center,
+        children: [
+          // Pulsing outer glow ring
+          Transform.scale(
+            scale: _scale.value,
+            child: Container(
+              width: 104,
+              height: 104,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color:
+                      Colors.amber.shade600.withValues(alpha: _opacity.value),
+                  width: 3,
+                ),
+                color: Colors.amber.shade900.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          // Inner circle
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.amber.shade800.withValues(alpha: 0.18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.shade600.withValues(alpha: 0.4),
+                  blurRadius: 24,
+                  spreadRadius: 4,
+                ),
+              ],
+              border: Border.all(
+                  color: Colors.amber.shade500.withValues(alpha: 0.6),
+                  width: 2),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 62,
+                  height: 62,
+                  child: CircularProgressIndicator(
+                    value: widget.uploadProgress > 0
+                        ? widget.uploadProgress
+                        : null,
+                    color: Colors.amber.shade400,
+                    strokeWidth: 4,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor:
+                        Colors.amber.shade900.withValues(alpha: 0.25),
+                  ),
+                ),
+                Icon(
+                  Icons.lock_rounded,
+                  color: Colors.amber.shade300,
+                  size: 28,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+} // end _PulsingLockIconState
+
+// ── Amber top banner shown during upload phase ──
+class _UploadPhaseBanner extends StatelessWidget {
+  final bool isUploading;
+  const _UploadPhaseBanner({required this.isUploading});
+
+  @override
+  Widget build(BuildContext context) {
+    // Top banners are now handled globally by GlobalTaskBanner
+    return const SizedBox.shrink();
   }
 }
 
@@ -1140,7 +1613,7 @@ class _ProgressBar extends StatelessWidget {
               builder: (_, value, __) => LinearProgressIndicator(
                 value: value,
                 minHeight: 8,
-                backgroundColor: Colors.white.withOpacity(0.1),
+                backgroundColor: Colors.white.withValues(alpha: 0.1),
                 valueColor:
                     const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
               ),
@@ -1160,7 +1633,7 @@ class _ProgressBar extends StatelessWidget {
                 return LinearProgressIndicator(
                   value: blended,
                   minHeight: 8,
-                  backgroundColor: Colors.white.withOpacity(0.1),
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
                   valueColor:
                       const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
                 );

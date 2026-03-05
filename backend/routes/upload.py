@@ -220,8 +220,9 @@ async def upload_files(
     r2_bucket: str = Depends(get_current_user_r2_bucket)
 ):
     """
-    Upload sales invoice files to R2 storage SEQUENTIALLY and SYNCHRONOUSLY.
-    Blocks until all files are uploaded to prevent race conditions and memory crashes.
+    Upload sales invoice files to R2 storage CONCURRENTLY.
+    All files are uploaded to R2 in parallel (asyncio.gather),
+    reducing upload time from N×T to ~T for a batch of N files.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
@@ -230,40 +231,46 @@ async def upload_files(
     logger.info(f"Received {len(files)} sales files for upload from {username}")
     
     try:
-        # Pre-generate file_keys and read file bytes immediately
+        # Read all file bytes into memory first (async, fast)
         file_data_list = []
-        
         for file in files:
-            # Read file bytes into memory
             content = await file.read()
-            
-            # Generate file_key deterministically
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = uuid.uuid4().hex[:6]
             sales_folder = get_sales_folder(username)
-            file_key = f"{sales_folder}{timestamp}_{file.filename}"
-            
+            file_key = f"{sales_folder}{timestamp}_{unique_id}_{file.filename}"
             file_data_list.append({
                 'content': content,
                 'filename': file.filename,
                 'file_key': file_key
             })
         
-        logger.info(f"Prepared {len(file_data_list)} sales files for sequential upload")
+        logger.info(f"Starting PARALLEL upload of {len(file_data_list)} sales files for {username}")
         
-        # Execute sequential upload in thread pool (Blocking operation)
+        # Upload all files in parallel — each runs in the thread pool
+        # Semaphore caps concurrency at 10 to avoid R2 overload
+        semaphore = asyncio.Semaphore(10)
         loop = asyncio.get_event_loop()
-        uploaded_keys = await loop.run_in_executor(
-            executor,
-            process_uploads_batch_sync,
-            file_data_list,
-            username,
-            r2_bucket
-        )
+
+        async def upload_one(file_data: Dict[str, Any]) -> Optional[str]:
+            async with semaphore:
+                return await loop.run_in_executor(
+                    executor,
+                    upload_single_file_sync,
+                    file_data['content'],
+                    file_data['filename'],
+                    username,
+                    r2_bucket,
+                    file_data['file_key']
+                )
+
+        results = await asyncio.gather(*[upload_one(fd) for fd in file_data_list])
+        uploaded_keys = [key for key in results if key is not None]
         
         if not uploaded_keys:
             raise HTTPException(status_code=500, detail="Failed to upload any files")
 
-        logger.info(f"Successfully uploaded {len(uploaded_keys)} sales files sequentially")
+        logger.info(f"Successfully uploaded {len(uploaded_keys)}/{len(file_data_list)} files in parallel")
         
         return {
             "success": True,
@@ -280,46 +287,16 @@ async def upload_files(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# process_uploads_batch_sync is no longer used — upload_files now uses
+# asyncio.gather() for parallel uploads. Kept as a no-op stub for safety.
 def process_uploads_batch_sync(
     file_data_list: List[Dict[str, Any]],
     username: str,
     r2_bucket: str
 ) -> List[str]:
-    """
-    Process a batch of sales invoice uploads sequentially and synchronously.
-    Running in thread pool to avoid blocking main loop, but blocking the request
-    until completion to ensure data integrity and prevent OOM.
-    """
-    uploaded_keys = []
-    logger.info(f"Starting sequential processing of {len(file_data_list)} sales files for {username}")
-    
-    for i, file_data in enumerate(file_data_list):
-        try:
-            logger.info(f"Uploading sales file {i+1}/{len(file_data_list)}: {file_data['filename']}")
-            
-            # Re-use existing sync upload logic
-            result_key = upload_single_file_sync(
-                content=file_data['content'],
-                filename=file_data['filename'],
-                username=username,
-                r2_bucket=r2_bucket,
-                file_key=file_data['file_key']
-            )
-            
-            if result_key:
-                uploaded_keys.append(result_key)
-                
-            # Force garbage collection after large image processing
-            import gc
-            del file_data['content'] 
-            gc.collect()
-            
-        except Exception as e:
-            logger.error(f"Failed to upload {file_data.get('filename')}: {e}")
-            # Continue with other files even if one fails
-            
-    logger.info(f"Completed sequential processing. Success: {len(uploaded_keys)}/{len(file_data_list)}")
-    return uploaded_keys
+    """Deprecated: parallel upload is now done directly in upload_files endpoint."""
+    logger.warning("process_uploads_batch_sync called — this is deprecated. Use parallel upload_files instead.")
+    return []
 
 
 def upload_single_file_sync(
@@ -389,6 +366,40 @@ def upload_single_file_sync(
         return None
 
 
+class InternalProcessRequest(BaseModel):
+    task_id: str
+    file_keys: List[str]
+    r2_bucket: str
+    sheet_id: str
+    username: str
+    force_upload: bool = False
+
+@router.post("/internal/process-task")
+async def internal_process_task(request: InternalProcessRequest):
+    """
+    Internal Webhook for Google Cloud Tasks.
+    Since Cloud Tasks manages retries/timeouts and keeps the HTTP connection open,
+    this runs SYNCHRONOUSLY to prevent Cloud Run CPU from throttling to zero.
+    Requires OIDC authentication verified by Cloud Run automatically.
+    """
+    try:
+        logger.info(f"Received Cloud Task webhook for task {request.task_id}")
+        # Run synchronously on the main thread
+        process_invoices_sync(
+            task_id=request.task_id,
+            file_keys=request.file_keys,
+            r2_bucket=request.r2_bucket,
+            sheet_id=request.sheet_id,
+            username=request.username,
+            force_upload=request.force_upload
+        )
+        return {"status": "success", "message": f"Task {request.task_id} processed"}
+    except Exception as e:
+        logger.error(f"Internal processing failed for task {request.task_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/process-files")  # RENAMED from /process to work around routing issue
 async def process_invoices_endpoint(
     request: ProcessRequest,
@@ -452,18 +463,45 @@ async def process_invoices_endpoint(
             f.write(f"{'='*80}\n\n")
         
         logger.info(f"Submitting task {task_id} to executor...")
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            executor,
-            process_invoices_sync,
-            task_id,
-            request.file_keys,
-            r2_bucket,
-            sheet_id,
-            username,  # Pass username explicitly
-            request.force_upload
-        )
-        logger.info(f"Task {task_id} submitted successfully")
+        
+        use_cloud_tasks = os.getenv('USE_CLOUD_TASKS', 'False').lower() == 'true'
+        
+        if use_cloud_tasks:
+            try:
+                from services.cloud_tasks import enqueue_process_invoices_task
+                success = enqueue_process_invoices_task(
+                    task_id=task_id,
+                    file_keys=request.file_keys,
+                    r2_bucket=r2_bucket,
+                    sheet_id=sheet_id,
+                    username=username,
+                    force_upload=request.force_upload
+                )
+                if success:
+                    logger.info(f"Task {task_id} submitted to Cloud Tasks successfully")
+                else:
+                    raise Exception("Cloud Tasks submission returned False")
+            except ImportError:
+                logger.error("google-cloud-tasks not installed. Falling back to local thread pool.")
+                use_cloud_tasks = False
+            except Exception as e:
+                logger.error(f"Cloud Tasks failed: {e}. Falling back to local thread pool.")
+                use_cloud_tasks = False
+                
+        if not use_cloud_tasks:
+            # Fallback to local ThreadPoolExecutor (for local development or if CT fails)
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(
+                executor,
+                process_invoices_sync,
+                task_id,
+                request.file_keys,
+                r2_bucket,
+                sheet_id,
+                username,  # Pass username explicitly
+                request.force_upload
+            )
+            logger.info(f"Task {task_id} submitted locally successfully")
     except Exception as e:
         logger.error(f"Failed to submit task {task_id}: {e}")
         # Try to update status to failed in DB

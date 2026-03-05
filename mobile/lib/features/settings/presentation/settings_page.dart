@@ -6,7 +6,6 @@ import 'package:mobile/core/theme/theme_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
-import 'package:mobile/core/localization/locale_provider.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
@@ -24,15 +23,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopPhone = '';
   String _shopGst = '';
   bool _isLoadingProfile = false;
-  bool _geminiConfigLoaded = false;
-  String _industry = '';
-  bool _isLoadingConfig = false;
 
   @override
   void initState() {
     super.initState();
     _loadShopDetails();
-    _loadConfig();
   }
 
   /// Load from local cache first for instant UI, then fetch latest from backend.
@@ -80,26 +75,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _loadConfig() async {
-    setState(() => _isLoadingConfig = true);
-    try {
-      final response = await ApiClient().dio.get('/api/config');
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        if (mounted) {
-          setState(() {
-            _geminiConfigLoaded = data['gemini_config_loaded'] == true;
-            _industry = (data['industry'] as String?) ?? '';
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Could not fetch config: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingConfig = false);
-    }
-  }
-
   /// Save to both local SharedPreferences and the backend API.
   Future<void> _saveShopDetails() async {
     // Save locally
@@ -138,9 +113,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         padding:
             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           child: Column(
@@ -152,9 +127,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'This info appears on your invoices & syncs across devices',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.textSecondary,
+                    fontSize: 13),
               ),
               const SizedBox(height: 24),
               MobileTextField(
@@ -226,7 +205,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final String userEmail = userState.user?.email ?? '';
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Profile & Settings',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
@@ -238,15 +217,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.surface,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.border),
+              border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.darkBorder
+                      : AppTheme.border),
             ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: AppTheme.primary.withOpacity(0.1),
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
                   child: Text(
                     userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                     style: const TextStyle(
@@ -281,9 +263,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
                             _isLoadingProfile ? 'Syncing...' : _shopName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: AppTheme.textSecondary,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? AppTheme.darkTextSecondary
+                                  : AppTheme.textSecondary,
                             ),
                           ),
                         ),
@@ -315,19 +300,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onChanged: (val) {
                 ref.read(themeProvider.notifier).toggleDarkMode(enabled: val);
               },
-              activeColor: AppTheme.primary,
+              activeThumbColor: AppTheme.primary,
             ),
           ),
-          _buildSettingsTile(
-            icon: LucideIcons.languages,
-            title: 'Language',
-            trailing: Text(
-              _getLanguageName(ref.watch(localeProvider).languageCode),
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: AppTheme.primary),
-            ),
-            onTap: _showLanguageSheet,
-          ),
+
           const SizedBox(height: 24),
 
           // Account Actions
@@ -350,42 +326,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 24),
 
-          // AI & System
-          const Text(
-            'AI & System',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _buildSettingsTile(
-            icon: LucideIcons.sparkles,
-            title: 'Gemini AI Config',
-            subtitle: _isLoadingConfig
-                ? 'Checking...'
-                : _geminiConfigLoaded
-                    ? 'Loaded ✓  (managed on server)'
-                    : '⚠ Not loaded — contact support',
-            iconColor:
-                _geminiConfigLoaded ? AppTheme.success : AppTheme.warning,
-            trailing: _isLoadingConfig
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : IconButton(
-                    icon: const Icon(LucideIcons.refreshCw, size: 16),
-                    onPressed: _loadConfig,
-                  ),
-          ),
-          if (_industry.isNotEmpty)
-            _buildSettingsTile(
-              icon: LucideIcons.building2,
-              title: 'Industry',
-              subtitle: _industry,
-              onTap: null,
-              trailing: const SizedBox.shrink(),
-            ),
-          const SizedBox(height: 24),
-
           // About
           const Text(
             'About',
@@ -394,7 +334,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 12),
           _buildSettingsTile(
             icon: LucideIcons.info,
-            title: 'DigiEntry Mobile',
+            title: 'SnapKhata Mobile',
             subtitle: 'Version 1.0.0 · Built for Indian SMBs',
             onTap: null,
             trailing: const SizedBox.shrink(),
@@ -417,98 +357,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppTheme.darkBorder
+                : AppTheme.border),
       ),
       child: ListTile(
-        leading: Icon(icon, color: iconColor ?? AppTheme.textPrimary),
+        leading: Icon(icon,
+            color: iconColor ?? Theme.of(context).colorScheme.onSurface),
         title: Text(
           title,
-          style: TextStyle(color: textColor ?? AppTheme.textPrimary),
+          style: TextStyle(
+              color: textColor ?? Theme.of(context).colorScheme.onSurface),
         ),
         subtitle: subtitle != null
             ? Text(subtitle,
-                style: const TextStyle(
-                    fontSize: 12, color: AppTheme.textSecondary))
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.textSecondary))
             : null,
         trailing: trailing ?? const Icon(LucideIcons.chevronRight, size: 20),
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-    );
-  }
-
-  String _getLanguageName(String code) {
-    switch (code) {
-      case 'hi':
-        return 'हिंदी';
-      case 'mr':
-        return 'मराठी';
-      case 'ta':
-        return 'தமிழ்';
-      case 'te':
-        return 'తెలుగు';
-      case 'en':
-      default:
-        return 'English';
-    }
-  }
-
-  void _showLanguageSheet() {
-    final currentLocale = ref.read(localeProvider);
-    final languages = [
-      {'code': 'en', 'name': 'English'},
-      {'code': 'hi', 'name': 'हिंदी (Hindi)'},
-      {'code': 'mr', 'name': 'मराठी (Marathi)'},
-      {'code': 'ta', 'name': 'தமிழ் (Tamil)'},
-      {'code': 'te', 'name': 'తెలుగు (Telugu)'},
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Select Language',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ...languages.map((lang) {
-                final isSelected = currentLocale.languageCode == lang['code'];
-                return ListTile(
-                  title: Text(
-                    lang['name']!,
-                    style: TextStyle(
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
-                      color:
-                          isSelected ? AppTheme.primary : AppTheme.textPrimary,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(LucideIcons.check, color: AppTheme.primary)
-                      : null,
-                  onTap: () {
-                    ref
-                        .read(localeProvider.notifier)
-                        .setLocale(Locale(lang['code']!));
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-            ],
-          ),
-        );
-      },
     );
   }
 }

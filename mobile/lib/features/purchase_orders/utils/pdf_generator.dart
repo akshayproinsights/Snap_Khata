@@ -42,7 +42,7 @@ class MaterialRequestPdfGenerator {
 
     // Load logo
     final ByteData logoData =
-        await rootBundle.load('assets/images/digientry_seal.png');
+        await rootBundle.load('assets/images/snapkhata_seal.png');
     final Uint8List logoBytes = logoData.buffer.asUint8List();
     final sealImage = pw.MemoryImage(logoBytes);
 
@@ -55,7 +55,6 @@ class MaterialRequestPdfGenerator {
     final colorGray500 = PdfColor.fromHex('#6b7280');
     final colorGray400 = PdfColor.fromHex('#9ca3af');
     final colorGray300 = PdfColor.fromHex('#d1d5db');
-    final colorGray100 = PdfColor.fromHex('#f3f4f6');
     final colorGray50 = PdfColor.fromHex('#f9fafb');
     final colorYellow50 = PdfColor.fromHex('#fefce8');
 
@@ -121,32 +120,34 @@ class MaterialRequestPdfGenerator {
                             crossAxisAlignment: pw.CrossAxisAlignment.end,
                             children: [
                               pw.Container(
+                                width: 170,
+                                alignment: pw.Alignment.center,
                                 decoration: pw.BoxDecoration(
                                   color: colorBlue700,
                                   borderRadius: const pw.BorderRadius.all(
                                       pw.Radius.circular(6)),
                                 ),
-                                padding: const pw.EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 8),
+                                padding: const pw.EdgeInsets.only(
+                                    left: 12, right: 10, top: 10, bottom: 10),
                                 margin: const pw.EdgeInsets.only(bottom: 24),
                                 child: pw.Text(
                                   'MATERIAL REQUEST',
                                   style: pw.TextStyle(
                                     color: PdfColors.white,
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: pw.FontWeight.bold,
                                     letterSpacing: 2,
                                   ),
                                 ),
                               ),
                               _buildMetaRow('Page', '${i + 1} of $totalPages',
-                                  colorGray500, colorGray900, colorGray100,
+                                  colorGray500, colorGray900, colorGray300,
                                   isBottomBorder: true),
                               _buildMetaRow('Date', formattedDate, colorGray500,
-                                  colorGray900, colorGray100,
+                                  colorGray900, colorGray300,
                                   isBottomBorder: true),
                               _buildMetaRow('PO Number', po.poNumber,
-                                  colorGray500, colorGray900, colorGray100,
+                                  colorGray500, colorGray900, colorGray300,
                                   isBottomBorder: false, valueSize: 14),
                             ],
                           ),
@@ -227,100 +228,102 @@ class MaterialRequestPdfGenerator {
                     ),
 
                   // 3. The Table
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: pw.EdgeInsets.only(
-                          left: 20, right: 20, top: isFirstPage ? 0 : 20),
-                      child: pw.Table(
-                        border:
-                            pw.TableBorder.all(color: colorGray300, width: 2),
-                        columnWidths: {
-                          0: const pw.FixedColumnWidth(40),
-                          1: const pw.FixedColumnWidth(160),
-                          2: const pw.FlexColumnWidth(),
-                          3: const pw.FixedColumnWidth(80),
-                        },
-                        children: [
-                          // Header
+                  pw.Container(
+                    padding: pw.EdgeInsets.only(
+                        left: 20,
+                        right: 20,
+                        top: isFirstPage ? 16 : 24,
+                        bottom: 0),
+                    child: pw.Table(
+                      border: pw.TableBorder.all(color: colorGray300, width: 2),
+                      columnWidths: {
+                        0: const pw.FixedColumnWidth(40),
+                        1: const pw.FixedColumnWidth(160),
+                        2: const pw.FlexColumnWidth(),
+                        3: const pw.FixedColumnWidth(80),
+                      },
+                      children: [
+                        // Header
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(color: colorBlue700),
+                          children: [
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(10),
+                                child: pw.Text('#',
+                                    textAlign: pw.TextAlign.center,
+                                    style: pw.TextStyle(
+                                        color: PdfColors.white,
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                        letterSpacing: 1))),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(10),
+                                child: pw.Text('PART NUMBER',
+                                    style: pw.TextStyle(
+                                        color: PdfColors.white,
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                        letterSpacing: 1))),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(10),
+                                child: pw.Text('DESCRIPTION',
+                                    style: pw.TextStyle(
+                                        color: PdfColors.white,
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                        letterSpacing: 1))),
+                            pw.Padding(
+                                padding: const pw.EdgeInsets.all(10),
+                                child: pw.Text('QUANTITY',
+                                    textAlign: pw.TextAlign.right,
+                                    style: pw.TextStyle(
+                                        color: PdfColors.white,
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                        letterSpacing: 1))),
+                          ],
+                        ),
+                        // Items
+                        for (var j = 0; j < chunk.length; j++)
                           pw.TableRow(
-                            decoration: pw.BoxDecoration(color: colorBlue700),
                             children: [
                               pw.Padding(
                                   padding: const pw.EdgeInsets.all(10),
-                                  child: pw.Text('#',
+                                  child: pw.Text('${startItemNumber + j}',
                                       textAlign: pw.TextAlign.center,
                                       style: pw.TextStyle(
-                                          color: PdfColors.white,
+                                          color: colorGray700,
                                           fontSize: 10,
-                                          fontWeight: pw.FontWeight.bold,
-                                          letterSpacing: 1))),
+                                          font: fontMedium))),
                               pw.Padding(
                                   padding: const pw.EdgeInsets.all(10),
-                                  child: pw.Text('PART NUMBER',
+                                  child: pw.Text(chunk[j].partNumber,
                                       style: pw.TextStyle(
-                                          color: PdfColors.white,
-                                          fontSize: 10,
-                                          fontWeight: pw.FontWeight.bold,
-                                          letterSpacing: 1))),
+                                          color: colorGray900,
+                                          fontSize: 12,
+                                          fontWeight: pw.FontWeight.bold))),
                               pw.Padding(
                                   padding: const pw.EdgeInsets.all(10),
-                                  child: pw.Text('DESCRIPTION',
+                                  child: pw.Text(chunk[j].itemName,
                                       style: pw.TextStyle(
-                                          color: PdfColors.white,
+                                          color: colorGray800,
                                           fontSize: 10,
-                                          fontWeight: pw.FontWeight.bold,
-                                          letterSpacing: 1))),
+                                          font: fontMedium))),
                               pw.Padding(
                                   padding: const pw.EdgeInsets.all(10),
-                                  child: pw.Text('QUANTITY',
+                                  child: pw.Text('${chunk[j].orderedQty}',
                                       textAlign: pw.TextAlign.right,
                                       style: pw.TextStyle(
-                                          color: PdfColors.white,
-                                          fontSize: 10,
-                                          fontWeight: pw.FontWeight.bold,
-                                          letterSpacing: 1))),
+                                          color: colorGray900,
+                                          fontSize: 14,
+                                          fontWeight: pw.FontWeight.bold))),
                             ],
                           ),
-                          // Items
-                          for (var j = 0; j < chunk.length; j++)
-                            pw.TableRow(
-                              children: [
-                                pw.Padding(
-                                    padding: const pw.EdgeInsets.all(10),
-                                    child: pw.Text('${startItemNumber + j}',
-                                        textAlign: pw.TextAlign.center,
-                                        style: pw.TextStyle(
-                                            color: colorGray700,
-                                            fontSize: 10,
-                                            font: fontMedium))),
-                                pw.Padding(
-                                    padding: const pw.EdgeInsets.all(10),
-                                    child: pw.Text(chunk[j].partNumber,
-                                        style: pw.TextStyle(
-                                            color: colorGray900,
-                                            fontSize: 12,
-                                            fontWeight: pw.FontWeight.bold))),
-                                pw.Padding(
-                                    padding: const pw.EdgeInsets.all(10),
-                                    child: pw.Text(chunk[j].itemName,
-                                        style: pw.TextStyle(
-                                            color: colorGray800,
-                                            fontSize: 10,
-                                            font: fontMedium))),
-                                pw.Padding(
-                                    padding: const pw.EdgeInsets.all(10),
-                                    child: pw.Text('${chunk[j].orderedQty}',
-                                        textAlign: pw.TextAlign.right,
-                                        style: pw.TextStyle(
-                                            color: colorGray900,
-                                            fontSize: 14,
-                                            fontWeight: pw.FontWeight.bold))),
-                              ],
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
+
+                  pw.Spacer(),
 
                   // 4. Footer Section
                   if (isLastPage)
@@ -355,7 +358,7 @@ class MaterialRequestPdfGenerator {
                                 border: pw.Border(
                                     top: pw.BorderSide(
                                         color: colorGray800, width: 2))),
-                            padding: const pw.EdgeInsets.only(top: 24),
+                            padding: const pw.EdgeInsets.only(top: 16),
                             child: pw.Row(
                               mainAxisAlignment:
                                   pw.MainAxisAlignment.spaceBetween,
@@ -378,10 +381,11 @@ class MaterialRequestPdfGenerator {
                                         pw.Radius.circular(12)),
                                     color: PdfColors.white,
                                   ),
-                                  padding: const pw.EdgeInsets.all(12),
+                                  padding: const pw.EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
                                   child: pw.Column(
                                     children: [
-                                      pw.Image(sealImage, height: 56),
+                                      pw.Image(sealImage, height: 48),
                                       pw.SizedBox(height: 4),
                                       pw.Text(
                                         'www.mydigientry.com',
@@ -430,40 +434,32 @@ class MaterialRequestPdfGenerator {
       PdfColor labelColor, PdfColor valueColor, PdfColor borderColor,
       {required bool isBottomBorder, double valueSize = 12}) {
     return pw.Container(
+      width: 170, // Precision tabular width matches the badge width above
       decoration: isBottomBorder
           ? pw.BoxDecoration(
               border: pw.Border(
                   bottom: pw.BorderSide(color: borderColor, width: 1)))
           : null,
-      padding: pw.EdgeInsets.only(bottom: 4, top: isBottomBorder ? 0 : 4),
-      margin: const pw.EdgeInsets.only(bottom: 8),
+      padding: pw.EdgeInsets.only(bottom: 6, top: isBottomBorder ? 0 : 6),
+      margin: const pw.EdgeInsets.only(bottom: 4),
       child: pw.Row(
-        mainAxisSize: pw.MainAxisSize.min,
-        mainAxisAlignment: pw.MainAxisAlignment.end,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Container(
-            width: 70,
-            alignment: pw.Alignment.centerRight,
-            padding: const pw.EdgeInsets.only(right: 16),
-            child: pw.Text(
-              label.toUpperCase(),
-              style: pw.TextStyle(
-                  color: labelColor,
-                  fontSize: 9,
-                  fontWeight: pw.FontWeight.bold,
-                  letterSpacing: 2),
-            ),
+          pw.Text(
+            label.toUpperCase(),
+            style: pw.TextStyle(
+                color: labelColor,
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                letterSpacing: 1.2),
           ),
-          pw.Container(
-            width: 140,
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text(
-              value,
-              style: pw.TextStyle(
-                  color: valueColor,
-                  fontSize: valueSize,
-                  fontWeight: pw.FontWeight.bold),
-            ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+                color: valueColor,
+                fontSize: valueSize,
+                fontWeight: pw.FontWeight.bold,
+                letterSpacing: 0.2),
           ),
         ],
       ),

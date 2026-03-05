@@ -189,6 +189,77 @@ def get_inventory_upload_history(
         }
 
 
+@router.get("/upload-urls")
+async def get_inventory_upload_urls(
+    count: int = 1,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    r2_bucket: str = Depends(get_current_user_r2_bucket)
+):
+    """
+    FIX-2: Return pre-signed R2 PUT URLs so the mobile app can upload images
+    directly to Cloudflare R2, bypassing the Python server entirely.
+
+    The mobile app calls this first to get N signed URLs, then uploads each
+    image with a plain HTTP PUT request directly to R2.
+    After all uploads complete, the app calls /api/inventory/process with
+    the returned R2 keys.
+
+    Query params:
+      count   - number of files to upload (default 1, max 20)
+    """
+    if count < 1 or count > 20:
+        raise HTTPException(status_code=400, detail="count must be between 1 and 20")
+
+    username = current_user.get("username", "user")
+    inventory_folder = get_purchases_folder(username)
+
+    try:
+        import boto3
+        from botocore.client import Config as BotocoreConfig
+
+        r2_account_id = os.getenv("R2_ACCOUNT_ID")
+        r2_access_key  = os.getenv("R2_ACCESS_KEY_ID")
+        r2_secret_key  = os.getenv("R2_SECRET_ACCESS_KEY")
+
+        if not all([r2_account_id, r2_access_key, r2_secret_key]):
+            raise HTTPException(status_code=500, detail="R2 credentials not configured")
+
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{r2_account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=r2_access_key,
+            aws_secret_access_key=r2_secret_key,
+            config=BotocoreConfig(signature_version="s3v4"),
+            region_name="auto",
+        )
+
+        upload_slots = []
+        for _ in range(count):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = uuid.uuid4().hex[:8]
+            file_key  = f"{inventory_folder}{timestamp}_{unique_id}.jpg"
+
+            presigned_url = s3.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": r2_bucket,
+                    "Key": file_key,
+                    "ContentType": "image/jpeg",
+                },
+                ExpiresIn=300,  # 5 minutes — plenty for compression + upload
+            )
+            upload_slots.append({"file_key": file_key, "upload_url": presigned_url})
+
+        logger.info(f"Generated {count} pre-signed upload URLs for {username}")
+        return {"success": True, "upload_slots": upload_slots}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating pre-signed URLs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/upload", response_model=InventoryUploadResponse)
 async def upload_inventory_files(
     files: List[UploadFile] = File(...),
@@ -196,8 +267,9 @@ async def upload_inventory_files(
     r2_bucket: str = Depends(get_current_user_r2_bucket)
 ):
     """
-    Upload inventory files to R2 storage SEQUENTIALLY and SYNCHRONOUSLY.
-    Blocks until all files are uploaded to prevent race conditions and memory crashes.
+    Upload inventory files to R2 storage CONCURRENTLY.
+    All files are uploaded to R2 in parallel (asyncio.gather),
+    reducing upload time dramatically for batches.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
@@ -208,16 +280,13 @@ async def upload_inventory_files(
     try:
         inventory_folder = get_purchases_folder(username)
         
-        # Pre-generate file_keys and read file bytes immediately
+        # Read all file bytes into memory first (async, fast)
         file_data_list = []
-        
         for file in files:
-            # Read file bytes into memory
             content = await file.read()
-            
-            # Generate file_key deterministically
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_key = f"{inventory_folder}{timestamp}_{file.filename}"
+            unique_id = uuid.uuid4().hex[:6]
+            file_key = f"{inventory_folder}{timestamp}_{unique_id}_{file.filename}"
             
             file_data_list.append({
                 'content': content,
@@ -225,22 +294,31 @@ async def upload_inventory_files(
                 'file_key': file_key
             })
         
-        logger.info(f"Prepared {len(file_data_list)} files for sequential upload")
+        logger.info(f"Starting PARALLEL upload of {len(file_data_list)} inventory files for {username}")
         
-        # Execute sequential upload in thread pool (Blocking operation)
+        # Upload all files in parallel — each runs in the thread pool
+        semaphore = asyncio.Semaphore(10)
         loop = asyncio.get_event_loop()
-        uploaded_keys = await loop.run_in_executor(
-            executor,
-            process_uploads_batch_sync,
-            file_data_list,
-            username,
-            r2_bucket
-        )
+
+        async def upload_one(file_data: Dict[str, Any]) -> Optional[str]:
+            async with semaphore:
+                return await loop.run_in_executor(
+                    executor,
+                    upload_single_inventory_file_sync,
+                    file_data['content'],
+                    file_data['filename'],
+                    username,
+                    r2_bucket,
+                    file_data['file_key']
+                )
+
+        results = await asyncio.gather(*[upload_one(fd) for fd in file_data_list])
+        uploaded_keys = [key for key in results if key is not None]
         
         if not uploaded_keys:
              raise HTTPException(status_code=500, detail="Failed to upload any files")
 
-        logger.info(f"Successfully uploaded {len(uploaded_keys)} files sequentially")
+        logger.info(f"Successfully uploaded {len(uploaded_keys)}/{len(file_data_list)} inventory files in parallel")
         
         return {
             "success": True,
@@ -257,47 +335,16 @@ async def upload_inventory_files(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# process_uploads_batch_sync is no longer used — upload_inventory_files now uses
+# asyncio.gather() for parallel uploads. Kept as a no-op stub for safety.
 def process_uploads_batch_sync(
     file_data_list: List[Dict[str, Any]],
     username: str,
     r2_bucket: str
 ) -> List[str]:
-    """
-    Process a batch of inventory uploads sequentially and synchronously.
-    Running in thread pool to avoid blocking main loop, but blocking the request
-    until completion to ensure data integrity and prevent OOM.
-    """
-    uploaded_keys = []
-    logger.info(f"Starting sequential processing of {len(file_data_list)} files for {username}")
-    
-    for i, file_data in enumerate(file_data_list):
-        try:
-            logger.info(f"Uploading file {i+1}/{len(file_data_list)}: {file_data['filename']}")
-            
-            # Re-use existing sync upload logic
-            result_key = upload_single_inventory_file_sync(
-                content=file_data['content'],
-                filename=file_data['filename'],
-                username=username,
-                r2_bucket=r2_bucket,
-                file_key=file_data['file_key']
-            )
-            
-            if result_key:
-                uploaded_keys.append(result_key)
-                
-            # Force garbage collection after large image processing?
-            # Usually not needed in Python unless ref cycles, but helps with peak mem
-            import gc
-            del file_data['content'] 
-            gc.collect()
-            
-        except Exception as e:
-            logger.error(f"Failed to upload {file_data.get('filename')}: {e}")
-            # Continue with other files even if one fails
-            
-    logger.info(f"Completed sequential processing. Success: {len(uploaded_keys)}/{len(file_data_list)}")
-    return uploaded_keys
+    """Deprecated: parallel upload is now done directly in upload_inventory_files endpoint."""
+    logger.warning("process_uploads_batch_sync called — this is deprecated. Use parallel upload instead.")
+    return []
 
 
 def upload_single_inventory_file_sync(
@@ -518,6 +565,20 @@ async def get_recent_inventory_task(
         raise HTTPException(status_code=500, detail=f"Failed to fetch recent task: {str(e)}")
 
 
+def _build_completion_message(processed: int, skipped: int, failed: int) -> str:
+    """Build a human-readable completion message that surfaces duplicate-skip count."""
+    parts = []
+    if processed > 0:
+        parts.append(f"{processed} invoice{'s' if processed != 1 else ''} processed")
+    if skipped > 0:
+        parts.append(f"{skipped} duplicate{'s' if skipped != 1 else ''} skipped")
+    if failed > 0:
+        parts.append(f"{failed} failed")
+    if not parts:
+        return "No invoices were processed"
+    return ", ".join(parts)
+
+
 def process_inventory_sync(
     task_id: str,
     file_keys: List[str],  # These are R2 keys now
@@ -582,7 +643,7 @@ def process_inventory_sync(
             logger.info(f"Progress: {current_index}/{total} (Failed: {failed_count}) - {current_file}")
         
         from services.inventory_processor import process_inventory_batch
-        
+
         results = process_inventory_batch(
             file_keys=r2_file_keys,
             r2_bucket=r2_bucket,
@@ -590,73 +651,57 @@ def process_inventory_sync(
             progress_callback=update_progress,
             force_upload=force_upload
         )
-        
+
         logger.info(f"Processing completed. Results: {results}")
-        
-        # Check for duplicates
-        if results.get("duplicates"):
-            update_db_status({
-                "status": "duplicate_detected",
-                "duplicates": results["duplicates"],
-                "uploaded_r2_keys": r2_file_keys, # CRITICAL: Frontend needs ALL R2 keys
-                "message": f"Duplicate vendor invoices detected: {len(results['duplicates'])} file(s)"
-            })
-            logger.info(f"Duplicates detected: {len(results['duplicates'])}")
-        else:
-            update_db_status({
-                "status": "completed",
-                "progress": {
-                    "total": results.get("total", len(r2_file_keys)),
-                    "processed": results["processed"],
-                    "failed": results["failed"]
-                },
-                "message": f"Successfully processed {results['processed']} vendor invoices",
-                "current_file": "All complete",
-                "duplicates": results.get("duplicates", []),
-                "end_time": datetime.now().isoformat()
-            })
+
+        skipped_count = results.get("skipped_count", 0)
+
+        # Duplicates list is now always empty (auto-skipped), but we keep the
+        # status key for backward-compat in case old clients check it.
+        update_db_status({
+            "status": "completed",
+            "progress": {
+                "total": results.get("total", len(r2_file_keys)),
+                "processed": results["processed"],
+                "failed": results["failed"],
+                "skipped": skipped_count,
+            },
+            "message": _build_completion_message(results["processed"], skipped_count, results["failed"]),
+            "current_file": "All complete",
+            "duplicates": [],
+            "skipped_count": skipped_count,
+            "end_time": datetime.now().isoformat()
+        })
             
-            # AUTO-RECALCULATION: Trigger stock recalculation after successful inventory processing
-            # This ensures stock levels are always up-to-date
-            # Advisory locks prevent race conditions with concurrent recalculations
-            if results["processed"] > 0:
-                logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
+        # AUTO-RECALCULATION: Trigger stock recalculation after successful inventory processing
+        # Advisory locks prevent race conditions with concurrent recalculations
+        if results["processed"] > 0:
+            logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
+            try:
+                from routes.stock_routes import recalculate_stock_wrapper
+
+                recalc_task_id = str(uuid.uuid4())
+
                 try:
-                    from routes.stock_routes import recalculate_stock_wrapper
-                    
-                    # Ensure table exists first (safeguard)
-                    # create_recalculation_tasks_table_if_not_exists()
-                    
-                    # Create a task_id for tracking
-                    recalc_task_id = str(uuid.uuid4())
-                    
-                    # Initialize task in DB (required for wrapper updates)
-                    try:
-                        from database import get_database_client
-                        db = get_database_client()
-                        db.insert("recalculation_tasks", {
-                            "task_id": recalc_task_id,
-                            "username": username,
-                            "status": "queued",
-                            "message": "Auto-triggered after inventory upload",
-                            "progress": {"total": 0, "processed": 0},
-                            "created_at": datetime.utcnow().isoformat()
-                        })
-                    except Exception as db_err:
-                        logger.warning(f"Could not create recalculation task record: {db_err}")
-                    
-                    # Run in background (uses stock_executor thread pool)
-                    # Pass BOTH task_id and username as required by wrapper
-                    recalculate_stock_wrapper(recalc_task_id, username)
-                    logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
-                except Exception as e:
-                    logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
-                    # Don't fail the upload if recalculation fails
-                    # User can manually trigger recalculation later
-        
-        if results["errors"]:
-            # Optionally update errors in DB
-            # update_db_status({"errors": results["errors"]})
+                    from database import get_database_client
+                    db = get_database_client()
+                    db.insert("recalculation_tasks", {
+                        "task_id": recalc_task_id,
+                        "username": username,
+                        "status": "queued",
+                        "message": "Auto-triggered after inventory upload",
+                        "progress": {"total": 0, "processed": 0},
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+                except Exception as db_err:
+                    logger.warning(f"Could not create recalculation task record: {db_err}")
+
+                recalculate_stock_wrapper(recalc_task_id, username)
+                logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
+            except Exception as e:
+                logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
+
+        if results.get("errors"):
             logger.warning(f"Processing errors: {results['errors']}")
         
     except Exception as e:
