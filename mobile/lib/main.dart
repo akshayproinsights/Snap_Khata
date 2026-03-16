@@ -45,13 +45,15 @@ void callbackDispatcher() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize background tasks
-  try {
-    Workmanager().initialize(
-      callbackDispatcher,
-    );
-  } catch (e) {
-    debugPrint('Workmanager init failed (non-fatal): $e');
+  // Initialize background tasks (Not supported on Web)
+  if (!kIsWeb) {
+    try {
+      Workmanager().initialize(
+        callbackDispatcher,
+      );
+    } catch (e) {
+      debugPrint('Workmanager init failed (non-fatal): $e');
+    }
   }
 
   final appDocumentDir = await getApplicationDocumentsDirectory();

@@ -53,11 +53,13 @@ class SyncQueueService {
       processQueue();
     } else {
       // If offline, register a background task to sync when network returns
-      Workmanager().registerOneOffTask(
-        'sync-upload-${DateTime.now().millisecondsSinceEpoch}',
-        'syncDataTask',
-        constraints: Constraints(networkType: NetworkType.connected),
-      );
+      if (!kIsWeb) {
+        Workmanager().registerOneOffTask(
+          'sync-upload-${DateTime.now().millisecondsSinceEpoch}',
+          'syncDataTask',
+          constraints: Constraints(networkType: NetworkType.connected),
+        );
+      }
     }
   }
 
@@ -80,11 +82,13 @@ class SyncQueueService {
       processQueue();
     } else {
       // Register background sync task
-      Workmanager().registerOneOffTask(
-        'sync-api-${DateTime.now().millisecondsSinceEpoch}',
-        'syncDataTask',
-        constraints: Constraints(networkType: NetworkType.connected),
-      );
+      if (!kIsWeb) {
+        Workmanager().registerOneOffTask(
+          'sync-api-${DateTime.now().millisecondsSinceEpoch}',
+          'syncDataTask',
+          constraints: Constraints(networkType: NetworkType.connected),
+        );
+      }
     }
   }
 
