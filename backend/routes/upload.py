@@ -9,7 +9,7 @@ import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from auth import get_current_user, get_current_user_r2_bucket, get_current_user_sheet_id
+from auth import get_current_user, get_current_user_r2_bucket
 from services.storage import get_storage_client
 from utils.image_optimizer import optimize_image_for_gemini, should_optimize_image, validate_image_quality
 from config import get_sales_folder
@@ -181,36 +181,6 @@ def get_upload_history(
             "history": []
         }
 
-    sys.stderr.write("\n🔥 STDERR TEST ENDPOINT HIT!\n")
-    sys.stderr.flush()
-    logger.info("🎯 TEST ENDPOINT HIT VIA LOGGER")
-    
-    # Also write to a file
-    with open("test_endpoint_log.txt", "a") as f:
-        f.write(f"\n{datetime.now()}: TEST ENDPOINT HIT!\n")
-    
-    return {"message": "Backend is alive!", "timestamp": datetime.now().isoformat()}
-
-
-@router.post("/test-post")
-async def test_post_endpoint(
-    request: ProcessRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    r2_bucket: str = Depends(get_current_user_r2_bucket),
-    sheet_id: str = Depends(get_current_user_sheet_id)
-):
-    """Minimal POST test to isolate crash point - WITH AUTH"""
-    with open("test_post_log.txt", "a") as f:
-        f.write(f"\n{datetime.now()}: POST TEST WITH AUTH HIT!\n")
-        f.write(f"Request: {request}\n")
-        f.write(f"User: {current_user.get('username')}\n")
-        f.write(f"Bucket: {r2_bucket}\n")
-        f.write(f"Sheet: {sheet_id}\n")
-    return {
-        "message": "POST with auth works!", 
-        "received": request.dict(),
-        "user": current_user.get("username")
-    }
 
 
 @router.post("/files", response_model=UploadResponse)
@@ -370,9 +340,12 @@ class InternalProcessRequest(BaseModel):
     task_id: str
     file_keys: List[str]
     r2_bucket: str
-    sheet_id: str
     username: str
     force_upload: bool = False
+
+    class Config:
+        # Accept and ignore extra fields (e.g. old payloads with sheet_id)
+        extra = "ignore"
 
 @router.post("/internal/process-task")
 async def internal_process_task(request: InternalProcessRequest):
@@ -383,19 +356,22 @@ async def internal_process_task(request: InternalProcessRequest):
     Requires OIDC authentication verified by Cloud Run automatically.
     """
     try:
-        logger.info(f"Received Cloud Task webhook for task {request.task_id}")
+        logger.info(f"[CLOUD-TASK-WEBHOOK] Received request for task {request.task_id}")
+        logger.info(f"[CLOUD-TASK-WEBHOOK] task_id={request.task_id}, username={request.username}, "
+                    f"file_keys_count={len(request.file_keys)}, r2_bucket={request.r2_bucket}, "
+                    f"force_upload={request.force_upload}")
         # Run synchronously on the main thread
         process_invoices_sync(
             task_id=request.task_id,
             file_keys=request.file_keys,
             r2_bucket=request.r2_bucket,
-            sheet_id=request.sheet_id,
             username=request.username,
             force_upload=request.force_upload
         )
+        logger.info(f"[CLOUD-TASK-WEBHOOK] Task {request.task_id} processed successfully")
         return {"status": "success", "message": f"Task {request.task_id} processed"}
     except Exception as e:
-        logger.error(f"Internal processing failed for task {request.task_id}: {e}")
+        logger.error(f"[CLOUD-TASK-WEBHOOK] Processing FAILED for task {request.task_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
@@ -404,8 +380,7 @@ async def internal_process_task(request: InternalProcessRequest):
 async def process_invoices_endpoint(
     request: ProcessRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
-    r2_bucket: str = Depends(get_current_user_r2_bucket),
-    sheet_id: str = Depends(get_current_user_sheet_id)
+    r2_bucket: str = Depends(get_current_user_r2_bucket)
 ):
     """
     Trigger invoice processing in thread pool (for blocking I/O operations)
@@ -420,7 +395,6 @@ async def process_invoices_endpoint(
     logger.info(f"File keys: {request.file_keys}")
     logger.info(f"Force upload: {request.force_upload}")
     logger.info(f"R2 Bucket: {r2_bucket}")
-    logger.info(f"Sheet ID: {sheet_id}")
     
     # Initialize status in DATABASE
     initial_status = {
@@ -473,7 +447,6 @@ async def process_invoices_endpoint(
                     task_id=task_id,
                     file_keys=request.file_keys,
                     r2_bucket=r2_bucket,
-                    sheet_id=sheet_id,
                     username=username,
                     force_upload=request.force_upload
                 )
@@ -497,8 +470,7 @@ async def process_invoices_endpoint(
                 task_id,
                 request.file_keys,
                 r2_bucket,
-                sheet_id,
-                username,  # Pass username explicitly
+                username,
                 request.force_upload
             )
             logger.info(f"Task {task_id} submitted locally successfully")
@@ -540,13 +512,29 @@ async def get_process_status(
         
         status_record = response.data[0]
         
-        # Verify ownership (optional, as global filter might apply, but safe to check)
-        if status_record.get("username") != current_user.get("username") and current_user.get("role") != "admin":
-             # We could return 404 to hide existence, or 403
-             # For now, let's assume if they have the UUID they can see it, 
-             # OR rely on RLS if enabled on the connection (backend usually runs as service role though)
-             # Let's verify username match for safety in code as well
-             pass 
+        # ── TIMEOUT SAFEGUARD ──────────────────────────────────────────
+        # Auto-fail tasks stuck in processing/queued for >30 minutes
+        # Prevents users from being stuck on the loading screen forever
+        task_status = status_record.get("status", "unknown")
+        if task_status in ("processing", "queued", "uploading"):
+            created_at_str = status_record.get("created_at", "")
+            if created_at_str:
+                try:
+                    created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                    age_minutes = (datetime.now(created_at.tzinfo if created_at.tzinfo else None) - created_at).total_seconds() / 60
+                    if age_minutes > 30:
+                        logger.warning(f"Task {task_id} stuck for {age_minutes:.0f} min — auto-failing")
+                        db.update("upload_tasks", {
+                            "status": "failed",
+                            "message": f"Task timed out after {age_minutes:.0f} minutes. Please try again.",
+                            "updated_at": datetime.utcnow().isoformat()
+                        }, {"task_id": task_id})
+                        task_status = "failed"
+                        status_record["status"] = "failed"
+                        status_record["message"] = f"Task timed out after {age_minutes:.0f} minutes. Please try again."
+                except Exception as timeout_err:
+                    logger.warning(f"Could not check task timeout: {timeout_err}")
+        # ── END TIMEOUT SAFEGUARD ──────────────────────────────────────
 
         return {
             "task_id": status_record.get("task_id"),
@@ -656,9 +644,8 @@ async def delete_history_batch(
 
 def process_invoices_sync(
     task_id: str,
-    file_keys: List[str],  # These are temp paths now
+    file_keys: List[str],
     r2_bucket: str,
-    sheet_id: str,
     username: str,
     force_upload: bool = False
 ):
@@ -699,7 +686,6 @@ def process_invoices_sync(
     logger.info(f"File keys to process: {file_keys}")
     logger.info(f"User: {username}")
     logger.info(f"R2 Bucket: {r2_bucket}")
-    logger.info(f"Sheet ID: {sheet_id}")
     logger.info(f"Force upload: {force_upload}")
     
     # Log environment check
@@ -771,7 +757,6 @@ def process_invoices_sync(
         results = process_invoices_batch(
             file_keys=r2_file_keys,
             r2_bucket=r2_bucket,
-            sheet_id=sheet_id,
             username=username,
             progress_callback=update_progress,
             force_upload=force_upload

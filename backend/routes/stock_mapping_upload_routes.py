@@ -562,7 +562,6 @@ async def upload_mapping_sheet(
             # Don't fail the upload just because auto-recalc failed
 
         return MappingSheetUploadResponse(
-            sheet_id="",
             image_url=last_image_url, # user can see at least one
             status="completed",
             message=f"Processed {total_files} files. Updated {total_stock_updates} stocks. Mappings: {total_mappings_created} new, {total_mappings_updated} updated.",

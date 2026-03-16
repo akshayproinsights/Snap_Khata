@@ -57,11 +57,6 @@ def get_user_config(username: str) -> Optional[Dict[str, Any]]:
     return configs.get_user_config(username)
 
 
-def get_gcp_service_account() -> Optional[Dict[str, str]]:
-    """Get GCP service account for Google Sheets authentication"""
-    return configs.get_gcp_service_account()
-
-
 def get_google_api_key() -> Optional[str]:
     """Get Google API key for Gemini"""
     if settings.google_api_key:

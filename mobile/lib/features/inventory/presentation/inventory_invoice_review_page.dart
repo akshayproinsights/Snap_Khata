@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -8,6 +9,8 @@ import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/review/presentation/receipt_review_page.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
   final InventoryInvoiceBundle bundle;
@@ -21,6 +24,191 @@ class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
 
 class _InventoryInvoiceReviewPageState
     extends ConsumerState<InventoryInvoiceReviewPage> {
+  // ── Header Details state ──────────────────────────────────────────
+  late final TextEditingController _vendorNameController;
+  late final TextEditingController _invoiceNumberController;
+  late final TextEditingController _dateController;
+
+  // ── Payment Mode state ───────────────────────────────────────────────────
+  String _paymentMode = 'Cash';
+  final TextEditingController _amountPaidController = TextEditingController();
+  final TextEditingController _vendorNotesController = TextEditingController();
+  double _amountPaid = 0.0;
+  bool _isLoading = false;
+
+  String get _prefsKey => widget.bundle.invoiceNumber.isNotEmpty 
+      ? widget.bundle.invoiceNumber 
+      : '${widget.bundle.date}_${widget.bundle.vendorName}';
+
+  @override
+  void initState() {
+    super.initState();
+    _vendorNameController =
+        TextEditingController(text: widget.bundle.vendorName);
+    _invoiceNumberController =
+        TextEditingController(text: widget.bundle.invoiceNumber);
+    _dateController = TextEditingController(text: widget.bundle.date);
+
+    _amountPaidController.addListener(() {
+      final value = double.tryParse(_amountPaidController.text) ?? 0.0;
+      if (value != _amountPaid) {
+        setState(() => _amountPaid = value);
+      }
+    });
+
+    _loadPersistedSettings();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _prefsKey;
+
+    // Load payment mode
+    final savedPaymentMode = prefs.getString('vendor_payment_mode_$key');
+    if (savedPaymentMode != null && mounted) {
+      setState(() {
+        _paymentMode = savedPaymentMode;
+      });
+    }
+
+    // Load amount paid
+    final savedAmountPaid = prefs.getDouble('vendor_amount_paid_$key');
+    if (savedAmountPaid != null && savedAmountPaid > 0 && mounted) {
+      setState(() {
+        _amountPaid = savedAmountPaid;
+        _amountPaidController.text = _fmt(savedAmountPaid);
+      });
+    }
+
+    // Load vendor notes
+    final savedNotes = prefs.getString('vendor_notes_$key');
+    if (savedNotes != null && savedNotes.isNotEmpty && mounted) {
+      setState(() {
+        _vendorNotesController.text = savedNotes;
+      });
+    }
+  }
+
+  Future<void> _savePaymentMode(String mode) async {
+    setState(() => _paymentMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('vendor_payment_mode_$_prefsKey', mode);
+  }
+
+  Future<void> _saveAmountPaid(double amount) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('vendor_amount_paid_$_prefsKey', amount);
+  }
+
+  Future<void> _saveVendorNotes(String notes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('vendor_notes_$_prefsKey', notes);
+  }
+
+  Future<void> _deleteItem(InventoryItem item) async {
+    HapticFeedback.mediumImpact();
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Item?'),
+        content: Text('Delete "${item.description}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => context.pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(inventoryProvider.notifier).deleteItem(item.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${item.description}" deleted'),
+            action: SnackBarAction(
+              label: 'UNDO',
+              onPressed: () {
+                // Note: Undo would require recreating the item
+                // For now just show a message
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteInvoice(List<InventoryItem> items) async {
+    HapticFeedback.mediumImpact();
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Entire Invoice?'),
+        content: Text('Delete invoice with ${items.length} items? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => context.pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final ids = items.map((i) => i.id).toList();
+      await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invoice deleted')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete invoice: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _vendorNameController.dispose();
+    _invoiceNumberController.dispose();
+    _dateController.dispose();
+    _amountPaidController.dispose();
+    _vendorNotesController.dispose();
+    super.dispose();
+  }
+
   void _showFullImage(String imageUrl) {
     Navigator.push(
       context,
@@ -75,14 +263,416 @@ class _InventoryInvoiceReviewPageState
     );
   }
 
-  Future<void> _markAllVerified(List<InventoryItem> items) async {
-    for (final item in items) {
-      await ref.read(inventoryProvider.notifier).updateItem(
-        item.id,
-        {'verification_status': 'Verified'},
-      );
+  Future<void> _selectDate() async {
+    DateTime? initialDate;
+    try {
+      initialDate = DateTime.tryParse(_dateController.text) ?? DateTime.now();
+    } catch (_) {
+      initialDate = DateTime.now();
     }
-    if (mounted) context.pop();
+    
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
+    }
+  }
+
+  Future<void> _saveInvoice(List<InventoryItem> items, double totalAmount) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final balanceOwed = _paymentMode == 'Credit' ? totalAmount - _amountPaid : 0.0;
+      
+      final data = {
+        'invoice_number': _invoiceNumberController.text.trim(),
+        'vendor_name': _vendorNameController.text.trim(),
+        'invoice_date': _dateController.text.trim(),
+        'payment_mode': _paymentMode,
+        'amount_paid': _paymentMode == 'Credit' ? _amountPaid : totalAmount,
+        'balance_owed': balanceOwed,
+        'vendor_notes': _paymentMode == 'Credit' ? _vendorNotesController.text : null,
+        'item_ids': items.map((i) => i.id).toList(),
+      };
+
+      await ref.read(inventoryProvider.notifier).verifyInvoice(data);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inventory verified & saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Widget _buildPaymentTypeSelectorCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(LucideIcons.wallet,
+                    size: 18, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Payment Type',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Toggle Buttons
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.all(2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      _savePaymentMode('Cash');
+                      setState(() => _amountPaidController.clear());
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _paymentMode == 'Cash'
+                            ? Colors.white
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: _paymentMode == 'Cash'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Cash',
+                        style: TextStyle(
+                          color: _paymentMode == 'Cash'
+                              ? AppTheme.primary
+                              : AppTheme.textSecondary,
+                          fontWeight: _paymentMode == 'Cash'
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _savePaymentMode('Credit'),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _paymentMode == 'Credit'
+                            ? Colors.white
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: _paymentMode == 'Credit'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Credit',
+                        style: TextStyle(
+                          color: _paymentMode == 'Credit'
+                              ? AppTheme.primary
+                              : AppTheme.textSecondary,
+                          fontWeight: _paymentMode == 'Credit'
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreditDetails(double grandTotal) {
+    if (_paymentMode != 'Credit') return const SizedBox.shrink();
+
+    final balanceOwed = grandTotal - _amountPaid;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(LucideIcons.fileClock,
+                    size: 18, color: Colors.amber),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Credit Details',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _amountPaidController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            decoration: _inputDecoration('Amount Paid (Optional)').copyWith(
+              prefixText: '₹ ',
+              prefixStyle: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16),
+            ),
+            onChanged: (val) => _saveAmountPaid(double.tryParse(val) ?? 0.0),
+          ),
+          if (balanceOwed > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade100),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Balance Owed (Udhaar)',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '₹${_fmt(balanceOwed)}',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (balanceOwed < 0) ...[
+             const SizedBox(height: 12),
+             Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade100),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Advance Paid',
+                    style: TextStyle(
+                      color: Colors.amber.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '₹${_fmt(balanceOwed.abs())}',
+                    style: TextStyle(
+                      color: Colors.amber.shade700,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _vendorNotesController,
+            decoration: _inputDecoration('Vendor / Notes (Optional)'),
+            maxLines: 2,
+            onChanged: (val) => _saveVendorNotes(val),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+               Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(LucideIcons.fileText,
+                    size: 18, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Header Details',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _vendorNameController,
+            decoration: _inputDecoration('Vendor Name'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _invoiceNumberController,
+                  decoration: _inputDecoration('Invoice Number'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _selectDate,
+                  child: AbsorbPointer(
+                    child: TextFormField(
+                      controller: _dateController,
+                      decoration: _inputDecoration('Date').copyWith(
+                        suffixIcon: const Icon(LucideIcons.calendar, size: 16),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -109,10 +699,11 @@ class _InventoryInvoiceReviewPageState
       final bMis = b.amountMismatch > 1.0;
       if (aMis && !bMis) return -1;
       if (!aMis && bMis) return 1;
-      return 0;
+      return a.id.compareTo(b.id);
     });
 
     final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch > 1.0);
+    final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + item.netBill);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -128,16 +719,31 @@ class _InventoryInvoiceReviewPageState
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            if (widget.bundle.invoiceNumber.isNotEmpty)
-              Text(
-                '#${widget.bundle.invoiceNumber}',
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w500),
-              ),
+            Text(
+              'Review Inventory',
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w500),
+            ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.green),
+            tooltip: 'Share via WhatsApp',
+            onPressed: () {
+               ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('WhatsApp sharing coming soon!')),
+               );
+            },
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.trash2, color: Colors.red),
+            tooltip: 'Delete Invoice',
+            onPressed: _isLoading ? null : () => _deleteInvoice(sortedItems),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -197,29 +803,42 @@ class _InventoryInvoiceReviewPageState
               ),
             ),
 
-          // Items list
+          // Main list
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               children: [
+                _buildHeaderCard(),
+                const SizedBox(height: 24),
+
                 Row(
                   children: [
                     const Text(
                       'Line Items',
                       style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textSecondary),
+                          color: AppTheme.textPrimary),
                     ),
                     const Spacer(),
-                    Text(
-                      '${sortedItems.length} item${sortedItems.length == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textSecondary),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${sortedItems.length} item${sortedItems.length == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 if (sortedItems.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(32),
@@ -228,28 +847,90 @@ class _InventoryInvoiceReviewPageState
                             style: TextStyle(color: AppTheme.textSecondary))),
                   ),
                 ...sortedItems.map((item) => _buildItemCard(item)),
+                
+                const SizedBox(height: 16),
+                _buildPaymentTypeSelectorCard(),
+                _buildCreditDetails(totalAmount),
+                
+                // Add lots of padding at the bottom so we can easily scroll past the FAB area
+                const SizedBox(height: 120),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: SizedBox(
-          width: double.infinity,
-          child: FloatingActionButton.extended(
-            onPressed: () => _markAllVerified(sortedItems),
-            backgroundColor: hasAnyMismatch ? Colors.orange : Colors.green,
-            foregroundColor: Colors.white,
-            elevation: 4,
-            icon: Icon(
-                hasAnyMismatch ? LucideIcons.alertTriangle : LucideIcons.check),
-            label: Text(
-              hasAnyMismatch ? 'Save with Errors' : 'Mark as Verified',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -4),
             ),
-          ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Grand Total',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '₹${_fmt(totalAmount)}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : () => _saveInvoice(sortedItems, totalAmount),
+                  icon: _isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Icon(hasAnyMismatch ? LucideIcons.alertTriangle : LucideIcons.checkCircle),
+                  label: Text(
+                    hasAnyMismatch ? 'Save with Errors' : 'Confirm & Save ✨',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasAnyMismatch ? Colors.orange : AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -257,25 +938,27 @@ class _InventoryInvoiceReviewPageState
 
   Widget _buildItemCard(InventoryItem item) {
     final hasMismatch = item.amountMismatch > 1.0;
-    final isVerified = item.verificationStatus == 'Verified';
 
     Color borderColor = AppTheme.border;
     Color bgColor = Colors.white;
     if (hasMismatch) {
-      borderColor = Colors.red.shade400;
+      borderColor = Colors.red.shade200;
       bgColor = Colors.red.shade50;
-    } else if (isVerified) {
-      borderColor = Colors.green.shade400;
-      bgColor = Colors.green.shade50;
-    }
+    } 
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: borderColor, width: hasMismatch || isVerified ? 2 : 1),
+        border: Border.all(color: borderColor, width: hasMismatch ? 1.5 : 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -283,26 +966,61 @@ class _InventoryInvoiceReviewPageState
         children: [
           // Part number + status icon row
           Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.partNumber.isNotEmpty
-                      ? 'Part: ${item.partNumber}'
-                      : 'Item #${item.id}',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.w600),
+             children: [
+               Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                 decoration: BoxDecoration(
+                   color: AppTheme.primary.withValues(alpha: 0.1),
+                   borderRadius: BorderRadius.circular(4),
+                 ),
+                 child: Text(
+                   item.partNumber.isNotEmpty ? 'Part: ${item.partNumber}' : 'Item #${item.id}',
+                   style: const TextStyle(
+                     fontSize: 11,
+                     fontWeight: FontWeight.w700,
+                     color: AppTheme.primary,
+                   ),
+                 ),
+               ),
+               const Spacer(),
+               if (hasMismatch)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.alertTriangle, size: 10, color: Colors.red.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Mismatch',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              if (hasMismatch)
-                const Icon(LucideIcons.alertCircle, color: Colors.red, size: 16)
-              else if (isVerified)
-                const Icon(LucideIcons.checkCircle,
-                    color: Colors.green, size: 16),
-            ],
+               const SizedBox(width: 8),
+               GestureDetector(
+                 onTap: () => _deleteItem(item),
+                 child: Container(
+                   padding: const EdgeInsets.all(4),
+                   decoration: BoxDecoration(
+                     color: Colors.red.shade50,
+                     borderRadius: BorderRadius.circular(4),
+                   ),
+                   child: Icon(LucideIcons.trash2, size: 14, color: Colors.red.shade600),
+                 ),
+               ),
+             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
           // Description + Amount row
           Row(
@@ -355,7 +1073,7 @@ class _InventoryInvoiceReviewPageState
           ),
 
           // Qty × Rate row
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -379,9 +1097,9 @@ class _InventoryInvoiceReviewPageState
                 ),
               ),
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.0),
+                padding: EdgeInsets.symmetric(horizontal: 12.0),
                 child:
-                    Text('×', style: TextStyle(color: AppTheme.textSecondary)),
+                    Text('×', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
               ),
               Expanded(
                 child: DebouncedReviewField(
@@ -408,22 +1126,29 @@ class _InventoryInvoiceReviewPageState
 
           // Mismatch error hint
           if (hasMismatch) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(LucideIcons.alertTriangle,
-                    size: 14, color: Colors.red),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    'Math Error: Qty × Rate ≠ Amount  (diff ₹${item.amountMismatch.toStringAsFixed(2)})',
-                    style: TextStyle(
-                        color: Colors.red.shade700,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold),
+            const SizedBox(height: 12),
+            Container(
+               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+               decoration: BoxDecoration(
+                 color: Colors.red.shade100.withValues(alpha: 0.5),
+                 borderRadius: BorderRadius.circular(6),
+               ),
+               child: Row(
+               children: [
+                  Icon(LucideIcons.alertTriangle,
+                      size: 14, color: Colors.red.shade700),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Math Error: Qty × Rate ≠ Amount  (diff ₹${item.amountMismatch.toStringAsFixed(2)})',
+                      style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ],

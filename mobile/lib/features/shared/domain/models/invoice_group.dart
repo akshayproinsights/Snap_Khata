@@ -7,6 +7,7 @@ class InvoiceGroup {
   String customerName;
   String vehicleNumber;
   String mobileNumber;
+  String uploadDate;
   double totalAmount = 0;
   List<VerifiedInvoice> items = [];
 
@@ -17,5 +18,6 @@ class InvoiceGroup {
     required this.customerName,
     required this.vehicleNumber,
     required this.mobileNumber,
+    required this.uploadDate,
   });
 }

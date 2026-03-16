@@ -146,6 +146,54 @@ class CurrentStockRepository {
     return response.data;
   }
 
+  // ── Mapping Methods (mirrors web's CurrentStockPage flow) ──────────────
+
+  /// Search unique customer item descriptions from verified_invoices.
+  /// Used for autocomplete dropdown in the mapping UI.
+  /// Web equivalent: GET /api/verified/unique-customer-items?search=...
+  Future<List<String>> searchCustomerItems(String query) async {
+    final queryParams = <String, dynamic>{};
+    if (query.isNotEmpty) queryParams['search'] = query;
+
+    final response = await _dio.get(
+      '/api/verified/unique-customer-items',
+      queryParameters: queryParams,
+    );
+    final data = response.data;
+    final items = data['customer_items'] as List?;
+    return items?.map((e) => e.toString()).toList() ?? [];
+  }
+
+  /// Save a customer‐item mapping via vendor_mapping_entries bulk‐save.
+  /// Also updates stock_levels.customer_items on the backend.
+  /// Web equivalent: POST /api/vendor-mapping/entries/bulk-save
+  Future<void> saveCustomerItemMapping({
+    required String partNumber,
+    required String vendorDescription,
+    required String customerItemName,
+  }) async {
+    await _dio.post('/api/vendor-mapping/entries/bulk-save', data: {
+      'entries': [
+        {
+          'row_number': 1,
+          'vendor_description': vendorDescription,
+          'part_number': partNumber,
+          'customer_item_name': customerItemName,
+          'status': 'Added',
+        }
+      ],
+    });
+  }
+
+  /// Clear a customer‐item mapping by deleting the vendor_mapping_entries record.
+  /// Also clears stock_levels.customer_items on the backend.
+  /// Web equivalent: DELETE /api/vendor-mapping/entries/by-part/:partNumber
+  Future<void> clearCustomerItemMapping(String partNumber) async {
+    await _dio.delete(
+      '/api/vendor-mapping/entries/by-part/${Uri.encodeComponent(partNumber)}',
+    );
+  }
+
   /// Export current stock levels as an Excel file.
   /// Returns the saved file path ready for sharing.
   Future<String> exportStockLevels({

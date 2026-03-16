@@ -12,6 +12,8 @@ class VerifiedInvoice {
   final double amount;
   final String receiptLink;
   final String uploadDate;
+  final String? gstMode;
+  final String? taxableRowIds;
 
   VerifiedInvoice({
     required this.rowId,
@@ -27,6 +29,8 @@ class VerifiedInvoice {
     required this.amount,
     required this.receiptLink,
     required this.uploadDate,
+    this.gstMode,
+    this.taxableRowIds,
   });
 
   factory VerifiedInvoice.fromJson(Map<String, dynamic> json) {
@@ -68,6 +72,8 @@ class VerifiedInvoice {
       uploadDate: json['upload_date']?.toString() ??
           json['Upload Date']?.toString() ??
           '',
+      gstMode: json['gst_mode']?.toString(),
+      taxableRowIds: json['taxable_row_ids']?.toString(),
     );
   }
 
@@ -87,6 +93,8 @@ class VerifiedInvoice {
       'amount': amount,
       'receipt_link': receiptLink,
       'upload_date': uploadDate,
+      if (gstMode != null) 'gst_mode': gstMode,
+      if (taxableRowIds != null) 'taxable_row_ids': taxableRowIds,
     };
   }
 
@@ -104,6 +112,8 @@ class VerifiedInvoice {
     double? amount,
     String? receiptLink,
     String? uploadDate,
+    String? gstMode,
+    String? taxableRowIds,
   }) {
     return VerifiedInvoice(
       rowId: rowId ?? this.rowId,
@@ -119,6 +129,8 @@ class VerifiedInvoice {
       amount: amount ?? this.amount,
       receiptLink: receiptLink ?? this.receiptLink,
       uploadDate: uploadDate ?? this.uploadDate,
+      gstMode: gstMode ?? this.gstMode,
+      taxableRowIds: taxableRowIds ?? this.taxableRowIds,
     );
   }
 }

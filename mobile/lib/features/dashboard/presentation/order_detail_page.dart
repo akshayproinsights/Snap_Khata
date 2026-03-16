@@ -72,8 +72,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   void _initGstDefaults() {
-    // Default all parts to taxable
-    _taxableRowIds = widget.group.items.map((i) => i.rowId).toSet();
+    // Default all parts to taxable, except labor/service
+    _taxableRowIds = widget.group.items
+        .where((i) {
+          final type = i.type.toLowerCase();
+          return type != 'labor' && type != 'labour' && type != 'service';
+        })
+        .map((i) => i.rowId).toSet();
   }
 
   Future<void> _loadPersistedSettings() async {

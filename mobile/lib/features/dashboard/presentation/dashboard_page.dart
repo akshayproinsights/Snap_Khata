@@ -185,17 +185,25 @@ class _RecentOrdersTab extends ConsumerWidget {
           customerName: record.customerName,
           vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
+          uploadDate: record.uploadDate,
         );
+      } else {
+        // Update uploadDate if the new record is more recent
+        final existingDt = DateTime.tryParse(groups[safeId]!.uploadDate) ?? DateTime(0);
+        final newDt = DateTime.tryParse(record.uploadDate) ?? DateTime(0);
+        if (newDt.isAfter(existingDt)) {
+          groups[safeId]!.uploadDate = record.uploadDate;
+        }
       }
       groups[safeId]!.items.add(record);
       groups[safeId]!.totalAmount += record.amount;
     }
 
-    // Sort descending by date
+    // Sort descending by uploadDate (most recent upload first)
     final sortedGroups = groups.values.toList()
       ..sort((a, b) {
-        final dA = DateTime.tryParse(a.date) ?? DateTime(0);
-        final dB = DateTime.tryParse(b.date) ?? DateTime(0);
+        final dA = DateTime.tryParse(a.uploadDate) ?? DateTime(0);
+        final dB = DateTime.tryParse(b.uploadDate) ?? DateTime(0);
         return dB.compareTo(dA);
       });
 
@@ -548,6 +556,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
       }
 
       summaries[key]!.totalAmount += record.amount;
+      summaries[key]!.rowIds.add(record.rowId);
 
       // Use receiptNumber if available, otherwise fallback to date/uploadDate for uniqueness
       final String uniqueJobId = record.receiptNumber.isNotEmpty
@@ -668,6 +677,44 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                                 },
                               );
                             },
+                            onLongPress: () {
+                              HapticFeedback.heavyImpact();
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Party Record?'),
+                                  content: Text(
+                                      'Are you sure you want to permanently delete all ${party.orderCount} order(s) for $displayTitle? This action cannot be undone.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        if (party.rowIds.isNotEmpty) {
+                                          ref
+                                              .read(verifiedProvider.notifier)
+                                              .deleteBulk(party.rowIds);
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Deleted all orders for $displayTitle.'),
+                                              backgroundColor: AppTheme.success,
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      style: TextButton.styleFrom(
+                                          foregroundColor: AppTheme.error),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 12),
@@ -777,6 +824,7 @@ class _PartySummary {
   final String latestReceipt;
   double totalAmount;
   final Set<String> receipts = {}; // Track unique invoice IDs
+  final List<String> rowIds = []; // Track all row IDs for deletion
 
   /// Display name: "CustomerName (VehicleNo)" or just vehicle/customer
   String get name => vehicleNumber.isNotEmpty
@@ -875,6 +923,16 @@ class _QuickLinksSection extends ConsumerWidget {
                 onTap: () {
                   HapticFeedback.lightImpact();
                   context.pushNamed('purchase-orders');
+                },
+              ),
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.wallet,
+                color: const Color(0xFFF59E0B), // Amber
+                title: 'Udhar',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.pushNamed('udhar-list');
                 },
               ),
               _buildActionItem(

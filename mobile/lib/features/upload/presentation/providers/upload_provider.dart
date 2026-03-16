@@ -147,8 +147,11 @@ class UploadNotifier extends Notifier<UploadState> {
   late final UploadRepository _repository;
   late final BackgroundTaskNotifier _backgroundTask;
   Timer? _pollingTimer;
+  DateTime? _pollingStartTime;
   int _consecutivePollingErrors = 0;
   static const int _maxPollingErrors = 3;
+  bool _isPaused = false;   // true while app is in background
+  String? _pausedTaskId;    // task to resume polling when foregrounded
 
   @override
   UploadState build() {
@@ -551,43 +554,113 @@ class UploadNotifier extends Notifier<UploadState> {
 
   // ─────────────────────────── Polling ────────────────────────────
 
+  /// Returns the poll interval for a given elapsed time:
+  ///   0–30s  → 2s   (fast feedback for the happy path)
+  ///   30–120s → 5s  (moderate backoff)
+  ///   120s+  → 10s  (slow backoff for long-running tasks)
+  Duration _backoffInterval(Duration elapsed) {
+    if (elapsed.inSeconds < 30) return const Duration(seconds: 2);
+    if (elapsed.inSeconds < 120) return const Duration(seconds: 5);
+    return const Duration(seconds: 10);
+  }
+
   void _startPolling(String taskId) {
     _backgroundTask.startTask('Processing your orders…');
     _consecutivePollingErrors = 0;
+    _isPaused = false;
+    _pausedTaskId = null;
+    _pollingStartTime = DateTime.now();
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      try {
-        final status = await _repository.getProcessStatus(taskId);
-        _consecutivePollingErrors = 0; // reset on success
-        state = state.copyWith(processingStatus: status);
-        _backgroundTask.updateTask(status.message);
+    _scheduleNextPoll(taskId);
+  }
 
-        if (status.status == 'completed') {
-          timer.cancel();
-          await _handleCompleted();
-        } else if (status.status == 'failed') {
-          timer.cancel();
-          await _handleProcessingFailed(status.message);
-        } else if (status.status == 'duplicate_detected') {
-          timer.cancel();
-          await _handleDuplicate();
-        }
-      } catch (e) {
-        _consecutivePollingErrors++;
-        // Swallow transient errors — only give up after 3 consecutive failures
-        if (_consecutivePollingErrors >= _maxPollingErrors) {
-          timer.cancel();
-          await UploadPersistenceService.clearTask();
-          state = state.copyWith(
-            isProcessing: false,
-            error:
-                'Network issue — please check your connection and try again.',
-            clearActiveTaskId: true,
-          );
-          _backgroundTask.completeTask('Connection issue during processing');
-        }
+  void _scheduleNextPoll(String taskId) {
+    _pollingTimer?.cancel();
+    final elapsed = DateTime.now().difference(_pollingStartTime ?? DateTime.now());
+    _pollingTimer = Timer(_backoffInterval(elapsed), () => _executePoll(taskId));
+  }
+
+  Future<void> _executePoll(String taskId) async {
+    // ── Paused? Park and wait for resume ──────────────────────────
+    if (_isPaused) {
+      _pausedTaskId = taskId;
+      return;
+    }
+
+    // ── CLIENT-SIDE TIMEOUT (5 min) ──────────────────────────────
+    // Backend keeps processing regardless — user gets result via
+    // resumeIfActive() when they return to the app.
+    if (_pollingStartTime != null) {
+      final elapsed = DateTime.now().difference(_pollingStartTime!);
+      if (elapsed.inMinutes >= 5) {
+        _pollingTimer?.cancel();
+        await UploadPersistenceService.clearTask();
+        state = state.copyWith(
+          isProcessing: false,
+          error: 'Processing is taking longer than expected. Check back shortly.',
+          clearActiveTaskId: true,
+        );
+        _backgroundTask.completeTask('Processing timed out');
+        return;
       }
-    });
+    }
+
+    try {
+      final status = await _repository.getProcessStatus(taskId);
+      _consecutivePollingErrors = 0;
+      state = state.copyWith(processingStatus: status);
+      _backgroundTask.updateTask(status.message);
+
+      if (status.status == 'completed') {
+        _pollingTimer?.cancel();
+        await _handleCompleted();
+      } else if (status.status == 'failed') {
+        _pollingTimer?.cancel();
+        await _handleProcessingFailed(status.message);
+      } else if (status.status == 'duplicate_detected') {
+        _pollingTimer?.cancel();
+        await _handleDuplicate();
+      } else {
+        // Still running — schedule next poll with backoff
+        _scheduleNextPoll(taskId);
+      }
+    } catch (e) {
+      _consecutivePollingErrors++;
+      if (_consecutivePollingErrors >= _maxPollingErrors) {
+        _pollingTimer?.cancel();
+        await UploadPersistenceService.clearTask();
+        state = state.copyWith(
+          isProcessing: false,
+          error: 'Network issue — please check your connection and try again.',
+          clearActiveTaskId: true,
+        );
+        _backgroundTask.completeTask('Connection issue during processing');
+      } else {
+        // Transient error — still schedule next poll
+        _scheduleNextPoll(taskId);
+      }
+    }
+  }
+
+  /// Called by the page when the app is backgrounded (paused/inactive).
+  /// Cancels the active timer so zero requests hit the server in background.
+  void pausePolling() {
+    if (!state.isProcessing) return;
+    _isPaused = true;
+    _pausedTaskId = state.activeTaskId;
+    _pollingTimer?.cancel();
+  }
+
+  /// Called by the page when the app returns to the foreground (resumed).
+  /// Fires one immediate poll to sync state, then resumes backoff schedule.
+  void resumePolling() {
+    if (!_isPaused) return;
+    _isPaused = false;
+    final taskId = _pausedTaskId ?? state.activeTaskId;
+    _pausedTaskId = null;
+    if (taskId != null && state.isProcessing) {
+      _executePoll(taskId); // immediate sync on return
+    }
   }
 
   // ─────────────────────────── Terminal state handlers ────────────

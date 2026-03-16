@@ -128,20 +128,16 @@ def get_r2_config() -> Dict[str, str]:
     secrets = load_secrets()
     env = os.getenv("APP_ENV", "development").lower()
     
-    # Try [cloudflare_r2.env] -> [cloudflare_r2]
-    # Examples: [cloudflare_r2.production], [cloudflare_r2.development]
-    r2 = secrets.get(f"cloudflare_r2.{env}") or secrets.get("cloudflare_r2", {})
+    r2 = secrets.get(f"cloudflare_r2.{env}")
     
-    # If using nested dict structure in TOML like:
-    # [cloudflare_r2]
-    #   [cloudflare_r2.production]
-    #      ...
-    if not r2 and "cloudflare_r2" in secrets:
-        base_r2 = secrets["cloudflare_r2"]
-        if isinstance(base_r2, dict):
-            r2 = base_r2.get(env) or base_r2  # Fallback to base if env specific not found
-
     if not r2:
+        base_r2 = secrets.get("cloudflare_r2", {})
+        if isinstance(base_r2, dict):
+            r2 = base_r2.get(env)
+            if not isinstance(r2, dict) or not any(k in r2 for k in ["account_id", "endpoint_url", "access_key_id", "secret_access_key"]):
+                r2 = base_r2
+                
+    if not r2 or not isinstance(r2, dict):
         r2 = {}
 
     # Normalize key names
@@ -211,44 +207,6 @@ def get_user_config(username: str) -> Optional[Dict[str, Any]]:
     users = get_users_db()
     return users.get(username)
 
-def get_gcp_service_account() -> Optional[Dict[str, str]]:
-    """
-    Returns the google_service_account dictionary for BigQuery/Sheets auth.
-    Checks environment variable first, then falls back to secrets file.
-    """
-    # Check Base64 environment variable first
-    import base64
-    gcp_b64 = os.getenv("GCP_SERVICE_ACCOUNT_JSON_BASE64")
-    gcp_json = None
-    
-    if gcp_b64:
-        try:
-            gcp_json = base64.b64decode(gcp_b64).decode('utf-8')
-        except Exception as e:
-            print(f"Error decoding GCP_SERVICE_ACCOUNT_JSON_BASE64: {e}")
-
-    # Fallback to raw JSON env var
-    if not gcp_json:
-        gcp_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-
-    if gcp_json:
-        try:
-            gcp_sa = json.loads(gcp_json)
-            if isinstance(gcp_sa, dict) and gcp_sa.get("private_key"):
-                return gcp_sa
-        except json.JSONDecodeError:
-            pass  # Fall through to secrets file
-    
-    # Fallback to secrets file
-    secrets = load_secrets()
-    # Support multiple common key names
-    gcp_sa = secrets.get("gcp_service_account") or \
-             secrets.get("google_service_account") or \
-             secrets.get("GCP_SERVICE_ACCOUNT")
-    
-    if isinstance(gcp_sa, dict) and gcp_sa.get("private_key"):
-        return gcp_sa
-    return None
 
 def get_google_api_key() -> Optional[str]:
     """
@@ -269,6 +227,3 @@ def get_google_api_key() -> Optional[str]:
            secrets.get("GEMINI_API_KEY") or \
            secrets.get("general", {}).get("gemini_api_key") or \
            secrets.get("general", {}).get("GEMINI_API_KEY")
-
-# The additional GCP client functions from your second snippet are not needed in configs.py, 
-# as app.py handles client initialization directly using the dict returned by get_gcp_service_account().

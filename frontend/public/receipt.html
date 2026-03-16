@@ -1055,28 +1055,37 @@
             document.title = `Tax Invoice #${data.id || '—'} • SnapKhata`;
 
             const items = Array.isArray(data.items) ? data.items : [];
-            const subtotal = items.reduce((s, i) => s + Number(i.amount || 0), 0);
             const isPaid = data.status === 'PAID';
 
-            // GST calculation
-            let partsBase, gstAmt, grandTotal;
+            // Separate taxable (parts) and non-taxable (labor) items
+            const taxableItems = items.filter(i => i.is_taxable !== false); // default to taxable if not specified
+            const nonTaxableItems = items.filter(i => i.is_taxable === false);
+
+            // Calculate subtotals
+            const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+            const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+
+            // GST calculation (only on parts)
+            let gstAmt, grandTotal;
             if (gstMode === 'included') {
-                partsBase = subtotal;
-                gstAmt = subtotal * 18 / 118;
-                grandTotal = subtotal;            // total unchanged
+                gstAmt = partsSubtotal * 18 / 118;
+                grandTotal = partsSubtotal + laborSubtotal; // total unchanged
             } else { // excluded
-                partsBase = subtotal;
-                gstAmt = subtotal * 0.18;
-                grandTotal = subtotal + gstAmt;
+                gstAmt = partsSubtotal * 0.18;
+                grandTotal = partsSubtotal + gstAmt + laborSubtotal;
             }
 
             const taxableValue = gstMode === 'included'
-                ? subtotal - gstAmt   // base without GST
-                : subtotal;           // already net
+                ? partsSubtotal - gstAmt   // base without GST
+                : partsSubtotal;           // already net
 
+            // Build items HTML with Part/Labor labels
             let itemsHtml = '';
-            if (items.length > 0) {
-                items.forEach((item, idx) => {
+
+            // Taxable items (Parts)
+            if (taxableItems.length > 0) {
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Parts (Taxable @ 18%)</td></tr>`;
+                taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
@@ -1096,7 +1105,34 @@
                         <td class="right" style="font-weight:700;">${fmtMoney(baseAmt * 1.18)}</td>
                     </tr>`;
                 });
-            } else {
+            }
+
+            // Non-taxable items (Labor)
+            if (nonTaxableItems.length > 0) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr><td colspan="8" style="height:8px;"></td></tr>`;
+                }
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Labor / Service (No GST)</td></tr>`;
+                nonTaxableItems.forEach((item, idx) => {
+                    const qty = Number(item.qty || 1);
+                    const rate = Number(item.rate || 0);
+                    const amount = Number(item.amount || 0);
+
+                    itemsHtml += `
+                    <tr>
+                        <td class="center">${idx + 1}</td>
+                        <td>${item.name || 'Labor / Service'}</td>
+                        <td class="center">${qty}</td>
+                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                        <td class="right">${fmtMoney(amount)}</td>
+                        <td class="center" style="color:#94a3b8;">—</td>
+                        <td class="right" style="color:#94a3b8;">—</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
+                    </tr>`;
+                });
+            }
+
+            if (items.length === 0) {
                 itemsHtml = `<tr><td colspan="8" style="text-align:center;padding:32px;color:#94a3b8;">No line items for this receipt.</td></tr>`;
             }
 
@@ -1137,7 +1173,7 @@
                             <div class="inv-col-val">
                                 <div><strong>Invoice No:</strong> #${data.id || '—'}</div>
                                 <div><strong>Date:</strong> ${fmtDate(data.created_at)}</div>
-                                <div style="margin-top:4px;font-size:11px;color:#64748b;">GST @18% ${gstMode === 'included' ? '(Included in price)' : '(Excluded — added on top)'}</div>
+                                <div style="margin-top:4px;font-size:11px;color:#64748b;">GST @18% on Parts ${gstMode === 'included' ? '(Included in price)' : '(Excluded — added on top)'}</div>
                             </div>
                         </div>
                         <div class="inv-col">
@@ -1170,9 +1206,20 @@
                             <div>
                                 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;margin-bottom:6px;">Amount in Words</div>
                                 <div class="inv-amount-words">Rupees ${wordsTotal} Only</div>
+                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:8px;">Parts: ${fmtMoney(partsSubtotal)} | Labor: ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                         </div>
                         <div class="inv-totals-table">
+                            <div class="inv-totals-row">
+                                <span class="label">Parts Subtotal</span>
+                                <span class="amount">${fmtMoney(partsSubtotal)}</span>
+                            </div>
+                            ${laborSubtotal > 0.01 ? `
+                            <div class="inv-totals-row" style="color:#64748b;">
+                                <span class="label">Labor / Service (no GST)</span>
+                                <span class="amount">${fmtMoney(laborSubtotal)}</span>
+                            </div>
+                            ` : ''}
                             <div class="inv-totals-row">
                                 <span class="label">Taxable Amount</span>
                                 <span class="amount">${fmtMoney(taxableValue)}</span>

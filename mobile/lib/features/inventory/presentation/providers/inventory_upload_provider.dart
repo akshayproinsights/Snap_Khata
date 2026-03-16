@@ -88,6 +88,9 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   Timer? _pollingTimer;
   int _consecutivePollingErrors = 0;
   static const int _maxPollingErrors = 3;
+  bool _isPaused = false;   // true while app is in background
+  String? _pausedTaskId;    // task to resume when foregrounded
+  DateTime? _pollingStartTime;
 
   @override
   InventoryUploadState build() {
@@ -450,70 +453,113 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
 
   // ─────────────────────────── Polling ────────────────────────────
 
-  // ── Max poll time before giving up (5 minutes) ────────────────────────────
   static const int _maxPollMinutes = 5;
+
+  /// Returns the poll interval for a given elapsed time:
+  ///   0–30s  → 3s   (fast feedback; Gemini is still warm)
+  ///   30–120s → 6s  (moderate backoff)
+  ///   120s+  → 12s  (slow backoff for large batches)
+  Duration _backoffInterval(Duration elapsed) {
+    if (elapsed.inSeconds < 30) return const Duration(seconds: 3);
+    if (elapsed.inSeconds < 120) return const Duration(seconds: 6);
+    return const Duration(seconds: 12);
+  }
 
   void _startPolling(String taskId) {
     _backgroundTask.startTask('Processing your inventory…');
     _consecutivePollingErrors = 0;
+    _isPaused = false;
+    _pausedTaskId = null;
     _pollingTimer?.cancel();
 
     // Adaptive initial delay: Gemini needs ~3–5s per invoice.
-    // We wait (fileCount * 3s, clamped 10s–45s) before the periodic timer.
+    // Wait (fileCount * 3s, clamped 10s–45s) before the first poll.
     final fileCount = state.fileItems.length;
     final initialDelaySeconds = (fileCount * 3).clamp(10, 45);
+    _pollingStartTime = DateTime.now();
 
-    // Record when polling began so we can enforce a hard timeout.
-    final pollStartTime = DateTime.now();
-
-    Future.delayed(Duration(seconds: initialDelaySeconds), () {
-      _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-        // ── Hard timeout guard ──────────────────────────────────────────────
-        final elapsed = DateTime.now().difference(pollStartTime);
-        if (elapsed.inMinutes >= _maxPollMinutes) {
-          timer.cancel();
-          await InventoryPersistenceService.clearTask();
-          state = state.copyWith(
-            isProcessing: false,
-            error: null, // silent reset — task may have completed on server
-            clearActiveTaskId: true,
-            isRestoringState: false,
-          );
-          _backgroundTask.completeTask(
-              'Inventory processing timed out. Pull down to refresh.');
-          return;
-        }
-
-        try {
-          final status = await _repository.getProcessStatus(taskId);
-          _consecutivePollingErrors = 0;
-          state = state.copyWith(processingStatus: status);
-          _backgroundTask.updateTask(status.message);
-
-          if (status.status == 'completed') {
-            timer.cancel();
-            await _handleCompleted(status);
-          } else if (status.status == 'failed') {
-            timer.cancel();
-            await _handleProcessingFailed(status.message);
-          }
-        } catch (e) {
-          _consecutivePollingErrors++;
-          if (_consecutivePollingErrors >= _maxPollingErrors) {
-            timer.cancel();
-            await InventoryPersistenceService.clearTask();
-            state = state.copyWith(
-              isProcessing: false,
-              error:
-                  'Network issue — please check your connection and try again.',
-              clearActiveTaskId: true,
-            );
-            _backgroundTask
-                .completeTask('Connection issue during inventory processing');
-          }
-        }
-      });
+    _pollingTimer = Timer(Duration(seconds: initialDelaySeconds), () {
+      _executePoll(taskId);
     });
+  }
+
+  void _scheduleNextPoll(String taskId) {
+    _pollingTimer?.cancel();
+    final elapsed = DateTime.now().difference(_pollingStartTime ?? DateTime.now());
+    _pollingTimer = Timer(_backoffInterval(elapsed), () => _executePoll(taskId));
+  }
+
+  Future<void> _executePoll(String taskId) async {
+    // ── Paused? Park and wait for resume ──────────────────────────
+    if (_isPaused) {
+      _pausedTaskId = taskId;
+      return;
+    }
+
+    // ── Hard timeout guard ────────────────────────────────────────
+    final elapsed = DateTime.now().difference(_pollingStartTime ?? DateTime.now());
+    if (elapsed.inMinutes >= _maxPollMinutes) {
+      _pollingTimer?.cancel();
+      await InventoryPersistenceService.clearTask();
+      state = state.copyWith(
+        isProcessing: false,
+        error: null,
+        clearActiveTaskId: true,
+        isRestoringState: false,
+      );
+      _backgroundTask.completeTask('Inventory processing timed out. Pull down to refresh.');
+      return;
+    }
+
+    try {
+      final status = await _repository.getProcessStatus(taskId);
+      _consecutivePollingErrors = 0;
+      state = state.copyWith(processingStatus: status);
+      _backgroundTask.updateTask(status.message);
+
+      if (status.status == 'completed') {
+        _pollingTimer?.cancel();
+        await _handleCompleted(status);
+      } else if (status.status == 'failed') {
+        _pollingTimer?.cancel();
+        await _handleProcessingFailed(status.message);
+      } else {
+        _scheduleNextPoll(taskId);
+      }
+    } catch (e) {
+      _consecutivePollingErrors++;
+      if (_consecutivePollingErrors >= _maxPollingErrors) {
+        _pollingTimer?.cancel();
+        await InventoryPersistenceService.clearTask();
+        state = state.copyWith(
+          isProcessing: false,
+          error: 'Network issue — please check your connection and try again.',
+          clearActiveTaskId: true,
+        );
+        _backgroundTask.completeTask('Connection issue during inventory processing');
+      } else {
+        _scheduleNextPoll(taskId);
+      }
+    }
+  }
+
+  /// Called by the page when the app is backgrounded.
+  void pausePolling() {
+    if (!state.isProcessing) return;
+    _isPaused = true;
+    _pausedTaskId = state.activeTaskId;
+    _pollingTimer?.cancel();
+  }
+
+  /// Called by the page when the app returns to the foreground.
+  void resumePolling() {
+    if (!_isPaused) return;
+    _isPaused = false;
+    final taskId = _pausedTaskId ?? state.activeTaskId;
+    _pausedTaskId = null;
+    if (taskId != null && state.isProcessing) {
+      _executePoll(taskId); // immediate sync on return
+    }
   }
 
   // ─────────────────────────── Terminal state handlers ────────────

@@ -151,16 +151,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=500, detail=f"Auth error: {str(e)}")
 
 
-async def get_current_user_sheet_id(current_user: Dict[str, Any] = Depends(get_current_user)) -> Optional[str]:
-    """
-    Dependency to get the current user's sheet_id.
-    Returns None if sheet_id is not configured (optional).
-    """
-    sheet_id = current_user.get("sheet_id")
-    # Make sheet_id optional - return None if missing instead of 400 error
-    return sheet_id
-
-
 async def get_current_user_r2_bucket(current_user: Dict[str, Any] = Depends(get_current_user)) -> str:
     """
     Dependency to get the current user's R2 bucket.

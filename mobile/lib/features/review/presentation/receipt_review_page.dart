@@ -27,6 +27,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   // ── GST / Payment Summary state ──────────────────────────────────────────
   GstMode _gstMode = GstMode.none;
 
+  // ── Payment Mode state ───────────────────────────────────────────────────
+  String _paymentMode = 'Cash';
+  bool _isReceivedChecked = false;
+  final TextEditingController _receivedAmountController = TextEditingController();
+  final TextEditingController _creditDetailsController = TextEditingController();
+  double _receivedAmount = 0.0;
+
   /// Row IDs of line items the user has marked as taxable (Parts).
   /// Defaults to ALL items being taxable — user unticks Labor/Service items.
   Set<String> _taxableRowIds = {};
@@ -34,14 +41,53 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   @override
   void initState() {
     super.initState();
-    // Default: mark all line items as taxable
-    _taxableRowIds = widget.group.lineItems.map((i) => i.rowId).toSet();
+    // Default: mark all line items as taxable (Parts) unless marked Labour/Service
+    _taxableRowIds = widget.group.lineItems
+        .where((i) {
+          final type = i.type?.toLowerCase() ?? '';
+          return type != 'labor' && type != 'labour' && type != 'service';
+        })
+        .map((i) => i.rowId)
+        .toSet();
     _loadPersistedSettings();
+  }
+
+  @override
+  void dispose() {
+    _receivedAmountController.dispose();
+    _creditDetailsController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPersistedSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final receipt = widget.group.receiptNumber;
+
+    // Load payment mode
+    final savedPaymentMode = prefs.getString('payment_mode_$receipt');
+    if (savedPaymentMode != null && mounted) {
+      setState(() {
+        _paymentMode = savedPaymentMode;
+      });
+    }
+
+    // Load received amount
+    final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
+    if (savedReceivedAmount != null && mounted) {
+      setState(() {
+        _receivedAmount = savedReceivedAmount;
+        _isReceivedChecked = savedReceivedAmount > 0;
+        _receivedAmountController.text = _formatAmount(savedReceivedAmount);
+      });
+    }
+
+    // Load credit details
+    final savedCreditDetails = prefs.getString('credit_details_$receipt');
+    if (savedCreditDetails != null && mounted) {
+      setState(() {
+        _creditDetailsController.text = savedCreditDetails;
+      });
+    }
 
     // Load GST mode
     final savedMode = prefs.getString('gst_mode_$receipt');
@@ -62,6 +108,22 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             savedTaxable.isEmpty ? <String>{} : savedTaxable.split(',').toSet();
       });
     }
+  }
+
+  Future<void> _savePaymentMode(String mode) async {
+    setState(() => _paymentMode = mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('payment_mode_${widget.group.receiptNumber}', mode);
+  }
+
+  Future<void> _saveReceivedAmount(double amount) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('received_amount_${widget.group.receiptNumber}', amount);
+  }
+
+  Future<void> _saveCreditDetails(String details) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('credit_details_${widget.group.receiptNumber}', details);
   }
 
   Future<void> _saveGstMode(GstMode mode) async {
@@ -148,47 +210,28 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   void _markAllDone() {
     final group = widget.group;
     final header = group.header;
-    final hasAnyError = group.hasError;
 
-    if (!hasAnyError) {
-      if (header != null && header.verificationStatus != 'Done') {
-        final newRecord = ReviewRecord(
-            rowId: header.rowId,
-            receiptNumber: header.receiptNumber,
-            date: header.date,
-            description: header.description,
-            amount: header.amount,
-            verificationStatus: 'Done',
-            receiptLink: header.receiptLink,
-            dateBbox: header.dateBbox,
-            receiptNumberBbox: header.receiptNumberBbox,
-            combinedBbox: header.combinedBbox,
-            lineItemBbox: header.lineItemBbox,
-            isHeader: header.isHeader,
-            auditFindings: header.auditFindings);
-        ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-      }
+    // Always save the record, even with errors
+    if (header != null) {
+      final grandTotal = _totalAfterGst(group);
+      final balanceDue = _paymentMode == 'Credit' ? grandTotal - _receivedAmount : 0.0;
+      
+      final newRecord = header.copyWith(
+          verificationStatus: 'Done',
+          paymentMode: _paymentMode,
+          receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : null,
+          balanceDue: _paymentMode == 'Credit' ? balanceDue : null,
+          customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
+          gstMode: _gstMode.name,
+          taxableRowIds: _taxableRowIds.join(','),
+      );
+      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+    }
 
-      for (var item in group.lineItems) {
-        if (item.verificationStatus != 'Done') {
-          final newRecord = ReviewRecord(
-              rowId: item.rowId,
-              receiptNumber: item.receiptNumber,
-              date: item.date,
-              description: item.description,
-              amount: item.amount,
-              verificationStatus: 'Done',
-              receiptLink: item.receiptLink,
-              dateBbox: item.dateBbox,
-              receiptNumberBbox: item.receiptNumberBbox,
-              combinedBbox: item.combinedBbox,
-              lineItemBbox: item.lineItemBbox,
-              isHeader: item.isHeader,
-              quantity: item.quantity,
-              rate: item.rate,
-              amountMismatch: item.amountMismatch);
-          ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-        }
+    for (var item in group.lineItems) {
+      if (item.verificationStatus != 'Done') {
+        final newRecord = item.copyWith(verificationStatus: 'Done');
+        ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
       }
     }
 
@@ -211,7 +254,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     sortedLineItems.sort((a, b) {
       if (a.hasError && !b.hasError) return -1;
       if (!a.hasError && b.hasError) return 1;
-      return 0; // Keep original order otherwise
+      // Sort in image order (top-to-bottom) using the lineItemBbox y-coordinate (index 1)
+      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
+      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
+      return yA.compareTo(yB);
     });
 
     final hasAnyError = group.hasError;
@@ -402,7 +448,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   grandTotal: _totalAfterGst(group),
                   originalTotal: group.header?.amount ??
                       (_partsSubtotal(group) + _laborSubtotal(group)),
-                  lineItems: group.lineItems
+                  lineItems: sortedLineItems
                       .map((item) => PaymentSummaryItem(
                             rowId: item.rowId,
                             description: item.description,
@@ -412,30 +458,262 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   onGstModeChanged: _saveGstMode,
                   onToggleTaxable: _toggleTaxable,
                 ),
-                const SizedBox(height: 100),
+                _buildPaymentSection(_totalAfterGst(group)),
+                const SizedBox(height: 24),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: SizedBox(
-          width: double.infinity,
-          child: FloatingActionButton.extended(
-            onPressed: _markAllDone,
-            backgroundColor: hasAnyError ? Colors.orange : Colors.green,
-            foregroundColor: Colors.white,
-            elevation: 4,
-            icon: Icon(
-                hasAnyError ? LucideIcons.alertTriangle : LucideIcons.check),
-            label: Text(
-              hasAnyError ? 'Save with Errors' : 'Mark as Done',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              offset: const Offset(0, -4),
+              blurRadius: 8,
             ),
-          ),
+          ],
         ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Total Amount:',
+                      style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  Text('₹${_formatAmount(_totalAfterGst(group))}',
+                      style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5)),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _markAllDone,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: hasAnyError
+                    ? Colors.orange
+                    : const Color(0xFF2A7678), // Deep teal
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: hasAnyError
+                  ? const Icon(LucideIcons.alertTriangle, size: 18)
+                  : const SizedBox.shrink(),
+              label: Text(
+                hasAnyError ? 'Save with Errors' : 'Confirm & Save ✨',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentSection(double grandTotal) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Payment Type',
+                  style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold)),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PaymentToggleBtn(
+                      title: 'Credit',
+                      isSelected: _paymentMode == 'Credit',
+                      onTap: () => _savePaymentMode('Credit'),
+                    ),
+                    _PaymentToggleBtn(
+                      title: 'Cash',
+                      isSelected: _paymentMode == 'Cash',
+                      onTap: () {
+                        _savePaymentMode('Cash');
+                        setState(() {
+                          _receivedAmount = grandTotal;
+                          _receivedAmountController.text =
+                              _formatAmount(grandTotal);
+                        });
+                        _saveReceivedAmount(grandTotal);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Text('Total Amount',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              const Text('₹ ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              SizedBox(
+                width: 100,
+                child: Text(
+                  _formatAmount(grandTotal),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          if (_paymentMode == 'Credit') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isReceivedChecked = !_isReceivedChecked;
+                      if (!_isReceivedChecked) {
+                        _receivedAmount = 0;
+                        _receivedAmountController.clear();
+                        _saveReceivedAmount(0);
+                      } else {
+                        _receivedAmount = grandTotal;
+                        _receivedAmountController.text =
+                            _formatAmount(grandTotal);
+                        _saveReceivedAmount(grandTotal);
+                      }
+                    });
+                  },
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isReceivedChecked
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: _isReceivedChecked
+                            ? AppTheme.primary
+                            : Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Received', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                const Text('₹ ',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _receivedAmountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                      border: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey.shade300)),
+                      enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey.shade300)),
+                      focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(color: AppTheme.primary)),
+                      fillColor: Colors.transparent,
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _receivedAmount = double.tryParse(val) ?? 0.0;
+                        _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
+                      });
+                      _saveReceivedAmount(double.tryParse(val) ?? 0.0);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Text('Balance Due',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
+                const Spacer(),
+                const Text('₹ ',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500)),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    _formatAmount(grandTotal - _receivedAmount),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _creditDetailsController,
+              onChanged: (val) => _saveCreditDetails(val),
+              decoration: InputDecoration(
+                labelText: 'Customer Details / Notes',
+                labelStyle:
+                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -514,20 +792,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ),
                   onSaved: (val) {
                     if (val != header.receiptNumber) {
-                      final newRecord = ReviewRecord(
-                          rowId: header.rowId,
-                          receiptNumber: val,
-                          date: header.date,
-                          description: header.description,
-                          amount: header.amount,
-                          verificationStatus: header.verificationStatus,
-                          receiptLink: header.receiptLink,
-                          dateBbox: header.dateBbox,
-                          receiptNumberBbox: header.receiptNumberBbox,
-                          combinedBbox: header.combinedBbox,
-                          lineItemBbox: header.lineItemBbox,
-                          isHeader: header.isHeader,
-                          auditFindings: header.auditFindings);
+                      final newRecord = header.copyWith(receiptNumber: val);
                       ref
                           .read(reviewProvider.notifier)
                           .updateDateRecord(newRecord);
@@ -563,20 +828,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       final formattedDate =
                           DateFormat('dd-MM-yyyy').format(picked);
                       if (formattedDate != header.date) {
-                        final newRecord = ReviewRecord(
-                            rowId: header.rowId,
-                            receiptNumber: header.receiptNumber,
-                            date: formattedDate,
-                            description: header.description,
-                            amount: header.amount,
-                            verificationStatus: header.verificationStatus,
-                            receiptLink: header.receiptLink,
-                            dateBbox: header.dateBbox,
-                            receiptNumberBbox: header.receiptNumberBbox,
-                            combinedBbox: header.combinedBbox,
-                            lineItemBbox: header.lineItemBbox,
-                            isHeader: header.isHeader,
-                            auditFindings: header.auditFindings);
+                        final newRecord = header.copyWith(date: formattedDate);
                         ref
                             .read(reviewProvider.notifier)
                             .updateDateRecord(newRecord);
@@ -612,6 +864,72 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DebouncedReviewField(
+            initialValue: header.customerName ?? '',
+            decoration: _inputDecoration('Customer Name').copyWith(
+              prefixIcon: const Icon(LucideIcons.user, size: 16),
+            ),
+            onSaved: (val) {
+              if (val != header.customerName) {
+                final newRecord = header.copyWith(customerName: val);
+                ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: DebouncedReviewField(
+                  initialValue: header.vehicleNumber ?? '',
+                  decoration: _inputDecoration('Vehicle Number').copyWith(
+                    prefixIcon: const Icon(LucideIcons.car, size: 16),
+                  ),
+                  onSaved: (val) {
+                    if (val != header.vehicleNumber) {
+                      final newRecord = header.copyWith(vehicleNumber: val);
+                      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DebouncedReviewField(
+                  initialValue: header.mobileNumber ?? '',
+                  keyboardType: TextInputType.phone,
+                  decoration: _inputDecoration('Mobile Number').copyWith(
+                    prefixIcon: const Icon(LucideIcons.phone, size: 16),
+                    errorText: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10) ? 'Must be 10 digits' : null,
+                    enabledBorder: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
+                        ? OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: Colors.red.shade400, width: 1.5),
+                          )
+                        : null,
+                    focusedBorder: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
+                        ? OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: Colors.red.shade400, width: 2),
+                          )
+                        : null,
+                    fillColor: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
+                        ? Colors.red.shade50
+                        : Colors.white,
+                  ),
+                  onSaved: (val) {
+                    if (val != header.mobileNumber) {
+                      final newRecord = header.copyWith(mobileNumber: val);
+                      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+                    }
+                  },
                 ),
               ),
             ],
@@ -673,22 +991,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   maxLines: null,
                   onSaved: (val) {
                     if (val != item.description) {
-                      final newRecord = ReviewRecord(
-                          rowId: item.rowId,
-                          receiptNumber: item.receiptNumber,
-                          date: item.date,
-                          description: val,
-                          amount: item.amount,
-                          verificationStatus: item.verificationStatus,
-                          receiptLink: item.receiptLink,
-                          dateBbox: item.dateBbox,
-                          receiptNumberBbox: item.receiptNumberBbox,
-                          combinedBbox: item.combinedBbox,
-                          lineItemBbox: item.lineItemBbox,
-                          isHeader: item.isHeader,
-                          quantity: item.quantity,
-                          rate: item.rate,
-                          amountMismatch: item.amountMismatch);
+                      final newRecord = item.copyWith(description: val);
                       ref
                           .read(reviewProvider.notifier)
                           .updateAmountRecord(newRecord);
@@ -710,22 +1013,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   onSaved: (val) {
                     final newAmount = double.tryParse(val);
                     if (newAmount != null && newAmount != item.amount) {
-                      final newRecord = ReviewRecord(
-                          rowId: item.rowId,
-                          receiptNumber: item.receiptNumber,
-                          date: item.date,
-                          description: item.description,
-                          amount: newAmount,
-                          verificationStatus: item.verificationStatus,
-                          receiptLink: item.receiptLink,
-                          dateBbox: item.dateBbox,
-                          receiptNumberBbox: item.receiptNumberBbox,
-                          combinedBbox: item.combinedBbox,
-                          lineItemBbox: item.lineItemBbox,
-                          isHeader: item.isHeader,
-                          quantity: item.quantity,
-                          rate: item.rate,
-                          amountMismatch: 0);
+                      final newRecord = item.copyWith(amount: newAmount, amountMismatch: 0);
                       ref
                           .read(reviewProvider.notifier)
                           .updateAmountRecord(newRecord);
@@ -750,22 +1038,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     if (newQty != null) {
                       // recalculate mismatch
                       final newMismatch = (newQty * item.rate!) - item.amount;
-                      final newRecord = ReviewRecord(
-                          rowId: item.rowId,
-                          receiptNumber: item.receiptNumber,
-                          date: item.date,
-                          description: item.description,
-                          amount: item.amount,
-                          verificationStatus: item.verificationStatus,
-                          receiptLink: item.receiptLink,
-                          dateBbox: item.dateBbox,
-                          receiptNumberBbox: item.receiptNumberBbox,
-                          combinedBbox: item.combinedBbox,
-                          lineItemBbox: item.lineItemBbox,
-                          isHeader: item.isHeader,
-                          quantity: newQty,
-                          rate: item.rate,
-                          amountMismatch: newMismatch);
+                      final newRecord = item.copyWith(quantity: newQty, amountMismatch: newMismatch);
                       ref
                           .read(reviewProvider.notifier)
                           .updateAmountRecord(newRecord);
@@ -788,22 +1061,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     if (newRate != null && item.quantity != null) {
                       final newMismatch =
                           (item.quantity! * newRate) - item.amount;
-                      final newRecord = ReviewRecord(
-                          rowId: item.rowId,
-                          receiptNumber: item.receiptNumber,
-                          date: item.date,
-                          description: item.description,
-                          amount: item.amount,
-                          verificationStatus: item.verificationStatus,
-                          receiptLink: item.receiptLink,
-                          dateBbox: item.dateBbox,
-                          receiptNumberBbox: item.receiptNumberBbox,
-                          combinedBbox: item.combinedBbox,
-                          lineItemBbox: item.lineItemBbox,
-                          isHeader: item.isHeader,
-                          quantity: item.quantity,
-                          rate: newRate,
-                          amountMismatch: newMismatch);
+                      final newRecord = item.copyWith(rate: newRate, amountMismatch: newMismatch);
                       ref
                           .read(reviewProvider.notifier)
                           .updateAmountRecord(newRecord);
@@ -965,3 +1223,47 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
 // ─────────────────────────────────────────────────────────────────────────────
 // END
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _PaymentToggleBtn extends StatelessWidget {
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PaymentToggleBtn({
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+}

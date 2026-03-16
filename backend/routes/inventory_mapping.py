@@ -573,14 +573,13 @@ async def get_unmapped_customer_items(
                     "total_qty": data["total_qty"]
                 }
         
-        # Get mapped items to exclude
+        # Get mapped items to exclude (Done, Added, or Skipped)
         mapped_result = db.client.table("inventory_mapped")\
             .select("customer_item")\
             .eq("username", username)\
-            .in_("status", ["Done", "Skipped"])\
             .execute()
         
-        mapped_items = {item["customer_item"] for item in (mapped_result.data or [])}
+        mapped_items = {item["customer_item"] for item in (mapped_result.data or []) if item.get("customer_item")}
         
         # Filter and prepare response
         unmapped_groups = []
@@ -618,6 +617,8 @@ async def get_unmapped_customer_items(
         
     except Exception as e:
         logger.error(f"Error getting unmapped items: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -654,6 +655,8 @@ async def get_mapped_customer_items(
 
     except Exception as e:
         logger.error(f"Error getting mapped items: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -939,33 +942,18 @@ async def get_customer_item_mapping_stats(
         unique_items = set(item["description"] for item in (all_items_result.data or []) if item.get("description"))
         total_items = len(unique_items)
         
-        # Get Done count (items marked Done but not yet synced)
-        # We'll mark items as synced by adding a synced_at timestamp
-        done_result = db.client.table("inventory_mapped")\
-            .select("customer_item", count="exact")\
+        # Get all mapped items (Added, Done, Skipped) - all statuses count as mapped
+        all_mapped_result = db.client.table("inventory_mapped")\
+            .select("customer_item, status")\
             .eq("username", username)\
-            .eq("status", "Done")\
-            .is_("synced_at", "null")\
             .execute()
-        done_count = done_result.count if done_result.count is not None else 0
         
-        # Get Skipped count
-        skipped_result = db.client.table("inventory_mapped")\
-            .select("customer_item", count="exact")\
-            .eq("username", username)\
-            .eq("status", "Skipped")\
-            .execute()
-        skipped_count = skipped_result.count if skipped_result.count is not None else 0
+        all_mapped = all_mapped_result.data or []
+        total_mapped = len(all_mapped)
+        done_count = sum(1 for m in all_mapped if m.get("status") in ("Done", "Added"))
+        skipped_count = sum(1 for m in all_mapped if m.get("status") == "Skipped")
         
-        # Get total mapped (Done + Skipped)
-        total_mapped_result = db.client.table("inventory_mapped")\
-            .select("customer_item", count="exact")\
-            .eq("username", username)\
-            .in_("status", ["Done", "Skipped"])\
-            .execute()
-        total_mapped = total_mapped_result.count if total_mapped_result.count is not None else 0
-        
-        # Pending = Total - Total Mapped
+        # Pending = Total unique descriptions - Total Mapped
         pending_count = max(0, total_items - total_mapped)
         
         return {
@@ -973,7 +961,7 @@ async def get_customer_item_mapping_stats(
             "stats": {
                 "total": total_items,
                 "pending": pending_count,
-                "done": done_count,  # Only unsynced Done items
+                "done": done_count,
                 "skipped": skipped_count,
                 "completion_percentage": round((total_mapped / total_items * 100) if total_items > 0 else 0, 1)
             }
@@ -984,36 +972,7 @@ async def get_customer_item_mapping_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/customer-items/mapped")
-async def get_mapped_items(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get all mapped items (Done and Skipped) for the Inventory Mapped page.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        result = db.client.table("inventory_mapped")\
-            .select("*")\
-            .eq("username", username)\
-            .order("created_at", desc=True)\
-            .execute()
-        
-        items = result.data or []
-        
-        logger.info(f"Found {len(items)} mapped items for {username}")
-        
-        return {
-            "success": True,
-            "items": items,
-            "count": len(items)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting mapped items: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Note: /customer-items/mapped is defined above (line ~625) with search support.
 
 
 @router.delete("/customer-items/unmap/{mapping_id}")

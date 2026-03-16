@@ -1,7 +1,21 @@
-"""
+"""     
 Export endpoint for inventory items
 Add this to backend/routes/inventory.py
 """
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Dict, Any, Optional
+from datetime import datetime
+import logging
+from io import BytesIO
+
+import pandas as pd
+from fastapi.responses import StreamingResponse
+
+from auth import get_current_user
+from database import get_database_client
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/export")
 async def export_inventory_to_excel(
@@ -18,11 +32,6 @@ async def export_inventory_to_excel(
     Export filtered inventory items to Excel
     Includes ALL columns up to amount_mismatch from the database
     """
-    from database import get_database_client
-    import pandas as pd
-    from io import BytesIO
-    from fastapi.responses import StreamingResponse
-    
     username = current_user.get("username")
     db = get_database_client()
     

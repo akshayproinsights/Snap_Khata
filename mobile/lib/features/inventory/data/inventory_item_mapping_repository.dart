@@ -28,9 +28,14 @@ class InventoryItemMappingRepository {
 
   /// Get all mapped items (status=Done or Added) from inventory_mapped table.
   /// Endpoint: GET /api/inventory-mapping/customer-items/mapped
-  Future<List<MappedItem>> getMappedCustomerItems() async {
+  Future<List<MappedItem>> getMappedCustomerItems({String? search}) async {
+    final queryParams = <String, dynamic>{};
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+    }
     final response = await _dio.get(
       '/api/inventory-mapping/customer-items/mapped',
+      queryParameters: queryParams,
     );
     return (response.data['items'] as List?)
             ?.map((json) => MappedItem.fromJson(json))

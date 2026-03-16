@@ -33,6 +33,11 @@ class InventoryRepository {
     await _dio.delete('/api/inventory/by-hash/$imageHash');
   }
 
+  Future<Map<String, dynamic>> verifyInvoice(Map<String, dynamic> data) async {
+    final response = await _dio.post('/api/inventory/verify-invoice', data: data);
+    return response.data;
+  }
+
   // Upload APIs
   Future<Map<String, dynamic>> uploadFiles(List<dynamic> files,
       {Function(int, int)? onProgress}) async {

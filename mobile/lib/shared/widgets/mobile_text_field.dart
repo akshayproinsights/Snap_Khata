@@ -14,6 +14,8 @@ class MobileTextField extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onCancel;
   final bool obscureText;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
   const MobileTextField({
     super.key,
@@ -26,6 +28,8 @@ class MobileTextField extends StatefulWidget {
     this.onEdit,
     this.onCancel,
     this.obscureText = false,
+    this.textInputAction,
+    this.onSubmitted,
   });
 
   @override
@@ -143,8 +147,12 @@ class _MobileTextFieldState extends State<MobileTextField> {
           controller: _controller,
           focusNode: _focusNode,
           keyboardType: widget.keyboardType,
+          textInputAction: widget.textInputAction,
           onChanged: _onChanged,
-          onSubmitted: (_) => _handleSave(),
+          onSubmitted: (value) {
+            _handleSave();
+            widget.onSubmitted?.call(value);
+          },
           enabled: widget.state != InputState.saving,
           obscureText: widget.obscureText,
           decoration: InputDecoration(

@@ -64,17 +64,24 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
           customerName: record.customerName,
           vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
+          uploadDate: record.uploadDate,
         );
+      } else {
+        final existingDt = DateTime.tryParse(groups[safeId]!.uploadDate) ?? DateTime(0);
+        final newDt = DateTime.tryParse(record.uploadDate) ?? DateTime(0);
+        if (newDt.isAfter(existingDt)) {
+          groups[safeId]!.uploadDate = record.uploadDate;
+        }
       }
       groups[safeId]!.items.add(record);
       groups[safeId]!.totalAmount += record.amount;
     }
 
-    // 2. Sort groups descending by date
+    // 2. Sort groups descending by uploadDate
     final groupedList = groups.values.toList();
     groupedList.sort((a, b) {
-      final dA = DateTime.tryParse(a.date) ?? DateTime(0);
-      final dB = DateTime.tryParse(b.date) ?? DateTime(0);
+      final dA = DateTime.tryParse(a.uploadDate) ?? DateTime(0);
+      final dB = DateTime.tryParse(b.uploadDate) ?? DateTime(0);
       return dB.compareTo(dA);
     });
 

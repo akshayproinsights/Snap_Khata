@@ -1,17 +1,15 @@
 """Review workflow routes"""
-from fastapi import APIRouter, HTTPException, Depends, Body, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import logging
-import pandas as pd
 import numpy as np
 
 from auth import get_current_user
 from database_helpers import (
     get_verification_dates,
     get_verification_amounts,
-    update_verification_records,
-    delete_records_by_receipt
+    update_verification_records
 )
 from database import get_database_client
 
@@ -160,7 +158,8 @@ async def update_single_review_date(
             'created_at', 'model_used', 'model_accuracy', 'input_tokens',
             'output_tokens', 'total_tokens', 'cost_inr', 'fallback_attempted',
             'fallback_reason', 'processing_errors', 'date_and_receipt_combined_bbox',
-            'receipt_number_bbox', 'date_bbox', 'customer_name', 'mobile_number'
+            'receipt_number_bbox', 'date_bbox', 'customer_name', 'mobile_number',
+            'payment_mode', 'received_amount', 'balance_due', 'customer_details'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -442,7 +441,8 @@ async def update_single_review_amount(
             'cost_inr', 'fallback_attempted', 'fallback_reason',
             'processing_errors', 'line_item_row_bbox', 'date_and_receipt_combined_bbox',
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
-            'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number'
+            'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
+            'payment_mode', 'received_amount', 'balance_due', 'customer_details'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -481,7 +481,6 @@ async def sync_and_finish(
     try:
         # Import and call the verification logic (migrated version)
         from services.verification import run_sync_verified_logic_supabase
-        from datetime import datetime
         
         logger.info(f"Sync & Finish triggered for user: {username}")
         

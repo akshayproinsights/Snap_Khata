@@ -6,7 +6,6 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -136,6 +135,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       MobileTextField(
                         initialValue: _username,
                         placeholder: 'Enter your User ID',
+                        textInputAction: TextInputAction.next,
                         onSave: (val) {
                           setState(() {
                             _username = val;
@@ -152,6 +152,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         initialValue: _password,
                         placeholder: 'Enter your password',
                         obscureText: true,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _handleLogin(),
                         onSave: (val) {
                           setState(() {
                             _password = val;
@@ -187,46 +189,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 ),
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: AppTheme.success.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const FaIcon(FontAwesomeIcons.whatsapp,
-                                size: 20, color: Colors.green),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Get Daily WhatsApp Reports',
-                                    style: TextStyle(
-                                        color: Colors.green.shade800,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Income, expenses & stock alerts on WhatsApp',
-                                    style: TextStyle(
-                                        color: Colors.green.shade700,
-                                        fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            )
-                          ],
-                        ),
-                      )
                     ],
                   ),
                 ),

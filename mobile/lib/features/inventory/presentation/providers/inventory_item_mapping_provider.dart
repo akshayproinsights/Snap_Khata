@@ -1,285 +1,307 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile/features/inventory/data/inventory_item_mapping_repository.dart';
-import 'package:mobile/features/inventory/domain/models/inventory_item_mapping_models.dart';
+import 'package:mobile/features/inventory/data/current_stock_repository.dart';
+import 'package:mobile/features/inventory/domain/models/current_stock_models.dart';
 
-final inventoryItemMappingRepositoryProvider =
-    Provider((ref) => InventoryItemMappingRepository());
+final _stockRepoProvider = Provider((ref) => CurrentStockRepository());
 
 enum MappingTab { pending, mapped }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
 class InventoryItemMappingState {
-  final List<CustomerItem> items; // pending unmapped items
-  final List<MappedItem> mappedItems; // already-mapped items
+  final List<StockLevel> allItems; // all stock_levels items
   final bool isLoading;
-  final bool isMappedLoading;
   final String? error;
   final String searchQuery;
   final MappingTab activeTab;
 
-  // Suggestion / search caches
-  final Map<String, List<VendorItem>> suggestionsCache;
-  final Map<String, List<VendorItem>> searchResultsCache;
-  final Map<String, bool> loadingSuggestions;
+  // Customer-item search results (from verified_invoices)
+  final Map<int, List<String>> searchResultsCache; // stockLevelId → matches
+  final Map<int, bool> searchLoading;
 
-  // Local selection state (before confirming)
-  final Map<String, VendorItem?> selectedMappings;
-  final Map<String, String> customInputs;
-  final Map<String, int> priorities;
+  // Selected customer-item name per stock level id (before confirming)
+  final Map<int, String> selectedCustomerItems;
 
-  // Optimistic local status overrides after user taps Done/Skip
-  final Map<String, String> pendingStatuses; // 'Done' | 'Skipped'
+  // Recalculation state
+  final bool isRecalculating;
+  final String? recalcTaskId;
+  final String? recalcMessage;
 
   InventoryItemMappingState({
-    this.items = const [],
-    this.mappedItems = const [],
+    this.allItems = const [],
     this.isLoading = false,
-    this.isMappedLoading = false,
     this.error,
     this.searchQuery = '',
     this.activeTab = MappingTab.pending,
-    this.suggestionsCache = const {},
     this.searchResultsCache = const {},
-    this.loadingSuggestions = const {},
-    this.selectedMappings = const {},
-    this.customInputs = const {},
-    this.priorities = const {},
-    this.pendingStatuses = const {},
+    this.searchLoading = const {},
+    this.selectedCustomerItems = const {},
+    this.isRecalculating = false,
+    this.recalcTaskId,
+    this.recalcMessage,
   });
 
   InventoryItemMappingState copyWith({
-    List<CustomerItem>? items,
-    List<MappedItem>? mappedItems,
+    List<StockLevel>? allItems,
     bool? isLoading,
-    bool? isMappedLoading,
     String? error,
     String? searchQuery,
     MappingTab? activeTab,
-    Map<String, List<VendorItem>>? suggestionsCache,
-    Map<String, List<VendorItem>>? searchResultsCache,
-    Map<String, bool>? loadingSuggestions,
-    Map<String, VendorItem?>? selectedMappings,
-    Map<String, String>? customInputs,
-    Map<String, int>? priorities,
-    Map<String, String>? pendingStatuses,
+    Map<int, List<String>>? searchResultsCache,
+    Map<int, bool>? searchLoading,
+    Map<int, String>? selectedCustomerItems,
+    bool? isRecalculating,
+    String? recalcTaskId,
+    String? recalcMessage,
   }) {
     return InventoryItemMappingState(
-      items: items ?? this.items,
-      mappedItems: mappedItems ?? this.mappedItems,
+      allItems: allItems ?? this.allItems,
       isLoading: isLoading ?? this.isLoading,
-      isMappedLoading: isMappedLoading ?? this.isMappedLoading,
       error: error,
       searchQuery: searchQuery ?? this.searchQuery,
       activeTab: activeTab ?? this.activeTab,
-      suggestionsCache: suggestionsCache ?? this.suggestionsCache,
       searchResultsCache: searchResultsCache ?? this.searchResultsCache,
-      loadingSuggestions: loadingSuggestions ?? this.loadingSuggestions,
-      selectedMappings: selectedMappings ?? this.selectedMappings,
-      customInputs: customInputs ?? this.customInputs,
-      priorities: priorities ?? this.priorities,
-      pendingStatuses: pendingStatuses ?? this.pendingStatuses,
+      searchLoading: searchLoading ?? this.searchLoading,
+      selectedCustomerItems:
+          selectedCustomerItems ?? this.selectedCustomerItems,
+      isRecalculating: isRecalculating ?? this.isRecalculating,
+      recalcTaskId: recalcTaskId ?? this.recalcTaskId,
+      recalcMessage: recalcMessage ?? this.recalcMessage,
     );
   }
 
-  int get doneCount => pendingStatuses.values.where((s) => s == 'Done').length;
-  int get skippedCount =>
-      pendingStatuses.values.where((s) => s == 'Skipped').length;
-  int get pendingCount => items.length - doneCount - skippedCount;
-  int get totalItems => items.length;
-  int get completionPercentage => totalItems > 0
-      ? ((doneCount + skippedCount) / totalItems * 100).round()
-      : 0;
+  /// Items where customer_items is null or empty → need mapping
+  List<StockLevel> get pendingItems {
+    var list = allItems
+        .where(
+            (i) => i.customerItems == null || i.customerItems!.trim().isEmpty)
+        .toList();
+    if (searchQuery.isNotEmpty) {
+      final q = searchQuery.toLowerCase();
+      list = list
+          .where((i) =>
+              i.internalItemName.toLowerCase().contains(q) ||
+              i.partNumber.toLowerCase().contains(q))
+          .toList();
+    }
+    return list;
+  }
 
-  List<CustomerItem> get visibleItems =>
-      items.where((i) => pendingStatuses[i.customerItem] == null).toList();
+  /// Items where customer_items is filled → already mapped
+  List<StockLevel> get mappedItems {
+    var list = allItems
+        .where((i) =>
+            i.customerItems != null && i.customerItems!.trim().isNotEmpty)
+        .toList();
+    if (searchQuery.isNotEmpty) {
+      final q = searchQuery.toLowerCase();
+      list = list
+          .where((i) =>
+              i.internalItemName.toLowerCase().contains(q) ||
+              i.partNumber.toLowerCase().contains(q) ||
+              (i.customerItems?.toLowerCase().contains(q) ?? false))
+          .toList();
+    }
+    return list;
+  }
+
+  int get pendingCount => pendingItems.length;
+  int get mappedCount => mappedItems.length;
+  int get totalItems => allItems.length;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifier
+// ─────────────────────────────────────────────────────────────────────────────
 class InventoryItemMappingNotifier extends Notifier<InventoryItemMappingState> {
-  late final InventoryItemMappingRepository _repository;
+  late final CurrentStockRepository _repo;
 
   @override
   InventoryItemMappingState build() {
-    _repository = ref.watch(inventoryItemMappingRepositoryProvider);
+    _repo = ref.watch(_stockRepoProvider);
     Future.microtask(() => fetchItems());
     return InventoryItemMappingState();
   }
 
+  // ── Tab & search ────────────────────────────────────────────────────────
   void setTab(MappingTab tab) {
     state = state.copyWith(activeTab: tab);
-    if (tab == MappingTab.mapped && state.mappedItems.isEmpty) {
-      _fetchMappedItems();
-    }
   }
 
   void setSearchQuery(String query) {
     state = state.copyWith(searchQuery: query);
-    fetchItems();
   }
 
+  // ── Fetch stock items (mirrors web's loadData) ──────────────────────────
   Future<void> fetchItems() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final items =
-          await _repository.getUnmappedCustomerItems(state.searchQuery);
-      // Clear any pending statuses for items that no longer appear (already saved)
-      final newStatuses = Map<String, String>.from(state.pendingStatuses)
-        ..removeWhere((k, _) => !items.any((i) => i.customerItem == k));
-      state = state.copyWith(
-          items: items, isLoading: false, pendingStatuses: newStatuses);
-
-      // Pre-fetch suggestions for first 10 items
-      for (var item in items.take(10)) {
-        if (!state.suggestionsCache.containsKey(item.customerItem)) {
-          _fetchSuggestions(item.customerItem);
-        }
-      }
+      final data = await _repo.getStockLevels();
+      final items = data['items'] as List<StockLevel>;
+      state = state.copyWith(allItems: items, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<void> _fetchMappedItems() async {
-    state = state.copyWith(isMappedLoading: true);
-    try {
-      final mapped = await _repository.getMappedCustomerItems();
-      state = state.copyWith(mappedItems: mapped, isMappedLoading: false);
-    } catch (e) {
-      state = state.copyWith(isMappedLoading: false);
-    }
-  }
-
-  Future<void> _fetchSuggestions(String customerItem) async {
-    state = state.copyWith(
-      loadingSuggestions: {...state.loadingSuggestions, customerItem: true},
-    );
-    try {
-      final suggestions =
-          await _repository.getCustomerItemSuggestions(customerItem);
-      state = state.copyWith(
-        suggestionsCache: {
-          ...state.suggestionsCache,
-          customerItem: suggestions
-        },
-        loadingSuggestions: {...state.loadingSuggestions, customerItem: false},
-      );
-    } catch (e) {
-      state = state.copyWith(
-        loadingSuggestions: {...state.loadingSuggestions, customerItem: false},
-      );
-    }
-  }
-
-  void fetchSuggestionsIfNeeded(String customerItem) {
-    if (!state.suggestionsCache.containsKey(customerItem)) {
-      _fetchSuggestions(customerItem);
-    }
-  }
-
-  Future<void> searchVendorItems(String customerItem, String query) async {
-    if (query.isEmpty) {
-      final newCache =
-          Map<String, List<VendorItem>>.from(state.searchResultsCache);
-      newCache.remove(customerItem);
-      state = state.copyWith(searchResultsCache: newCache);
+  // ── Search customer items (mirrors web's handleSearchChange) ────────────
+  Future<void> searchCustomerItems(int stockLevelId, String query) async {
+    if (query.trim().isEmpty) {
+      final cache = Map<int, List<String>>.from(state.searchResultsCache);
+      cache.remove(stockLevelId);
+      state = state.copyWith(searchResultsCache: cache);
       return;
     }
+
+    state = state.copyWith(
+      searchLoading: {...state.searchLoading, stockLevelId: true},
+    );
+
     try {
-      final results = await _repository.searchVendorItems(query, 20);
+      final results = await _repo.searchCustomerItems(query);
       state = state.copyWith(
         searchResultsCache: {
           ...state.searchResultsCache,
-          customerItem: results
+          stockLevelId: results,
         },
+        searchLoading: {...state.searchLoading, stockLevelId: false},
       );
     } catch (e) {
-      // Ignore search errors silently
+      state = state.copyWith(
+        searchLoading: {...state.searchLoading, stockLevelId: false},
+      );
     }
   }
 
-  void selectItem(String customerItem, VendorItem? item) {
+  // ── Select a customer item name (before confirming) ─────────────────────
+  void selectCustomerItem(int stockLevelId, String customerItemName) {
     state = state.copyWith(
-      selectedMappings: {...state.selectedMappings, customerItem: item},
-      customInputs: {
-        ...state.customInputs,
-        customerItem: item?.description ?? ''
+      selectedCustomerItems: {
+        ...state.selectedCustomerItems,
+        stockLevelId: customerItemName,
       },
     );
   }
 
-  void setCustomInput(String customerItem, String value) {
-    if (value != state.selectedMappings[customerItem]?.description) {
-      final newMappings = Map<String, VendorItem?>.from(state.selectedMappings);
-      newMappings.remove(customerItem);
-      state = state.copyWith(
-        customInputs: {...state.customInputs, customerItem: value},
-        selectedMappings: newMappings,
-      );
-    } else {
-      state = state.copyWith(
-        customInputs: {...state.customInputs, customerItem: value},
-      );
-    }
+  void clearSelection(int stockLevelId) {
+    final updated = Map<int, String>.from(state.selectedCustomerItems);
+    updated.remove(stockLevelId);
+    state = state.copyWith(selectedCustomerItems: updated);
   }
 
-  void setPriority(String customerItem, int priority) {
-    state = state.copyWith(
-      priorities: {...state.priorities, customerItem: priority},
-    );
-  }
-
-  Future<void> markAsDone(String customerItem) async {
-    final customInput = state.customInputs[customerItem];
-    final selectedVendorItem = state.selectedMappings[customerItem];
-
-    if (customInput == null || customInput.trim().isEmpty) {
-      state = state.copyWith(
-          error: 'Please select or type a standardized item name');
+  // ── Confirm mapping (mirrors web's handleSelectVendorItem) ──────────────
+  Future<void> confirmMapping(StockLevel item) async {
+    final customerItemName = state.selectedCustomerItems[item.id];
+    if (customerItemName == null || customerItemName.trim().isEmpty) {
+      state =
+          state.copyWith(error: 'Please select or type a customer item name');
       return;
     }
 
-    // Optimistically mark as Done so item slides out of list
-    state = state.copyWith(
-      pendingStatuses: {...state.pendingStatuses, customerItem: 'Done'},
-    );
-
     try {
-      final item =
-          state.items.firstWhere((i) => i.customerItem == customerItem);
-
-      await _repository.confirmCustomerItemMapping(
-        customerItem: customerItem,
-        normalizedDescription: customInput.trim(),
-        vendorItemId: selectedVendorItem?.id,
-        vendorDescription: selectedVendorItem?.description,
-        vendorPartNumber: selectedVendorItem?.partNumber,
-        priority: state.priorities[customerItem] ?? 0,
-        // Pass all variation names so they're all mapped together
-        variations: item.allVariationDescriptions,
+      // Save mapping to vendor_mapping_entries (same as web)
+      await _repo.saveCustomerItemMapping(
+        partNumber: item.partNumber,
+        vendorDescription: item.internalItemName,
+        customerItemName: customerItemName.trim(),
       );
+
+      // Clear selection
+      final sel = Map<int, String>.from(state.selectedCustomerItems);
+      sel.remove(item.id);
+      state = state.copyWith(selectedCustomerItems: sel);
+
+      // Reload data then trigger recalculation (same as web)
+      await fetchItems();
+      _triggerRecalculation();
     } catch (e) {
-      // Revert optimistic update on failure
-      final newStatuses = Map<String, String>.from(state.pendingStatuses);
-      newStatuses.remove(customerItem);
-      state = state.copyWith(
-          pendingStatuses: newStatuses,
-          error: 'Failed to save mapping. Please try again.');
+      state = state.copyWith(error: 'Failed to save mapping: $e');
     }
   }
 
-  Future<void> skipItem(String customerItem) async {
-    // Optimistically mark as Skipped
-    state = state.copyWith(
-      pendingStatuses: {...state.pendingStatuses, customerItem: 'Skipped'},
-    );
+  // ── Clear mapping (mirrors web's handleClearCustomerItem) ───────────────
+  Future<void> clearMapping(StockLevel item) async {
     try {
-      await _repository.skipCustomerItem(customerItem);
+      await _repo.clearCustomerItemMapping(item.partNumber);
+      await fetchItems();
+      _triggerRecalculation();
     } catch (e) {
-      // Revert on failure
-      final newStatuses = Map<String, String>.from(state.pendingStatuses);
-      newStatuses.remove(customerItem);
-      state = state.copyWith(
-          pendingStatuses: newStatuses, error: 'Failed to skip item.');
+      state = state.copyWith(error: 'Failed to clear mapping: $e');
     }
   }
+
+  // ── Recalculation polling safeguards ─────────────────────────────────────
+  DateTime? _recalcStartTime;
+  int _consecutiveRecalcErrors = 0;
+  static const int _maxRecalcErrors = 3;
+  static const int _maxRecalcSeconds = 90; // DB aggregation, typically <15s
+
+  Duration _recalcBackoff(Duration elapsed) {
+    if (elapsed.inSeconds < 15) return const Duration(seconds: 2);
+    if (elapsed.inSeconds < 45) return const Duration(seconds: 5);
+    return const Duration(seconds: 10);
+  }
+
+  // ── Recalculation (mirrors web's triggerRecalculation) ──────────────────
+  Future<void> _triggerRecalculation() async {
+    try {
+      _recalcStartTime = DateTime.now();
+      _consecutiveRecalcErrors = 0;
+      state = state.copyWith(isRecalculating: true);
+      final result = await _repo.calculateStockLevels();
+      final taskId = result['task_id'] as String?;
+      if (taskId != null) {
+        state = state.copyWith(
+          recalcTaskId: taskId,
+          recalcMessage: 'Recalculating stock...',
+        );
+        _pollRecalcStatus(taskId);
+      }
+    } catch (e) {
+      state = state.copyWith(isRecalculating: false);
+    }
+  }
+
+  Future<void> _pollRecalcStatus(String taskId) async {
+    // Hard timeout
+    final elapsed = DateTime.now().difference(_recalcStartTime ?? DateTime.now());
+    if (elapsed.inSeconds >= _maxRecalcSeconds) {
+      state = state.copyWith(isRecalculating: false, recalcMessage: null);
+      return;
+    }
+
+    await Future.delayed(_recalcBackoff(elapsed));
+
+    try {
+      final status = await _repo.getRecalculationStatus(taskId);
+      _consecutiveRecalcErrors = 0; // reset on success
+      final statusStr = status['status'] as String?;
+      state = state.copyWith(
+        recalcMessage: status['message'] as String? ?? '',
+      );
+
+      if (statusStr == 'completed') {
+        state = state.copyWith(isRecalculating: false, recalcMessage: null);
+        await fetchItems(); // Reload after recalculation completes
+      } else if (statusStr == 'failed') {
+        state = state.copyWith(isRecalculating: false, recalcMessage: null);
+      } else {
+        // Still processing — continue with backoff
+        _pollRecalcStatus(taskId);
+      }
+    } catch (e) {
+      _consecutiveRecalcErrors++;
+      if (_consecutiveRecalcErrors >= _maxRecalcErrors) {
+        state = state.copyWith(isRecalculating: false, recalcMessage: null);
+        return;
+      }
+      // Retry on transient error
+      _pollRecalcStatus(taskId);
+    }
+  }
+
+  Future<void> triggerRecalculation() => _triggerRecalculation();
 
   void clearError() {
     state = state.copyWith(error: null);

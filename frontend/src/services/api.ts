@@ -10,7 +10,6 @@ export interface User {
     username: string;
     name?: string;
     r2_bucket: string;
-    sheet_id: string;
     dashboard_url?: string;
 }
 
@@ -327,7 +326,6 @@ export const configAPI = {
 
 // Mapping Sheet Upload
 export interface MappingSheetUploadResponse {
-    sheet_id: string;
     image_url: string;
     status: string;
     message: string;

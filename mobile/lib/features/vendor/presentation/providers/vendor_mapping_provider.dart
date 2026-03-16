@@ -61,6 +61,12 @@ class VendorMappingState {
 class VendorMappingNotifier extends Notifier<VendorMappingState> {
   late final VendorMappingRepository _repository;
   Timer? _pollingTimer;
+  int _consecutivePollingErrors = 0;
+  static const int _maxPollingErrors = 3;
+  static const int _maxPollSeconds = 90; // vendor mapping is fast (10-30s typical)
+  bool _isPaused = false;
+  String? _pausedTaskId;
+  DateTime? _pollingStartTime;
 
   @override
   VendorMappingState build() {
@@ -157,53 +163,109 @@ class VendorMappingNotifier extends Notifier<VendorMappingState> {
   }
 
   void _startPolling(String taskId) {
+    _consecutivePollingErrors = 0;
+    _isPaused = false;
+    _pausedTaskId = null;
+    _pollingStartTime = DateTime.now();
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      try {
-        final status = await _repository.getProcessStatus(taskId);
-        final currentStatus = status['status'];
+    _scheduleNextPoll(taskId);
+  }
 
-        state = state.copyWith(processingStatus: currentStatus);
+  Duration _backoffInterval(Duration elapsed) {
+    if (elapsed.inSeconds < 30) return const Duration(seconds: 2);
+    if (elapsed.inSeconds < 90) return const Duration(seconds: 5);
+    return const Duration(seconds: 10);
+  }
 
-        if (currentStatus == 'completed') {
-          timer.cancel();
-          final rows = status['rows'] as List;
-          final entries = rows
-              .map((row) => VendorMappingEntry(
-                    rowNumber: row['row_number'],
-                    vendorDescription: row['vendor_description'],
-                    partNumber: row['part_number'],
-                    stock: row['stock'],
-                    reorder: row['reorder'],
-                    notes: row['notes'],
-                    status: 'Pending',
-                    systemQty: row['system_qty'],
-                    variance: row['variance'],
-                  ))
-              .toList();
+  void _scheduleNextPoll(String taskId) {
+    _pollingTimer?.cancel();
+    final elapsed = DateTime.now().difference(_pollingStartTime ?? DateTime.now());
+    _pollingTimer = Timer(_backoffInterval(elapsed), () => _executePoll(taskId));
+  }
 
-          state = state.copyWith(
-            reviewQueue: [...state.reviewQueue, ...entries],
-            uploadedFiles: [],
-            activeTaskId: null,
-            processingStatus: 'idle',
-          );
-        } else if (currentStatus == 'failed') {
-          timer.cancel();
-          state = state.copyWith(
-            processingStatus: 'failed',
-            error: status['message'],
-            activeTaskId: null,
-          );
-        }
-      } catch (e) {
-        timer.cancel();
+  Future<void> _executePoll(String taskId) async {
+    if (_isPaused) { _pausedTaskId = taskId; return; }
+
+    // Hard timeout
+    final elapsed = DateTime.now().difference(_pollingStartTime ?? DateTime.now());
+    if (elapsed.inSeconds >= _maxPollSeconds) {
+      _pollingTimer?.cancel();
+      state = state.copyWith(
+        processingStatus: 'failed',
+        error: 'Processing timed out. Please try again.',
+        activeTaskId: null,
+      );
+      return;
+    }
+
+    try {
+      final status = await _repository.getProcessStatus(taskId);
+      _consecutivePollingErrors = 0;
+      final currentStatus = status['status'];
+      state = state.copyWith(processingStatus: currentStatus);
+
+      if (currentStatus == 'completed') {
+        _pollingTimer?.cancel();
+        final rows = status['rows'] as List;
+        final entries = rows
+            .map((row) => VendorMappingEntry(
+                  rowNumber: row['row_number'],
+                  vendorDescription: row['vendor_description'],
+                  partNumber: row['part_number'],
+                  stock: row['stock'],
+                  reorder: row['reorder'],
+                  notes: row['notes'],
+                  status: 'Pending',
+                  systemQty: row['system_qty'],
+                  variance: row['variance'],
+                ))
+            .toList();
         state = state.copyWith(
-            processingStatus: 'failed',
-            error: 'Polling error',
-            activeTaskId: null);
+          reviewQueue: [...state.reviewQueue, ...entries],
+          uploadedFiles: [],
+          activeTaskId: null,
+          processingStatus: 'idle',
+        );
+      } else if (currentStatus == 'failed') {
+        _pollingTimer?.cancel();
+        state = state.copyWith(
+          processingStatus: 'failed',
+          error: status['message'],
+          activeTaskId: null,
+        );
+      } else {
+        _scheduleNextPoll(taskId);
       }
-    });
+    } catch (e) {
+      _consecutivePollingErrors++;
+      if (_consecutivePollingErrors >= _maxPollingErrors) {
+        _pollingTimer?.cancel();
+        state = state.copyWith(
+          processingStatus: 'failed',
+          error: 'Network issue — please check your connection.',
+          activeTaskId: null,
+        );
+      } else {
+        _scheduleNextPoll(taskId);
+      }
+    }
+  }
+
+  /// Pause polling when the app is backgrounded.
+  void pausePolling() {
+    if (state.processingStatus == 'idle' || state.processingStatus == 'completed') return;
+    _isPaused = true;
+    _pausedTaskId = state.activeTaskId;
+    _pollingTimer?.cancel();
+  }
+
+  /// Resume polling when the app comes back to foreground.
+  void resumePolling() {
+    if (!_isPaused) return;
+    _isPaused = false;
+    final taskId = _pausedTaskId ?? state.activeTaskId;
+    _pausedTaskId = null;
+    if (taskId != null) _executePoll(taskId);
   }
 
   Future<bool> bulkSaveReviewQueue() async {

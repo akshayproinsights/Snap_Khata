@@ -9,7 +9,6 @@ def enqueue_process_invoices_task(
     task_id: str,
     file_keys: List[str],
     r2_bucket: str,
-    sheet_id: str,
     username: str,
     force_upload: bool = False
 ) -> bool:
@@ -42,7 +41,6 @@ def enqueue_process_invoices_task(
         "task_id": task_id,
         "file_keys": file_keys,
         "r2_bucket": r2_bucket,
-        "sheet_id": sheet_id,
         "username": username,
         "force_upload": force_upload
     }

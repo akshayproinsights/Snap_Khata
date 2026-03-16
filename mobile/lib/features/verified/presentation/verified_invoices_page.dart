@@ -750,7 +750,36 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
 
   Widget _buildGroupSection(
       String groupKey, List<VerifiedInvoice> orders, bool isExpanded) {
-    final totalAmount = orders.fold<double>(0, (sum, b) => sum + b.amount);
+    if (orders.isEmpty) return const SizedBox.shrink();
+    
+    // Group-level GST and Tax settings
+    // In practice, all items in a group share the same header, so we can check the first item.
+    final firstItem = orders.first;
+    final gstModeStr = firstItem.gstMode ?? 'none';
+    final Set<String> taxableIds = (firstItem.taxableRowIds ?? '').split(',').where((s) => s.isNotEmpty).toSet();
+
+    double partsBase = 0;
+    double laborBase = 0;
+
+    for (var inv in orders) {
+      if (taxableIds.contains(inv.rowId)) {
+        partsBase += inv.amount;
+      } else {
+        laborBase += inv.amount;
+      }
+    }
+
+    double gstAmount = 0;
+    if (gstModeStr == 'excluded') {
+      gstAmount = partsBase * 0.18;
+    } else if (gstModeStr == 'included') {
+      gstAmount = partsBase * 18 / 118;
+    }
+
+    double grandTotal = partsBase + laborBase;
+    if (gstModeStr == 'excluded') {
+      grandTotal += gstAmount;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -825,7 +854,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('₹${totalAmount.toStringAsFixed(0)}',
+                        Text('₹${grandTotal.toStringAsFixed(0)}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -858,20 +887,57 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     ? const BoxConstraints()
                     : const BoxConstraints(maxHeight: 0),
                 child: Column(
-                  children: orders.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final order = entry.value;
-                    return Column(
-                      children: [
-                        _buildBillRow(order),
-                        if (i < orders.length - 1)
-                          Divider(
-                              height: 1,
-                              indent: 64,
-                              color: Colors.grey.shade100),
-                      ],
-                    );
-                  }).toList(),
+                  children: [
+                    ...orders.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final order = entry.value;
+                      return Column(
+                        children: [
+                          _buildBillRow(order, taxableIds: taxableIds),
+                          if (i < orders.length - 1)
+                            Divider(
+                                height: 1,
+                                indent: 64,
+                                color: Colors.grey.shade100),
+                        ],
+                      );
+                    }),
+                    
+                    // ── GST Summary (if applicable) ─────────────────────
+                    if (gstModeStr != 'none')
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Order Summary',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary)),
+                            const SizedBox(height: 12),
+                            _buildSummaryRow(
+                                'Taxable Amount (Parts)', '₹${partsBase.toStringAsFixed(2)}'),
+                            const SizedBox(height: 4),
+                            _buildSummaryRow('GST (18%)', '₹${gstAmount.toStringAsFixed(2)}',
+                                isIncluded: gstModeStr == 'included'),
+                            const SizedBox(height: 4),
+                            _buildSummaryRow(
+                                'Non-Taxable (Labor)', '₹${laborBase.toStringAsFixed(2)}'),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: Divider(height: 1),
+                            ),
+                            _buildSummaryRow('Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
+                                isTotal: true),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -881,10 +947,50 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     );
   }
 
+  Widget _buildSummaryRow(String label, String value,
+      {bool isTotal = false, bool isIncluded = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Text(label,
+                style: TextStyle(
+                  color: isTotal ? AppTheme.textPrimary : Colors.grey.shade600,
+                  fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                  fontSize: isTotal ? 14 : 13,
+                )),
+            if (isIncluded)
+              Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange.shade200)),
+                child: Text('INCLUDED IN ITEM PRICES',
+                    style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade800)),
+              )
+          ],
+        ),
+        Text(value,
+            style: TextStyle(
+              color: isTotal ? AppTheme.primary : AppTheme.textPrimary,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+              fontSize: isTotal ? 16 : 13,
+            )),
+      ],
+    );
+  }
+
   // ─── Individual order row inside an expanded group ─────────────────────────
 
-  Widget _buildBillRow(VerifiedInvoice record) {
+  Widget _buildBillRow(VerifiedInvoice record, {required Set<String> taxableIds}) {
     final isSelected = _selectedIds.contains(record.rowId);
+    final bool hasGstApplied = taxableIds.contains(record.rowId);
 
     Color typeColor = Colors.grey.shade700;
     Color typeBg = Colors.grey.shade100;
@@ -964,6 +1070,23 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                           ],
                         ),
                       ),
+                      if (hasGstApplied) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.shade200)),
+                          child: Text('+ GST',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade700)),
+                        ),
+                      ]
                     ],
                   ),
 

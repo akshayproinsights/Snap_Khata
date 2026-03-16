@@ -828,7 +828,6 @@ def convert_to_dataframe_rows(
 def process_invoices_batch(
     file_keys: List[str],
     r2_bucket: str,
-    sheet_id: str,
     username: str,
     progress_callback: Optional[Callable[[int, int, int, str], None]] = None,
     force_upload: bool = False
@@ -839,7 +838,6 @@ def process_invoices_batch(
     Args:
         file_keys: List of R2 file keys to process
         r2_bucket: R2 bucket name
-        sheet_id: Google Sheet ID
         username: Username for logging
         progress_callback: Optional callback function(processed, failed, total, current_file)
         force_upload: If True, bypass duplicate checking and delete old duplicates
@@ -1120,160 +1118,6 @@ def process_invoices_batch(
             results["errors"].append(f"Database save error: {str(e)}")
     
     return results
-
-
-def create_verification_records(df_new: pd.DataFrame, sheet_id: str):
-    """
-    Create records in verification sheets for new invoices.
-    
-    For Verify Dates:
-    - Builds Audit Findings with: Date Diff, Missing Date, Duplicate Receipt Number, Duplicate Receipt Link
-    - Sets Verification Status based on findings
-    
-    For Verify Amount:
-    - ONLY creates records where Amount Mismatch > 0 (non-zero mismatch)
-    - Orders columns as: Status, Receipt Number, Amount Mismatch, Description, Quantity, Rate, Amount, Receipt Link
-    """
-    import numpy as np
-    # sheets_client removed - this old function is kept for reference only
-    # Use create_verification_records_supabase() instead
-    
-    try:
-        # =============================================
-        # VERIFY DATES - With Audit Findings Logic
-        # =============================================
-        
-        # Group by receipt for date verification (one row per receipt)
-        date_records = df_new.groupby('Receipt Number').first().reset_index()
-        date_records['Verification Status'] = 'Pending'
-        
-        # Parse dates for comparison
-        date_records['_parsed_date'] = pd.to_datetime(date_records['Date'], errors='coerce', dayfirst=True)
-        
-        # Sort by Receipt Number and Date for sequential comparison
-        date_records = date_records.sort_values(['Receipt Number', '_parsed_date']).reset_index(drop=True)
-        
-        # Calculate date differences (gap between consecutive receipts)
-        prev_date = date_records['_parsed_date'].shift()
-        date_records['_date_diff_days'] = (date_records['_parsed_date'] - prev_date).dt.days
-        
-        # Build Audit Findings
-        def build_audit_findings(row, all_records):
-            findings = []
-            
-            # 1. Date Difference (gap from previous receipt)
-            diff_days = row.get('_date_diff_days')
-            if pd.notna(diff_days) and diff_days != 0:
-                findings.append(f"Date Diff: {int(diff_days)}")
-            
-            # 2. Missing Date
-            if pd.isna(row.get('_parsed_date')):
-                findings.append("Missing Date")
-            
-            # 3. Duplicate Receipt Number (if same receipt number appears more than once)
-            receipt_num = row.get('Receipt Number', '')
-            if receipt_num:
-                count = (all_records['Receipt Number'] == receipt_num).sum()
-                if count > 1:
-                    findings.append("Duplicate Receipt Number")
-            
-            # 4. Duplicate Receipt Link (same file uploaded twice)
-            receipt_link = row.get('Receipt Link', '')
-            if receipt_link:
-                link_count = (all_records['Receipt Link'] == receipt_link).sum()
-                if link_count > 1:
-                    findings.append("Duplicate Receipt Link")
-            
-            return " | ".join(findings) if findings else ""
-        
-        # Apply audit findings to each row
-        date_records['Audit Findings'] = date_records.apply(
-            lambda row: build_audit_findings(row, date_records), axis=1
-        )
-        
-        # Set Verification Status based on Audit Findings
-        def set_date_status(row):
-            audit = str(row.get('Audit Findings', '')).strip()
-            if 'Duplicate Receipt Number' in audit:
-                return 'Duplicate Receipt Number'
-            elif 'Already Verified' in audit:
-                return 'Already Verified'
-            elif not audit:
-                # No issues found - auto-done
-                return 'Done'
-            else:
-                # Has issues - needs review
-                return 'Pending'
-        
-        date_records['Verification Status'] = date_records.apply(set_date_status, axis=1)
-        
-        # Drop temporary columns
-        date_records = date_records.drop(columns=['_parsed_date', '_date_diff_days'], errors='ignore')
-        
-        # Define column order (matching old code)
-        date_cols = ['Verification Status', 'Receipt Number', 'Date', 'Audit Findings', 
-                     'Receipt Link', 'Upload Date', 'Row_Id']
-        date_records = date_records[[col for col in date_cols if col in date_records.columns]]
-        
-        # Read existing and append
-        df_existing_dates = sheets_client.read_sheet_to_df(sheet_id, SHEET_VERIFY_DATES)
-        if not df_existing_dates.empty:
-            df_dates_combined = pd.concat([df_existing_dates, date_records], ignore_index=True)
-        else:
-            df_dates_combined = date_records
-        
-        sheets_client.write_df_to_sheet(df_dates_combined, sheet_id, SHEET_VERIFY_DATES)
-        logger.info(f"Created {len(date_records)} date verification records")
-        
-        # =============================================
-        # VERIFY AMOUNT - Filter Amount Mismatch > 0
-        # =============================================
-        
-        amount_records = df_new.copy()
-        
-        # CRITICAL: Only include records where Amount Mismatch > 0
-        # This ensures records with zero mismatch don't clutter the review sheet
-        if 'Amount Mismatch' in amount_records.columns:
-            # Convert to numeric and filter
-            amount_records['Amount Mismatch'] = pd.to_numeric(
-                amount_records['Amount Mismatch'], errors='coerce'
-            ).fillna(0)
-            amount_records = amount_records[amount_records['Amount Mismatch'] > 0].copy()
-        
-        # Only proceed if there are records with mismatches
-        if not amount_records.empty:
-            amount_records['Verification Status'] = 'Pending'
-            
-            # Define column order (user's expected order):
-            # Status, Receipt Number, Amount Mismatch, Description, Quantity, Rate, Amount, Receipt Link
-            amount_cols = [
-                'Verification Status', 
-                'Receipt Number', 
-                'Amount Mismatch',
-                'Description', 
-                'Quantity', 
-                'Rate', 
-                'Amount', 
-                'Receipt Link',
-                'Row_Id'
-            ]
-            amount_records = amount_records[[col for col in amount_cols if col in amount_records.columns]]
-            
-            # Read existing and append
-            df_existing_amounts = sheets_client.read_sheet_to_df(sheet_id, SHEET_VERIFY_AMOUNT)
-            if not df_existing_amounts.empty:
-                df_amounts_combined = pd.concat([df_existing_amounts, amount_records], ignore_index=True)
-            else:
-                df_amounts_combined = amount_records
-            
-            sheets_client.write_df_to_sheet(df_amounts_combined, sheet_id, SHEET_VERIFY_AMOUNT)
-            logger.info(f"Created {len(amount_records)} amount verification records (filtered: Amount Mismatch > 0)")
-        else:
-            logger.info("No amount verification records needed (all Amount Mismatch = 0)")
-        
-    except Exception as e:
-        logger.error(f"Error creating verification records: {e}")
-        raise
 
 
 def create_verification_records_supabase(all_rows: List[Dict[str, Any]], username: str):

@@ -56,17 +56,26 @@ class _UploadPageState extends ConsumerState<UploadPage>
   }
 
   /// Called whenever the app lifecycle changes (foreground/background).
-  /// When the user comes back from another app, we run BOTH approaches.
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    if (lifecycle == AppLifecycleState.resumed) {
-      // APPROACH 1: Provider-based resume
-      ref.read(uploadProvider.notifier).resumeIfActive();
-      // APPROACH 2: Direct backend check — sets local guard immediately
-      if (mounted) {
-        setState(() => _isCheckingBackend = true);
-      }
-      _checkBackendForActiveTask();
+    switch (lifecycle) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // App is going to background — suspend all polling immediately.
+        // Zero requests will hit the server until we return to foreground.
+        ref.read(uploadProvider.notifier).pausePolling();
+        break;
+      case AppLifecycleState.resumed:
+        // App returned to foreground — do an immediate sync then resume backoff.
+        ref.read(uploadProvider.notifier).resumePolling();
+        // Also run the full resumeIfActive() to handle cold-launch recovery.
+        ref.read(uploadProvider.notifier).resumeIfActive();
+        if (mounted) setState(() => _isCheckingBackend = true);
+        _checkBackendForActiveTask();
+        break;
+      default:
+        break;
     }
   }
 

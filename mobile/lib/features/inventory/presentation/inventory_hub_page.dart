@@ -120,6 +120,19 @@ class InventoryHubPage extends ConsumerWidget {
               context.pushNamed('inventory-upload');
             },
           ),
+          const SizedBox(height: 10),
+          _HubTile(
+            icon: LucideIcons.wallet,
+            iconColor: const Color(0xFFE11D48),
+            iconBg: const Color(0xFFFFE4E6),
+            title: 'Vendor Udhar',
+            subtitle: 'Track your pending payables to vendors',
+            badge: null,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.pushNamed('vendor-ledger-list');
+            },
+          ),
           const SizedBox(height: 20),
 
           // ── Procurement ──────────────────────────────────────────────────────

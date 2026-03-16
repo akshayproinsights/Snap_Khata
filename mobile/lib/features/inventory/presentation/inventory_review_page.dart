@@ -62,7 +62,7 @@ class InventoryReviewPage extends ConsumerWidget {
       bundle.totalAmount += item.netBill;
       if (item.amountMismatch > 1.0) bundle.hasMismatch = true;
       // If any item is NOT verified, the whole bundle is not verified
-      if (item.verificationStatus != 'Verified') bundle.isVerified = false;
+      if (item.verificationStatus != 'Done') bundle.isVerified = false;
     }
 
     // Mismatched bundles first, then verified

@@ -73,12 +73,22 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   /// Called whenever the app lifecycle changes.
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    if (lifecycle == AppLifecycleState.resumed) {
-      ref.read(inventoryUploadProvider.notifier).resumeIfActive();
-      if (mounted) {
-        setState(() => _isCheckingBackend = true);
-      }
-      _checkBackendForActiveTask();
+    switch (lifecycle) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // App going to background — suspend all polling immediately.
+        ref.read(inventoryUploadProvider.notifier).pausePolling();
+        break;
+      case AppLifecycleState.resumed:
+        // App returned to foreground — immediate sync then resume backoff.
+        ref.read(inventoryUploadProvider.notifier).resumePolling();
+        ref.read(inventoryUploadProvider.notifier).resumeIfActive();
+        if (mounted) setState(() => _isCheckingBackend = true);
+        _checkBackendForActiveTask();
+        break;
+      default:
+        break;
     }
   }
 
@@ -959,9 +969,11 @@ class _InventoryLoadingOverlayState
     final stepIndex = _computeStepIndex(procServerProgress);
     final currentStep = _processingSteps[stepIndex];
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
-
-    final isFinishingUp = stepIndex >= _processingSteps.length - 1 &&
-        procServerProgress < 1.0 &&
+    // True when we've reached the final step and are waiting for the backend
+    // to confirm completion. The progress bar goes indeterminate here — honest
+    // signalling that work is happening, not showing a fake "0% complete".
+    final isLastStep = !isUploading &&
+        stepIndex >= _processingSteps.length - 1 &&
         isProcessing;
 
     final fileCount = widget.fileItems.length;
@@ -1024,12 +1036,10 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? 'Sending your invoice${fileCount > 1 ? 's' : ''}'
-                                    : isFinishingUp
-                                        ? 'Finishing up…'
-                                        : currentStep.title,
+                                    : currentStep.title,
                                 key: ValueKey(isUploading
                                     ? 'upload_title'
-                                    : 'step_${stepIndex}_$isFinishingUp'),
+                                    : 'step_$stepIndex'),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 26,
@@ -1059,12 +1069,10 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? 'Photos are going directly to storage. You can switch tabs freely.'
-                                    : isFinishingUp
-                                        ? 'Just a few more seconds — saving your data'
-                                        : currentStep.sub,
+                                    : currentStep.sub,
                                 key: ValueKey(isUploading
                                     ? 'upload_sub'
-                                    : 'sub_${stepIndex}_$isFinishingUp'),
+                                    : 'sub_$stepIndex'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: isUploading
@@ -1082,6 +1090,7 @@ class _InventoryLoadingOverlayState
                             // Progress bar
                             _ProgressBar(
                               isUploading: isUploading,
+                              isLastStep: isLastStep,
                               uploadProgress: uploadProgress,
                               procStepProgress: procStepProgress,
                               procServerProgress: procServerProgress,
@@ -1096,12 +1105,10 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? '${(uploadProgress * 100).toInt()}% uploaded'
-                                    : isFinishingUp
-                                        ? '${(procServerProgress * 100).toInt()}% complete'
-                                        : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
+                                    : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
                                 key: ValueKey(isUploading
                                     ? 'pct_${(uploadProgress * 100).toInt()}'
-                                    : 'step_lbl_${stepIndex}_$isFinishingUp'),
+                                    : 'step_lbl_$stepIndex'),
                                 style: TextStyle(
                                   color: isUploading
                                       ? Colors.amber.shade400
@@ -1494,6 +1501,7 @@ class _PulsingLockIconState extends State<_PulsingLockIcon>
 // ── Unified progress bar ──
 class _ProgressBar extends StatelessWidget {
   final bool isUploading;
+  final bool isLastStep;
   final double uploadProgress;
   final double procStepProgress;
   final double procServerProgress;
@@ -1501,6 +1509,7 @@ class _ProgressBar extends StatelessWidget {
 
   const _ProgressBar({
     required this.isUploading,
+    required this.isLastStep,
     required this.uploadProgress,
     required this.procStepProgress,
     required this.procServerProgress,
@@ -1520,23 +1529,34 @@ class _ProgressBar extends StatelessWidget {
                 valueColor:
                     AlwaysStoppedAnimation<Color>(Colors.amber.shade400),
               )
-            : AnimatedBuilder(
-                animation: processingBarAnim,
-                builder: (_, __) {
-                  final blended = procServerProgress > procStepProgress
-                      ? procServerProgress
-                      : procStepProgress;
-                  final animated = processingBarAnim.value;
-                  final display = blended > animated ? blended : animated;
-                  return LinearProgressIndicator(
-                    value: display.clamp(0.0, 1.0),
+            // At the last step we don't know exactly when the backend will
+            // finish — show an indeterminate pulsing bar instead of a frozen
+            // percentage. This is honest: work is happening, not stuck.
+            : isLastStep
+                ? LinearProgressIndicator(
+                    value: null, // indeterminate  → pulses
                     backgroundColor:
                         const Color(0xFF0066FF).withValues(alpha: 0.15),
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
-                  );
-                },
-              ),
+                  )
+                : AnimatedBuilder(
+                    animation: processingBarAnim,
+                    builder: (_, __) {
+                      final blended = procServerProgress > procStepProgress
+                          ? procServerProgress
+                          : procStepProgress;
+                      final animated = processingBarAnim.value;
+                      final display = blended > animated ? blended : animated;
+                      return LinearProgressIndicator(
+                        value: display.clamp(0.0, 1.0),
+                        backgroundColor:
+                            const Color(0xFF0066FF).withValues(alpha: 0.15),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF0066FF)),
+                      );
+                    },
+                  ),
       ),
     );
   }

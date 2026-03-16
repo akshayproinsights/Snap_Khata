@@ -28,6 +28,12 @@ import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
+import 'package:mobile/features/udhar/presentation/udhar_list_page.dart';
+import 'package:mobile/features/udhar/presentation/udhar_detail_page.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
+import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
+import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
+import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -211,6 +217,36 @@ class AppRouter {
         name: 'notifications',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const NotificationsPage(),
+      ),
+      GoRoute(
+        path: '/udhar',
+        name: 'udhar-list',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const UdharListPage(),
+      ),
+      GoRoute(
+        path: '/udhar/:id',
+        name: 'udhar-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final ledger = state.extra as CustomerLedger;
+          return UdharDetailPage(ledger: ledger);
+        },
+      ),
+      GoRoute(
+        path: '/inventory/vendor-ledger',
+        name: 'vendor-ledger-list',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const VendorLedgerListPage(),
+      ),
+      GoRoute(
+        path: '/inventory/vendor-ledger/:id',
+        name: 'vendor-ledger-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final ledger = state.extra as VendorLedger;
+          return VendorLedgerDetailPage(ledger: ledger);
+        },
       ),
       GoRoute(
         path: '/order-detail',

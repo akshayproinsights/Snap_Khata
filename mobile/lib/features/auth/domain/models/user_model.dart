@@ -3,7 +3,6 @@ class User {
   final String? name;
   final String? email;
   final String r2Bucket;
-  final String sheetId;
   final String? dashboardUrl;
 
   User({
@@ -11,7 +10,6 @@ class User {
     this.name,
     this.email,
     required this.r2Bucket,
-    required this.sheetId,
     this.dashboardUrl,
   });
 
@@ -21,7 +19,6 @@ class User {
       name: json['name'] as String?,
       email: json['email'] as String?,
       r2Bucket: json['r2_bucket'] as String? ?? '',
-      sheetId: json['sheet_id'] as String? ?? '',
       dashboardUrl: json['dashboard_url'] as String?,
     );
   }
@@ -32,7 +29,6 @@ class User {
       'name': name,
       'email': email,
       'r2_bucket': r2Bucket,
-      'sheet_id': sheetId,
       'dashboard_url': dashboardUrl,
     };
   }

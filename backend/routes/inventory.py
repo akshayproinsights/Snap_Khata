@@ -1,5 +1,5 @@
 """Inventory upload and processing routes"""
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import logging
@@ -56,6 +56,18 @@ class InventoryProcessStatusResponse(BaseModel):
     message: str
     duplicates: Optional[List[Dict[str, Any]]] = []  # Add duplicates field
     uploaded_r2_keys: List[str] = []  # CRITICAL: R2 keys for frontend
+
+
+class InventoryInvoiceVerifyRequest(BaseModel):
+    """Inventory invoice verify request"""
+    invoice_number: str
+    vendor_name: str
+    invoice_date: str
+    payment_mode: str
+    amount_paid: float
+    balance_owed: float
+    vendor_notes: Optional[str] = None
+    item_ids: List[int]
 
 
 class InventoryUploadHistoryItem(BaseModel):
@@ -590,9 +602,8 @@ def process_inventory_sync(
     Synchronous background task to process inventory
     1. Process with Gemini (files already in R2)
     """
-    import os
     
-    logger.info(f"=== INVENTORY PROCESSING STARTED ===")
+    logger.info("=== INVENTORY PROCESSING STARTED ===")
     logger.info(f"Task ID: {task_id}")
     logger.info(f"Files: {len(file_keys)} R2 keys")
     logger.info(f"User: {username}")
@@ -705,7 +716,7 @@ def process_inventory_sync(
             logger.warning(f"Processing errors: {results['errors']}")
         
     except Exception as e:
-        logger.error(f"=== INVENTORY PROCESSING FAILED ===")
+        logger.error("=== INVENTORY PROCESSING FAILED ===")
         logger.error(f"Error processing inventory: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -754,6 +765,126 @@ async def get_inventory_items(
         }
     except Exception as e:
         logger.error(f"Error fetching inventory items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/verify-invoice")
+async def verify_inventory_invoice(
+    request: InventoryInvoiceVerifyRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Verify an inventory invoice, creating an inventory_invoices parent record
+    and updating the matched inventory_items.
+    """
+    from database import get_database_client
+    
+    username = current_user.get("username")
+    db = get_database_client()
+    
+    try:
+        if not request.item_ids:
+            raise HTTPException(status_code=400, detail="No items provided to verify")
+            
+        # 1. Fetch items to get total amount and receipt link
+        item_response = db.client.table("inventory_items") \
+            .select("id, net_bill, receipt_link") \
+            .in_("id", request.item_ids) \
+            .eq("username", username) \
+            .execute()
+            
+        if not item_response.data:
+            raise HTTPException(status_code=404, detail="No valid items found")
+            
+        total_amount = sum(float(item.get("net_bill", 0)) for item in item_response.data)
+        receipt_link = item_response.data[0].get("receipt_link", "")
+
+        # 2. Insert into inventory_invoices
+        invoice_data = {
+            "username": username,
+            "invoice_number": request.invoice_number,
+            "vendor_name": request.vendor_name,
+            "invoice_date": request.invoice_date,
+            "receipt_link": receipt_link,
+            "total_amount": total_amount,
+            "payment_mode": request.payment_mode,
+            "amount_paid": request.amount_paid,
+            "balance_owed": request.balance_owed,
+            "vendor_notes": request.vendor_notes
+        }
+        
+        invoice_response = db.client.table("inventory_invoices").insert(invoice_data).execute()
+        
+        if not invoice_response.data:
+            raise HTTPException(status_code=500, detail="Failed to save invoice details")
+            
+        new_invoice_id = invoice_response.data[0]["id"]
+        
+        # 3. Update all linked inventory_items to Verification Status = 'Done' and link invoice ID
+        update_data = {
+            "verification_status": "Done",
+            "inventory_invoice_id": new_invoice_id
+        }
+        
+        db.client.table("inventory_items") \
+            .update(update_data) \
+            .in_("id", request.item_ids) \
+            .eq("username", username) \
+            .execute()
+            
+        # 4. Handle Vendor Ledger if Credit
+        if request.payment_mode == 'Credit' and request.vendor_name and request.balance_owed is not None and float(request.balance_owed) > 0:
+            vendor_name_clean = str(request.vendor_name).strip()
+            balance_owed_float = float(request.balance_owed)
+            
+            # Fetch existing ledger
+            ledger_resp = db.client.table('vendor_ledgers') \
+                .select('*') \
+                .eq('username', username) \
+                .eq('vendor_name', vendor_name_clean) \
+                .execute()
+                
+            if ledger_resp.data:
+                ledger = ledger_resp.data[0]
+                new_balance = float(ledger.get('balance_due', 0)) + balance_owed_float
+                from datetime import datetime
+                db.client.table('vendor_ledgers').update({
+                    'balance_due': new_balance,
+                    'updated_at': datetime.utcnow().isoformat()
+                }).eq('id', ledger['id']).execute()
+                ledger_id = ledger['id']
+            else:
+                new_ledger_resp = db.client.table('vendor_ledgers').insert({
+                    'username': username,
+                    'vendor_name': vendor_name_clean,
+                    'balance_due': balance_owed_float,
+                }).execute()
+                
+                if new_ledger_resp.data:
+                    ledger_id = new_ledger_resp.data[0]['id']
+                else:
+                    ledger_id = None
+            
+            if ledger_id:
+                db.client.table('vendor_ledger_transactions').insert({
+                    'username': username,
+                    'ledger_id': ledger_id,
+                    'transaction_type': 'INVOICE',
+                    'amount': balance_owed_float,
+                    'invoice_number': request.invoice_number,
+                    'notes': request.vendor_notes
+                }).execute()
+            
+        return {
+            "success": True,
+            "message": "Invoice verified and saved successfully",
+            "invoice_id": new_invoice_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying inventory invoice: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -936,9 +1067,6 @@ async def export_inventory_to_excel(
     Includes ALL columns up to amount_mismatch from the database
     """
     from database import get_database_client
-    import pandas as pd
-    from io import BytesIO
-    from fastapi.responses import StreamingResponse
     
     username = current_user.get("username")
     db = get_database_client()

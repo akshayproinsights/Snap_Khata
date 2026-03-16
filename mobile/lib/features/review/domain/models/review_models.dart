@@ -16,7 +16,19 @@ class ReviewRecord {
   final bool isHeader; // Derived
   final String? customerName;
   final String? mobileNumber;
+  final String? vehicleNumber;
   final String? auditFindings;
+  final String? type;
+  
+  // Payment tracking fields
+  final String? paymentMode;
+  final double? receivedAmount;
+  final double? balanceDue;
+  final String? customerDetails;
+  
+  // Tax / Calculation state
+  final String? gstMode;
+  final String? taxableRowIds;
 
   // New helper getter for validation hoisting
   bool get hasError {
@@ -63,7 +75,15 @@ class ReviewRecord {
     required this.isHeader,
     this.customerName,
     this.mobileNumber,
+    this.vehicleNumber,
     this.auditFindings,
+    this.type,
+    this.paymentMode,
+    this.receivedAmount,
+    this.balanceDue,
+    this.customerDetails,
+    this.gstMode,
+    this.taxableRowIds,
   });
 
   factory ReviewRecord.fromJson(Map<String, dynamic> json,
@@ -99,8 +119,17 @@ class ReviewRecord {
           json['Customer Name']?.toString(),
       mobileNumber: json['mobile_number']?.toString() ??
           json['Mobile Number']?.toString(),
+      vehicleNumber: json['vehicle_number']?.toString() ??
+          json['Vehicle Number']?.toString(),
       auditFindings: json['audit_findings']?.toString() ??
           json['Audit Findings']?.toString(),
+      type: json['type']?.toString() ?? json['Type']?.toString(),
+      paymentMode: json['payment_mode']?.toString() ?? json['Payment Mode']?.toString(),
+      receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'])?.toString() ?? ''),
+      balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'])?.toString() ?? ''),
+      customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
+      gstMode: json['gst_mode']?.toString() ?? json['GST Mode']?.toString(),
+      taxableRowIds: json['taxable_row_ids']?.toString() ?? json['Taxable Row Ids']?.toString(),
     );
   }
 
@@ -137,6 +166,64 @@ class ReviewRecord {
     return null;
   }
 
+  ReviewRecord copyWith({
+    String? rowId,
+    String? receiptNumber,
+    String? date,
+    String? description,
+    double? amount,
+    double? quantity,
+    double? rate,
+    double? amountMismatch,
+    String? verificationStatus,
+    String? receiptLink,
+    List<double>? dateBbox,
+    List<double>? receiptNumberBbox,
+    List<double>? combinedBbox,
+    List<double>? lineItemBbox,
+    bool? isHeader,
+    String? customerName,
+    String? mobileNumber,
+    String? vehicleNumber,
+    String? auditFindings,
+    String? type,
+    String? paymentMode,
+    double? receivedAmount,
+    double? balanceDue,
+    String? customerDetails,
+    String? gstMode,
+    String? taxableRowIds,
+  }) {
+    return ReviewRecord(
+      rowId: rowId ?? this.rowId,
+      receiptNumber: receiptNumber ?? this.receiptNumber,
+      date: date ?? this.date,
+      description: description ?? this.description,
+      amount: amount ?? this.amount,
+      quantity: quantity ?? this.quantity,
+      rate: rate ?? this.rate,
+      amountMismatch: amountMismatch ?? this.amountMismatch,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      receiptLink: receiptLink ?? this.receiptLink,
+      dateBbox: dateBbox ?? this.dateBbox,
+      receiptNumberBbox: receiptNumberBbox ?? this.receiptNumberBbox,
+      combinedBbox: combinedBbox ?? this.combinedBbox,
+      lineItemBbox: lineItemBbox ?? this.lineItemBbox,
+      isHeader: isHeader ?? this.isHeader,
+      customerName: customerName ?? this.customerName,
+      mobileNumber: mobileNumber ?? this.mobileNumber,
+      vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      auditFindings: auditFindings ?? this.auditFindings,
+      type: type ?? this.type,
+      paymentMode: paymentMode ?? this.paymentMode,
+      receivedAmount: receivedAmount ?? this.receivedAmount,
+      balanceDue: balanceDue ?? this.balanceDue,
+      customerDetails: customerDetails ?? this.customerDetails,
+      gstMode: gstMode ?? this.gstMode,
+      taxableRowIds: taxableRowIds ?? this.taxableRowIds,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'row_id': rowId,
@@ -155,7 +242,15 @@ class ReviewRecord {
       'line_item_row_bbox': lineItemBbox,
       'customer_name': customerName,
       'mobile_number': mobileNumber,
+      'vehicle_number': vehicleNumber,
       'audit_findings': auditFindings,
+      'type': type,
+      if (paymentMode != null) 'payment_mode': paymentMode,
+      if (receivedAmount != null) 'received_amount': receivedAmount,
+      if (balanceDue != null) 'balance_due': balanceDue,
+      if (customerDetails != null) 'customer_details': customerDetails,
+      if (gstMode != null) 'gst_mode': gstMode,
+      if (taxableRowIds != null) 'taxable_row_ids': taxableRowIds,
     };
   }
 }

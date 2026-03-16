@@ -5,8 +5,10 @@ Handles routing, middleware, and application lifecycle.
 print("SnapKhata Backend is starting......Final Doneee..")
 # Final check done yep done yes git yep done api done yesss
 # Initial deployment trigger done yeah d addddd
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 import logging
 
 import config
@@ -68,10 +70,41 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],  # Allow browser to read this header for file downloads
 )
 
+# ── Validation Error Handler for Cloud Tasks ──────────────────────
+# Cloud Tasks retries on 4xx/5xx responses. If a stale task sends a
+# payload that fails Pydantic validation (422), Cloud Tasks would
+# retry it FOREVER.  This handler returns 200 for the internal
+# webhook endpoint so Cloud Tasks considers the task complete and
+# stops retrying.
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if "/internal/" in str(request.url):
+        logger.error(f"[VALIDATION-ERROR] Cloud Tasks sent invalid payload to {request.url}")
+        logger.error(f"[VALIDATION-ERROR] Details: {exc.errors()}")
+        try:
+            body = await request.body()
+            logger.error(f"[VALIDATION-ERROR] Raw body: {body.decode('utf-8', errors='replace')[:2000]}")
+        except Exception:
+            pass
+        # Return 200 so Cloud Tasks stops retrying this malformed payload
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "error",
+                "message": "Validation failed — payload rejected. Task will not be retried.",
+                "errors": [str(e) for e in exc.errors()[:5]]
+            }
+        )
+    # For all other endpoints, return the standard 422 response
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
 # Startup Error Handling
 try:
     # Import routers
-    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes
+    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes, udhar, vendor_ledgers
 except Exception as e:
     import traceback
     print("CRITICAL STARTUP ERROR: Failed to import routers", flush=True)
@@ -92,6 +125,8 @@ app.include_router(purchase_order_routes.router, prefix="/api/purchase-orders", 
 app.include_router(invoices.router, prefix="/api/invoices", tags=["Invoices"])
 app.include_router(review.router, prefix="/api/review", tags=["Review"])
 app.include_router(verified.router, prefix="/api/verified", tags=["Verified Invoices"])
+app.include_router(udhar.router, prefix="/api/udhar", tags=["Udhar Tracking"])
+app.include_router(vendor_ledgers.router, prefix="/api/vendor-ledgers", tags=["Vendor Ledgers"])
 app.include_router(public_routes.router, prefix="/api/public", tags=["Public"])
 
 
@@ -124,7 +159,7 @@ async def db_check():
         
         db = get_database_client()
         # Try a simple query
-        response = db.client.table("users").select("count", count="exact").limit(1).execute()
+        _ = db.client.table("users").select("count", count="exact").limit(1).execute()
         
         return {
             "status": "connected",

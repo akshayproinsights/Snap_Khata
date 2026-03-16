@@ -86,6 +86,12 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
       return false;
     }).toList();
 
+    filteredRecords.sort((a, b) {
+      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
+      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
+      return yA.compareTo(yB);
+    });
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -441,14 +447,14 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.red.shade200),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(LucideIcons.alertCircle,
+                          const Icon(LucideIcons.alertCircle,
                               color: AppTheme.error, size: 16),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
-                              'Calculation Mismatch: ₹\${record.amountMismatch}',
-                              style: TextStyle(
+                              'Calculation Mismatch: ₹${record.amountMismatch}',
+                              style: const TextStyle(
                                   color: AppTheme.error,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold)),
@@ -493,7 +499,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
     required String initialValue,
     required TextInputType keyboardType,
   }) {
-    final isSuccess = _showSuccessFor['\${record.rowId}-\$fieldKey'] ?? false;
+    final isSuccess = _showSuccessFor['${record.rowId}-$fieldKey'] ?? false;
 
     return TextFormField(
       initialValue: initialValue,
@@ -524,7 +530,7 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
           final newRecord =
               _updateRecordWithRebuiltFields(record, fieldKey, val);
           ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-          _triggerSuccess('\${record.rowId}-\$fieldKey');
+          _triggerSuccess('${record.rowId}-$fieldKey');
         }
       },
     );

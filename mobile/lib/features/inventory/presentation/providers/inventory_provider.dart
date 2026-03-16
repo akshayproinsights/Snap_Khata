@@ -96,6 +96,18 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await fetchItems(); // Revert
     }
   }
+
+  Future<void> verifyInvoice(Map<String, dynamic> data) async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+      await _repository.verifyInvoice(data);
+      await fetchItems(); // Refresh the items to remove the verified ones
+    } catch (e) {
+      state = state.copyWith(
+          isLoading: false, error: 'Failed to verify invoice: $e');
+      rethrow; // Rethrow so the UI can catch and show a snackbar
+    }
+  }
 }
 
 final inventoryProvider =

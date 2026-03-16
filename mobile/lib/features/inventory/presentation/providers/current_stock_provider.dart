@@ -70,6 +70,12 @@ class CurrentStockState {
 class CurrentStockNotifier extends Notifier<CurrentStockState> {
   late final CurrentStockRepository _repository;
   Timer? _recalcTimer;
+  int _consecutiveRecalcErrors = 0;
+  static const int _maxRecalcErrors = 3;
+  static const int _maxRecalcSeconds = 90; // DB aggregation, typically <15s
+  bool _isPollingRecalc = false;  // prevents duplicate poll loops
+  bool _isPaused = false;
+  DateTime? _recalcStartTime;
 
   @override
   CurrentStockState build() {
@@ -323,21 +329,77 @@ class CurrentStockNotifier extends Notifier<CurrentStockState> {
   }
 
   void _pollRecalculation(String taskId) {
-    _recalcTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      try {
-        final status = await _repository.getRecalculationStatus(taskId);
-        if (status['status'] == 'completed' || status['status'] == 'failed') {
-          timer.cancel();
-          state = state.copyWith(isCalculating: false);
-          if (status['status'] == 'completed') {
-            fetchData();
-          }
-        }
-      } catch (e) {
-        timer.cancel();
+    if (_isPollingRecalc) return; // guard: don't start a second loop
+    _isPollingRecalc = true;
+    _consecutiveRecalcErrors = 0;
+    _recalcStartTime = DateTime.now();
+    _scheduleNextRecalcPoll(taskId);
+  }
+
+  Duration _backoffInterval(Duration elapsed) {
+    if (elapsed.inSeconds < 30) return const Duration(seconds: 2);
+    if (elapsed.inSeconds < 90) return const Duration(seconds: 5);
+    return const Duration(seconds: 10);
+  }
+
+  void _scheduleNextRecalcPoll(String taskId) {
+    _recalcTimer?.cancel();
+    final elapsed = DateTime.now().difference(_recalcStartTime ?? DateTime.now());
+    _recalcTimer = Timer(_backoffInterval(elapsed), () => _executeRecalcPoll(taskId));
+  }
+
+  Future<void> _executeRecalcPoll(String taskId) async {
+    if (_isPaused) return; // silently park; triggerRecalculation re-checks on resume
+
+    // Hard timeout
+    final elapsed = DateTime.now().difference(_recalcStartTime ?? DateTime.now());
+    if (elapsed.inSeconds >= _maxRecalcSeconds) {
+      _recalcTimer?.cancel();
+      _isPollingRecalc = false;
+      state = state.copyWith(isCalculating: false);
+      fetchData();
+      return;
+    }
+
+    try {
+      final status = await _repository.getRecalculationStatus(taskId);
+      if (status['status'] == 'completed' || status['status'] == 'failed') {
+        _recalcTimer?.cancel();
+        _isPollingRecalc = false;
         state = state.copyWith(isCalculating: false);
+        if (status['status'] == 'completed') fetchData();
+      } else {
+        _consecutiveRecalcErrors = 0;
+        _scheduleNextRecalcPoll(taskId);
       }
-    });
+    } catch (e) {
+      _consecutiveRecalcErrors++;
+      if (_consecutiveRecalcErrors >= _maxRecalcErrors) {
+        _recalcTimer?.cancel();
+        _isPollingRecalc = false;
+        state = state.copyWith(isCalculating: false);
+      } else {
+        _scheduleNextRecalcPoll(taskId);
+      }
+    }
+  }
+
+  /// Pause recalculation polling when the app is backgrounded.
+  void pausePolling() {
+    _isPaused = true;
+    _recalcTimer?.cancel();
+  }
+
+  /// Resume recalculation polling when the app returns to foreground.
+  /// Since recalc is typically fast (<30s), just re-trigger rather than resuming mid-backoff.
+  void resumePolling() {
+    if (!_isPaused) return;
+    _isPaused = false;
+    // If still calculating, refresh the stock data — recalc likely finished in background
+    if (state.isCalculating) {
+      state = state.copyWith(isCalculating: false);
+      fetchData();
+    }
   }
 }
 

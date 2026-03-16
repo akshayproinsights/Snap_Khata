@@ -8,6 +8,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
+import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
 
 // ─── Grouped invoice bundle ──────────────────────────────────────────────────
 class _InvoiceBundle {
@@ -534,6 +535,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
             return _VendorDeliveryCard(
               bundle: bundle,
               dateLabel: _dateLabel(bundle.date),
+              searchQuery: _searchQuery,
+              allItems: items,
             );
           },
         );
@@ -546,8 +549,15 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
 class _VendorDeliveryCard extends ConsumerStatefulWidget {
   final _InvoiceBundle bundle;
   final String dateLabel;
+  final String searchQuery;
+  final List<InventoryItem> allItems;
 
-  const _VendorDeliveryCard({required this.bundle, required this.dateLabel});
+  const _VendorDeliveryCard({
+    required this.bundle,
+    required this.dateLabel,
+    required this.searchQuery,
+    required this.allItems,
+  });
 
   @override
   ConsumerState<_VendorDeliveryCard> createState() =>
@@ -558,11 +568,63 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
   bool _isExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Auto-expand when search is active
+    _isExpanded = widget.searchQuery.isNotEmpty;
+  }
+
+  @override
+  void didUpdateWidget(_VendorDeliveryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update expansion state when search query changes
+    if (oldWidget.searchQuery != widget.searchQuery) {
+      setState(() {
+        _isExpanded = widget.searchQuery.isNotEmpty;
+      });
+    }
+  }
+
+  List<InventoryItem> _getVisibleItems() {
+    final searchQuery = widget.searchQuery;
+    final allItems = widget.bundle.items;
+    
+    if (searchQuery.isEmpty) {
+      return allItems;
+    }
+    
+    // When search is active, show only matching items
+    return allItems.where((item) {
+      final descMatch = item.description.toLowerCase().contains(searchQuery);
+      final partMatch = item.partNumber.toLowerCase().contains(searchQuery);
+      return descMatch || partMatch;
+    }).toList();
+  }
+
+  void _showItemHistory(InventoryItem item) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ItemPurchaseHistorySheet(
+        itemDescription: item.description,
+        itemPartNumber: item.partNumber,
+        allItems: widget.allItems,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final bundle = widget.bundle;
     final hasMismatch = bundle.hasMismatch;
+    final visibleItems = _getVisibleItems();
+    final isSearching = widget.searchQuery.isNotEmpty;
+    final filteredCount = visibleItems.length;
+    final totalCount = bundle.items.length;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -807,69 +869,86 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                     ),
                   ),
                   const Divider(height: 1),
-                  ...bundle.items.map((item) {
+                  ...visibleItems.map((item) {
                     final rowMismatch = item.amountMismatch > 1.0;
-                    return Container(
-                      color: rowMismatch
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.04)
-                          : null,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 4,
-                            child: Text(
-                              item.description.isNotEmpty
-                                  ? item.description
-                                  : item.partNumber,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: rowMismatch
-                                    ? const Color(0xFFEF4444)
-                                    : AppTheme.textPrimary,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          SizedBox(
-                            width: 48,
-                            child: Text(
-                              item.qty == item.qty.roundToDouble()
-                                  ? item.qty.toInt().toString()
-                                  : item.qty.toStringAsFixed(2),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                  fontSize: 12, color: AppTheme.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 60,
-                            child: Text(
-                              '₹${item.rate.toStringAsFixed(0)}',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                  fontSize: 12, color: AppTheme.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 64,
-                            child: Text(
-                              '₹${item.netBill.toStringAsFixed(0)}',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: rowMismatch
-                                    ? const Color(0xFFEF4444)
-                                    : AppTheme.textPrimary,
+                    return InkWell(
+                      onTap: () => _showItemHistory(item),
+                      child: Container(
+                        color: rowMismatch
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.04)
+                            : null,
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.description.isNotEmpty
+                                        ? item.description
+                                        : item.partNumber,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: rowMismatch
+                                          ? const Color(0xFFEF4444)
+                                          : AppTheme.textPrimary,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (isSearching)
+                                    Text(
+                                      'Tap for history →',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                            SizedBox(
+                              width: 48,
+                              child: Text(
+                                item.qty == item.qty.roundToDouble()
+                                    ? item.qty.toInt().toString()
+                                    : item.qty.toStringAsFixed(2),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 60,
+                              child: Text(
+                                '₹${item.rate.toStringAsFixed(0)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 64,
+                              child: Text(
+                                '₹${item.netBill.toStringAsFixed(0)}',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: rowMismatch
+                                      ? const Color(0xFFEF4444)
+                                      : AppTheme.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }),
@@ -879,12 +958,42 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              color: Colors.grey.shade500,
-                              fontWeight: FontWeight.w500),
+                        Row(
+                          children: [
+                            Text(
+                              isSearching && filteredCount != totalCount
+                                  ? 'Showing $filteredCount of $totalCount items'
+                                  : '$totalCount item${totalCount == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: isSearching && filteredCount != totalCount
+                                      ? AppTheme.primary
+                                      : Colors.grey.shade500,
+                                  fontWeight: isSearching && filteredCount != totalCount
+                                      ? FontWeight.w600
+                                      : FontWeight.w500),
+                            ),
+                            if (isSearching && filteredCount != totalCount)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'filtered',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         Text(
                           'Total: ${currencyFormat.format(bundle.totalAmount)}',

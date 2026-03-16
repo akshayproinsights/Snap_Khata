@@ -28,7 +28,6 @@ class MappingSheetExtractedData(BaseModel):
 
 class MappingSheetUploadResponse(BaseModel):
     """Response after successful upload"""
-    sheet_id: str
     image_url: str
     status: str
     message: str

@@ -14,7 +14,8 @@ def apply_migration(migration_filename):
     
     # 1. Load Dev Credentials
     secrets = configs.load_secrets()
-    supabase_dev = secrets.get('supabase', {})
+    supabase_config = secrets.get('supabase', {})
+    supabase_dev = supabase_config.get('development', {})
     url = supabase_dev.get('url')
     key = supabase_dev.get('service_role_key')
     
