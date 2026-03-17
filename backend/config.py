@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")  # 24 hours
     
     # CORS
-    cors_origins: list = Field(default=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://snapkhata-prod.web.app", "https://mydigientry.com", "https://www.mydigientry.com", "http://192.168.1.18:8000", "http://192.168.1.18:3000", "http://192.168.1.18:5173"], alias="CORS_ORIGINS")
+    cors_origins: list = Field(default=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://snapkhata-prod.web.app", "https://mydigientry.com", "https://www.mydigientry.com", "http://192.168.1.18:8000", "http://192.168.1.18:3000", "http://192.168.1.18:5173", "http://localhost:8080", "http://127.0.0.1:8080"], alias="CORS_ORIGINS")
     
     # Google API
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
@@ -62,28 +62,29 @@ def get_google_api_key() -> Optional[str]:
     if settings.google_api_key:
         return settings.google_api_key
     
-    # Try from secrets
-    secrets = configs.load_secrets()
-    return secrets.get("google_api_key") or secrets.get("GOOGLE_API_KEY")
+    return configs.get_google_api_key()
 
 def get_supabase_config() -> Optional[Dict[str, str]]:
     """
     Returns Supabase configuration.
     Respects APP_ENV (development/production).
     """
-    # 1. Check strict environment variables
+    env = os.getenv("APP_ENV", "development").lower()
+    
+    prefix = "PROD_" if env == "production" else ""
+    
     env_config = {
-        "url": os.getenv("SUPABASE_URL"),
-        "anon_key": os.getenv("SUPABASE_ANON_KEY"),
-        "service_role_key": os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        "url": os.getenv(f"{prefix}SUPABASE_URL") or os.getenv("SUPABASE_URL"),
+        "anon_key": os.getenv(f"{prefix}SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY"),
+        "service_role_key": os.getenv(f"{prefix}SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     }
     
-    # If all env vars present, return them (highest priority)
+    # If all env vars present, return them
     if all(env_config.values()):
         return env_config
         
     # BACKWARD COMPATIBILITY: Allow SUPABASE_KEY to map to service_role_key
-    supabase_key = os.getenv("SUPABASE_KEY")
+    supabase_key = os.getenv(f"{prefix}SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
     if supabase_key and env_config["url"]:
         return {
             "url": env_config["url"],
@@ -91,27 +92,6 @@ def get_supabase_config() -> Optional[Dict[str, str]]:
             "service_role_key": supabase_key
         }
     
-    # 2. Fallback to secrets file with APP_ENV support
-    secrets = configs.load_secrets()
-    env = os.getenv("APP_ENV", "development").lower()
-
-    # TOML [supabase.production] parses as {"supabase": {"production": {...}, "development": {...}}}
-    # We need to unwrap the env-specific sub-dict if the top-level has no "url".
-    supabase = secrets.get("supabase", {})
-
-    # If supabase is a nested dict (e.g. has "production"/"development" sub-keys), unwrap env-specific one
-    if isinstance(supabase, dict) and not supabase.get("url"):
-        env_specific = supabase.get(env)
-        if isinstance(env_specific, dict) and env_specific.get("url"):
-            supabase = env_specific
-
-    if isinstance(supabase, dict) and supabase.get("url"):
-        return {
-            "url": supabase.get("url"),
-            "anon_key": supabase.get("anon_key"),
-            "service_role_key": supabase.get("service_role_key")
-        }
-
     return None
 
 

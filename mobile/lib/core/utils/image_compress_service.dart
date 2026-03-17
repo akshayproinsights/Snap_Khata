@@ -9,6 +9,7 @@
 
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -23,6 +24,10 @@ class ImageCompressService {
   /// compressed temp file. If the source is already small enough it is
   /// returned unchanged.
   static Future<XFile> compressFile(XFile sourceFile) async {
+    if (kIsWeb) {
+      return sourceFile;
+    }
+
     final bytes = await sourceFile.readAsBytes();
     final sizeKb = bytes.length / 1024;
 

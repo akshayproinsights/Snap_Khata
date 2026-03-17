@@ -34,21 +34,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   final TextEditingController _creditDetailsController = TextEditingController();
   double _receivedAmount = 0.0;
 
-  /// Row IDs of line items the user has marked as taxable (Parts).
-  /// Defaults to ALL items being taxable — user unticks Labor/Service items.
-  Set<String> _taxableRowIds = {};
-
   @override
   void initState() {
     super.initState();
-    // Default: mark all line items as taxable (Parts) unless marked Labour/Service
-    _taxableRowIds = widget.group.lineItems
-        .where((i) {
-          final type = i.type?.toLowerCase() ?? '';
-          return type != 'labor' && type != 'labour' && type != 'service';
-        })
-        .map((i) => i.rowId)
-        .toSet();
     _loadPersistedSettings();
   }
 
@@ -99,15 +87,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         );
       });
     }
-
-    // Load taxable item overrides (stored as comma-separated row IDs)
-    final savedTaxable = prefs.getString('gst_taxable_$receipt');
-    if (savedTaxable != null && mounted) {
-      setState(() {
-        _taxableRowIds =
-            savedTaxable.isEmpty ? <String>{} : savedTaxable.split(',').toSet();
-      });
-    }
   }
 
   Future<void> _savePaymentMode(String mode) async {
@@ -132,28 +111,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await prefs.setString('gst_mode_${widget.group.receiptNumber}', mode.name);
   }
 
-  Future<void> _toggleTaxable(String rowId, bool taxable) async {
-    setState(() {
-      if (taxable) {
-        _taxableRowIds.add(rowId);
-      } else {
-        _taxableRowIds.remove(rowId);
-      }
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'gst_taxable_${widget.group.receiptNumber}',
-      _taxableRowIds.join(','),
-    );
-  }
-
   // ── GST computed helpers (on PARTS only) ─────────────────────────────────
   double _partsSubtotal(InvoiceReviewGroup group) => group.lineItems
-      .where((i) => _taxableRowIds.contains(i.rowId))
+      .where((i) {
+        final type = i.type?.toUpperCase() ?? '';
+        return !type.contains('LABOR') && !type.contains('LABOUR') && !type.contains('SERVICE');
+      })
       .fold(0.0, (s, i) => s + i.amount);
 
   double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
-      .where((i) => !_taxableRowIds.contains(i.rowId))
+      .where((i) {
+        final type = i.type?.toUpperCase() ?? '';
+        return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+      })
       .fold(0.0, (s, i) => s + i.amount);
 
   double _gstAmount(double partsSubtotal) {
@@ -223,7 +193,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           balanceDue: _paymentMode == 'Credit' ? balanceDue : null,
           customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
-          taxableRowIds: _taxableRowIds.join(','),
       );
       ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
     }
@@ -259,6 +228,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
       return yA.compareTo(yB);
     });
+
+    final partsItems = sortedLineItems.where((i) {
+        final type = i.type?.toUpperCase() ?? '';
+        return type.contains('PART');
+    }).toList();
+    
+    final laborItems = sortedLineItems.where((i) {
+        final type = i.type?.toUpperCase() ?? '';
+        return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+    }).toList();
+
+    final otherItems = sortedLineItems.where((i) {
+        return !partsItems.contains(i) && !laborItems.contains(i);
+    }).toList();
 
     final hasAnyError = group.hasError;
 
@@ -354,6 +337,45 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             },
             tooltip: 'Share via WhatsApp',
           ),
+          IconButton(
+            icon: const Icon(LucideIcons.trash2, color: Colors.red),
+            tooltip: 'Delete Receipt',
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Receipt'),
+                  content: const Text(
+                      'Are you sure you want to delete this receipt? This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => context.pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style:
+                          FilledButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => context.pop(true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true && context.mounted) {
+                await ref
+                    .read(reviewProvider.notifier)
+                    .deleteReceipt(group.receiptNumber);
+                if (context.mounted) {
+                  context.pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Receipt deleted successfully')),
+                  );
+                }
+              }
+            },
+          ),
         ],
       ),
       body: Column(
@@ -436,27 +458,31 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         child: Text('No line items found.',
                             style: TextStyle(color: AppTheme.textSecondary))),
                   ),
-                ...sortedLineItems.map((item) => _buildLineItemCard(item)),
-                const SizedBox(height: 16),
+                if (partsItems.isNotEmpty) ...[
+                  _buildCategoryHeader('Spare Parts', LucideIcons.package2, Colors.blue),
+                  ...partsItems.map((item) => _buildLineItemCard(item)),
+                  const SizedBox(height: 12),
+                ],
+                if (laborItems.isNotEmpty) ...[
+                  _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, Colors.orange),
+                  ...laborItems.map((item) => _buildLineItemCard(item)),
+                  const SizedBox(height: 12),
+                ],
+                if (otherItems.isNotEmpty) ...[
+                  _buildCategoryHeader('Other Items', LucideIcons.box, Colors.grey),
+                  ...otherItems.map((item) => _buildLineItemCard(item)),
+                  const SizedBox(height: 12),
+                ],
                 // ── Payment Summary ──────────────────────────────────────
                 PaymentSummaryCard(
                   gstMode: _gstMode,
-                  taxableRowIds: _taxableRowIds,
                   partsSubtotal: _partsSubtotal(group),
                   laborSubtotal: _laborSubtotal(group),
                   gstAmount: _gstAmount(_partsSubtotal(group)),
                   grandTotal: _totalAfterGst(group),
                   originalTotal: group.header?.amount ??
                       (_partsSubtotal(group) + _laborSubtotal(group)),
-                  lineItems: sortedLineItems
-                      .map((item) => PaymentSummaryItem(
-                            rowId: item.rowId,
-                            description: item.description,
-                            amount: item.amount,
-                          ))
-                      .toList(),
                   onGstModeChanged: _saveGstMode,
-                  onToggleTaxable: _toggleTaxable,
                 ),
                 _buildPaymentSection(_totalAfterGst(group)),
                 const SizedBox(height: 24),
@@ -948,6 +974,30 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
+  Widget _buildCategoryHeader(String title, IconData icon, MaterialColor color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+                color: color.shade50,
+                borderRadius: BorderRadius.circular(6)),
+            child: Icon(icon, size: 14, color: color.shade700),
+          ),
+          const SizedBox(width: 8),
+          Text(title.toUpperCase(),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: color.shade700,
+                  letterSpacing: 1.0)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLineItemCard(ReviewRecord item) {
     final isError = item.hasError;
     final isDone = item.verificationStatus == 'Done';
@@ -977,6 +1027,73 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Item #${item.rowId}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete Item'),
+                      content: const Text(
+                          'Are you sure you want to delete this item?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => context.pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red),
+                          onPressed: () => context.pop(true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true && context.mounted) {
+                    await ref
+                        .read(reviewProvider.notifier)
+                        .deleteRecord(item.rowId, item.receiptNumber);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Item deleted'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(LucideIcons.trash2, size: 14, color: Colors.red.shade600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1092,6 +1209,32 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               ],
             ),
           ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _PartLaborToggle(
+                isPart: true,
+                selected: (item.type?.toLowerCase() ?? '') != 'labor' && 
+                          (item.type?.toLowerCase() ?? '') != 'labour' && 
+                          (item.type?.toLowerCase() ?? '') != 'service',
+                onTap: () {
+                  final newRecord = item.copyWith(type: 'Part');
+                  ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+                },
+              ),
+              const SizedBox(width: 8),
+              _PartLaborToggle(
+                isPart: false,
+                selected: (item.type?.toLowerCase() ?? '') == 'labor' || 
+                          (item.type?.toLowerCase() ?? '') == 'labour' || 
+                          (item.type?.toLowerCase() ?? '') == 'service',
+                onTap: () {
+                  final newRecord = item.copyWith(type: 'Labor');
+                  ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1261,6 +1404,51 @@ class _PaymentToggleBtn extends StatelessWidget {
             color: isSelected ? Colors.white : AppTheme.textSecondary,
             fontWeight: FontWeight.bold,
             fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartLaborToggle extends StatelessWidget {
+  final bool isPart; // true = Part, false = Labor
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PartLaborToggle({
+    super.key,
+    required this.isPart,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isPart ? '\u2699\uFE0F Part' : '\uD83D\uDD27 Labor';
+    final selectedColor =
+        isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color:
+              selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? selectedColor : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: selected ? selectedColor : Colors.grey.shade500,
           ),
         ),
       ),

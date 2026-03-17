@@ -1,0 +1,33 @@
+INFO:     205.210.31.156:63280 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44646 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44646 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:40392 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40392 - "GET /api/review/amounts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40392 - "OPTIONS /api/stock/levels?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40398 - "OPTIONS /api/stock/levels?limit=50&offset=0 HTTP/1.1" 200 OK
+2026-03-17 18:15:07,438 - routes.stock_routes - INFO - Retrieved 50 stock levels for Adnak (Total: 310)
+INFO:     127.0.0.1:40398 - "GET /api/stock/levels?limit=50&offset=0 HTTP/1.1" 200 OK
+2026-03-17 18:15:08,156 - routes.stock_routes - INFO - Retrieved 50 stock levels for Adnak (Total: 310)
+INFO:     127.0.0.1:40392 - "GET /api/stock/levels?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41024 - "OPTIONS /api/purchase-orders/draft/items HTTP/1.1" 200 OK
+2026-03-17 18:16:00,262 - routes.purchase_order_routes - INFO - 📝 CHECKPOINT A1: Adding draft item for user Adnak: 01550M1025A
+2026-03-17 18:16:00,262 - routes.purchase_order_routes - INFO - 📝 CHECKPOINT A2: Validation passed for 01550M1025A
+2026-03-17 18:16:00,262 - routes.purchase_order_routes - INFO - 📝 CHECKPOINT A3: Upserting data: {'username': 'Adnak', 'part_number': '01550M1025A', 'item_name': 'BOLT', 'current_stock': 40.0, 'reorder_point': 2.0, 'reorder_qty': 2, 'unit_value': 7.13, 'priority': 'P2', 'supplier_name': None, 'notes': None, 'quantity': 2, 'added_at': '2026-03-17T18:16:00.262668', 'updated_at': '2026-03-17T18:16:00.262678'}
+2026-03-17 18:16:00,972 - routes.purchase_order_routes - INFO - ✅ CHECKPOINT A5: Successfully added/updated draft PO item: 01550M1025A (qty: 2)
+INFO:     127.0.0.1:41024 - "POST /api/purchase-orders/draft/items HTTP/1.1" 200 OK
+2026-03-17 18:16:01,625 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 1: Getting draft items for user: Adnak
+2026-03-17 18:16:01,890 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 2: Retrieved 3 draft PO items for Adnak, total cost: ₹770.26
+INFO:     127.0.0.1:41024 - "GET /api/purchase-orders/draft/items HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41036 - "GET /api/purchase-orders/suppliers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41036 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41036 - "GET /api/auth/me HTTP/1.1" 200 OK
+2026-03-17 18:16:33,964 - database_helpers - INFO - Fetching 500 most recent verified invoices for Adnak
+2026-03-17 18:16:34,574 - database_helpers - INFO - ✅ Fetched 99 verified invoice records
+INFO:     127.0.0.1:53016 - "GET /api/verified/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53026 - "GET /api/review/dates HTTP/1.1" 200 OK
+2026-03-17 18:16:35,065 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 1: Getting draft items for user: Adnak
+2026-03-17 18:16:35,278 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 2: Retrieved 3 draft PO items for Adnak, total cost: ₹770.26
+INFO:     127.0.0.1:53034 - "GET /api/purchase-orders/draft/items HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53036 - "GET /api/purchase-orders/suppliers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53026 - "GET /api/review/amounts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47238 - "GET / HTTP/1.1" 200 OK

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -593,7 +593,13 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
       return allItems;
     }
     
-    // When search is active, show only matching items
+    // If the search query matches the bundle's vendor or invoice number, show all items
+    if (widget.bundle.vendorName.toLowerCase().contains(searchQuery) ||
+        widget.bundle.invoiceNumber.toLowerCase().contains(searchQuery)) {
+      return allItems;
+    }
+    
+    // When search is active and vendor/invoice don't match, show only matching items
     return allItems.where((item) {
       final descMatch = item.description.toLowerCase().contains(searchQuery);
       final partMatch = item.partNumber.toLowerCase().contains(searchQuery);

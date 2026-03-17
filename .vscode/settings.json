@@ -1,6 +1,11 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
+    "python.defaultInterpreterPath": "/root/Snap_Khata/backend/venv/bin/python3",
     "python.analysis.extraPaths": [
-        "${workspaceFolder}/backend"
-    ]
+        "/root/Snap_Khata/backend"
+    ],
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.flake8Enabled": false,
+    "python.linting.mypyEnabled": false,
+    "python.linting.pylintPath": "/root/Snap_Khata/backend/venv/bin/pylint"
 }

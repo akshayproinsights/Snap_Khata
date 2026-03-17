@@ -57,3 +57,26 @@ class LedgerTransaction {
     );
   }
 }
+
+class OrderLineItem {
+  final String description;
+  final int quantity;
+  final double rate;
+  final double amount;
+
+  OrderLineItem({
+    required this.description,
+    required this.quantity,
+    required this.rate,
+    required this.amount,
+  });
+
+  factory OrderLineItem.fromJson(Map<String, dynamic> json) {
+    return OrderLineItem(
+      description: json['description'] ?? 'Item',
+      quantity: int.tryParse(json['quantity']?.toString() ?? '0') ?? 0,
+      rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
+      amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+    );
+  }
+}

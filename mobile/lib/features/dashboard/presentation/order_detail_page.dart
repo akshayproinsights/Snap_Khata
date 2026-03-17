@@ -61,25 +61,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   // GST State
   GstMode _gstMode = GstMode.none;
-  Set<String> _taxableRowIds = {};
 
   @override
   void initState() {
     super.initState();
     _initControllers();
-    _initGstDefaults();
     _loadPersistedSettings();
   }
 
-  void _initGstDefaults() {
-    // Default all parts to taxable, except labor/service
-    _taxableRowIds = widget.group.items
-        .where((i) {
-          final type = i.type.toLowerCase();
-          return type != 'labor' && type != 'labour' && type != 'service';
-        })
-        .map((i) => i.rowId).toSet();
-  }
+
 
   Future<void> _loadPersistedSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -94,14 +84,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         );
       });
     }
-
-    final savedTaxable = prefs.getString('gst_taxable_order_$receipt');
-    if (savedTaxable != null && mounted) {
-      setState(() {
-        _taxableRowIds =
-            savedTaxable.isEmpty ? <String>{} : savedTaxable.split(',').toSet();
-      });
-    }
   }
 
   Future<void> _saveGstMode(GstMode mode) async {
@@ -111,27 +93,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         'gst_mode_order_${widget.group.receiptNumber}', mode.name);
   }
 
-  Future<void> _toggleTaxable(String rowId, bool taxable) async {
-    setState(() {
-      if (taxable) {
-        _taxableRowIds.add(rowId);
-      } else {
-        _taxableRowIds.remove(rowId);
-      }
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'gst_taxable_order_${widget.group.receiptNumber}',
-      _taxableRowIds.join(','),
-    );
-  }
-
   double _partsSubtotal(InvoiceGroup group) => group.items
-      .where((i) => _taxableRowIds.contains(i.rowId))
+      .where((i) {
+        final type = i.type.toUpperCase();
+        return !type.contains('LABOR') && !type.contains('LABOUR') && !type.contains('SERVICE');
+      })
       .fold(0.0, (s, i) => s + i.amount);
 
   double _laborSubtotal(InvoiceGroup group) => group.items
-      .where((i) => !_taxableRowIds.contains(i.rowId))
+      .where((i) {
+        final type = i.type.toUpperCase();
+        return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+      })
       .fold(0.0, (s, i) => s + i.amount);
 
   double _gstAmount(double partsSubtotal) {
@@ -745,22 +718,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: PaymentSummaryCard(
         gstMode: _gstMode,
-        taxableRowIds: _taxableRowIds,
         partsSubtotal: _partsSubtotal(widget.group),
         laborSubtotal: _laborSubtotal(widget.group),
         gstAmount: _gstAmount(_partsSubtotal(widget.group)),
         grandTotal: _totalAfterGst(widget.group),
         originalTotal: widget.group.totalAmount,
-        lineItems: widget.group.items
-            .map((item) => PaymentSummaryItem(
-                  rowId: item.rowId,
-                  description:
-                      item.description.isNotEmpty ? item.description : 'Item',
-                  amount: item.amount,
-                ))
-            .toList(),
         onGstModeChanged: _saveGstMode,
-        onToggleTaxable: _toggleTaxable,
       ),
     );
   }
@@ -906,7 +869,28 @@ class _ItemRow extends StatelessWidget {
           padding: const EdgeInsets.only(left: 36),
           child: Row(
             children: [
-              Expanded(flex: 2, child: _buildTextField(ctrl.typeCtrl, 'Type')),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: ctrl.typeCtrl,
+                builder: (context, value, child) {
+                  final text = value.text.toLowerCase();
+                  final isPart = text.isEmpty || (text != 'labor' && text != 'labour' && text != 'service');
+                  return Row(
+                    children: [
+                      _PartLaborToggle(
+                        isPart: true,
+                        selected: isPart,
+                        onTap: () => ctrl.typeCtrl.text = 'Part',
+                      ),
+                      const SizedBox(width: 4),
+                      _PartLaborToggle(
+                        isPart: false,
+                        selected: !isPart,
+                        onTap: () => ctrl.typeCtrl.text = 'Labor',
+                      ),
+                    ],
+                  );
+                },
+              ),
               const SizedBox(width: 8),
               Expanded(
                   flex: 1,
@@ -968,6 +952,51 @@ class _ItemRow extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: AppTheme.primary)),
+      ),
+    );
+  }
+}
+
+class _PartLaborToggle extends StatelessWidget {
+  final bool isPart; // true = Part, false = Labor
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PartLaborToggle({
+    super.key,
+    required this.isPart,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isPart ? '\u2699\uFE0F Part' : '\uD83D\uDD27 Labor';
+    final selectedColor =
+        isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color:
+              selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? selectedColor : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: selected ? selectedColor : Colors.grey.shade500,
+          ),
+        ),
       ),
     );
   }

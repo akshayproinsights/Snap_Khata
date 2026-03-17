@@ -13,6 +13,7 @@ from database_helpers import (
     get_verification_dates,
     get_verification_amounts
 )
+from database import get_database_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -95,22 +96,14 @@ async def get_invoice_stats(
                     current_month = datetime.now().month
                     current_year = datetime.now().year
                     
-                    def is_current_month(date_str):
-                        if pd.isna(date_str) or not date_str:
-                            return False
-                        try:
-                            # Try multiple date formats
-                            for fmt in ["%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y"]:
-                                try:
-                                    dt = datetime.strptime(str(date_str).strip(), fmt)
-                                    return dt.month == current_month and dt.year == current_year
-                                except:
-                                    continue
-                            return False
-                        except:
-                            return False
+                    # Vectorized date processing
+                    # Supabase standard: YYYY-MM-DD. Local formats: DD-Mon-YYYY, DD-MM-YYYY, DD/MM/YYYY
+                    df_verified['parsed_date'] = pd.to_datetime(df_verified['date'], format='mixed', errors='coerce')
                     
-                    current_month_mask = df_verified['date'].apply(is_current_month)
+                    # Filter for current month and year
+                    current_month_mask = (df_verified['parsed_date'].dt.month == current_month) & \
+                                         (df_verified['parsed_date'].dt.year == current_year)
+                    
                     df_current_month = df_verified[current_month_mask]
                     if not df_current_month.empty:
                         stats["this_month"] = len(df_current_month['receipt_number'].dropna().astype(str).unique())
@@ -184,3 +177,35 @@ async def get_invoice(
         "invoice_id": invoice_id,
         "message": "Single invoice retrieval not yet implemented"
     }
+
+
+@router.get("/receipt/{receipt_number}/items")
+async def get_receipt_items(
+    receipt_number: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get all line items for a specific receipt matching the current user.
+    """
+    username = current_user.get("username")
+    
+    if not username:
+        raise HTTPException(status_code=400, detail="No username in token")
+        
+    try:
+        db = get_database_client()
+        # Query verified_invoices for this user and receipt_number
+        response = db.client.table('verified_invoices') \
+            .select('*') \
+            .eq('username', username) \
+            .eq('receipt_number', receipt_number) \
+            .execute()
+            
+        return {
+            "status": "success",
+            "receipt_number": receipt_number,
+            "items": response.data if response.data else []
+        }
+    except Exception as e:
+        logger.error(f"Error fetching items for receipt {receipt_number}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

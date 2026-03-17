@@ -2,116 +2,30 @@ from typing import Dict, Any, Optional
 import os
 import json
 
-try:
-    import toml
-except Exception:
-    toml = None
-
-# Attempt to import streamlit only when needed so configs can be imported in non-streamlit contexts
-try:
-    import streamlit as st
-except Exception:
-    st = None
-
 # Try to load python-dotenv if available (for .env file support)
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # Load .env file into environment variables
+    # Load .env file from root directory
+    dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(dotenv_path)
 except Exception:
     pass  # python-dotenv not installed, will use system env vars only
 
 
-def _load_from_st_secrets() -> Optional[Dict[str, Any]]:
-    """Return a dict from st.secrets if available and non-empty."""
-    if st is None:
-        return None
-    try:
-        # st.secrets acts like a dict; convert to plain dict recursively
-        def _to_native(obj):
-            if hasattr(obj, "items"):
-                return {k: _to_native(v) for k, v in obj.items()}
-            return obj
-            
-        secrets = _to_native(st.secrets)
-        # If empty, return None
-        if not secrets:
-            return None
-        return secrets
-    except Exception:
-        return None
 
-
-def _load_from_file(path: str = "secrets.toml") -> Optional[Dict[str, Any]]:
-    """Load secrets from a local TOML file. Returns None if not possible."""
-    if toml is None:
-        return None
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = toml.load(f)
-        return data
-    except Exception:
-        return None
-
-
-# Cache loaded secrets in module scope
-_secrets_cache: Optional[Dict[str, Any]] = None
-
-
-def load_secrets() -> Dict[str, Any]:
-    """Load secrets from st.secrets or local file; return empty dict if none found."""
-    global _secrets_cache
-    if _secrets_cache is not None:
-        return _secrets_cache
-
-    # 1) Try streamlit secrets
-    secrets = _load_from_st_secrets()
-    if secrets:
-        _secrets_cache = secrets
-        return _secrets_cache
-
-    # 2) Try local file (check relative to this file's directory)
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"DEBUG: configs.py base_dir: {base_dir}")
-    
-    # Check directly in the same folder as configs.py (root) or in .streamlit subdir
-    candidates = [
-        os.path.join(base_dir, "secrets.toml"),
-        os.path.join(base_dir, ".streamlit", "secrets.toml"),
-        "secrets.toml", # Fallback to CWD
-        ".streamlit/secrets.toml" # Fallback to CWD
-    ]
-
-    for path in candidates:
-        # print(f"DEBUG: Checking path: {path}")
-        secrets = _load_from_file(path)
-        if secrets:
-            print(f"DEBUG: Found secrets at: {path}")
-            _secrets_cache = secrets
-            return _secrets_cache
-            
-    print("DEBUG: No secrets found in candidates.")
-
-    # 3) Fallback: minimal default
-    _secrets_cache = {}
-    return _secrets_cache
 
 
 def get_r2_config() -> Dict[str, str]:
     """
     Returns the cloudflare_r2 configuration as a dict.
-    Checks environment variables first, then falls back to secrets file.
-    Respects APP_ENV (development/production).
+    Strictly uses environment variables.
     """
-    # 1. Check strict environment variables (R2_ACCOUNT_ID, etc.)
     account_id = os.getenv("CLOUDFLARE_R2_ACCOUNT_ID") or os.getenv("R2_ACCOUNT_ID")
     endpoint_url = os.getenv("CLOUDFLARE_R2_ENDPOINT_URL") or os.getenv("R2_ENDPOINT_URL")
     access_key_id = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID")
     secret_access_key = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY")
     public_base_url = os.getenv("CLOUDFLARE_R2_PUBLIC_BASE_URL") or os.getenv("R2_PUBLIC_BASE_URL")
 
-    # If all required credentials are present in env vars, USE THEM (highest priority)
     if account_id and access_key_id and secret_access_key:
         if not endpoint_url:
             endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
@@ -124,36 +38,12 @@ def get_r2_config() -> Dict[str, str]:
             "public_base_url": public_base_url
         }
     
-    # 2. Fallback to secrets file with APP_ENV support
-    secrets = load_secrets()
-    env = os.getenv("APP_ENV", "development").lower()
-    
-    r2 = secrets.get(f"cloudflare_r2.{env}")
-    
-    if not r2:
-        base_r2 = secrets.get("cloudflare_r2", {})
-        if isinstance(base_r2, dict):
-            r2 = base_r2.get(env)
-            if not isinstance(r2, dict) or not any(k in r2 for k in ["account_id", "endpoint_url", "access_key_id", "secret_access_key"]):
-                r2 = base_r2
-                
-    if not r2 or not isinstance(r2, dict):
-        r2 = {}
-
-    # Normalize key names
-    normalized = {
-        "account_id": r2.get("account_id") or r2.get("accountId") or r2.get("account-id"),
-        "endpoint_url": r2.get("endpoint_url") or r2.get("endpointUrl") or r2.get("endpoint"),
-        "access_key_id": r2.get("access_key_id") or r2.get("accessKeyId") or r2.get("access_key"),
-        "secret_access_key": r2.get("secret_access_key") or r2.get("secretAccessKey") or r2.get("secret_key"),
-        "public_base_url": r2.get("public_base_url") or r2.get("publicBaseUrl") or None
-    }
-    return {k: v for k, v in normalized.items() if v is not None}
+    return {}
 
 
 def get_users_db() -> Dict[str, Dict[str, Any]]:
     """
-    Returns a dict of users from environment variables or secrets file:
+    Returns a dict of users from environment variables:
       { username: { password: str, r2_bucket: str, sheet_id?: str, dashboard_url?: str } }
     """
     import base64
@@ -176,30 +66,14 @@ def get_users_db() -> Dict[str, Dict[str, Any]]:
         try:
             users = json.loads(users_json)
             if isinstance(users, dict):
-                # Handle case where JSON is wrapped in "users" key (like secrets.toml)
+                # Handle case where JSON is wrapped in "users" key
                 if "users" in users and isinstance(users["users"], dict):
                     return users["users"]
                 return users
         except json.JSONDecodeError:
-            pass  # Fall through to secrets file
+            pass
     
-    # Fallback to secrets file
-    secrets = load_secrets()
-    users = secrets.get("users") or secrets.get("Users") or {}
-
-    # If there's a 'users' table (toml) keys are already nested.
-    if isinstance(users, dict) and users and any("password" in v for v in users.values()):
-        return users
-
-    # Try to assemble users from keys like "users.username" in top-level secrets (less common in TOML)
-    assembled = {}
-    
-    # Final fallback: try to find any table-like entries that look like users
-    for key, val in (secrets.items() if isinstance(secrets, dict) else []):
-        if isinstance(val, dict) and "password" in val and "r2_bucket" in val:
-            assembled[key] = val
-
-    return assembled
+    return {}
 
 
 def get_user_config(username: str) -> Optional[Dict[str, Any]]:
@@ -211,19 +85,6 @@ def get_user_config(username: str) -> Optional[Dict[str, Any]]:
 def get_google_api_key() -> Optional[str]:
     """
     Returns the Google API key for Gemini AI.
-    Checks environment variable first, then falls back to secrets file.
+    Strictly uses environment variables.
     """
-    # Check environment variable first
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    if api_key:
-        return api_key
-    
-    # Fallback to secrets file
-    secrets = load_secrets()
-    # Support multiple common key names
-    return secrets.get("google_api_key") or \
-           secrets.get("GOOGLE_API_KEY") or \
-           secrets.get("gemini_api_key") or \
-           secrets.get("GEMINI_API_KEY") or \
-           secrets.get("general", {}).get("gemini_api_key") or \
-           secrets.get("general", {}).get("GEMINI_API_KEY")
+    return os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")

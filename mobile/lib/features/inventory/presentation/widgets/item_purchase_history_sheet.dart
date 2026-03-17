@@ -269,9 +269,15 @@ class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
             ),
           ),
 
-          // Stats Grid (2x2)
-          Padding(
-            padding: const EdgeInsets.all(16),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Stats Grid (2x2)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
             child: GridView.count(
               crossAxisCount: 2,
               crossAxisSpacing: 12,
@@ -425,12 +431,12 @@ class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
           ),
 
           // History List
-          Flexible(
-            child: history.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.all(16),
+          history.isEmpty
+              ? _buildEmptyState()
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
                     itemCount: history.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 12),
@@ -590,8 +596,11 @@ class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
                       );
                     },
                   ),
+                  SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                ],
+              ),
+            ),
           ),
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
         ],
       ),
     );

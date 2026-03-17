@@ -81,6 +81,19 @@ class UdharNotifier extends Notifier<UdharState> {
       return false;
     }
   }
+
+  Future<List<OrderLineItem>> fetchOrderItems(String receiptNumber) async {
+    try {
+      final response = await _dio.get('/api/invoices/receipt/$receiptNumber/items');
+      final data = response.data['items'] as List?;
+      if (data != null) {
+        return data.map((e) => OrderLineItem.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }
 
 final udharProvider =

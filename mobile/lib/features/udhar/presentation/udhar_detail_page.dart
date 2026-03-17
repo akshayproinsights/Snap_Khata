@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
+import 'widgets/order_details_sheet.dart';
 
 class UdharDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -302,82 +303,126 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                           final tx = _transactions![index];
                           final isPayment = tx.transactionType == 'PAYMENT';
 
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.border),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: isPayment
-                                        ? Colors.green.shade50
-                                        : Colors.orange.shade50,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isPayment
-                                        ? LucideIcons.arrowDownLeft
-                                        : LucideIcons.arrowUpRight,
-                                    color: isPayment
-                                        ? Colors.green.shade600
-                                        : Colors.orange.shade600,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isPayment
-                                            ? 'Payment Received'
-                                            : 'Credit Invoice ${tx.receiptNumber ?? ''}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
+                          return InkWell(
+                            onTap: (!isPayment && tx.receiptNumber != null) 
+                                ? () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) => OrderDetailsSheet(
+                                        receiptNumber: tx.receiptNumber!,
+                                        transaction: tx,
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        dateFormatter.format(tx.createdAt.toLocal()),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                      if (tx.notes != null &&
-                                          tx.notes!.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
+                                    );
+                                  }
+                                : null,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppTheme.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: isPayment
+                                          ? Colors.green.shade50
+                                          : Colors.orange.shade50,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isPayment
+                                          ? LucideIcons.arrowDownLeft
+                                          : LucideIcons.arrowUpRight,
+                                      color: isPayment
+                                          ? Colors.green.shade600
+                                          : Colors.orange.shade600,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
                                         Text(
-                                          tx.notes!,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade600,
-                                            fontStyle: FontStyle.italic,
+                                          isPayment
+                                              ? 'Payment Received'
+                                              : 'Credit Invoice ${tx.receiptNumber ?? ''}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
                                           ),
                                         ),
-                                      ]
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          dateFormatter.format(tx.createdAt.toLocal()),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                        if (tx.notes != null &&
+                                            tx.notes!.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            tx.notes!,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ]
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: isPayment
+                                              ? Colors.green.shade700
+                                              : Colors.orange.shade700,
+                                        ),
+                                      ),
+                                      if (!isPayment && tx.receiptNumber != null) ...[
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'View Items',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.orange.shade800,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Icon(
+                                              LucideIcons.chevronRight,
+                                              size: 14,
+                                              color: Colors.orange.shade800,
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
-                                ),
-                                Text(
-                                  '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: isPayment
-                                        ? Colors.green.shade700
-                                        : Colors.orange.shade700,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },
