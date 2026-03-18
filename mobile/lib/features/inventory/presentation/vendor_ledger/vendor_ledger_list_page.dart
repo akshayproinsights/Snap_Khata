@@ -6,6 +6,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import '../providers/vendor_ledger_provider.dart';
 import '../../domain/models/vendor_ledger_models.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
 
 class VendorLedgerListPage extends ConsumerWidget {
   const VendorLedgerListPage({super.key});
@@ -13,26 +14,20 @@ class VendorLedgerListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(vendorLedgerProvider);
+    final searchQuery = ref.watch(udharSearchQueryProvider).toLowerCase();
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Vendor Payables (Udhar)'),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.refreshCw),
-            onPressed: () => ref.read(vendorLedgerProvider.notifier).fetchLedgers(),
-          ),
-        ],
-      ),
-      body: state.isLoading && state.ledgers.isEmpty
+    final filteredLedgers = state.ledgers.where((ledger) {
+      if (searchQuery.isEmpty) return true;
+      return ledger.vendorName.toLowerCase().contains(searchQuery);
+    }).toList();
+
+    return state.isLoading && state.ledgers.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : state.error != null && state.ledgers.isEmpty
               ? _buildErrorState(context, ref, state.error!)
               : state.ledgers.isEmpty
                   ? _buildEmptyState()
-                  : _buildLedgerList(state.ledgers),
-    );
+                  : _buildLedgerList(filteredLedgers);
   }
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, String error) {
@@ -80,75 +75,14 @@ class VendorLedgerListPage extends ConsumerWidget {
   }
 
   Widget _buildLedgerList(List<VendorLedger> ledgers) {
-    final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
-    
-    // Calculate total pending
-    final totalPending = ledgers.fold(0.0, (sum, ledger) => sum + ledger.balanceDue);
-
-    return Column(
-      children: [
-        // Summary Header
-        Container(
-          padding: const EdgeInsets.all(20),
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppTheme.primary, Color(0xFF1F5C5B)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Total Pending Payables',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                currencyFormatter.format(totalPending),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -1,
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
-          child: Row(
-            children: [
-              Text(
-                'VENDORS',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // List
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: ledgers.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final ledger = ledgers[index];
-              return _LedgerCard(ledger: ledger);
-            },
-          ),
-        ),
-      ],
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      itemCount: ledgers.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final ledger = ledgers[index];
+        return _LedgerCard(ledger: ledger);
+      },
     );
   }
 }
@@ -161,6 +95,23 @@ class _LedgerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
+    
+    // Calculate time ago
+    String timeAgo = '';
+    if (ledger.lastPaymentDate != null) {
+      final difference = DateTime.now().difference(ledger.lastPaymentDate!);
+      if (difference.inDays > 0) {
+        timeAgo = '${difference.inDays} days ago';
+      } else if (difference.inHours > 0) {
+        timeAgo = '${difference.inHours} hours ago';
+      } else if (difference.inMinutes > 0) {
+        timeAgo = '${difference.inMinutes} mins ago';
+      } else {
+        timeAgo = 'Just now';
+      }
+    } else {
+      timeAgo = 'No payments yet';
+    }
     
     return InkWell(
       onTap: () {
@@ -183,21 +134,15 @@ class _LedgerCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  ledger.vendorName.isNotEmpty ? ledger.vendorName[0].toUpperCase() : 'V',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
+            CircleAvatar(
+              backgroundColor: Colors.red.shade50,
+              radius: 24,
+              child: Text(
+                ledger.vendorName.isNotEmpty ? ledger.vendorName[0].toUpperCase() : 'V',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade800,
                 ),
               ),
             ),
@@ -210,11 +155,16 @@ class _LedgerCard extends StatelessWidget {
                     ledger.vendorName,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    timeAgo,
+                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                   ),
                 ],
               ),
@@ -227,21 +177,21 @@ class _LedgerCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.redAccent,
+                    color: Colors.red,
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'TO PAY',
+                  'You will give',
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                     color: AppTheme.textSecondary,
-                    letterSpacing: 1,
                   ),
                 ),
               ],
             ),
+            const SizedBox(width: 8),
+            const Icon(Icons.keyboard_arrow_down, color: AppTheme.textSecondary, size: 20),
           ],
         ),
       ),

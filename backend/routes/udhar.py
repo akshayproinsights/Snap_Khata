@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from auth import get_current_user
 from database import get_database_client
@@ -221,4 +221,214 @@ async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: D
         raise
     except Exception as e:
         logger.error(f"Error recording payment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ManualUdharEntry(BaseModel):
+    party_type: str # 'customer' or 'vendor'
+    party_name: str # Name of the customer or vendor
+    amount: float   # Must be > 0
+    entry_type: str # 'got' (You Got) or 'gave' (You Gave)
+    notes: Optional[str] = None
+
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
+    """Get the top-level summary for the Udhar dashboard."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Calculate Total Receivable (customer ledgers balance > 0)
+        receivable_resp = db.client.table('customer_ledgers') \
+            .select('balance_due') \
+            .eq('username', username) \
+            .gt('balance_due', 0) \
+            .execute()
+        total_receivable = sum(item['balance_due'] for item in receivable_resp.data) if receivable_resp.data else 0.0
+
+        # Calculate Total Payable (vendor ledgers balance > 0)
+        payable_resp = db.client.table('vendor_ledgers') \
+            .select('balance_due') \
+            .eq('username', username) \
+            .gt('balance_due', 0) \
+            .execute()
+        total_payable = sum(item['balance_due'] for item in payable_resp.data) if payable_resp.data else 0.0
+
+        # Chart Data Aggregation (last 30 days)
+        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        
+        # customer transactions (Cash In when PAYMENT)
+        # Note: in existing code, PAYMENT to customer decreases balance. means customer gave us (Cash In).
+        c_tx_resp = db.client.table('ledger_transactions') \
+            .select('amount, created_at') \
+            .eq('username', username) \
+            .eq('transaction_type', 'PAYMENT') \
+            .gte('created_at', thirty_days_ago) \
+            .execute()
+            
+        # vendor transactions (Cash Out when PAYMENT)
+        # Note: in existing code, PAYMENT to vendor decreases balance. means we gave vendor (Cash Out).
+        v_tx_resp = db.client.table('vendor_ledger_transactions') \
+            .select('amount, created_at') \
+            .eq('username', username) \
+            .eq('transaction_type', 'PAYMENT') \
+            .gte('created_at', thirty_days_ago) \
+            .execute()
+
+        # Group by date
+        daily_cashflow = {}
+        
+        for tx in c_tx_resp.data:
+            date_str = tx['created_at'].split('T')[0]
+            if date_str not in daily_cashflow:
+                daily_cashflow[date_str] = {"cash_in": 0.0, "cash_out": 0.0}
+            daily_cashflow[date_str]["cash_in"] += float(tx['amount'])
+            
+        for tx in v_tx_resp.data:
+            date_str = tx['created_at'].split('T')[0]
+            if date_str not in daily_cashflow:
+                daily_cashflow[date_str] = {"cash_in": 0.0, "cash_out": 0.0}
+            daily_cashflow[date_str]["cash_out"] += float(tx['amount'])
+            
+        # Calculate net and format for chart
+        chart_data = []
+        for date_str, flow in sorted(daily_cashflow.items()):
+            chart_data.append({
+                "date": date_str,
+                "cash_in": flow["cash_in"],
+                "cash_out": flow["cash_out"],
+                "net_cashflow": flow["cash_in"] - flow["cash_out"]
+            })
+
+        return {
+            "status": "success",
+            "data": {
+                "total_receivable": total_receivable,
+                "total_payable": total_payable,
+                "chart_data": chart_data
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dashboard summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/manual-entry")
+async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depends(get_current_user)):
+    """Create a manual Udhar entry for a customer or vendor."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    if entry.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+        
+    if entry.party_type not in ['customer', 'vendor']:
+        raise HTTPException(status_code=400, detail="Invalid party_type. Must be 'customer' or 'vendor'")
+        
+    if entry.entry_type not in ['got', 'gave']:
+        raise HTTPException(status_code=400, detail="Invalid entry_type. Must be 'got' or 'gave'")
+        
+    party_name_clean = entry.party_name.strip()
+    if not party_name_clean:
+        raise HTTPException(status_code=400, detail="Party name cannot be empty")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    now = datetime.utcnow().isoformat()
+    
+    try:
+        tables = {
+            'customer': {
+                'ledger_table': 'customer_ledgers',
+                'tx_table': 'ledger_transactions',
+                'name_field': 'customer_name'
+            },
+            'vendor': {
+                'ledger_table': 'vendor_ledgers',
+                'tx_table': 'vendor_ledger_transactions',
+                'name_field': 'vendor_name'
+            }
+        }
+        
+        cfg = tables[entry.party_type]
+        
+        # Determine if balance goes up or down
+        # Customer: gave -> balance increases (they owe us more). got -> balance decreases (they paid us).
+        # Vendor: got -> balance increases (we owe them more). gave -> balance decreases (we paid them).
+        is_increase = False
+        tx_type = ''
+        
+        if entry.party_type == 'customer':
+            if entry.entry_type == 'gave':
+                is_increase = True
+                tx_type = 'MANUAL_CREDIT'
+            elif entry.entry_type == 'got':
+                is_increase = False
+                tx_type = 'PAYMENT'
+        else: # vendor
+            if entry.entry_type == 'got':
+                is_increase = True
+                tx_type = 'MANUAL_CREDIT'
+            elif entry.entry_type == 'gave':
+                is_increase = False
+                tx_type = 'PAYMENT'
+                
+        # 1. Upsert Ledger
+        ledger_resp = db.client.table(cfg['ledger_table']) \
+            .select('*') \
+            .eq('username', username) \
+            .eq(cfg['name_field'], party_name_clean) \
+            .execute()
+            
+        ledger_data = ledger_resp.data
+        if ledger_data:
+            ledger = ledger_data[0]
+            current_balance = float(ledger.get('balance_due', 0))
+            new_balance = current_balance + entry.amount if is_increase else current_balance - entry.amount
+            
+            update_data = {
+                'balance_due': new_balance,
+                'updated_at': now
+            }
+            # Only update last_payment_date if it's a payment (decrease in balance due)
+            if not is_increase:
+                update_data['last_payment_date'] = now
+                
+            db.client.table(cfg['ledger_table']).update(update_data).eq('id', ledger['id']).execute()
+            ledger_id = ledger['id']
+        else:
+            new_balance = entry.amount if is_increase else -entry.amount
+            new_ledger_resp = db.client.table(cfg['ledger_table']).insert({
+                'username': username,
+                cfg['name_field']: party_name_clean,
+                'balance_due': new_balance,
+            }).execute()
+            
+            if new_ledger_resp.data:
+                ledger_id = new_ledger_resp.data[0]['id']
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to create ledger for {party_name_clean}")
+                
+        # 2. Add Transaction
+        db.client.table(cfg['tx_table']).insert({
+            'username': username,
+            'ledger_id': ledger_id,
+            'transaction_type': tx_type,
+            'amount': entry.amount,
+            'notes': entry.notes
+        }).execute()
+        
+        return {
+            "status": "success",
+            "message": "Manual entry recorded successfully",
+            "new_balance": new_balance,
+            "ledger_id": ledger_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating manual entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))

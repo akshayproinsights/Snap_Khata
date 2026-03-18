@@ -63,26 +63,27 @@ void main() async {
     await Hive.initFlutter();
   }
 
-  // Initialize Firebase — wrapped so app still launches even if Firebase fails
-  try {
-    await Firebase.initializeApp();
+  // Initialize Firebase — skipped on web (no firebase_options configured for web).
+  // Crashlytics and Workmanager are also skipped on web.
+  if (!kIsWeb) {
+    try {
+      await Firebase.initializeApp();
 
-    if (!kIsWeb) {
       // Setup Crashlytics
       FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
       PlatformDispatcher.instance.onError = (error, stack) {
         FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
         return true;
       };
-    }
 
-    // Initialize notifications in the background — do NOT await, so FCM token
-    // fetch never blocks the app from showing the login screen.
-    NotificationService.initialize().catchError((e) {
-      debugPrint('NotificationService init failed (non-fatal): $e');
-    });
-  } catch (e) {
-    debugPrint('Firebase init failed (non-fatal): $e');
+      // Initialize notifications in the background — do NOT await, so FCM token
+      // fetch never blocks the app from showing the login screen.
+      NotificationService.initialize().catchError((e) {
+        debugPrint('NotificationService init failed (non-fatal): $e');
+      });
+    } catch (e) {
+      debugPrint('Firebase init failed (non-fatal): $e');
+    }
   }
 
   // Open cache boxes

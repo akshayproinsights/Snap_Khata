@@ -12,8 +12,12 @@ module.exports = {
     {
       name: "flutter-web",
       cwd: "./mobile",
-      script: "flutter",
-      args: "run -d web-server --web-hostname 0.0.0.0 --web-port 3000",
+      script: "serve",
+      env: {
+        PM2_SERVE_PATH: './build/web',
+        PM2_SERVE_PORT: 3000,
+        PM2_SERVE_SPA: 'true'
+      },
       out_file: "../logs/flutter.log",
       error_file: "../logs/flutter.log",
       merge_logs: true
@@ -21,7 +25,7 @@ module.exports = {
     {
       name: "log-viewer",
       script: "frontail",
-      args: "--port 9003 --theme dark /root/Snap_Khata/logs/backend.log /root/Snap_Khata/logs/flutter.log",
+      args: "--host 0.0.0.0 --port 9003 --theme dark /root/Snap_Khata/logs/backend.log /root/Snap_Khata/logs/flutter.log",
     },
     {
       name: "log-downloader",

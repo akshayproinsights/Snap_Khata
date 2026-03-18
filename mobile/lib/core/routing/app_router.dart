@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
 import 'package:mobile/features/dashboard/presentation/dashboard_page.dart';
+import 'package:mobile/features/udhar/presentation/udhar_dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
 import 'package:mobile/features/review/presentation/pending_receipts_page.dart';
 import 'package:mobile/features/review/presentation/receipt_review_page.dart';
@@ -59,6 +60,15 @@ class AppRouter {
                 path: '/dashboard',
                 name: 'dashboard',
                 builder: (context, state) => const DashboardPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/udhar-dashboard',
+                name: 'udhar-dashboard',
+                builder: (context, state) => const UdharDashboardPage(),
               ),
             ],
           ),
