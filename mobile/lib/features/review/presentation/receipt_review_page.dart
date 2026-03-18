@@ -1417,7 +1417,6 @@ class _PartLaborToggle extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PartLaborToggle({
-    super.key,
     required this.isPart,
     required this.selected,
     required this.onTap,

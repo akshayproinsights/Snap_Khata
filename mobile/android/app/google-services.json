@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "47234500199",
+    "project_id": "snapkhata",
+    "storage_bucket": "snapkhata.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:47234500199:android:75de60efade553da42f6c2",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDCQWdcRn0e2R0azqIVhg8d14d59Dd468"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
