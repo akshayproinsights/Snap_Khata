@@ -12,11 +12,7 @@ class ApiClient {
   // Uses PC's LAN IP for physical device testing.
   // For emulator/simulator use 'http://10.0.2.2:8000' (Android) or 'http://127.0.0.1:8000' (iOS sim).
   // For production, set to your deployed API URL.
-  static final String _defaultBaseUrl = kIsWeb
-      ? 'http://localhost:8000'
-      : kDebugMode
-          ? 'http://192.168.1.18:8000' // Local PC IP for physical device testing
-          : 'https://snap-khata-backend-112233610459.asia-south1.run.app';
+  static final String _defaultBaseUrl = 'http://77.42.26.79:8000';
 
   ApiClient._internal() {
     dio = Dio(BaseOptions(
