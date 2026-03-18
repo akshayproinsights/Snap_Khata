@@ -1,0 +1,33 @@
+name: Deploy FastAPI to Hetzner
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'ecosystem.config.js'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd ~/Snap_Khata
+            git pull origin main
+            
+            # Update Python dependencies
+            cd backend
+            source venv/bin/activate
+            pip install -r requirements.txt
+            cd ..
+            
+            # Restart the FastAPI Server
+            pm2 restart ecosystem.config.js
