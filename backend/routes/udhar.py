@@ -169,6 +169,40 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         logger.error(f"Error fetching transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/ledgers/{ledger_id}")
+async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(get_current_user)):
+    """Delete a customer ledger and its transactions."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Verify ledger belongs to user
+        ledger_resp = db.client.table('customer_ledgers') \
+            .select('id') \
+            .eq('id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not ledger_resp.data:
+            raise HTTPException(status_code=404, detail="Ledger not found")
+            
+        # Delete the ledger (transactions will be deleted by CASCADE)
+        db.client.table('customer_ledgers').delete().eq('id', ledger_id).execute()
+        
+        return {
+            "status": "success",
+            "message": "Ledger deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting ledger: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/ledgers/{ledger_id}/pay")
 async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: Dict = Depends(get_current_user)):
     """Record a payment from the customer, reducing their balance."""
@@ -257,8 +291,7 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
             .execute()
         total_payable = sum(item['balance_due'] for item in payable_resp.data) if payable_resp.data else 0.0
 
-        # Chart Data Aggregation (last 30 days)
-        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        # Chart Data Aggregation (all time)
         
         # customer transactions (Cash In when PAYMENT)
         # Note: in existing code, PAYMENT to customer decreases balance. means customer gave us (Cash In).
@@ -266,7 +299,6 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
             .select('amount, created_at') \
             .eq('username', username) \
             .eq('transaction_type', 'PAYMENT') \
-            .gte('created_at', thirty_days_ago) \
             .execute()
             
         # vendor transactions (Cash Out when PAYMENT)
@@ -275,7 +307,6 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
             .select('amount, created_at') \
             .eq('username', username) \
             .eq('transaction_type', 'PAYMENT') \
-            .gte('created_at', thirty_days_ago) \
             .execute()
 
         # Group by date

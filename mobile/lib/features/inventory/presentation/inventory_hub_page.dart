@@ -126,7 +126,7 @@ class InventoryHubPage extends ConsumerWidget {
             iconColor: const Color(0xFFE11D48),
             iconBg: const Color(0xFFFFE4E6),
             title: 'Vendor Udhar',
-            subtitle: 'Track your pending payables to vendors',
+            subtitle: 'Track your pending dues to vendors',
             badge: null,
             onTap: () {
               HapticFeedback.lightImpact();

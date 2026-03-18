@@ -57,8 +57,8 @@ class UdharDashboardPage extends ConsumerWidget {
                       // Tabs
                       const TabBar(
                         tabs: [
-                          Tab(text: 'Customers (Receivables)'),
-                          Tab(text: 'Suppliers (Payables)'),
+                          Tab(icon: Icon(Icons.person), text: 'Customers'),
+                          Tab(icon: Icon(Icons.local_shipping), text: 'Suppliers'),
                         ],
                         labelColor: AppTheme.primary,
                         unselectedLabelColor: AppTheme.textSecondary,
@@ -160,13 +160,19 @@ class UdharDashboardPage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'YOU WILL GET\n(RECEIVABLE)',
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+                const Row(
+                  children: [
+                    Icon(Icons.person, color: Colors.green, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      'YOU WILL GET',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -190,13 +196,19 @@ class UdharDashboardPage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'YOU WILL GIVE\n(PAYABLE)',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+                const Row(
+                  children: [
+                    Icon(Icons.local_shipping, color: Colors.red, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      'YOU WILL GIVE',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -219,7 +231,7 @@ class UdharDashboardPage extends ConsumerWidget {
     if (dataPoints.isEmpty) {
       return const SizedBox(
         height: 150,
-        child: Center(child: Text('No recent transaction data')),
+        child: Center(child: Text('No transaction data')),
       );
     }
 

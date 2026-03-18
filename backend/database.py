@@ -41,14 +41,10 @@ class DatabaseClient:
     
     def set_user_context(self, username: str):
         """Set user context for Row-Level Security"""
-        # This will be used by RLS policies
-        try:
-            self.client.rpc('set_config', {
-                'setting': 'app.current_user',
-                'value': username
-            }).execute()
-        except Exception as e:
-            logger.warning(f"Could not set user context: {e}")
+        # The backend uses service_role key which bypasses RLS.
+        # Calling set_config is unnecessary and causes a noisy warning
+        # since pg_catalog.set_config isn't exposed via PostgREST RPC.
+        pass
     
     def query(self, table: str, columns: List[str] = None):
         """

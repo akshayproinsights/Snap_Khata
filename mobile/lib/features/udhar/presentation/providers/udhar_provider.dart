@@ -82,6 +82,16 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  Future<bool> deleteLedger(int ledgerId) async {
+    try {
+      await _dio.delete('/api/udhar/ledgers/$ledgerId');
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<OrderLineItem>> fetchOrderItems(String receiptNumber) async {
     try {
       final response = await _dio.get('/api/invoices/receipt/$receiptNumber/items');

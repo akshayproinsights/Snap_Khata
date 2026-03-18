@@ -1,0 +1,245 @@
+2026-03-18 17:54:31,879 - database - WARNING - Could not set user context: {'message': 'Could not find the function public.set_config(setting, value) in the schema cache', 'code': 'PGRST202', 'hint': None, 'details': 'Searched for the function public.set_config with parameters setting, value or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.'}
+INFO:     106.213.86.118:30707 - "GET /api/udhar/ledgers/1/transactions HTTP/1.1" 200 OK
+INFO:     106.213.86.118:12513 - "GET /api/invoices/receipt/1547/items HTTP/1.1" 200 OK
+2026-03-18 17:55:02,511 - database - WARNING - Could not set user context: {'message': 'Could not find the function public.set_config(setting, value) in the schema cache', 'code': 'PGRST202', 'hint': None, 'details': 'Searched for the function public.set_config with parameters setting, value or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.'}
+INFO:     106.213.86.118:26776 - "GET /api/udhar/ledgers/1/transactions HTTP/1.1" 200 OK
+2026-03-18 17:55:34,920 - database - WARNING - Could not set user context: {'message': 'Could not find the function public.set_config(setting, value) in the schema cache', 'code': 'PGRST202', 'hint': None, 'details': 'Searched for the function public.set_config with parameters setting, value or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.'}
+INFO:     106.213.86.118:6548 - "GET /api/vendor-ledgers/vendor-ledgers/1/transactions HTTP/1.1" 200 OK
+INFO:     106.213.86.118:17143 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:28863 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:17143 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:28863 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:22510 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:26347 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+2026-03-18 17:56:08,523 - routes.upload - INFO - Received 1 sales files for upload from Adnak
+2026-03-18 17:56:08,524 - routes.upload - INFO - Starting PARALLEL upload of 1 sales files for Adnak
+2026-03-18 17:56:08,531 - utils.image_optimizer - INFO - Large dimensions (1499x1992), will optimize
+2026-03-18 17:56:08,531 - routes.upload - INFO - Optimizing image: scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:08,532 - utils.image_optimizer - INFO - Original image: 1499x1992, 345.76KB, format: JPEG
+2026-03-18 17:56:08,629 - utils.image_optimizer - INFO - Resized to: 1444x1920
+2026-03-18 17:56:08,655 - utils.image_optimizer - INFO - Optimization complete: 475.44KB (-37.5% reduction), quality: 85
+2026-03-18 17:56:08,657 - routes.upload - INFO - Optimization results for scaled_1000052437_1773856566665_289364536_compressed.jpg:
+2026-03-18 17:56:08,657 - routes.upload - INFO -   Original: 345.76KB, 1499x1992
+2026-03-18 17:56:08,657 - routes.upload - INFO -   Optimized: 475.44KB, 1444x1920
+2026-03-18 17:56:08,657 - routes.upload - INFO -   Compression: -37.5% reduction
+2026-03-18 17:56:08,732 - services.storage - INFO - R2 storage client initialized
+2026-03-18 17:56:10,717 - services.storage - INFO - Uploaded to R2: adnak-sir-invoices/Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:10,717 - routes.upload - INFO - Uploaded file: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:10,717 - routes.upload - INFO - Successfully uploaded 1/1 files in parallel
+INFO:     106.213.86.118:26347 - "POST /api/upload/files HTTP/1.1" 200 OK
+2026-03-18 17:56:11,211 - routes.upload - INFO - ========== PROCESS FILES ENDPOINT CALLED ==========
+2026-03-18 17:56:11,211 - routes.upload - INFO - User: Adnak
+2026-03-18 17:56:11,211 - routes.upload - INFO - Task ID: 9002efbc-6674-4efb-b0ed-2acdf755a191
+2026-03-18 17:56:11,211 - routes.upload - INFO - Number of files to process: 1
+2026-03-18 17:56:11,211 - routes.upload - INFO - File keys: ['Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg']
+2026-03-18 17:56:11,211 - routes.upload - INFO - Force upload: False
+2026-03-18 17:56:11,211 - routes.upload - INFO - R2 Bucket: adnak-sir-invoices
+2026-03-18 17:56:11,765 - routes.upload - INFO - Created task 9002efbc-6674-4efb-b0ed-2acdf755a191 for user Adnak in database
+2026-03-18 17:56:11,766 - routes.upload - INFO - Submitting task 9002efbc-6674-4efb-b0ed-2acdf755a191 to executor...
+2026-03-18 17:56:11,768 - routes.upload - INFO - Task 9002efbc-6674-4efb-b0ed-2acdf755a191 submitted locally successfully
+
+🔥🔥🔥 BACKGROUND TASK STARTED 🔥🔥🔥
+INFO:     106.213.86.118:26347 - "POST /api/upload/process-files HTTP/1.1" 200 OK
+Task ID: 9002efbc-6674-4efb-b0ed-2acdf755a191
+Files to process: 1
+Force upload: False
+================================================================================
+
+2026-03-18 17:56:11,771 - routes.upload - INFO - ========== BACKGROUND TASK STARTED ==========
+2026-03-18 17:56:11,771 - routes.upload - INFO - Task ID: 9002efbc-6674-4efb-b0ed-2acdf755a191
+2026-03-18 17:56:11,771 - routes.upload - INFO - File keys to process: ['Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg']
+2026-03-18 17:56:11,771 - routes.upload - INFO - User: Adnak
+2026-03-18 17:56:11,772 - routes.upload - INFO - R2 Bucket: adnak-sir-invoices
+2026-03-18 17:56:11,772 - routes.upload - INFO - Force upload: False
+2026-03-18 17:56:11,772 - routes.upload - INFO - Environment check:
+2026-03-18 17:56:11,772 - routes.upload - INFO -   - GOOGLE_API_KEY set: True
+2026-03-18 17:56:11,772 - routes.upload - INFO -   - R2_ACCOUNT_ID set: False
+2026-03-18 17:56:11,772 - routes.upload - INFO -   - SUPABASE_URL set: True
+2026-03-18 17:56:11,772 - routes.upload - INFO - Phase 1: Verifying files in R2...
+2026-03-18 17:56:11,954 - routes.upload - INFO - Phase 2: Processing invoices with AI...
+2026-03-18 17:56:12,129 - routes.upload - INFO - Processing 1 files for user Adnak
+
+================================================================================
+BATCH PROCESSING STARTED
+Total files: 1
+Username: Adnak
+Force upload: False
+================================================================================
+
+2026-03-18 17:56:12,129 - services.processor - INFO - Phase 1: Checking 1 files for duplicates...
+2026-03-18 17:56:12,554 - routes.upload - INFO - Progress: 0/1 (Failed: 0) - Checking for duplicates: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:12,555 - services.processor - INFO - [1/1] Checking: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:13,638 - services.storage - INFO - Downloaded from R2: adnak-sir-invoices/Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:13,639 - services.processor - INFO - Hash for Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg: 6ffd4247a212aab3...
+2026-03-18 17:56:14,011 - services.processor - INFO - No duplicates found - proceeding with processing
+2026-03-18 17:56:14,012 - services.processor - INFO - Starting parallel processing of 1 files with 50 workers
+2026-03-18 17:56:14,183 - routes.upload - INFO - Progress: 0/1 (Failed: 0) - Downloading Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+
+[1/1] Downloading: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:14,183 - services.processor - INFO - [1/1] Downloading: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+INFO:     106.213.86.118:26347 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+2026-03-18 17:56:14,551 - services.storage - INFO - Downloaded from R2: adnak-sir-invoices/Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+[HASH] 6ffd4247a212aab3...
+2026-03-18 17:56:14,552 - services.processor - INFO - Calculated hash for Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg: 6ffd4247a212aab3...
+2026-03-18 17:56:14,730 - routes.upload - INFO - Progress: 0/1 (Failed: 0) - Automated processing: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+[AI PROCESSING] Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:14,797 - config_loader - INFO - User config found with lowercase name: adnak
+2026-03-18 17:56:14,797 - config_loader - INFO - Loaded user config: Adnak
+
+================================================================================
+>>> PROCESSING IMAGE: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+================================================================================
+
+2026-03-18 17:56:14,811 - services.processor - INFO - Processing image: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+[AI] Starting Flash model attempt
+2026-03-18 17:56:14,812 - services.processor - INFO - Starting Flash model attempt
+[ATTEMPT 1/5] Using model: gemini-3-flash-preview
+2026-03-18 17:56:14,812 - services.processor - INFO - Attempting with gemini-3-flash-preview (attempt 1/5)
+2026-03-18 17:56:14,812 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-03-18 17:56:16,124 - services.processor - ERROR - Error on attempt 1/5: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+[ATTEMPT 2/5] Using model: gemini-3-flash-preview
+2026-03-18 17:56:17,124 - services.processor - INFO - Attempting with gemini-3-flash-preview (attempt 2/5)
+2026-03-18 17:56:17,125 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+INFO:     106.213.86.118:26347 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+2026-03-18 17:56:18,369 - services.processor - ERROR - Error on attempt 2/5: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+INFO:     106.213.86.118:26347 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+[ATTEMPT 3/5] Using model: gemini-3-flash-preview
+2026-03-18 17:56:20,369 - services.processor - INFO - Attempting with gemini-3-flash-preview (attempt 3/5)
+2026-03-18 17:56:20,369 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-03-18 17:56:21,525 - services.processor - ERROR - Error on attempt 3/5: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+[ATTEMPT 4/5] Using model: gemini-3-flash-preview
+2026-03-18 17:56:25,525 - services.processor - INFO - Attempting with gemini-3-flash-preview (attempt 4/5)
+2026-03-18 17:56:25,525 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-03-18 17:56:26,688 - services.processor - ERROR - Error on attempt 4/5: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+INFO:     106.213.86.118:5242 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+INFO:     106.213.86.118:31026 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+[ATTEMPT 5/5] Using model: gemini-3-flash-preview
+2026-03-18 17:56:34,688 - services.processor - INFO - Attempting with gemini-3-flash-preview (attempt 5/5)
+2026-03-18 17:56:34,689 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+INFO:     106.213.86.118:5242 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+2026-03-18 17:56:35,927 - services.processor - ERROR - Error on attempt 5/5: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+2026-03-18 17:56:35,927 - services.processor - ERROR - ❌ gemini-3-flash-preview failed after 5 attempts
+
+[ERROR] Processing failed for Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+
+2026-03-18 17:56:35,928 - services.processor - ERROR - Complete failure: Both Flash and Pro models failed for Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:35,928 - services.processor - ERROR -    Errors: gemini-3-flash-preview error: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}} | gemini-3-flash-preview error: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}} | gemini-3-flash-preview error: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}} | gemini-3-flash-preview error: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}} | gemini-3-flash-preview error: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Your API key was reported as leaked. Please use another API key.', 'status': 'PERMISSION_DENIED'}}
+2026-03-18 17:56:36,121 - routes.upload - INFO - Progress: 0/1 (Failed: 1) - Failed processing: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg
+2026-03-18 17:56:36,122 - services.processor - INFO - Parallel processing complete. Processed: 0, Failed: 1
+2026-03-18 17:56:36,122 - routes.upload - INFO - Processing completed. Results: {'total': 1, 'processed': 0, 'failed': 1, 'errors': ['AI processing failed: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg'], 'duplicates': []}
+2026-03-18 17:56:36,308 - routes.upload - WARNING - Processing errors: ['AI processing failed: Adnak/sales/20260318_175608_5085b8_scaled_1000052437_1773856566665_289364536_compressed.jpg']
+2026-03-18 17:56:36,308 - routes.upload - INFO - === BACKGROUND TASK COMPLETED ===
+INFO:     106.213.86.118:5242 - "GET /api/upload/process/status/9002efbc-6674-4efb-b0ed-2acdf755a191 HTTP/1.1" 200 OK
+2026-03-18 17:59:43,108 - database - WARNING - Could not set user context: {'message': 'Could not find the function public.set_config(setting, value) in the schema cache', 'code': 'PGRST202', 'hint': None, 'details': 'Searched for the function public.set_config with parameters setting, value or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.'}
+INFO:     106.213.86.118:32344 - "GET /api/vendor-ledgers/vendor-ledgers/1/transactions HTTP/1.1" 200 OK
+INFO:     106.213.86.118:30031 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     106.213.86.118:30031 - "GET /api/review/amounts HTTP/1.1" 200 OK
+INFO:     106.213.86.118:28471 - "GET /api/auth/me HTTP/1.1" 200 OK
+2026-03-18 18:02:39,741 - database_helpers - INFO - Fetching 500 most recent verified invoices for Adnak
+2026-03-18 18:02:39,975 - database_helpers - INFO - ✅ Fetched 99 verified invoice records
+INFO:     106.213.86.118:28471 - "GET /api/verified/ HTTP/1.1" 200 OK
+2026-03-18 18:02:40,020 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 1: Getting draft items for user: Adnak
+2026-03-18 18:02:40,217 - routes.purchase_order_routes - INFO - 🔍 CHECKPOINT 2: Retrieved 3 draft PO items for Adnak, total cost: ₹770.26
+INFO:     106.213.86.118:20810 - "GET /api/purchase-orders/draft/items HTTP/1.1" 200 OK
+INFO:     106.213.86.118:33069 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     106.213.86.118:28482 - "GET /api/purchase-orders/suppliers HTTP/1.1" 200 OK
+INFO:     106.213.86.118:33069 - "GET /api/review/amounts HTTP/1.1" 200 OK
+INFO:     106.213.86.118:33069 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:28482 - "GET /api/upload/recent-task HTTP/1.1" 200 OK
+INFO:     106.213.86.118:23732 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     106.213.86.118:23732 - "GET /api/review/amounts HTTP/1.1" 200 OK
+2026-03-18 18:03:07,356 - database_helpers - INFO - Fetching 500 most recent verified invoices for Adnak
+2026-03-18 18:03:07,684 - database_helpers - INFO - ✅ Fetched 99 verified invoice records
+INFO:     106.213.86.118:20776 - "GET /api/verified/ HTTP/1.1" 200 OK
+INFO:     106.213.86.118:31458 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     106.213.86.118:20776 - "GET /api/review/amounts HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'database.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:05:37,401 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [29988]
+INFO:     Started server process [51347]
+INFO:     Waiting for application startup.
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:05:39,850 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:05:39,851 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'routes/udhar.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:05:40,755 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [51347]
+WARNING:  StatReload detected changes in 'routes/vendor_ledgers.py'. Reloading...
+INFO:     Started server process [51399]
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:05:43,137 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:05:43,137 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:05:43,238 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [51399]
+INFO:     Started server process [51411]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:05:45,609 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:05:45,610 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+2026-03-18 18:06:35,730 - database - INFO - Supabase client initialized
+INFO:     106.213.86.118:12579 - "GET /api/review/dates HTTP/1.1" 200 OK
+INFO:     106.213.86.118:12579 - "GET /api/review/amounts HTTP/1.1" 200 OK
+INFO:     106.213.86.118:12579 - "GET /api/inventory/items?show_all=true HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:09:13,401 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [51411]
+INFO:     Stopping reloader process [893]
+INFO:     Will watch for changes in these directories: ['/root/Snap_Khata/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [52182] using StatReload
+INFO:     Started server process [52185]
+INFO:     Waiting for application startup.
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:09:15,973 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:09:15,973 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+INFO:     Application startup complete.
+2026-03-18 18:15:41,415 - database - INFO - Supabase client initialized
+INFO:     106.213.86.118:18896 - "GET /api/udhar/ledgers HTTP/1.1" 200 OK
+INFO:     106.213.86.118:12613 - "GET /api/udhar/dashboard-summary HTTP/1.1" 200 OK
+INFO:     106.213.86.118:21409 - "GET /api/udhar/ledgers/1/transactions HTTP/1.1" 200 OK
+INFO:     106.213.86.118:29259 - "GET /api/invoices/receipt/1547/items HTTP/1.1" 200 OK
+INFO:     106.213.86.118:20399 - "GET /api/vendor-ledgers/vendor-ledgers HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'routes/udhar.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:23:38,987 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52185]
+INFO:     Started server process [55893]
+INFO:     Waiting for application startup.
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:23:41,490 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:23:41,490 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-03-18 18:24:05,377 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55893]
+INFO:     Stopping reloader process [52182]
+INFO:     Will watch for changes in these directories: ['/root/Snap_Khata/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [56084] using StatReload
+INFO:     Started server process [56087]
+INFO:     Waiting for application startup.
+SnapKhata Backend is starting......Final Doneee..
+2026-03-18 18:24:07,978 - main - INFO - SnapKhata API starting up...
+2026-03-18 18:24:07,978 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+INFO:     Application startup complete.
+INFO:     127.0.0.1:57512 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57512 - "GET /favicon.ico HTTP/1.1" 404 Not Found

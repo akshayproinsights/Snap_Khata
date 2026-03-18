@@ -1068,15 +1068,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     ),
                   );
 
-                  if (confirmed == true && context.mounted) {
+                  if (confirmed == true && mounted) {
                     await ref
                         .read(reviewProvider.notifier)
                         .deleteRecord(item.rowId, item.receiptNumber);
-                    if (context.mounted) {
+                    if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
+                        const SnackBar(
                           content: Text('Item deleted'),
-                          duration: const Duration(seconds: 2),
+                          duration: Duration(seconds: 2),
                         ),
                       );
                     }

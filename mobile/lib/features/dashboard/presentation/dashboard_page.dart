@@ -927,16 +927,6 @@ class _QuickLinksSection extends ConsumerWidget {
               ),
               _buildActionItem(
                 context: context,
-                icon: LucideIcons.wallet,
-                color: const Color(0xFFF59E0B), // Amber
-                title: 'Udhar',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.pushNamed('udhar-list');
-                },
-              ),
-              _buildActionItem(
-                context: context,
                 icon: LucideIcons.indianRupee,
                 color: const Color(0xFF10B981), // Emerald
                 title: 'Today\'s Sale',

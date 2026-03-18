@@ -83,6 +83,40 @@ async def get_vendor_ledger_transactions(ledger_id: int, current_user: Dict = De
         logger.error(f"Error fetching vendor transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/vendor-ledgers/{ledger_id}")
+async def delete_vendor_ledger(ledger_id: int, current_user: Dict = Depends(get_current_user)):
+    """Delete a vendor ledger and its transactions."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Verify ledger belongs to user
+        ledger_resp = db.client.table('vendor_ledgers') \
+            .select('id') \
+            .eq('id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not ledger_resp.data:
+            raise HTTPException(status_code=404, detail="Vendor Ledger not found")
+            
+        # Delete the ledger (transactions will be deleted by CASCADE)
+        db.client.table('vendor_ledgers').delete().eq('id', ledger_id).execute()
+        
+        return {
+            "status": "success",
+            "message": "Vendor Ledger deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting vendor ledger: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/vendor-ledgers/{ledger_id}/pay")
 async def record_vendor_payment(ledger_id: int, payment: PaymentCreate, current_user: Dict = Depends(get_current_user)):
     """Record a payment to the vendor, reducing the balance owed."""

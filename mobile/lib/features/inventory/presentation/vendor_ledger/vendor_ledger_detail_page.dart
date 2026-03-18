@@ -99,7 +99,7 @@ class _VendorLedgerDetailPageState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Current Balance Payable:',
+                          'Current Balance:',
                           style: TextStyle(
                             color: AppTheme.primary,
                             fontWeight: FontWeight.w600,

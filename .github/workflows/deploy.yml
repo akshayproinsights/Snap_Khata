@@ -1,13 +1,9 @@
-name: Deploy FastAPI to Hetzner
+name: Deploy App to Hetzner
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'backend/**'
-      - 'ecosystem.config.js'
-      - '.github/workflows/deploy-backend.yml'
 
 jobs:
   deploy:
@@ -29,5 +25,10 @@ jobs:
             pip install -r requirements.txt
             cd ..
             
-            # Restart the FastAPI Server
+            # Build Flutter Web App
+            cd mobile
+            flutter build web --release
+            cd ..
+            
+            # Restart all PM2 Services
             pm2 restart ecosystem.config.js

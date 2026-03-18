@@ -81,6 +81,16 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       return false;
     }
   }
+
+  Future<bool> deleteLedger(int ledgerId) async {
+    try {
+      await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }
 
 final vendorLedgerProvider =
