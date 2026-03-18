@@ -3,7 +3,7 @@ name: Build and Send APK to Firebase
 on:
   push:
     branches:
-      - main  # <-- CHANGE THIS to 'master' if that's your branch name
+      - main
 
 jobs:
   build:
@@ -25,7 +25,10 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-        working-directory: mobile # Tells the robot to look in your mobile folder
+        working-directory: mobile
+
+      - name: Accept Android Licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Build APK
         run: flutter build apk --release
@@ -36,5 +39,5 @@ jobs:
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           token: ${{ secrets.FIREBASE_TOKEN }}
-          groups: testers
+          testers: "akshay.proinsights@gmail.com" 
           file: mobile/build/app/outputs/flutter-apk/app-release.apk
