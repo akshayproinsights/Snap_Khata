@@ -21,7 +21,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Thread pool for blocking operations (Optimized for high-load: 50 concurrent tasks)
-# Configurable via environment variable
+# Configurable via environment variable done
 executor = ThreadPoolExecutor(max_workers=int(os.getenv('INVENTORY_MAX_WORKERS', '50')))
 
 # In-memory storage REMOVED - using database table 'upload_tasks'
