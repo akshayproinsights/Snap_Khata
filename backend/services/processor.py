@@ -6,20 +6,18 @@ import os
 import json
 import time
 import threading
-import tempfile
 from typing import List, Dict, Any, Optional, Callable
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 import logging
 
 
 from google import genai
 from google.genai import types
 from PIL import Image
-import pandas as pd
+
 
 from config import get_google_api_key
-from config_loader import get_user_config, get_gemini_prompt, get_columns_config
+from config_loader import get_user_config, get_gemini_prompt
 from database import get_database_client
 from services.storage import get_storage_client
 from utils.date_helpers import normalize_date, format_to_db, get_ist_now_str

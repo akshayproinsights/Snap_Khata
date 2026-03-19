@@ -41,6 +41,36 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     });
   }
 
+  /// Compute balance from actual transactions: invoices add, payments subtract
+  double get _computedBalance {
+    if (_transactions == null || _transactions!.isEmpty) {
+      return widget.ledger.balanceDue;
+    }
+    double balance = 0;
+    for (final tx in _transactions!) {
+      if (tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT') {
+        balance += tx.amount;
+      } else if (tx.transactionType == 'PAYMENT') {
+        balance -= tx.amount;
+      }
+    }
+    return balance;
+  }
+
+  double get _totalInvoiced {
+    if (_transactions == null) return 0;
+    return _transactions!
+        .where((tx) => tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT')
+        .fold(0.0, (sum, tx) => sum + tx.amount);
+  }
+
+  double get _totalPaid {
+    if (_transactions == null) return 0;
+    return _transactions!
+        .where((tx) => tx.transactionType == 'PAYMENT')
+        .fold(0.0, (sum, tx) => sum + tx.amount);
+  }
+
   void _showAddPaymentDialog(BuildContext context) {
     final amountController = TextEditingController();
     final notesController = TextEditingController();
@@ -50,7 +80,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
@@ -58,14 +88,26 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 20,
-                right: 20,
+                left: 24,
+                right: 24,
                 top: 24,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -80,18 +122,19 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Current Balance Due:',
+                          'Balance Due:',
                           style: TextStyle(
                               color: AppTheme.textSecondary,
                               fontWeight: FontWeight.w600),
@@ -107,7 +150,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: amountController,
                     keyboardType:
@@ -135,7 +178,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    height: 50,
+                    height: 52,
                     child: ElevatedButton(
                       onPressed: isSubmitting
                           ? null
@@ -159,7 +202,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
                               if (success && context.mounted) {
                                 Navigator.pop(context);
-                                _loadTransactions(); // Reload tx
+                                _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                       content: Text('Payment recorded! 🎉')),
@@ -206,73 +249,90 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch for ledger updates in the main list
     final state = ref.watch(udharProvider);
     final currentLedger = state.ledgers.firstWhere(
         (l) => l.id == widget.ledger.id,
         orElse: () => widget.ledger);
 
+    final initials = currentLedger.customerName.isNotEmpty
+        ? currentLedger.customerName
+            .trim()
+            .split(' ')
+            .take(2)
+            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+            .join()
+        : 'C';
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Row(
           children: [
-            Text(currentLedger.customerName),
-            if (currentLedger.customerPhone != null &&
-                currentLedger.customerPhone!.isNotEmpty)
-              Text(
-                currentLedger.customerPhone!,
-                style: const TextStyle(fontSize: 12, color: Colors.white70),
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.white.withValues(alpha: 0.25),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    currentLedger.customerName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (currentLedger.customerPhone != null &&
+                      currentLedger.customerPhone!.isNotEmpty)
+                    Text(
+                      currentLedger.customerPhone!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.white70),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
-          // Header Card
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  'Pending Balance',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  currencyFormatter.format(currentLedger.balanceDue),
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Header with balance & stats
+          _buildHeaderCard(currentLedger),
 
-          const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+          // Section Label
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Row(
               children: [
-                Text(
+                Container(
+                  width: 3,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
                   'TRANSACTIONS',
                   style: TextStyle(
                     fontSize: 12,
@@ -284,147 +344,21 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
 
           // Transactions List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _transactions == null || _transactions!.isEmpty
-                    ? const Center(
-                        child: Text('No transactions yet',
-                            style: TextStyle(color: AppTheme.textSecondary)))
+                    ? _buildEmptyState()
                     : ListView.separated(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
                         itemCount: _transactions!.length,
                         separatorBuilder: (context, index) =>
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final tx = _transactions![index];
-                          final isPayment = tx.transactionType == 'PAYMENT';
-
-                          return InkWell(
-                            onTap: (!isPayment && tx.receiptNumber != null) 
-                                ? () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (context) => OrderDetailsSheet(
-                                        receiptNumber: tx.receiptNumber!,
-                                        transaction: tx,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppTheme.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: isPayment
-                                          ? Colors.green.shade50
-                                          : Colors.orange.shade50,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      isPayment
-                                          ? LucideIcons.arrowDownLeft
-                                          : LucideIcons.arrowUpRight,
-                                      color: isPayment
-                                          ? Colors.green.shade600
-                                          : Colors.orange.shade600,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          isPayment
-                                              ? 'Payment Received'
-                                              : 'Credit Invoice ${tx.receiptNumber ?? ''}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          dateFormatter.format(tx.createdAt.toLocal()),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppTheme.textSecondary,
-                                          ),
-                                        ),
-                                        if (tx.notes != null &&
-                                            tx.notes!.isNotEmpty) ...[
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            tx.notes!,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade600,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                          ),
-                                        ]
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                          color: isPayment
-                                              ? Colors.green.shade700
-                                              : Colors.orange.shade700,
-                                        ),
-                                      ),
-                                      if (!isPayment && tx.receiptNumber != null) ...[
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'View Items',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.orange.shade800,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 2),
-                                            Icon(
-                                              LucideIcons.chevronRight,
-                                              size: 14,
-                                              color: Colors.orange.shade800,
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                          return _buildTransactionCard(tx);
                         },
                       ),
           ),
@@ -441,6 +375,304 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildHeaderCard(CustomerLedger currentLedger) {
+    final balance = _isLoading ? currentLedger.balanceDue : _computedBalance;
+    final isPositive = balance >= 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppTheme.primary,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Balance
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+            child: Column(
+              children: [
+                Text(
+                  isPositive ? 'Pending Balance' : 'Overpaid',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  currencyFormatter.format(balance.abs()),
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                  ),
+                ),
+                if (!isPositive)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Customer has overpaid',
+                      style: TextStyle(color: Colors.greenAccent, fontSize: 11),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Stats Row
+          if (!_isLoading) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatItem(
+                        label: 'Total Billed',
+                        value: currencyFormatter.format(_totalInvoiced),
+                        color: Colors.orange.shade200,
+                        icon: LucideIcons.fileText,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 36,
+                      color: Colors.white.withValues(alpha: 0.3),
+                    ),
+                    Expanded(
+                      child: _buildStatItem(
+                        label: 'Total Paid',
+                        value: currencyFormatter.format(_totalPaid),
+                        color: Colors.greenAccent.shade200,
+                        icon: LucideIcons.checkCircle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 20),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTransactionCard(LedgerTransaction tx) {
+    final isPayment = tx.transactionType == 'PAYMENT';
+    final isInvoice = tx.transactionType == 'INVOICE';
+    final canTap = isInvoice && tx.receiptNumber != null;
+
+    final Color accentColor = isPayment ? AppTheme.success : Colors.orange.shade600;
+    final Color bgColor = isPayment ? Colors.green.shade50 : Colors.orange.shade50;
+    final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
+    final String txTitle = isPayment
+        ? 'Payment Received'
+        : 'Credit Invoice ${tx.receiptNumber ?? ''}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: canTap
+            ? () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => OrderDetailsSheet(
+                    receiptNumber: tx.receiptNumber!,
+                    transaction: tx,
+                  ),
+                );
+              }
+            : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Colored left accent bar
+              Container(
+                width: 4,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(14),
+                    bottomLeft: Radius.circular(14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Icon
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(txIcon, color: accentColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+
+              // Content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        txTitle,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        dateFormatter.format(tx.createdAt.toLocal()),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      if (tx.notes != null && tx.notes!.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          tx.notes!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // Amount + tap hint
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: accentColor,
+                      ),
+                    ),
+                    if (canTap) ...[
+                      const SizedBox(height: 4),
+                      Icon(
+                        LucideIcons.chevronRight,
+                        size: 16,
+                        color: Colors.grey.shade400,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.fileText, size: 52, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          const Text(
+            'No transactions yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Transactions will appear here once\nan invoice or payment is recorded.',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

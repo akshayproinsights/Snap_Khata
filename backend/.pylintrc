@@ -1,0 +1,7 @@
+[MASTER]
+# Add the backend directory to sys path so local imports resolve correctly
+init-hook='import sys; sys.path.insert(0, ".")'
+
+[MESSAGES CONTROL]
+# Disable import errors for local modules (handled by sys.path above)
+disable=C0114,C0115,C0116

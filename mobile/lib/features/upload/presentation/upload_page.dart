@@ -1033,7 +1033,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     final currentStep = _processingSteps[stepIndex];
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
 
-    // ── "Finishing up" state: step 6 reached but backend still processing ──
+    // ── "Finishing up" state ──
     final isFinishingUp = stepIndex >= _processingSteps.length - 1 &&
         procServerProgress < 1.0 &&
         isProcessing;
@@ -1047,253 +1047,424 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     final tips = isUploading ? _uploadTips : _processingTips;
     final safeTipIndex = _tipIndex % tips.length;
 
-    return Container(
-      decoration: const BoxDecoration(color: Colors.black),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
         child: Column(
           children: [
-            // ── TOP BANNER: context-sensitive ──────────────────────────
-            _UploadPhaseBanner(isUploading: isUploading),
-
-            Expanded(
-              child: SafeArea(
-                top: false, // banner already handles top padding
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: MediaQuery.of(context).size.height -
-                          MediaQuery.of(context).padding.top -
-                          MediaQuery.of(context).padding.bottom -
-                          56, // banner height approx
+            // ── App Bar ──
+            Container(
+              color: const Color(0xFFF8F9FA),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
+                        color: Color(0xFF0058BE), size: 22),
+                    onPressed: isUploading
+                        ? null
+                        : () {
+                            if (context.mounted) context.go('/dashboard');
+                          },
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'SnapKhata',
+                      style: TextStyle(
+                        color: Color(0xFF0058BE),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 28),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 20),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
 
-                            // ── Phase pill indicator ──
-                            _PhasePill(isUploading: isUploading),
-
-                            const SizedBox(height: 20),
-
-                            // ── Thumbnail strip ──
-                            if (hasRealFiles)
-                              _ThumbnailStrip(fileItems: widget.fileItems),
-
-                            const SizedBox(height: 20),
-
-                            // ── Main animated icon / ring ──
-                            _PhaseIcon(
-                              isUploading: isUploading,
-                              uploadProgress: uploadProgress,
-                              phaseAnim: _phaseTransitionAnim,
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // ── Title ──
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 500),
-                              child: Text(
-                                isUploading
-                                    ? 'Sending your order${fileCount > 1 ? 's' : ''}'
-                                    : isFinishingUp
-                                        ? 'Finishing up…'
-                                        : currentStep.title,
-                                key: ValueKey(isUploading
-                                    ? 'upload_title'
-                                    : 'step_${stepIndex}_$isFinishingUp'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.3,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            // ── Subtitle ──
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 500),
-                              transitionBuilder: (child, anim) =>
-                                  FadeTransition(
-                                opacity: anim,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.12),
-                                    end: Offset.zero,
-                                  ).animate(anim),
-                                  child: child,
-                                ),
-                              ),
-                              child: Text(
-                                isUploading
-                                    ? 'Your photo is being sent. Do NOT close the app right now.'
-                                    : isFinishingUp
-                                        ? 'Just a few more seconds — saving your data'
-                                        : currentStep.sub,
-                                key: ValueKey(isUploading
-                                    ? 'upload_sub'
-                                    : 'sub_${stepIndex}_$isFinishingUp'),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: isUploading
-                                      ? Colors.amber.shade300
-                                      : Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.4,
+            // ── Body ──
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  children: [
+                    // ── Animated icon with rotating rings ──
+                    SizedBox(
+                      width: 176,
+                      height: 176,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          RotationTransition(
+                            turns: Tween(begin: 0.0, end: 1.0).animate(
+                                CurvedAnimation(
+                                    parent: _processingBarController,
+                                    curve: Curves.linear)),
+                            child: Container(
+                              width: 176,
+                              height: 176,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFF0058BE)
+                                      .withValues(alpha: 0.18),
+                                  width: 2,
                                 ),
                               ),
                             ),
-
-                            const SizedBox(height: 24),
-
-                            // ── Progress bar ──
-                            _ProgressBar(
-                              isUploading: isUploading,
-                              uploadProgress: uploadProgress,
-                              procStepProgress: procStepProgress,
-                              procServerProgress: procServerProgress,
-                              processingBarAnim: _processingBarController,
-                            ),
-
-                            const SizedBox(height: 10),
-
-                            // ── Percentage label ──
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              child: Text(
-                                isUploading
-                                    ? '${(uploadProgress * 100).toInt()}% uploaded'
-                                    : isFinishingUp
-                                        ? '${(procServerProgress * 100).toInt()}% complete'
-                                        : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
-                                key: ValueKey(isUploading
-                                    ? 'pct_${(uploadProgress * 100).toInt()}'
-                                    : 'step_lbl_${stepIndex}_$isFinishingUp'),
-                                style: TextStyle(
-                                  color: isUploading
-                                      ? Colors.amber.shade400
-                                      : const Color(0xFF0066FF)
-                                          .withValues(alpha: 0.85),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
+                          ),
+                          RotationTransition(
+                            turns: Tween(begin: 0.0, end: -1.0).animate(
+                                CurvedAnimation(
+                                    parent: _processingBarController,
+                                    curve: Curves.linear)),
+                            child: Container(
+                              width: 140,
+                              height: 140,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(0xFF0058BE)
+                                      .withValues(alpha: 0.38),
+                                  width: 2,
                                 ),
                               ),
                             ),
-
-                            // ── Upload warning box ──
-                            if (isUploading) ...[
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade900
-                                      .withValues(alpha: 0.55),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: Colors.red.shade600, width: 1),
+                          ),
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF0058BE),
+                                  Color(0xFF2170E4)
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF0058BE)
+                                      .withValues(alpha: 0.25),
+                                  blurRadius: 32,
+                                  spreadRadius: 4,
                                 ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.warning_amber_rounded,
-                                        color: Colors.orangeAccent, size: 16),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Leaving now will cancel your upload',
-                                        style: TextStyle(
-                                          color: Colors.orangeAccent,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                              ],
+                            ),
+                            child: isUploading
+                                ? Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 64,
+                                        height: 64,
+                                        child: CircularProgressIndicator(
+                                          value: uploadProgress > 0
+                                              ? uploadProgress
+                                              : null,
+                                          color: Colors.white,
+                                          strokeWidth: 3,
+                                          backgroundColor: Colors.white
+                                              .withValues(alpha: 0.2),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      const Icon(Icons.cloud_upload_outlined,
+                                          color: Colors.white, size: 32),
+                                    ],
+                                  )
+                                : const Icon(Icons.description_outlined,
+                                    color: Colors.white, size: 40),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // ── Status text ──
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      child: Text(
+                        mainTitle,
+                        key: ValueKey(mainTitle),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF191C1D),
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      child: Text(
+                        mainSub,
+                        key: ValueKey(mainSub),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF424754),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // ── Progress card ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE1E3E4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                stepLabel.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF424754),
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                              Text(
+                                '$percent%',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF0058BE),
                                 ),
                               ),
                             ],
-
-                            // ── "Go to HOME" escape during processing ──
-                            if (!isUploading) ...[
-                              const SizedBox(height: 16),
-                              TextButton.icon(
-                                onPressed: () {
-                                  if (context.mounted) {
-                                    context.go('/dashboard');
-                                  }
-                                },
-                                icon: const Icon(
-                                  Icons.home_outlined,
-                                  color: Colors.lightBlueAccent,
-                                  size: 16,
-                                ),
-                                label: const Text(
-                                  'Go to HOME — we\'ll notify you when done',
-                                  style: TextStyle(
-                                    color: Colors.lightBlueAccent,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                          ),
+                          const SizedBox(height: 12),
+                          AnimatedBuilder(
+                            animation: _processingBarController,
+                            builder: (_, __) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: barValue),
+                                  duration: const Duration(milliseconds: 500),
+                                  curve: Curves.easeOut,
+                                  builder: (_, v, __) =>
+                                      LinearProgressIndicator(
+                                    value: v,
+                                    minHeight: 8,
+                                    backgroundColor: const Color(0xFFEDEEEF),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                            Color(0xFF0058BE)),
                                   ),
                                 ),
-                              ),
-                            ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          _PhaseRow(
+                            label: 'Uploading document',
+                            isDone: !isUploading,
+                            isActive: isUploading,
+                            doneColor: const Color(0xFF006C49),
+                            activeColor: const Color(0xFF0058BE),
+                          ),
+                          const SizedBox(height: 16),
+                          _PhaseRow(
+                            label: 'Reading details & prices',
+                            isDone: false,
+                            isActive: !isUploading,
+                            doneColor: const Color(0xFF006C49),
+                            activeColor: const Color(0xFF0058BE),
+                          ),
+                        ],
+                      ),
+                    ),
 
-                            const Spacer(),
+                    const SizedBox(height: 16),
 
-                            // ── Rotating tips ticker ──
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 600),
-                              child: Container(
-                                key: ValueKey(
-                                    'tip_${isUploading}_$safeTipIndex'),
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isUploading
-                                      ? Colors.amber.shade900
-                                          .withValues(alpha: 0.25)
-                                      : Colors.white.withValues(alpha: 0.06),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isUploading
-                                        ? Colors.amber.shade700
-                                            .withValues(alpha: 0.5)
-                                        : Colors.white.withValues(alpha: 0.08),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  tips[safeTipIndex],
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: isUploading
-                                        ? Colors.amber.shade300
-                                        : Colors.white.withValues(alpha: 0.45),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                    // ── Upload warning ──
+                    if (isUploading)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: const Color(0xFFFDE68A)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFD97706), size: 18),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Keep the app open — closing will cancel your upload',
+                                style: TextStyle(
+                                  color: Color(0xFF92400E),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Go to Home card ──
+                    GestureDetector(
+                      onTap: () {
+                        if (context.mounted) context.go('/dashboard');
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(20),
+                          border:
+                              Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.home_outlined,
+                                  color: Color(0xFF0058BE), size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Go to Home',
+                                    style: TextStyle(
+                                      color: Color(0xFF191C1D),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Keep working while we process',
+                                    style: TextStyle(
+                                      color: Color(0xFF424754),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: Color(0xFF424754), size: 20),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Rotating tip card ──
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 600),
+                      child: Container(
+                        key: ValueKey(
+                            'tip_${isUploading}_$safeTipIndex'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDEEEF),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.lightbulb_outline,
+                                  color: Color(0xFF825100), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Quick Tip',
+                                    style: TextStyle(
+                                      color: Color(0xFF191C1D),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    tips[safeTipIndex],
+                                    style: const TextStyle(
+                                      color: Color(0xFF424754),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w400,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1304,350 +1475,97 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
   }
 }
 
-// ── Phase pill: shows Upload phase and Smart Reading phase ──
-class _PhasePill extends StatelessWidget {
-  final bool isUploading;
-  const _PhasePill({required this.isUploading});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(32),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PillChip(
-            label: '📤  Uploading',
-            active: isUploading,
-          ),
-          const SizedBox(width: 4),
-          _PillChip(
-            label: '📝  Reading Order',
-            active: !isUploading,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillChip extends StatelessWidget {
+// ── Phase row indicator (used inside progress card) ──
+class _PhaseRow extends StatelessWidget {
   final String label;
-  final bool active;
-  const _PillChip({required this.label, required this.active});
+  final bool isDone;
+  final bool isActive;
+  final Color doneColor;
+  final Color activeColor;
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFF0066FF) : Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? Colors.white : Colors.white.withValues(alpha: 0.35),
-          fontSize: 13,
-          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-// ── Thumbnail strip of captured order photos ──
-class _ThumbnailStrip extends StatelessWidget {
-  final List<UploadFileItem> fileItems;
-  const _ThumbnailStrip({required this.fileItems});
-
-  @override
-  Widget build(BuildContext context) {
-    // Only render items that have a real file path
-    final validItems = fileItems.where((f) => f.path.isNotEmpty).toList();
-    if (validItems.isEmpty) return const SizedBox.shrink();
-
-    return SizedBox(
-      height: 72,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        shrinkWrap: true,
-        itemCount: validItems.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final item = validItems[index];
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Stack(
-              children: [
-                Image.file(
-                  File(item.path),
-                  width: 54,
-                  height: 72,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 54,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.image_not_supported,
-                        color: Colors.white38, size: 22),
-                  ),
-                ),
-                // Subtle darkening overlay so thumbnails don't distract
-                Container(
-                  width: 54,
-                  height: 72,
-                  color: Colors.black.withValues(alpha: 0.25),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ── Animated center icon: upload lock ↔ reading ──
-class _PhaseIcon extends StatelessWidget {
-  final bool isUploading;
-  final double uploadProgress;
-  final Animation<double> phaseAnim;
-
-  const _PhaseIcon({
-    required this.isUploading,
-    required this.uploadProgress,
-    required this.phaseAnim,
+  const _PhaseRow({
+    required this.label,
+    required this.isDone,
+    required this.isActive,
+    required this.doneColor,
+    required this.activeColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isUploading) {
-      // Amber pulsing lock ring during upload
-      return _PulsingLockIcon(uploadProgress: uploadProgress);
-    }
-
-    // Blue reading icon during processing
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 600),
-      transitionBuilder: (child, anim) => ScaleTransition(
-        scale: anim,
-        child: FadeTransition(opacity: anim, child: child),
-      ),
-      child: Container(
-        key: const ValueKey('reading_icon'),
-        width: 88,
-        height: 88,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFF0066FF).withValues(alpha: 0.12),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0066FF).withValues(alpha: 0.25),
-              blurRadius: 32,
-              spreadRadius: 6,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: isDone
+                    ? doneColor
+                    : (isActive
+                        ? activeColor.withValues(alpha: 0.1)
+                        : Colors.transparent),
+                shape: BoxShape.circle,
+                border: isActive || isDone
+                    ? null
+                    : Border.all(color: const Color(0xFFE1E3E4)),
+              ),
+              child: isDone
+                  ? const Icon(Icons.check, color: Colors.white, size: 16)
+                  : (isActive
+                      ? Center(
+                          child: SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: activeColor,
+                            ),
+                          ),
+                        )
+                      : null),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive || isDone
+                    ? const Color(0xFF191C1D)
+                    : const Color(0xFF727785),
+                fontSize: 14,
+                fontWeight:
+                    isActive || isDone ? FontWeight.w700 : FontWeight.w600,
+              ),
             ),
           ],
-          border: Border.all(
-              color: const Color(0xFF0066FF).withValues(alpha: 0.3), width: 2),
         ),
-        child: const Icon(
-          Icons.auto_stories_rounded,
-          color: Color(0xFF0066FF),
-          size: 38,
-        ),
-      ),
-    );
-  }
-}
-
-/// Amber pulsing lock ring — used during the upload phase.
-class _PulsingLockIcon extends StatefulWidget {
-  final double uploadProgress;
-  const _PulsingLockIcon({required this.uploadProgress});
-
-  @override
-  State<_PulsingLockIcon> createState() => _PulsingLockIconState();
-}
-
-class _PulsingLockIconState extends State<_PulsingLockIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-  late final Animation<double> _scale;
-  late final Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 1.0, end: 1.18).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
-    _opacity = Tween<double>(begin: 0.4, end: 0.9).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, __) => Stack(
-        alignment: Alignment.center,
-        children: [
-          // Pulsing outer glow ring
-          Transform.scale(
-            scale: _scale.value,
-            child: Container(
-              width: 104,
-              height: 104,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color:
-                      Colors.amber.shade600.withValues(alpha: _opacity.value),
-                  width: 3,
-                ),
-                color: Colors.amber.shade900.withValues(alpha: 0.08),
+        if (isDone)
+          Text(
+            'DONE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: doneColor,
+              letterSpacing: 1.0,
+            ),
+          )
+        else if (isActive)
+          Opacity(
+            // Since it's active we can make it look prominent
+            opacity: 1.0,
+            child: Text(
+              'READING',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: activeColor,
+                letterSpacing: 1.0,
               ),
             ),
           ),
-          // Inner circle
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.amber.shade800.withValues(alpha: 0.18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.amber.shade600.withValues(alpha: 0.4),
-                  blurRadius: 24,
-                  spreadRadius: 4,
-                ),
-              ],
-              border: Border.all(
-                  color: Colors.amber.shade500.withValues(alpha: 0.6),
-                  width: 2),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 62,
-                  height: 62,
-                  child: CircularProgressIndicator(
-                    value: widget.uploadProgress > 0
-                        ? widget.uploadProgress
-                        : null,
-                    color: Colors.amber.shade400,
-                    strokeWidth: 4,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor:
-                        Colors.amber.shade900.withValues(alpha: 0.25),
-                  ),
-                ),
-                Icon(
-                  Icons.lock_rounded,
-                  color: Colors.amber.shade300,
-                  size: 28,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-} // end _PulsingLockIconState
-
-// ── Amber top banner shown during upload phase ──
-class _UploadPhaseBanner extends StatelessWidget {
-  final bool isUploading;
-  const _UploadPhaseBanner({required this.isUploading});
-
-  @override
-  Widget build(BuildContext context) {
-    // Top banners are now handled globally by GlobalTaskBanner
-    return const SizedBox.shrink();
-  }
-}
-
-// ── Unified progress bar: upload (real) or reading (blended) ──
-class _ProgressBar extends StatelessWidget {
-  final bool isUploading;
-  final double uploadProgress;
-  final double procStepProgress;
-  final double procServerProgress;
-  final AnimationController processingBarAnim;
-
-  const _ProgressBar({
-    required this.isUploading,
-    required this.uploadProgress,
-    required this.procStepProgress,
-    required this.procServerProgress,
-    required this.processingBarAnim,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: isUploading
-          // Phase 1: real upload progress — AnimatedContainer for smooth fill
-          ? TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: uploadProgress),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOut,
-              builder: (_, value, __) => LinearProgressIndicator(
-                value: value,
-                minHeight: 8,
-                backgroundColor: Colors.white.withValues(alpha: 0.1),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
-              ),
-            )
-          // Phase 2: blended step + time progress
-          : AnimatedBuilder(
-              animation: processingBarAnim,
-              builder: (_, __) {
-                // Weight: server data > step index > time animation
-                final timeP = processingBarAnim.value;
-                final blended = procServerProgress > 0
-                    ? (procServerProgress * 0.7 +
-                            procStepProgress * 0.2 +
-                            timeP * 0.1)
-                        .clamp(0.0, 0.98)
-                    : (procStepProgress * 0.7 + timeP * 0.3).clamp(0.0, 0.98);
-                return LinearProgressIndicator(
-                  value: blended,
-                  minHeight: 8,
-                  backgroundColor: Colors.white.withValues(alpha: 0.1),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
-                );
-              },
-            ),
+      ],
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
 import 'package:mobile/core/theme/app_theme.dart';
@@ -47,12 +46,7 @@ class UdharDashboardPage extends ConsumerWidget {
                       _buildSummaryCard(dashboardState.summary?.totalReceivable ?? 0.0,
                           dashboardState.summary?.totalPayable ?? 0.0),
                       
-                      const SizedBox(height: 16),
-
-                      // Bar Chart
-                      _buildChart(dashboardState.summary?.chartData ?? []),
-
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
                       // Tabs
                       const TabBar(
@@ -227,108 +221,4 @@ class UdharDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildChart(List dataPoints) {
-    if (dataPoints.isEmpty) {
-      return const SizedBox(
-        height: 150,
-        child: Center(child: Text('No transaction data')),
-      );
-    }
-
-    // Prepare chart data
-    final barGroups = <BarChartGroupData>[];
-    double maxY = 0.0;
-    double minY = 0.0;
-
-    for (int i = 0; i < dataPoints.length; i++) {
-        final point = dataPoints[i];
-        final netFlow = point.netCashflow;
-        
-        if (netFlow > maxY) maxY = netFlow;
-        if (netFlow < minY) minY = netFlow;
-
-        barGroups.add(
-            BarChartGroupData(
-                x: i,
-                barRods: [
-                    BarChartRodData(
-                        toY: netFlow,
-                        color: netFlow >= 0 ? Colors.green : Colors.red,
-                        width: 16,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          topRight: Radius.circular(4),
-                          bottomLeft: Radius.circular(0),
-                          bottomRight: Radius.circular(0),
-                        ),
-                    ),
-                ],
-            ),
-        );
-    }
-
-    // Add some padding to Y axis
-    maxY = maxY > 0 ? maxY * 1.2 : 0;
-    minY = minY < 0 ? minY * 1.2 : 0;
-    if (maxY == 0 && minY == 0) {
-      maxY = 100;
-      minY = -100;
-    }
-
-    return Container(
-      height: 180,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: maxY,
-          minY: minY,
-          barTouchData: BarTouchData(enabled: false),
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (index >= 0 && index < dataPoints.length) {
-                    // Show dates selectively, e.g., first, middle, last to avoid crowding
-                    if (index == 0 || index == dataPoints.length - 1 || index == dataPoints.length ~/ 2) {
-                        try {
-                           final dateStr = dataPoints[index].date;
-                           final dateObj = DateTime.parse(dateStr);
-                           final formatted = DateFormat('dd MMM').format(dateObj);
-                           return Padding(
-                             padding: const EdgeInsets.only(top: 8.0),
-                             child: Text(formatted, style: const TextStyle(fontSize: 10)),
-                           );
-                        } catch(e) {
-                           return const SizedBox();
-                        }
-                    }
-                  }
-                  return const SizedBox();
-                },
-              ),
-            ),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (value) {
-                if (value == 0) {
-                   return FlLine(color: Colors.grey.shade400, strokeWidth: 1.5);
-                }
-                return const FlLine(color: Colors.transparent, strokeWidth: 0);
-            },
-          ),
-          borderData: FlBorderData(show: false),
-          barGroups: barGroups,
-        ),
-      ),
-    );
-  }
 }

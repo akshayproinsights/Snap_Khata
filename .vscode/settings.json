@@ -1,11 +1,19 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/bin/python3",
+    "python.defaultInterpreterPath": "/root/Snap_Khata/backend/venv/bin/python3",
+    "python.analysis.pythonPath": "/root/Snap_Khata/backend/venv/bin/python3",
     "python.analysis.extraPaths": [
-        "${workspaceFolder}/backend"
+        "/root/Snap_Khata/backend"
     ],
+    "python.analysis.venvPath": "/root/Snap_Khata/backend",
+    "python.analysis.venv": "venv",
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": false,
-    "python.linting.pylintPath": "${workspaceFolder}/backend/venv/bin/pylint"
+    "python.linting.pylintPath": "/root/Snap_Khata/backend/venv/bin/pylint",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "[python]": {
+        "editor.defaultFormatter": null
+    }
 }
