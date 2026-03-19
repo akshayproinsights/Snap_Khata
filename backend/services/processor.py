@@ -296,6 +296,8 @@ def process_single_invoice(
     
     logger.debug(f"Loaded prompt for user {username}, length: {len(system_instruction)}")
     
+    processing_errors = []  # Collect all errors
+    
     # Load image directly from bytes — no temp file disk I/O needed
     try:
         from io import BytesIO
@@ -311,7 +313,6 @@ def process_single_invoice(
         fallback_attempted = False
         fallback_reason = ""
         flash_result = None  # Store Flash result in case we need it as fallback
-        processing_errors = []  # Collect all errors
         
         # CRITICAL FIX: Give Pro model its own full retry cycle
         # Try Flash first, then if fallback needed, try Pro with fresh retries
@@ -508,13 +509,25 @@ def process_single_invoice(
                         time.sleep(2 ** attempt)  # Exponential backoff
                     
                 except Exception as e:
-                    error_msg = f"Error on attempt {attempt + 1}/{MAX_RETRIES}"
-                    logger.error(f"{error_msg}: {e}")
-                    processing_errors.append(f"{model_name} error: {str(e)}")
+                    error_str = str(e)
+                    if "429" in error_str and "RESOURCE_EXHAUSTED" in error_str:
+                        error_msg = f"API Quota Exhausted (429) on attempt {attempt + 1}/{MAX_RETRIES}"
+                        # If it's a quota error, we might want to wait longer or just stop
+                        # For now, we'll let it retry but with a very clear message
+                        logger.error(f"{error_msg}: {error_str}")
+                    else:
+                        error_msg = f"Error on attempt {attempt + 1}/{MAX_RETRIES}: {error_str}"
+                        logger.error(error_msg)
+                    
+                    processing_errors.append(f"{model_name} error: {error_str}")
                     if attempt == MAX_RETRIES - 1:
                         logger.error(f"❌ {model_name} failed after {MAX_RETRIES} attempts")
                     else:
-                        time.sleep(2 ** attempt)
+                        # Exponential backoff with a bit more jitter/delay for 429s
+                        delay = 2 ** attempt
+                        if "429" in error_str:
+                            delay += 5  # Extra wait for rate limits
+                        time.sleep(delay)
             
             # If Pro model just failed and we have Flash result, use it
             if model_name == FALLBACK_MODEL and flash_result:
@@ -544,9 +557,13 @@ def process_single_invoice(
         logger.error(f"Unhandled exception processing {filename}: {outer_err}")
     
     # If we got here, both models failed completely
-    print(f"\n[ERROR] Processing failed for {filename}\n", flush=True)
+    error_summary = " | ".join(processing_errors)
+    print(f"\n[ERROR] Processing failed for {filename}: {error_summary}\n", flush=True)
     logger.error(f"Complete failure: Both Flash and Pro models failed for {filename}")
-    logger.error(f"   Errors: {' | '.join(processing_errors)}")
+    logger.error(f"   Errors: {error_summary}")
+    
+    # Return a structured error info if possible (though callers usually expect None or Dict)
+    # We'll stick to None for compatibility but ensured logs are much better
     return None
 
 
