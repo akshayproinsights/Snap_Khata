@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -917,7 +916,6 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
 
   late final AnimationController _processingBarController;
   late final AnimationController _phaseTransitionController;
-  late final Animation<double> _phaseTransitionAnim;
 
   StreamSubscription<dynamic>? _tipSub;
 
@@ -933,10 +931,6 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     _phaseTransitionController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
-    );
-    _phaseTransitionAnim = CurvedAnimation(
-      parent: _phaseTransitionController,
-      curve: Curves.easeOutCubic,
     );
 
     // Tip ticker — rotate every 4 seconds
@@ -1033,20 +1027,22 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     final currentStep = _processingSteps[stepIndex];
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
 
-    // ── "Finishing up" state ──
-    final isFinishingUp = stepIndex >= _processingSteps.length - 1 &&
-        procServerProgress < 1.0 &&
-        isProcessing;
-
-    final fileCount = widget.fileItems.length;
-
-    // Only show thumbnail strip when items have real file paths
-    final hasRealFiles = widget.fileItems.any((f) => f.path.isNotEmpty);
-
     // Pick the right tips list
     final tips = isUploading ? _uploadTips : _processingTips;
     final safeTipIndex = _tipIndex % tips.length;
 
+    // Phase-specific text and progress values
+    final mainTitle = isUploading ? 'Uploading order' : currentStep.title;
+    final mainSub = isUploading
+        ? 'Please wait while we send your document'
+        : currentStep.sub;
+
+    final stepLabel = isUploading
+        ? 'Step 1 of 2'
+        : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
+
+    final barValue = isUploading ? uploadProgress : procStepProgress;
+    final percent = (barValue * 100).toInt();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
