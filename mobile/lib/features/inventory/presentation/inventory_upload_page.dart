@@ -177,11 +177,14 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
 
     // Auto-navigate to inventory-review when done
     ref.listen(inventoryUploadProvider, (previous, next) async {
-      if (next.allDone && previous!.allDone != true) {
+      final wasAlreadyDone = previous?.allDone == true;
+      if (next.allDone && !wasAlreadyDone) {
         await Future.delayed(const Duration(milliseconds: 600));
         if (!context.mounted) return;
-        ref.read(inventoryUploadProvider.notifier).clearFiles();
+        // Navigate FIRST, then clear — avoids a rebuild that would show the
+        // camera screen momentarily before the route transition completes.
         context.go('/inventory-review');
+        ref.read(inventoryUploadProvider.notifier).clearFiles();
       }
     });
 

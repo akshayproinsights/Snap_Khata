@@ -63,9 +63,9 @@ class InventoryInvoiceVerifyRequest(BaseModel):
     invoice_number: str
     vendor_name: str
     invoice_date: str
-    payment_mode: str
-    amount_paid: float
-    balance_owed: float
+    payment_mode: Optional[str] = "Cash"
+    amount_paid: Optional[float] = 0.0
+    balance_owed: Optional[float] = 0.0
     vendor_notes: Optional[str] = None
     item_ids: List[int]
 
@@ -229,9 +229,9 @@ async def get_inventory_upload_urls(
         import boto3
         from botocore.client import Config as BotocoreConfig
 
-        r2_account_id = os.getenv("R2_ACCOUNT_ID")
-        r2_access_key  = os.getenv("R2_ACCESS_KEY_ID")
-        r2_secret_key  = os.getenv("R2_SECRET_ACCESS_KEY")
+        r2_account_id = os.getenv("CLOUDFLARE_R2_ACCOUNT_ID") or os.getenv("R2_ACCOUNT_ID")
+        r2_access_key  = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID")
+        r2_secret_key  = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY")
 
         if not all([r2_account_id, r2_access_key, r2_secret_key]):
             raise HTTPException(status_code=500, detail="R2 credentials not configured")
@@ -680,7 +680,6 @@ def process_inventory_sync(
             "message": _build_completion_message(results["processed"], skipped_count, results["failed"]),
             "current_file": "All complete",
             "duplicates": [],
-            "skipped_count": skipped_count,
             "end_time": datetime.now().isoformat()
         })
             
@@ -833,9 +832,10 @@ async def verify_inventory_invoice(
             .execute()
             
         # 4. Handle Vendor Ledger if Credit
-        if request.payment_mode == 'Credit' and request.vendor_name and request.balance_owed is not None and float(request.balance_owed) > 0:
+        balance_owed_val = request.balance_owed if request.balance_owed is not None else 0.0
+        if request.payment_mode == 'Credit' and request.vendor_name and balance_owed_val > 0:
             vendor_name_clean = str(request.vendor_name).strip()
-            balance_owed_float = float(request.balance_owed)
+            balance_owed_float = float(balance_owed_val)
             
             # Fetch existing ledger
             ledger_resp = db.client.table('vendor_ledgers') \

@@ -112,17 +112,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   // ── GST computed helpers (on PARTS only) ─────────────────────────────────
+  // Uses positive match for 'PART' — same logic as order_detail_page.dart
+  // and the visual partsItems grouping below.
   double _partsSubtotal(InvoiceReviewGroup group) => group.lineItems
       .where((i) {
         final type = i.type?.toUpperCase() ?? '';
-        return !type.contains('LABOR') && !type.contains('LABOUR') && !type.contains('SERVICE');
+        return type.contains('PART');
       })
       .fold(0.0, (s, i) => s + i.amount);
 
   double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
       .where((i) {
         final type = i.type?.toUpperCase() ?? '';
-        return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+        return type.contains('LABOUR') || type.contains('LABOR') || type.contains('SERVICE');
       })
       .fold(0.0, (s, i) => s + i.amount);
 

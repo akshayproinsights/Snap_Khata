@@ -42,25 +42,43 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
             balance_due_float = float(balance_due)
                 
             try:
-                # 1. Upsert Ledger
-                # Fetch existing ledger
+                # 1. Add Transaction
+                # Check if this invoice receipt_number already caused a transaction
+                receipt_number = record.get('receipt_number')
+                ledger_id = None
+                
+                # Fetch existing ledger first to get its ID (we need ID to check for existing transactions)
                 ledger_resp = db.client.table('customer_ledgers') \
-                    .select('*') \
+                    .select('id, balance_due') \
                     .eq('username', username) \
                     .eq('customer_name', customer_name_clean) \
                     .execute()
-                    
-                ledger_data = ledger_resp.data
                 
-                if ledger_data:
+                existing_ledger = ledger_resp.data[0] if ledger_resp.data else None
+
+                if receipt_number and existing_ledger:
+                    ledger_id = existing_ledger['id']
+                    existing_tx = db.client.table('ledger_transactions') \
+                        .select('id') \
+                        .eq('ledger_id', ledger_id) \
+                        .eq('receipt_number', receipt_number) \
+                        .eq('transaction_type', 'INVOICE') \
+                        .execute()
+                    
+                    # Prevent duplicate ledger increment if transaction already exists
+                    if existing_tx.data:
+                        logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
+                        continue
+
+                # 2. Upsert Ledger
+                if existing_ledger:
                     # Update existing ledger
-                    ledger = ledger_data[0]
-                    new_balance = float(ledger.get('balance_due', 0)) + balance_due_float
+                    ledger_id = existing_ledger['id']
+                    new_balance = float(existing_ledger.get('balance_due', 0)) + balance_due_float
                     db.client.table('customer_ledgers').update({
                         'balance_due': new_balance,
                         'updated_at': datetime.utcnow().isoformat()
-                    }).eq('id', ledger['id']).execute()
-                    ledger_id = ledger['id']
+                    }).eq('id', ledger_id).execute()
                 else:
                     # Create new ledger
                     new_ledger_resp = db.client.table('customer_ledgers').insert({
@@ -75,22 +93,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                         logger.error(f"Failed to create ledger for {customer_name_clean}")
                         continue
                 
-                # 2. Add Transaction
-                # Check if this invoice receipt_number already caused a transaction
-                receipt_number = record.get('receipt_number')
-                if receipt_number:
-                    existing_tx = db.client.table('ledger_transactions') \
-                        .select('id') \
-                        .eq('ledger_id', ledger_id) \
-                        .eq('receipt_number', receipt_number) \
-                        .eq('transaction_type', 'INVOICE') \
-                        .execute()
-                    
-                    # Prevent duplicate ledger increment on consecutive syncs of same invoice
-                    if existing_tx.data:
-                        logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
-                        continue
-                        
+                # 3. Add Transaction Record
                 db.client.table('ledger_transactions').insert({
                     'username': username,
                     'ledger_id': ledger_id,

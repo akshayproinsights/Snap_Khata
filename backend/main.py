@@ -183,6 +183,31 @@ async def startup_event():
     logger.info("SnapKhata API starting up...")
     logger.info(f"CORS origins: {config.settings.cors_origins}")
 
+    # ── Orphaned task cleanup ─────────────────────────────────────────────────
+    # Any task still in 'processing' or 'queued' when the server starts was
+    # killed by a previous reload/crash. Mark them as 'failed' immediately so
+    # clients stop polling and show an error instead of looping forever.
+    try:
+        from database import get_database_client
+        from datetime import datetime, timezone
+        db = get_database_client()
+        failed_update = {
+            "status": "failed",
+            "message": "Processing was interrupted by a server restart. Please re-upload.",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        for table in ("upload_tasks", "recalculation_tasks"):
+            try:
+                # Mark stuck 'processing' tasks
+                db.client.table(table).update(failed_update).eq("status", "processing").execute()
+                # Mark stuck 'queued' tasks
+                db.client.table(table).update(failed_update).eq("status", "queued").execute()
+            except Exception as tbl_err:
+                logger.warning(f"Could not clean orphaned tasks in '{table}': {tbl_err}")
+        logger.info("Orphaned task cleanup complete")
+    except Exception as e:
+        logger.warning(f"Orphaned task cleanup skipped (non-fatal): {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

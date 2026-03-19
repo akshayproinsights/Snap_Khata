@@ -24,11 +24,16 @@ class InventoryPersistenceService {
   // ─────────────── Processing-task persistence ───────────────
 
   /// Persist an active task to disk.
-  static Future<void> saveTask(String taskId, {int fileCount = 1}) async {
+  /// Pass [startTime] to anchor the polling timeout to when processing began
+  /// (defaults to now). This survives navigation/resume cycles.
+  static Future<void> saveTask(String taskId,
+      {int fileCount = 1, DateTime? startTime}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_taskIdKey, taskId);
     await prefs.setInt(_fileCountKey, fileCount);
-    await prefs.setInt(_startedAtKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+        _startedAtKey,
+        (startTime ?? DateTime.now()).millisecondsSinceEpoch);
     // Once we have a real task ID, the upload-phase marker is no longer needed
     await clearUploadPhase();
   }
@@ -64,6 +69,15 @@ class InventoryPersistenceService {
   static Future<int> loadActiveFileCount() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_fileCountKey) ?? 1;
+  }
+
+  /// Returns the persisted task start time, or null if none saved.
+  /// Used to restore polling timeout across app resume/navigation.
+  static Future<DateTime?> loadStartTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_startedAtKey);
+    if (ms == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms);
   }
 
   /// Quick check at startup.

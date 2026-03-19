@@ -90,7 +90,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   static const int _maxPollingErrors = 3;
   bool _isPaused = false;   // true while app is in background
   String? _pausedTaskId;    // task to resume when foregrounded
-  DateTime? _pollingStartTime;
+  DateTime? _pollingStartTime; // ALWAYS set from persisted start time, never reset on resume
 
   @override
   InventoryUploadState build() {
@@ -171,7 +171,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     InventoryPersistenceService.saveTask(taskId, fileCount: fileCount);
 
     if (_pollingTimer == null || !_pollingTimer!.isActive) {
-      _startPolling(taskId);
+      _startPolling(taskId, taskStartTime: _pollingStartTime);
     }
   }
 
@@ -288,7 +288,9 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
         activeTaskId: savedTaskId,
         isRestoringState: false,
       );
-      _startPolling(savedTaskId);
+      // Restore persisted start time so the timeout is not reset on resume
+      final savedStartTime = await InventoryPersistenceService.loadStartTime();
+      _startPolling(savedTaskId, taskStartTime: savedStartTime);
       return;
     }
 
@@ -338,7 +340,9 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
           ),
         );
 
-        await InventoryPersistenceService.saveTask(taskId, fileCount: total);
+        final savedStartTime = await InventoryPersistenceService.loadStartTime();
+        await InventoryPersistenceService.saveTask(taskId, fileCount: total,
+            startTime: savedStartTime ?? DateTime.now());
 
         state = state.copyWith(
           fileItems: placeholders,
@@ -347,7 +351,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
           activeTaskId: taskId,
           isRestoringState: false,
         );
-        _startPolling(taskId);
+        _startPolling(taskId, taskStartTime: savedStartTime);
         return;
       }
     } catch (_) {
@@ -434,9 +438,12 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
           await _repository.processInvoices(fileKeys, forceUpload: force);
 
       // ✅ Persist task to disk (also clears upload-phase)
+      // Anchor the timeout to when processing actually STARTS
+      final taskStartTime = DateTime.now();
       await InventoryPersistenceService.saveTask(
         initialStatus.taskId,
         fileCount: toUpload.length,
+        startTime: taskStartTime,
       );
 
       state = state.copyWith(
@@ -445,7 +452,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       );
 
       // 3. Poll for completion
-      _startPolling(initialStatus.taskId);
+      _startPolling(initialStatus.taskId, taskStartTime: taskStartTime);
     } catch (e) {
       await _handleUploadError(e.toString(), toUpload);
     }
@@ -453,7 +460,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
 
   // ─────────────────────────── Polling ────────────────────────────
 
-  static const int _maxPollMinutes = 5;
+  static const int _maxPollMinutes = 10;
 
   /// Returns the poll interval for a given elapsed time:
   ///   0–30s  → 3s   (fast feedback; Gemini is still warm)
@@ -465,18 +472,26 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     return const Duration(seconds: 12);
   }
 
-  void _startPolling(String taskId) {
+  void _startPolling(String taskId, {DateTime? taskStartTime}) {
     _backgroundTask.startTask('Processing your inventory…');
     _consecutivePollingErrors = 0;
     _isPaused = false;
     _pausedTaskId = null;
     _pollingTimer?.cancel();
 
+    // CRITICAL: Use the persisted task start time if available so the timeout
+    // is not reset every time the user navigates away and comes back.
+    // Only fall back to DateTime.now() for brand-new tasks.
+    if (taskStartTime != null) {
+      _pollingStartTime = taskStartTime;
+    }
+    _pollingStartTime ??= DateTime.now();
+    // (if _pollingStartTime is already set and no override, keep it as-is)
+
     // Adaptive initial delay: Gemini needs ~3–5s per invoice.
     // Wait (fileCount * 3s, clamped 10s–45s) before the first poll.
     final fileCount = state.fileItems.length;
     final initialDelaySeconds = (fileCount * 3).clamp(10, 45);
-    _pollingStartTime = DateTime.now();
 
     _pollingTimer = Timer(Duration(seconds: initialDelaySeconds), () {
       _executePoll(taskId);
@@ -589,6 +604,16 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       'Review Inventory',
       () => AppRouter.router.go('/inventory-review'),
     );
+
+    // Guaranteed direct navigation: fires after 800ms regardless of UI state.
+    // This covers the edge case where fileItems was empty when _handleCompleted
+    // ran (e.g., state lost during app lifecycle), so allDone stays false and
+    // ref.listen in the page never triggers. The UI's ref.listen fires first
+    // at 600ms, so this is a safe fallback — navigating twice to the same route
+    // is a no-op in go_router.
+    Future.delayed(const Duration(milliseconds: 800), () {
+      AppRouter.router.go('/inventory-review');
+    });
   }
 
   Future<void> _handleProcessingFailed(String message) async {

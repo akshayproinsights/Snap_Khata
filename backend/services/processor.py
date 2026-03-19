@@ -956,20 +956,21 @@ def process_invoices_batch(
     # This prevents non-duplicate files from being processed when duplicates exist
     if not force_upload:
         logger.info(f"Phase 1: Checking {len(file_keys)} files for duplicates...")
-        duplicates_found = []
+        valid_file_keys = []
         
         for idx, file_key in enumerate(file_keys):
             try:
                 # Download and hash file
                 if progress_callback:
                     # Just use 0 for processed/failed during pre-check
-                    progress_callback(0, 0, len(file_keys), f"Checking for duplicates: {file_key}")
+                    progress_callback(results["processed"], results["failed"], len(file_keys), f"Checking for duplicates: {file_key}")
                 
                 logger.info(f"[{idx + 1}/{len(file_keys)}] Checking: {file_key}")
                 image_bytes = storage.download_file(r2_bucket, file_key)
                 
                 if not image_bytes:
                     logger.warning(f"Failed to download {file_key} during duplicate check")
+                    valid_file_keys.append(file_key)
                     continue
                 
                 # Calculate hash and check for duplicate
@@ -979,27 +980,30 @@ def process_invoices_batch(
                 duplicate = check_duplicate_invoice(image_hash, username)
                 if duplicate:
                     logger.warning(f"Duplicate detected: {file_key} matches existing receipt {duplicate.get('receipt_number', 'N/A')}")
-                    duplicates_found.append({
+                    results["duplicates"].append({
                         "file_key": file_key,
                         "existing_invoice": duplicate,
                         "image_hash": image_hash
                     })
+                else:
+                    valid_file_keys.append(file_key)
             except Exception as e:
                 logger.error(f"Error checking {file_key} for duplicates: {e}")
+                valid_file_keys.append(file_key)
                 continue
         
-        # If ANY duplicates found, return immediately WITHOUT processing
-        if duplicates_found:
-            logger.info(f"Found {len(duplicates_found)} duplicate(s) - returning without processing")
-            return {
-                "total": len(file_keys),
-                "processed": 0,
-                "failed": 0,
-                "errors": [],
-                "duplicates": duplicates_found
-            }
+        # Replace original file_keys with only valid ones
+        file_keys = valid_file_keys
         
-        logger.info("No duplicates found - proceeding with processing")
+        if results["duplicates"]:
+            logger.info(f"Found {len(results['duplicates'])} duplicate(s) - skipping them")
+            
+        # If ALL files were duplicates, return immediately
+        if not file_keys:
+            logger.info("All files were duplicates - returning without processing")
+            return results
+        
+        logger.info(f"{len(file_keys)} non-duplicate files found - proceeding with processing")
     else:
         logger.info("Force upload enabled - skipping pre-processing duplicate check")
     

@@ -18,17 +18,46 @@ jobs:
           script: |
             cd ~/Snap_Khata
             git pull origin main
-            
-            # Update Python dependencies
+
+            # ── 1. Python Backend ──────────────────────────────────────────────
             cd backend
             source venv/bin/activate
             pip install -r requirements.txt
             cd ..
-            
-            # Build Flutter Web App
+
+            # ── 2. Flutter Web App (Mobile companion) ──────────────────────────
             cd mobile
             flutter build web --release
             cd ..
-            
-            # Restart all PM2 Services
-            pm2 restart ecosystem.config.js
+
+            # ── 3. React Web App (mydigientry.com) ────────────────────────────
+            cd frontend
+            npm install
+            npm run build
+            cd ..
+
+            # Ensure 'serve' is available globally for PM2
+            which serve || npm install -g serve
+
+            # ── 4. Nginx Setup (idempotent — safe to run every deploy) ────────
+            # Install Nginx if not present
+            which nginx || (apt-get update -qq && apt-get install -y -qq nginx)
+
+            # Link our config if not already linked
+            CONF_SRC="$HOME/Snap_Khata/nginx/mydigientry.conf"
+            CONF_DST="/etc/nginx/sites-enabled/mydigientry.conf"
+            if [ ! -L "$CONF_DST" ]; then
+              cp "$CONF_SRC" "$CONF_DST"
+              # Disable default site to avoid conflicts
+              rm -f /etc/nginx/sites-enabled/default
+            else
+              # Always refresh the config in case it changed
+              cp "$CONF_SRC" "$CONF_DST"
+            fi
+
+            # Test config then reload
+            nginx -t && systemctl reload nginx
+
+            # ── 5. Restart all PM2 Services ───────────────────────────────────
+            pm2 restart ecosystem.config.js --update-env
+            pm2 save

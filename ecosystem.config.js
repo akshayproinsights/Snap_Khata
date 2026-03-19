@@ -23,9 +23,22 @@ module.exports = {
       merge_logs: true
     },
     {
+      name: "react-web",
+      cwd: "./frontend",
+      script: "serve",
+      env: {
+        PM2_SERVE_PATH: './dist',
+        PM2_SERVE_PORT: 5000,
+        PM2_SERVE_SPA: 'true'
+      },
+      out_file: "../logs/react.log",
+      error_file: "../logs/react.log",
+      merge_logs: true
+    },
+    {
       name: "log-viewer",
       script: "frontail",
-      args: "--host 0.0.0.0 --port 9003 --theme dark /root/Snap_Khata/logs/backend.log /root/Snap_Khata/logs/flutter.log",
+      args: "--host 0.0.0.0 --port 9003 --theme dark /root/Snap_Khata/logs/backend.log /root/Snap_Khata/logs/flutter.log /root/Snap_Khata/logs/react.log",
     },
     {
       name: "log-downloader",
