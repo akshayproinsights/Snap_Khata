@@ -38,7 +38,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get processNow => 'ఇప్పుడే ప్రాసెస్ చేయండి';
 
   @override
-  String get mapItems => 'అంశాలను మ్యాప్ చేయండి';
+  String get mapItems => 'లింక్ ఐటెమ్స్';
 
   @override
   String get restockList => 'రీస్టాక్ జాబితా';

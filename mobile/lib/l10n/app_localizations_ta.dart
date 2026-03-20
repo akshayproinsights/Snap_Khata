@@ -38,7 +38,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get processNow => 'இப்போது செயல்படுத்து';
 
   @override
-  String get mapItems => 'உருப்படிகளை வரைபடமாக்கு';
+  String get mapItems => 'லிங்க் உருப்படிகள்';
 
   @override
   String get restockList => 'மறுசீரமைப்பு பட்டியல்';

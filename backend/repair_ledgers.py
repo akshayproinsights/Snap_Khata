@@ -23,7 +23,8 @@ def repair_ledgers():
         ledgers_resp = db.client.table('customer_ledgers').select('*').execute()
         customer_ledgers = ledgers_resp.data
         
-        repaired_customers = 0
+        repaired_ids = []
+
         for ledger in customer_ledgers:
             ledger_id = ledger['id']
             name = ledger['customer_name']
@@ -59,11 +60,11 @@ def repair_ledgers():
                     'balance_due': expected_balance,
                     'updated_at': datetime.utcnow().isoformat()
                 }).eq('id', ledger_id).execute()
-                repaired_customers += 1
+                repaired_ids.append(ledger_id)
             else:
                 logger.debug(f"Balance correct for customer '{name}'")
         
-        logger.info(f"Customer Ledgers repair complete. Repaired {repaired_customers} records.")
+        logger.info(f"Customer Ledgers repair complete. Repaired {len(repaired_ids)} records.")
         
     except Exception as e:
         logger.error(f"Error during customer ledger repair: {e}")
@@ -74,7 +75,8 @@ def repair_ledgers():
         v_ledgers_resp = db.client.table('vendor_ledgers').select('*').execute()
         vendor_ledgers = v_ledgers_resp.data
         
-        repaired_vendors = 0
+        repaired_v_ids = []
+
         for v_ledger in vendor_ledgers:
             v_ledger_id = v_ledger['id']
             name = v_ledger['vendor_name']
@@ -110,11 +112,11 @@ def repair_ledgers():
                     'balance_due': expected_v_balance,
                     'updated_at': datetime.utcnow().isoformat()
                 }).eq('id', v_ledger_id).execute()
-                repaired_vendors += 1
+                repaired_v_ids.append(v_ledger_id)
             else:
                 logger.debug(f"Balance correct for vendor '{name}'")
         
-        logger.info(f"Vendor Ledgers repair complete. Repaired {repaired_vendors} records.")
+        logger.info(f"Vendor Ledgers repair complete. Repaired {len(repaired_v_ids)} records.")
         
     except Exception as e:
         logger.error(f"Error during vendor ledger repair: {e}")

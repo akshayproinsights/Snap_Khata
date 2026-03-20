@@ -38,7 +38,7 @@ class AppLocalizationsMr extends AppLocalizations {
   String get processNow => 'आता प्रक्रिया करा';
 
   @override
-  String get mapItems => 'आयटम मॅप करा';
+  String get mapItems => 'लिंक आयटम';
 
   @override
   String get restockList => 'रेस्टॉक सूची';

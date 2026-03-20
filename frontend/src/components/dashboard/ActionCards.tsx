@@ -54,12 +54,12 @@ const ActionCards: React.FC<ActionCardsProps> = ({
         },
         {
             id: 'unmapped-items',
-            title: 'Unmapped New Items',
+            title: 'Unlinked New Items',
             value: unmappedItemsCount,
             icon: PackageX,
             themeColor: 'amber',
             actionType: 'button',
-            actionLabel: 'Map Items >',
+            actionLabel: 'Link Items >',
             onAction: onNavigateToUnmappedItems,
         },
         {

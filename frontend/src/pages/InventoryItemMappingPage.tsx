@@ -268,9 +268,9 @@ const InventoryItemMappingPage: React.FC = () => {
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Map Items</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Link Items</h1>
                 <p className="text-gray-600 mt-2">
-                    Map your invoice items to standardized vendor parts inventory
+                    Link your invoice items to standardized vendor parts inventory
                 </p>
             </div>
 
@@ -345,7 +345,7 @@ const InventoryItemMappingPage: React.FC = () => {
                 {pageStats.total > 0 && (
                     <div className="mt-4">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-600">Mapping Progress</span>
+                            <span className="text-xs font-medium text-gray-600">Linking Progress</span>
                             <span className="text-xs font-semibold text-gray-700">
                                 {pageStats.completion_percentage}% Complete
                             </span>
@@ -358,7 +358,7 @@ const InventoryItemMappingPage: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-between mt-1">
                             <span className="text-xs text-gray-500">
-                                {pageStats.done} of {pageStats.total} mapped
+                                {pageStats.done} of {pageStats.total} linked
                             </span>
                             {pageStats.pending > 0 && (
                                 <span className="text-xs text-yellow-600">

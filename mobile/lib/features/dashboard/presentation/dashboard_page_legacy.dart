@@ -271,7 +271,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           value: unmappedItemsCount.toString(),
           icon: LucideIcons.packageX,
           theme: MetricTheme.amber,
-          actionLabel: 'Map Items',
+          actionLabel: 'Link Items',
           onAction: () {
             HapticFeedback.lightImpact();
             context.pushNamed('inventory-item-mapping');

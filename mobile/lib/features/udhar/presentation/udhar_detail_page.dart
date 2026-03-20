@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
-import 'widgets/order_details_sheet.dart';
 
 class UdharDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -245,6 +247,58 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         );
       },
     );
+  }
+
+  Future<void> _navigateToOrderDetails(LedgerTransaction tx) async {
+    if (tx.receiptNumber == null) return;
+
+    // Show a loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final repo = ref.read(verifiedRepositoryProvider);
+      final records =
+          await repo.getVerifiedInvoices(receiptNumber: tx.receiptNumber);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (records.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not find order details.')),
+        );
+        return;
+      }
+
+      // Construct InvoiceGroup
+      final first = records.first;
+      final group = InvoiceGroup(
+        receiptNumber: first.receiptNumber,
+        date: first.date.isNotEmpty ? first.date : first.uploadDate,
+        receiptLink: first.receiptLink,
+        customerName: first.customerName,
+        vehicleNumber: first.vehicleNumber,
+        mobileNumber: first.mobileNumber,
+        uploadDate: first.uploadDate,
+      );
+      group.items = records;
+      group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
+
+      if (mounted) {
+        context.pushNamed('order-detail', extra: group);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   @override
@@ -523,17 +577,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       color: Colors.transparent,
       child: InkWell(
         onTap: canTap
-            ? () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => OrderDetailsSheet(
-                    receiptNumber: tx.receiptNumber!,
-                    transaction: tx,
-                  ),
-                );
-              }
+            ? () => _navigateToOrderDetails(tx)
             : null,
         borderRadius: BorderRadius.circular(14),
         child: Container(

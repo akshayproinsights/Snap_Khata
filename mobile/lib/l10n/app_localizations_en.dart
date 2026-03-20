@@ -38,7 +38,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processNow => 'Process Now';
 
   @override
-  String get mapItems => 'Map Items';
+  String get mapItems => 'Link Items';
 
   @override
   String get restockList => 'Restock List';

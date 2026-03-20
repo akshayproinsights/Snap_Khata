@@ -161,7 +161,7 @@ abstract class AppLocalizations {
   /// No description provided for @mapItems.
   ///
   /// In en, this message translates to:
-  /// **'Map Items'**
+  /// **'Link Items'**
   String get mapItems;
 
   /// No description provided for @restockList.

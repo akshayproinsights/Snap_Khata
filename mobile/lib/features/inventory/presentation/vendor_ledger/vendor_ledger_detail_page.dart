@@ -305,49 +305,6 @@ class _VendorLedgerDetailPageState
               ],
             ),
 
-            const SizedBox(height: 24),
-
-            // Contact Info
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildContactRow('Phone:', '+91 98765 43210'),
-                        const SizedBox(height: 12),
-                        _buildContactRow('Email:', 'orders@domain.com'),
-                        const SizedBox(height: 12),
-                        _buildContactRow('GSTIN:', '27AAAAA0000A1Z5'),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    children: [
-                      _buildActionButton(LucideIcons.phone),
-                      const SizedBox(height: 12),
-                      _buildActionButton(LucideIcons.mail),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
 
             // Transactions Header
             Row(
@@ -450,44 +407,6 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  Widget _buildContactRow(String label, String value) {
-    return Row(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(IconData icon) {
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: 40,
-        width: 40,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: 18, color: AppTheme.textPrimary),
-      ),
-    );
-  }
 
   Widget _buildTransactionCard(VendorLedgerTransaction tx, bool isPayment) {
     return Container(

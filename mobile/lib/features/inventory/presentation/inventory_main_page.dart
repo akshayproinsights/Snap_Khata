@@ -329,7 +329,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
                 context: context,
                 icon: LucideIcons.gitMerge,
                 color: const Color(0xFF3B82F6),
-                title: 'Map Items',
+                title: 'Link Items',
                 onTap: () {
                   HapticFeedback.lightImpact();
                   context.push('/inventory-item-mapping');
