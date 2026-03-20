@@ -134,12 +134,10 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
               child: SizedBox(
                 width: double.infinity,
                 child: FloatingActionButton.extended(
-                  onPressed:
-                      (!allDone || state.isSyncing) ? null : _syncAndFinish,
-                  backgroundColor:
-                      allDone ? AppTheme.primary : Colors.grey.shade400,
+                  onPressed: state.isSyncing ? null : _syncAndFinish,
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
-                  elevation: allDone ? 4 : 0,
+                  elevation: 4,
                   icon: state.isSyncing
                       ? const SizedBox(
                           width: 20,
@@ -150,7 +148,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                   label: Text(
                     state.isSyncing
                         ? 'Syncing... ${state.syncProgress?.percentage ?? 0}%'
-                        : (allDone ? 'Sync & Finish' : 'Fix Remaining to Sync'),
+                        : (allDone ? 'Sync & Finish' : 'Sync Anyway'),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),

@@ -114,12 +114,27 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   // ── GST computed helpers (on PARTS only) ─────────────────────────────────
   // Uses positive match for 'PART' — same logic as order_detail_page.dart
   // and the visual partsItems grouping below.
-  double _partsSubtotal(InvoiceReviewGroup group) => group.lineItems
-      .where((i) {
-        final type = i.type?.toUpperCase() ?? '';
-        return type.contains('PART');
-      })
-      .fold(0.0, (s, i) => s + i.amount);
+  // FALLBACK: if NO items have a recognized type (all null/empty), treat all
+  // items as parts so the Payment Summary is never blank.
+  double _partsSubtotal(InvoiceReviewGroup group) {
+    final typed = group.lineItems.where((i) {
+      final type = i.type?.toUpperCase() ?? '';
+      return type.isNotEmpty;
+    }).toList();
+
+    // If no items have a type at all, sum every line item as "parts"
+    if (typed.isEmpty) {
+      return group.lineItems.fold(0.0, (s, i) => s + i.amount);
+    }
+
+    return group.lineItems
+        .where((i) {
+          final type = i.type?.toUpperCase() ?? '';
+          // Untyped items also fall into parts bucket
+          return type.contains('PART') || type.isEmpty;
+        })
+        .fold(0.0, (s, i) => s + i.amount);
+  }
 
   double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
       .where((i) {
@@ -231,14 +246,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       return yA.compareTo(yB);
     });
 
-    final partsItems = sortedLineItems.where((i) {
-        final type = i.type?.toUpperCase() ?? '';
-        return type.contains('PART');
-    }).toList();
-    
     final laborItems = sortedLineItems.where((i) {
         final type = i.type?.toUpperCase() ?? '';
         return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+    }).toList();
+
+    // Items with null/empty type are grouped under Parts (same as _partsSubtotal)
+    final partsItems = sortedLineItems.where((i) {
+        final type = i.type?.toUpperCase() ?? '';
+        return type.contains('PART') || (type.isEmpty && !laborItems.contains(i));
     }).toList();
 
     final otherItems = sortedLineItems.where((i) {
@@ -252,6 +268,45 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       appBar: AppBar(
         title: Text('Receipt #${group.receiptNumber}'),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.trash2, color: Colors.red),
+            tooltip: 'Delete Receipt',
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Receipt'),
+                  content: const Text(
+                      'Are you sure you want to delete this receipt? This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => context.pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style:
+                          FilledButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => context.pop(true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true && context.mounted) {
+                await ref
+                    .read(reviewProvider.notifier)
+                    .deleteReceipt(group.receiptNumber);
+                if (context.mounted) {
+                  context.pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Receipt deleted successfully')),
+                  );
+                }
+              }
+            },
+          ),
           IconButton(
             icon: const FaIcon(FontAwesomeIcons.whatsapp,
                 color: AppTheme.primary),
@@ -338,45 +393,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               }
             },
             tooltip: 'Share via WhatsApp',
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.trash2, color: Colors.red),
-            tooltip: 'Delete Receipt',
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Receipt'),
-                  content: const Text(
-                      'Are you sure you want to delete this receipt? This action cannot be undone.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => context.pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      style:
-                          FilledButton.styleFrom(backgroundColor: Colors.red),
-                      onPressed: () => context.pop(true),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirmed == true && context.mounted) {
-                await ref
-                    .read(reviewProvider.notifier)
-                    .deleteReceipt(group.receiptNumber);
-                if (context.mounted) {
-                  context.pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Receipt deleted successfully')),
-                  );
-                }
-              }
-            },
           ),
         ],
       ),

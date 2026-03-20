@@ -601,6 +601,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final servicing = widget.group.items
         .where((i) =>
             i.type.toUpperCase().contains('LABOUR') ||
+            i.type.toUpperCase().contains('LABOR') ||
             i.type.toUpperCase().contains('SERVICE'))
         .toList();
     final others = widget.group.items
@@ -885,7 +886,7 @@ class _ItemRow extends StatelessWidget {
                       _PartLaborToggle(
                         isPart: false,
                         selected: !isPart,
-                        onTap: () => ctrl.typeCtrl.text = 'Labor',
+                        onTap: () => ctrl.typeCtrl.text = 'Labour',
                       ),
                     ],
                   );
