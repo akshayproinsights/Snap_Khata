@@ -238,3 +238,18 @@ Files to process: 1
 Force upload: False
 Username: Adnak
 
+
+================================================================================
+2026-03-20 15:13:36.411628: RECEIVED PROCESS REQUEST
+Task ID: 26ebeb40-6c8f-48b5-9dab-5c7bc7c629bf
+Files: ['Adnak/sales/20260320_151334_195860_scaled_1000052474_1774019612257_641125290_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-20 15:13:36.414028: Task ID: 26ebeb40-6c8f-48b5-9dab-5c7bc7c629bf
+Files to process: 1
+Force upload: False
+Username: Adnak
+

@@ -47,7 +47,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDCLRrqDwCOff4UIVP2otMFzwMtr_jz67U',
+    apiKey: const String.fromEnvironment('GOOGLE_API_KEY_WEB'),
     appId: '1:47234500199:web:623000bc86ce0e9142f6c2',
     messagingSenderId: '47234500199',
     projectId: 'snapkhata',
@@ -57,7 +57,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCDCQWdcRn0e2R0azqIVhg8d14d59Dd468',
+    apiKey: const String.fromEnvironment('GOOGLE_API_KEY_ANDROID'),
     appId: '1:47234500199:android:75de60efade553da42f6c2',
     messagingSenderId: '47234500199',
     projectId: 'snapkhata',
@@ -65,7 +65,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBFFMXMcdaA9i06nRSysG_Wmc9OONcKJIs',
+    apiKey: const String.fromEnvironment('GOOGLE_API_KEY_IOS'),
     appId: '1:47234500199:ios:070ac54b7cb2abf742f6c2',
     messagingSenderId: '47234500199',
     projectId: 'snapkhata',
