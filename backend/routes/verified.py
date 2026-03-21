@@ -230,11 +230,47 @@ async def update_single_verified_invoice(
         from database_helpers import convert_numeric_types
         record = convert_numeric_types(record)
         
+        # Get old record to check for amount differences
+        old_record_resp = db.client.table('verified_invoices').select('amount', 'receipt_number').eq('username', username).eq('row_id', row_id).execute()
+        old_amount = 0.0
+        receipt_number = record.get('receipt_number')
+        
+        if old_record_resp.data:
+            old_amount = float(old_record_resp.data[0].get('amount', 0) or 0)
+            if not receipt_number:
+                receipt_number = old_record_resp.data[0].get('receipt_number')
+        
         # Delete the old record
         db.delete('verified_invoices', {'username': username, 'row_id': row_id})
         
         # Insert the updated record
         db.insert('verified_invoices', record)
+        
+        # Adjust ledger transaction if amount changed
+        try:
+            new_amount = float(record.get('amount', 0) or 0)
+            amount_diff = new_amount - old_amount
+            
+            if amount_diff != 0 and receipt_number:
+                # Find the LedgerTransaction for this invoice
+                tx_resp = db.client.table('ledger_transactions').select('id', 'ledger_id', 'amount').eq('username', username).eq('receipt_number', receipt_number).eq('transaction_type', 'INVOICE').execute()
+                if tx_resp.data:
+                    tx = tx_resp.data[0]
+                    new_tx_amount = float(tx.get('amount', 0) or 0) + amount_diff
+                    db.client.table('ledger_transactions').update({'amount': new_tx_amount}).eq('id', tx['id']).execute()
+                    
+                    # Update the customer ledger balance
+                    ledger_id = tx['ledger_id']
+                    ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
+                    if ledger_resp.data:
+                        current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
+                        db.client.table('customer_ledgers').update({
+                            'balance_due': current_balance + amount_diff
+                        }).eq('id', ledger_id).execute()
+                        
+                        logger.info(f"Updated ledger {ledger_id} and transaction {tx['id']} by {amount_diff} due to invoice edit")
+        except Exception as inner_e:
+            logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")
         
         logger.info(f"Updated verified invoice record {row_id} for {username}")
         
@@ -272,10 +308,41 @@ async def delete_bulk_verified_invoices(
         
         # Delete all records matching the row_ids for this user
         deleted_count = 0
+        receipt_diffs = {}
+        
         for row_id in row_ids:
+            old_record_resp = db.client.table('verified_invoices').select('amount', 'receipt_number').eq('username', username).eq('row_id', row_id).execute()
+            
             result = db.delete('verified_invoices', {'username': username, 'row_id': row_id})
             if result:
                 deleted_count += 1
+                if old_record_resp.data:
+                    old_amount = float(old_record_resp.data[0].get('amount', 0) or 0)
+                    receipt_number = old_record_resp.data[0].get('receipt_number')
+                    if receipt_number:
+                        receipt_diffs[receipt_number] = receipt_diffs.get(receipt_number, 0) - old_amount
+        
+        # Apply diffs to ledgers
+        try:
+            for receipt_number, diff in receipt_diffs.items():
+                if diff != 0:
+                    tx_resp = db.client.table('ledger_transactions').select('id', 'ledger_id', 'amount').eq('username', username).eq('receipt_number', receipt_number).eq('transaction_type', 'INVOICE').execute()
+                    if tx_resp.data:
+                        tx = tx_resp.data[0]
+                        new_tx_amount = float(tx.get('amount', 0) or 0) + diff
+                        db.client.table('ledger_transactions').update({'amount': new_tx_amount}).eq('id', tx['id']).execute()
+                        
+                        ledger_id = tx['ledger_id']
+                        ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
+                        if ledger_resp.data:
+                            current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
+                            db.client.table('customer_ledgers').update({
+                                'balance_due': current_balance + diff
+                            }).eq('id', ledger_id).execute()
+                            
+                            logger.info(f"Updated ledger {ledger_id} and transaction {tx['id']} by {diff} due to invoice line deletion")
+        except Exception as inner_e:
+            logger.error(f"Error syncing ledger transaction for invoice delete: {inner_e}")
         
         logger.info(f"Deleted {deleted_count} verified invoice records for {username}")
         

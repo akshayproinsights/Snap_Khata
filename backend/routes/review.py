@@ -159,7 +159,8 @@ async def update_single_review_date(
             'output_tokens', 'total_tokens', 'cost_inr', 'fallback_attempted',
             'fallback_reason', 'processing_errors', 'date_and_receipt_combined_bbox',
             'receipt_number_bbox', 'date_bbox', 'customer_name', 'mobile_number',
-            'payment_mode', 'received_amount', 'balance_due', 'customer_details'
+            'payment_mode', 'received_amount', 'balance_due', 'customer_details',
+            'vehicle_number'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -442,7 +443,8 @@ async def update_single_review_amount(
             'processing_errors', 'line_item_row_bbox', 'date_and_receipt_combined_bbox',
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
-            'payment_mode', 'received_amount', 'balance_due', 'customer_details'
+            'payment_mode', 'received_amount', 'balance_due', 'customer_details',
+            'type'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         

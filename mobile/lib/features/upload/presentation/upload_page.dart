@@ -975,12 +975,12 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     // Server-driven step: map 0.0→1.0 to step indices
     final serverStep = (serverRatio * maxIdx).floor().clamp(0, maxIdx);
 
-    // Time-based minimum floor: ~1 step per 3 seconds, max step 2
+    // Time-based minimum floor: ~1 step per 3 seconds, max step 4
     int timeStep = 0;
     if (_processingStartTime != null) {
       final elapsed =
           DateTime.now().difference(_processingStartTime!).inMilliseconds;
-      timeStep = (elapsed / 3000).floor().clamp(0, 2);
+      timeStep = (elapsed / 3000).floor().clamp(0, 4);
     }
 
     // Take the max of server and time, but never go backwards

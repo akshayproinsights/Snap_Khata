@@ -926,6 +926,12 @@
                 const resp = await fetch(apiUrl);
                 if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
                 const data = await resp.json();
+
+                // Override backend data with unsaved UI state from URL params
+                if (params.has('pm')) data.payment_mode = params.get('pm');
+                if (params.has('ra')) data.received_amount = Number(params.get('ra'));
+                if (params.has('bd')) data.balance_due = Number(params.get('bd'));
+
                 if (gstMode === 'none') {
                     renderOrderSummary(data);
                 } else {
@@ -944,99 +950,177 @@
             document.title = `Order Summary #${data.id || '—'} • SnapKhata`;
 
             const items = Array.isArray(data.items) ? data.items : [];
-            const subtotal = items.reduce((s, i) => s + Number(i.amount || 0), 0);
-            const total = Number(data.total_amount) || subtotal;
             const isPaid = data.status === 'PAID';
 
+            // Separate taxable (parts) and non-taxable (labor) items
+            const taxableItems = items.filter(i => {
+                const t = String(i.type || '').toLowerCase();
+                return t !== 'labor' && t !== 'labour' && t !== 'service';
+            });
+            const nonTaxableItems = items.filter(i => {
+                const t = String(i.type || '').toLowerCase();
+                return t === 'labor' || t === 'labour' || t === 'service';
+            });
+
+            // Calculate subtotals
+            const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+            const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+
+            // Grand Total (since no GST)
+            const subtotal = items.reduce((s, i) => s + Number(i.amount || 0), 0);
+            const grandTotal = Number(data.total_amount) || subtotal;
+
             let itemsHtml = '';
-            if (items.length > 0) {
-                items.forEach((item, idx) => {
+
+            // Parts
+            if (taxableItems.length > 0) {
+                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts</td></tr>`;
+                taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
+
                     itemsHtml += `
                     <tr>
-                        <td class="center" style="color:#94a3b8;font-size:12px;">${idx + 1}</td>
-                        <td>
-                            <div class="os-item-name">${item.name || 'Item'}</div>
-                            ${rate > 0 ? `<div class="os-item-rate">₹${rate.toLocaleString('en-IN')} × ${qty}</div>` : ''}
-                        </td>
+                        <td class="center">${idx + 1}</td>
+                        <td>${item.name || 'Spare Part'}</td>
                         <td class="center">${qty}</td>
-                        <td class="right">${rate > 0 ? fmtMoney(rate) : '—'}</td>
-                        <td class="right">${fmtMoney(amount)}</td>
+                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
                     </tr>`;
                 });
-            } else {
+            }
+
+            // Labor
+            if (nonTaxableItems.length > 0) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr><td colspan="5" style="height:8px;"></td></tr>`;
+                }
+                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing</td></tr>`;
+                nonTaxableItems.forEach((item, idx) => {
+                    const qty = Number(item.qty || 1);
+                    const rate = Number(item.rate || 0);
+                    const amount = Number(item.amount || 0);
+
+                    itemsHtml += `
+                    <tr>
+                        <td class="center">${idx + 1}</td>
+                        <td>${item.name || 'Servicing'}</td>
+                        <td class="center">${qty}</td>
+                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
+                    </tr>`;
+                });
+            }
+
+            if (items.length === 0) {
                 itemsHtml = `<tr><td colspan="5" style="text-align:center;padding:32px;color:#94a3b8;">No line items for this receipt.</td></tr>`;
             }
 
-            const html = `
-            <div class="os-page">
-                <div class="os-brand-bar">
-                    <div class="os-brand-dot"></div>
-                    <div class="os-brand-name">SnapKhata</div>
-                </div>
+            const wordsTotal = numberToWords(Math.round(grandTotal));
 
-                <div class="os-card">
-                    <div class="os-hero">
-                        <div class="os-hero-top">
-                            <div>
-                                <div class="os-shop-name">${data.shop_name || 'Your Business'}</div>
-                                ${(data.shop_address || data.shop_phone) ? `
-                                <div style="font-size:13px; color:rgba(255,255,255,0.7); margin-top:6px; line-height:1.4; max-width:280px;">
-                                    ${data.shop_address ? `<div>${data.shop_address}</div>` : ''}
-                                    ${data.shop_phone ? `<div>📞 +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
-                                </div>` : ''}
-                            </div>
-                            <span class="os-status-pill ${isPaid ? 'os-paid' : 'os-pending'}">
-                                ${isPaid ? '✓ Paid' : '⏳ Pending'}
-                            </span>
+            const html = `
+            <div class="inv-page">
+                <div class="inv-doc">
+                    <div class="inv-heading-bar">Order Summary</div>
+
+                    <div class="inv-shop-header">
+                        <div>
+                            <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
+                            ${(data.shop_address || data.shop_phone) ? `
+                            <div class="inv-shop-detail">
+                                ${data.shop_address ? `${data.shop_address}<br>` : ''}
+                                ${data.shop_phone ? `📞 +91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                            </div>` : ''}
                         </div>
-                        <div class="os-meta">
-                            <div class="os-meta-item">
-                                <label>Order No.</label>
-                                <span>#${data.id || '—'}</span>
-                            </div>
-                            <div class="os-meta-item">
-                                <label>Date</label>
-                                <span>${fmtDate(data.created_at)}</span>
+                        <div class="inv-gst-badge">
+                            <div style="margin-top:8px;">
+                                <span class="inv-status-pill ${isPaid ? 'inv-paid' : 'inv-pending'}">
+                                    ${isPaid ? '✓ PAID' : 'PENDING'}
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    <div class="os-body">
-                        <div class="os-customer-strip">
-                            <div class="os-customer-avatar">👤</div>
+                    <div class="inv-details-row">
+                        <div class="inv-col">
+                            <div class="inv-col-header">Order Details</div>
+                            <div class="inv-col-val">
+                                <div><strong>Order No:</strong> #${data.id || '—'}</div>
+                                <div><strong>Date:</strong> ${fmtDate(data.created_at)}</div>
+                            </div>
+                        </div>
+                        <div class="inv-col">
+                            <div class="inv-col-header">Bill To</div>
+                            <div class="inv-col-val">
+                                <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
+                                ${data.customer_phone ? `<div style="color:#64748b;">+91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
+                                ${data.vehicle_number ? `<div style="margin-top:2px;"><strong>Vehicle No:</strong> ${data.vehicle_number}</div>` : ''}
+                                ${data.odometer_reading ? `<div style="margin-top:2px;"><strong>Odometer:</strong> ${data.odometer_reading} km</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="inv-table">
+                        <thead>
+                            <tr>
+                                <th class="center" style="width:5%">#</th>
+                                <th style="width:40%">Description of Parts/Services</th>
+                                <th class="center" style="width:10%">Qty</th>
+                                <th class="right" style="width:20%">Rate</th>
+                                <th class="right" style="width:25%">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${itemsHtml}</tbody>
+                    </table>
+
+                    <div class="inv-totals-wrap">
+                        <div class="inv-totals-spacer">
                             <div>
-                                <div class="os-customer-name">${data.customer_name || 'Walk-in Customer'}</div>
-                                ${data.customer_phone ? `<div class="os-customer-phone">+91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
+                                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;margin-bottom:6px;">Amount in Words</div>
+                                <div class="inv-amount-words">Rupees ${wordsTotal} Only</div>
+                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:8px;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                         </div>
-
-                        <table class="os-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:5%">#</th>
-                                    <th style="width:44%">Item</th>
-                                    <th class="center" style="width:10%">Qty</th>
-                                    <th class="right" style="width:20%">Rate</th>
-                                    <th class="right" style="width:21%">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-
-                        <div class="os-totals">
-                            <div class="os-total-divider"></div>
-                            <div class="os-grand-total">
-                                <div class="os-grand-label">Total Amount</div>
-                                <div class="os-grand-value">${fmtMoney(total)}</div>
+                        <div class="inv-totals-table">
+                            ${partsSubtotal > 0.01 && laborSubtotal > 0.01 ? `
+                            <div class="inv-totals-row">
+                                <span class="label">Spare Parts Total</span>
+                                <span class="amount">${fmtMoney(partsSubtotal)}</span>
+                            </div>
+                            <div class="inv-totals-row" style="color:#64748b;">
+                                <span class="label">Servicing Total</span>
+                                <span class="amount">${fmtMoney(laborSubtotal)}</span>
+                            </div>
+                            ` : ''}
+                            <div class="inv-totals-row grand">
+                                <span class="label">Grand Total</span>
+                                <span class="amount">${fmtMoney(grandTotal)}</span>
+                            </div>
+                            <div class="inv-totals-row">
+                                <span class="label">Payment Mode</span>
+                                <span class="amount" style="font-weight:600;">${data.payment_mode || 'Cash'}</span>
+                            </div>
+                            <div class="inv-totals-row" style="color:#4f46e5;font-weight:600;">
+                                <span class="label">Amount Received</span>
+                                <span class="amount">${fmtMoney(data.received_amount !== undefined && data.received_amount !== null ? Number(data.received_amount) : (grandTotal - Number(data.balance_due)))}</span>
+                            </div>
+                            <div class="inv-totals-row" style="color:#dc2626;font-weight:700;background:#fef2f2;">
+                                <span class="label">Balance Due</span>
+                                <span class="amount">${fmtMoney(Number(data.balance_due))}</span>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="os-footer">
-                            <div class="os-footer-brand">Powered by <span>SnapKhata</span></div>
-                            <div class="os-footer-note">This is a digital order summary.</div>
+                    <div class="inv-footer">
+                        <div>
+                            <div class="inv-footer-note">This is a digital order summary and does not require a signature.</div>
+                            <div class="inv-footer-brand" style="margin-top:6px;">Powered by <span>SnapKhata</span></div>
+                        </div>
+                        <div class="inv-sign-block">
+                            <div class="inv-sign-line"></div>
+                            <div class="inv-sign-label">Authorised Signature</div>
+                            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${data.shop_name || ''}</div>
                         </div>
                     </div>
                 </div>
@@ -1058,8 +1142,14 @@
             const isPaid = data.status === 'PAID';
 
             // Separate taxable (parts) and non-taxable (labor) items
-            const taxableItems = items.filter(i => i.is_taxable !== false); // default to taxable if not specified
-            const nonTaxableItems = items.filter(i => i.is_taxable === false);
+            const taxableItems = items.filter(i => {
+                const t = String(i.type || '').toLowerCase();
+                return t !== 'labor' && t !== 'labour' && t !== 'service';
+            });
+            const nonTaxableItems = items.filter(i => {
+                const t = String(i.type || '').toLowerCase();
+                return t === 'labor' || t === 'labour' || t === 'service';
+            });
 
             // Calculate subtotals
             const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
@@ -1084,7 +1174,7 @@
 
             // Taxable items (Parts)
             if (taxableItems.length > 0) {
-                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Parts (Taxable @ 18%)</td></tr>`;
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts (Taxable @ 18%)</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -1096,7 +1186,7 @@
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
-                        <td>${item.name || 'Part / Item'}</td>
+                        <td>${item.name || 'Spare Part'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(baseRate)}</td>
                         <td class="right">${fmtMoney(baseAmt)}</td>
@@ -1112,7 +1202,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr><td colspan="8" style="height:8px;"></td></tr>`;
                 }
-                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Labor / Service (No GST)</td></tr>`;
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing (No GST)</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -1121,7 +1211,7 @@
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
-                        <td>${item.name || 'Labor / Service'}</td>
+                        <td>${item.name || 'Servicing'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                         <td class="right">${fmtMoney(amount)}</td>
@@ -1173,7 +1263,7 @@
                             <div class="inv-col-val">
                                 <div><strong>Invoice No:</strong> #${data.id || '—'}</div>
                                 <div><strong>Date:</strong> ${fmtDate(data.created_at)}</div>
-                                <div style="margin-top:4px;font-size:11px;color:#64748b;">GST @18% on Parts ${gstMode === 'included' ? '(Included in price)' : '(Excluded — added on top)'}</div>
+                                <div style="margin-top:4px;font-size:11px;color:#64748b;">GST @18% on Spare Parts ${gstMode === 'included' ? '(Included in price)' : '(Excluded — added on top)'}</div>
                             </div>
                         </div>
                         <div class="inv-col">
@@ -1181,6 +1271,8 @@
                             <div class="inv-col-val">
                                 <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
                                 ${data.customer_phone ? `<div style="color:#64748b;">+91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
+                                ${data.vehicle_number ? `<div style="margin-top:2px;"><strong>Vehicle No:</strong> ${data.vehicle_number}</div>` : ''}
+                                ${data.odometer_reading ? `<div style="margin-top:2px;"><strong>Odometer:</strong> ${data.odometer_reading} km</div>` : ''}
                             </div>
                         </div>
                     </div>
@@ -1206,22 +1298,12 @@
                             <div>
                                 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8;margin-bottom:6px;">Amount in Words</div>
                                 <div class="inv-amount-words">Rupees ${wordsTotal} Only</div>
-                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:8px;">Parts: ${fmtMoney(partsSubtotal)} | Labor: ${fmtMoney(laborSubtotal)}</div>` : ''}
+                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:8px;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                         </div>
                         <div class="inv-totals-table">
                             <div class="inv-totals-row">
-                                <span class="label">Parts Subtotal</span>
-                                <span class="amount">${fmtMoney(partsSubtotal)}</span>
-                            </div>
-                            ${laborSubtotal > 0.01 ? `
-                            <div class="inv-totals-row" style="color:#64748b;">
-                                <span class="label">Labor / Service (no GST)</span>
-                                <span class="amount">${fmtMoney(laborSubtotal)}</span>
-                            </div>
-                            ` : ''}
-                            <div class="inv-totals-row">
-                                <span class="label">Taxable Amount</span>
+                                <span class="label">Taxable Amount (Parts)</span>
                                 <span class="amount">${fmtMoney(taxableValue)}</span>
                             </div>
                             <div class="inv-totals-row gst">
@@ -1232,9 +1314,27 @@
                                 <span class="label">SGST @9%</span>
                                 <span class="amount">${fmtMoney(sgst)}</span>
                             </div>
+                            ${laborSubtotal > 0.01 ? `
+                            <div class="inv-totals-row" style="color:#64748b;">
+                                <span class="label">Servicing (Non-Taxable)</span>
+                                <span class="amount">${fmtMoney(laborSubtotal)}</span>
+                            </div>
+                            ` : ''}
                             <div class="inv-totals-row grand">
                                 <span class="label">Grand Total</span>
                                 <span class="amount">${fmtMoney(grandTotal)}</span>
+                            </div>
+                            <div class="inv-totals-row">
+                                <span class="label">Payment Mode</span>
+                                <span class="amount" style="font-weight:600;">${data.payment_mode || 'Cash'}</span>
+                            </div>
+                            <div class="inv-totals-row" style="color:#4f46e5;font-weight:600;">
+                                <span class="label">Amount Received</span>
+                                <span class="amount">${fmtMoney(data.received_amount !== undefined && data.received_amount !== null ? Number(data.received_amount) : (grandTotal - Number(data.balance_due)))}</span>
+                            </div>
+                            <div class="inv-totals-row" style="color:#dc2626;font-weight:700;background:#fef2f2;">
+                                <span class="label">Balance Due</span>
+                                <span class="amount">${fmtMoney(Number(data.balance_due))}</span>
                             </div>
                         </div>
                     </div>

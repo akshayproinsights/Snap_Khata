@@ -253,3 +253,213 @@ Files to process: 1
 Force upload: False
 Username: Adnak
 
+
+================================================================================
+2026-03-20 17:59:04.155592: RECEIVED PROCESS REQUEST
+Task ID: e97eab1b-c8f4-4d1f-81c0-cef1b3cb1441
+Files: ['Adnak/sales/20260320_175900_95f99a_scaled_1000052476_1774029537394_549839785_compressed.jpg', 'Adnak/sales/20260320_175900_cc5ec1_scaled_1000052586_1774029537395_239705305_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-20 17:59:04.156620: Task ID: e97eab1b-c8f4-4d1f-81c0-cef1b3cb1441
+Files to process: 2
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-20 18:04:56.845630: RECEIVED PROCESS REQUEST
+Task ID: 72d73af9-6cd8-4c57-b8bc-d26121312c30
+Files: ['Adnak/sales/20260320_180452_baf215_scaled_1000052293_1774029890895_3823331_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-20 18:04:56.847080: Task ID: 72d73af9-6cd8-4c57-b8bc-d26121312c30
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-20 19:39:28.551543: RECEIVED PROCESS REQUEST
+Task ID: 5c48b1ce-0731-45ed-8056-8d277e73056c
+Files: ['Adnak/sales/20260320_193925_6b8f2f_scaled_1000052457_1774035563713_203441205_compressed.jpg', 'Adnak/sales/20260320_193925_bc23be_scaled_1000052445_1774035563713_439451335_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-20 19:39:28.552393: Task ID: 5c48b1ce-0731-45ed-8056-8d277e73056c
+Files to process: 2
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-20 19:41:18.020894: RECEIVED PROCESS REQUEST
+Task ID: a3e1987c-19c0-464f-b391-35189f6d6b3a
+Files: ['Adnak/sales/20260320_194114_48f98e_scaled_1000052536_1774035672337_138153130_compressed.jpg', 'Adnak/sales/20260320_194114_9e19ef_scaled_1000052493_1774035672338_217704667_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-20 19:41:18.022135: Task ID: a3e1987c-19c0-464f-b391-35189f6d6b3a
+Files to process: 2
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 05:24:01.185943: RECEIVED PROCESS REQUEST
+Task ID: b81f92bc-4533-4e60-aa75-3eba765c0b73
+Files: ['Adnak/sales/20260321_052357_ed542a_scaled_1000052452_1774070635928_77560002_compressed.jpg', 'Adnak/sales/20260321_052357_abc56d_scaled_1000052475_1774070635912_179184434_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 05:24:01.188809: Task ID: b81f92bc-4533-4e60-aa75-3eba765c0b73
+Files to process: 2
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 05:51:16.091389: RECEIVED PROCESS REQUEST
+Task ID: 03930422-664b-4f4e-b827-8ca3e5c0d3b8
+Files: ['Adnak/sales/20260321_055110_da84f0_scaled_1000052535_1774072267026_247335817_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 05:51:16.094645: Task ID: 03930422-664b-4f4e-b827-8ca3e5c0d3b8
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 05:55:45.642715: RECEIVED PROCESS REQUEST
+Task ID: 90dc10fe-5c4f-4436-b4a0-f634a4660759
+Files: ['Adnak/sales/20260321_055542_97a9ed_scaled_1000052455_1774072540879_753977049_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 05:55:45.645038: Task ID: 90dc10fe-5c4f-4436-b4a0-f634a4660759
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 06:03:22.861115: RECEIVED PROCESS REQUEST
+Task ID: 13287f86-1be5-4a2e-ae4e-4c56e9d8d487
+Files: ['Adnak/sales/20260321_060320_0849d8_scaled_1000052501_1774072995983_833905248_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 06:03:22.863054: Task ID: 13287f86-1be5-4a2e-ae4e-4c56e9d8d487
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 06:13:10.907995: RECEIVED PROCESS REQUEST
+Task ID: 4112764c-7ec9-455e-b0c3-f95dd2f043e3
+Files: ['Adnak/sales/20260321_061307_6a1143_scaled_1000052547_1774073585480_280983262_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 06:13:10.909514: Task ID: 4112764c-7ec9-455e-b0c3-f95dd2f043e3
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 06:16:25.606806: RECEIVED PROCESS REQUEST
+Task ID: 75fcc41c-c707-4901-910f-7e4026731cec
+Files: ['Adnak/sales/20260321_061623_fec172_scaled_1000052541_1774073781497_119957463_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 06:16:25.608536: Task ID: 75fcc41c-c707-4901-910f-7e4026731cec
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 06:48:22.097282: RECEIVED PROCESS REQUEST
+Task ID: f28d73d2-44f4-4018-bebd-9f987bce211f
+Files: ['Adnak/sales/20260321_064819_cb01e6_scaled_1000052465_1774075697705_421899246_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 06:48:22.101126: Task ID: f28d73d2-44f4-4018-bebd-9f987bce211f
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 07:19:41.430449: RECEIVED PROCESS REQUEST
+Task ID: 72abfb33-97b2-4adf-940e-025e0e7ae3b7
+Files: ['Adnak/sales/20260321_071938_7c4055_scaled_1000052463_1774077577030_240032262_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 07:19:41.432488: Task ID: 72abfb33-97b2-4adf-940e-025e0e7ae3b7
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 07:36:19.473102: RECEIVED PROCESS REQUEST
+Task ID: cca40a08-5ca7-44c4-9027-97fa4b81afda
+Files: ['Adnak/sales/20260321_073616_11184f_scaled_1000052575_1774078571340_294129473_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 07:36:19.474141: Task ID: cca40a08-5ca7-44c4-9027-97fa4b81afda
+Files to process: 1
+Force upload: False
+Username: Adnak
+
+
+================================================================================
+2026-03-21 07:53:51.626103: RECEIVED PROCESS REQUEST
+Task ID: 08d7cf4e-4ecc-4bdc-bf16-55e6f269066f
+Files: ['Adnak/sales/20260321_075348_c5630b_scaled_1000052573_1774079626385_182548746_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-21 07:53:51.626613: Task ID: 08d7cf4e-4ecc-4bdc-bf16-55e6f269066f
+Files to process: 1
+Force upload: False
+Username: Adnak
+

@@ -59,7 +59,7 @@ async def get_public_receipt(receipt_number: str, u: str = None):
         shop_gst = ""
         if username:
             try:
-                profile_response = db.client.from_("profiles") \
+                profile_response = db.client.from_("user_profiles") \
                     .select("shop_name, shop_address, shop_phone, shop_gst") \
                     .eq("username", username) \
                     .limit(1) \
@@ -105,7 +105,8 @@ async def get_public_receipt(receipt_number: str, u: str = None):
                         "name": item.get("description") or "Item",
                         "qty": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
-                        "amount": amount
+                        "amount": amount,
+                        "type": item.get("type") or "part"
                     })
 
         else:  # verified_invoices — fetch ALL rows for this receipt number
@@ -127,7 +128,8 @@ async def get_public_receipt(receipt_number: str, u: str = None):
                         "name": row.get("description") or "Item",
                         "qty": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
-                        "amount": amount
+                        "amount": amount,
+                        "type": row.get("type") or "part"
                     })
 
         # ── Total amount ──────────────────────────────────────────────────────────
@@ -140,6 +142,11 @@ async def get_public_receipt(receipt_number: str, u: str = None):
             or header.get("created_at")
         )
 
+        calc_received = total_amount - float(header.get("balance_due") or 0.0)
+        received_amount = float(header.get("received_amount") or 0.0)
+        if received_amount <= 0:
+            received_amount = calc_received if calc_received > 0 else 0.0
+
         return {
             "id": header.get("receipt_number"),
             "customer_name": header.get("customer_name") or "Customer",
@@ -148,6 +155,11 @@ async def get_public_receipt(receipt_number: str, u: str = None):
             "paid_amount": total_amount if is_paid else 0,
             "status": "PAID" if is_paid else "PENDING",
             "created_at": display_date,
+            "vehicle_number": header.get("vehicle_number") or "",
+            "odometer_reading": header.get("odometer") or "",
+            "balance_due": float(header.get("balance_due") or 0.0),
+            "payment_mode": header.get("payment_mode") or "Cash",
+            "received_amount": received_amount,
             "shop_name": shop_name,
             "shop_address": shop_address,
             "shop_phone": shop_phone,

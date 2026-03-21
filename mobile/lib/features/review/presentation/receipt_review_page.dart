@@ -325,8 +325,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ? '&u=${authState.user!.username}'
                   : '';
 
+              final paymentModeParam = '&pm=${Uri.encodeComponent(_paymentMode)}';
+              final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
+              final receivedParam = '&ra=${_receivedAmount.toStringAsFixed(2)}';
+              final balanceParam = '&bd=${balanceDue.toStringAsFixed(2)}';
+
               final shareUrl =
-                  'https://mydigientry.com/receipt.html?id=${group.receiptNumber}$gstParam$usernameParam';
+                  'https://mydigientry.com/receipt.html?id=${group.receiptNumber}$gstParam$usernameParam$paymentModeParam$receivedParam$balanceParam';
 
               final prefs = await SharedPreferences.getInstance();
               final shopName = prefs.getString('shop_title')?.isNotEmpty == true

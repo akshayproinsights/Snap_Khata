@@ -1278,7 +1278,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     'date_bbox': row.get('date_bbox'),
                     'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                     'customer_name': row.get('customer'),
-                    'mobile_number': row.get('mobile_number')
+                    'mobile_number': row.get('mobile_number'),
+                    'vehicle_number': row.get('vehicle_number')
                 }
                 date_row = sanitize_for_supabase(date_row)
                 
@@ -1377,7 +1378,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                         'line_item_row_bbox': row.get('line_item_row_bbox'),  # Only use row-level bbox
                         'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                         'customer_name': row.get('customer'),
-                        'mobile_number': row.get('mobile_number')
+                        'mobile_number': row.get('mobile_number'),
+                        'type': row.get('type')
                     }
                     amount_row = sanitize_for_supabase(amount_row)
                     

@@ -1,85 +1,65 @@
-ÿþ# ---- Python ----
+# [Snap_Khata] Git Ignore Patterns
+
+# Environments
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+ENV/
+env/
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
 
-# Virtual environments
-venv/
-.env/
-.env*/
+# Node / React
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+frontend/build/
+.npm
+/root/Snap_Khata/frontend/build
 
-# Environment/Secrets
-.env
-# *.json
-secrets.toml
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+mobile/build/
+mobile/.dart_tool/
+mobile/.packages
+mobile/.pub/
+mobile/*.freezed.dart
+mobile/*.g.dart
 
-# Secrets only - allow user configs
-credentials.json
-package-lock.json
-
-# Jupyter
-.ipynb_checkpoints/
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Streamlit
-.streamlit/
-
-# Cache
-*.cache/
-.cache/
-node_modules/
-dist/
-build/
-
-credentials.json
-secrets.toml
-
-.agents/
+# Other
+cloud_run_env.json
 .stitch/
-
-.agent/
-stitch-skills/
-
-# Python Cache and Virtual Environments
-**/__pycache__/
-backend/venv/
-venv/
-
-backend/venv/
-
-# Python
-venv/
-__pycache__/
-*.py[cod]
-
-# Flutter/Android
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-build/
-**/android/**/generated/
-**/android/app/debug/
-**/android/app/profile/
-**/android/app/release/
-
-# Python
-venv/
-__pycache__/
-*.py[cod]
-
-# Ignore any venv folder anywhere in the project
-**/venv/
-**/__pycache__/
-.env
-.agent/
-.agents/stitch-skills/
+firebase-debug.log
+.firebase/
