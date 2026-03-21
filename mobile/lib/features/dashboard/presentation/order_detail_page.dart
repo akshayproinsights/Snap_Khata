@@ -189,8 +189,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     }
     
     double newGst = 0;
-    if (_gstMode == GstMode.excluded) newGst = newParts * 0.18;
-    else if (_gstMode == GstMode.included) newGst = newParts * 18 / 118;
+    if (_gstMode == GstMode.excluded) {
+      newGst = newParts * 0.18;
+    } else if (_gstMode == GstMode.included) {
+      newGst = newParts * 18 / 118;
+    }
     
     double grandTotal = newParts + newLabor + newGst;
     double calculatedBalanceDue = _paymentMode == 'Credit' ? (grandTotal - _receivedAmount) : 0.0;

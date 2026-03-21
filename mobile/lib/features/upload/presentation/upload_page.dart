@@ -964,30 +964,20 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     _processingBarController.forward();
   }
 
-  /// Compute the step index from REAL backend data + a time-based floor.
-  ///  - `serverRatio` = processed / total (0.0 – 1.0)
-  ///  - time-based floor: advance 1 step per ~3s as a minimum,
-  ///    capped at step 2 (so we never race ahead of the server)
-  /// The result never goes backwards (high-water mark).
-  int _computeStepIndex(double serverRatio) {
-    final maxIdx = _processingSteps.length - 1;
-
-    // Server-driven step: map 0.0→1.0 to step indices
-    final serverStep = (serverRatio * maxIdx).floor().clamp(0, maxIdx);
-
-    // Time-based minimum floor: ~1 step per 3 seconds, max step 4
-    int timeStep = 0;
-    if (_processingStartTime != null) {
-      final elapsed =
-          DateTime.now().difference(_processingStartTime!).inMilliseconds;
-      timeStep = (elapsed / 3000).floor().clamp(0, 4);
-    }
-
-    // Take the max of server and time, but never go backwards
-    final computed = serverStep > timeStep ? serverStep : timeStep;
-    if (computed > _highWaterStep) {
-      _highWaterStep = computed;
-    }
+  /// Step index is driven purely by time so the 6 UI sub-steps advance
+  /// smoothly and realistically. The backend only reports *files* done
+  /// (0 → N), not the internal sub-steps (read header, items, quantities,
+  /// prices, totals, save) — so using the server ratio here would cause
+  /// an instant jump to Step 6 the moment one file finishes.
+  int _computeStepIndex() {
+    if (_processingStartTime == null) return _highWaterStep;
+    final elapsed =
+        DateTime.now().difference(_processingStartTime!).inMilliseconds;
+    // Advance one step every ~10 seconds (max 5 so step 6 is indeterminate
+    // until backend confirms completion).
+    final maxAutoStep = _processingSteps.length - 2; // stop at step 5 (index 4)
+    final timeStep = (elapsed ~/ 10000).clamp(0, maxAutoStep);
+    if (timeStep > _highWaterStep) _highWaterStep = timeStep;
     return _highWaterStep;
   }
 
@@ -1015,31 +1005,35 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
       _startProcessingAnimation();
     }
 
-    // ── Compute real progress from backend polling data ──
-    double procServerProgress = 0;
-    if (processingStatus != null && processingStatus.total > 0) {
-      procServerProgress =
-          (processingStatus.processed / processingStatus.total).clamp(0.0, 1.0);
-    }
-
-    // ── Step index driven by REAL data, not a blind timer ──
-    final stepIndex = _computeStepIndex(procServerProgress);
+    // ── Step index driven purely by time, not server ratio ──
+    final stepIndex = _computeStepIndex();
     final currentStep = _processingSteps[stepIndex];
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
+
+    // Indeterminate bar on step 6: we've animated through all 5 timed steps
+    // and are now waiting for the backend to confirm completion.
+    // Also show it immediately if the backend reports all files done but
+    // status hasn't flipped to 'completed' yet.
+    final serverAllFilesReported = processingStatus != null &&
+        processingStatus.total > 0 &&
+        processingStatus.processed >= processingStatus.total;
+    final isLastStep = !isUploading &&
+        (stepIndex >= _processingSteps.length - 1 || serverAllFilesReported) &&
+        isProcessing;
 
     // Pick the right tips list
     final tips = isUploading ? _uploadTips : _processingTips;
     final safeTipIndex = _tipIndex % tips.length;
 
     // Phase-specific text and progress values
-    final mainTitle = isUploading ? 'Uploading order' : currentStep.title;
+    final mainTitle = isUploading ? 'Uploading order' : isLastStep ? _processingSteps.last.title : currentStep.title;
     final mainSub = isUploading
         ? 'Please wait while we send your document'
-        : currentStep.sub;
+        : isLastStep ? _processingSteps.last.sub : currentStep.sub;
 
     final stepLabel = isUploading
         ? 'Step 1 of 2'
-        : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
+        : isLastStep ? 'Finalizing…' : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
 
     final barValue = isUploading ? uploadProgress : procStepProgress;
     final percent = (barValue * 100).toInt();
@@ -1266,7 +1260,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                                   curve: Curves.easeOut,
                                   builder: (_, v, __) =>
                                       LinearProgressIndicator(
-                                    value: v,
+                                    value: isLastStep ? null : v,
                                     minHeight: 8,
                                     backgroundColor: const Color(0xFFEDEEEF),
                                     valueColor:

@@ -28,6 +28,7 @@ class _InventoryInvoiceReviewPageState
   late final TextEditingController _invoiceNumberController;
   late final TextEditingController _dateController;
 
+  String _paymentMode = 'Credit';
   bool _isLoading = false;
 
   @override
@@ -37,7 +38,15 @@ class _InventoryInvoiceReviewPageState
         TextEditingController(text: widget.bundle.vendorName);
     _invoiceNumberController =
         TextEditingController(text: widget.bundle.invoiceNumber);
-    _dateController = TextEditingController(text: widget.bundle.date);
+
+    String initialDate = widget.bundle.date;
+    try {
+        final parsed = DateTime.tryParse(initialDate);
+        if (parsed != null) {
+            initialDate = DateFormat('dd/MM/yyyy').format(parsed);
+        }
+    } catch (_) {}
+    _dateController = TextEditingController(text: initialDate);
   }
 
   Future<void> _deleteItem(InventoryItem item) async {
@@ -199,9 +208,13 @@ class _InventoryInvoiceReviewPageState
   Future<void> _selectDate() async {
     DateTime? initialDate;
     try {
-      initialDate = DateTime.tryParse(_dateController.text) ?? DateTime.now();
+      initialDate = DateFormat('dd/MM/yyyy').parse(_dateController.text);
     } catch (_) {
-      initialDate = DateTime.now();
+      try {
+        initialDate = DateTime.tryParse(_dateController.text) ?? DateTime.now();
+      } catch (_) {
+        initialDate = DateTime.now();
+      }
     }
     
     final picked = await showDatePicker(
@@ -225,7 +238,7 @@ class _InventoryInvoiceReviewPageState
 
     if (picked != null) {
       setState(() {
-        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+        _dateController.text = DateFormat('dd/MM/yyyy').format(picked);
       });
     }
   }
@@ -235,11 +248,21 @@ class _InventoryInvoiceReviewPageState
     setState(() => _isLoading = true);
 
     try {
+      String backendDate = _dateController.text.trim();
+      try {
+        final parsed = DateFormat('dd/MM/yyyy').parse(backendDate);
+        backendDate = DateFormat('yyyy-MM-dd').format(parsed);
+      } catch (_) {}
+
       final data = {
         'invoice_number': _invoiceNumberController.text.trim(),
         'vendor_name': _vendorNameController.text.trim(),
-        'invoice_date': _dateController.text.trim(),
+        'invoice_date': backendDate,
         'item_ids': items.map((i) => i.id).toList(),
+        'payment_mode': _paymentMode,
+        'payment_date': backendDate,
+        'balance_owed': _paymentMode == 'Credit' ? totalAmount : 0.0,
+        'amount_paid': _paymentMode == 'Cash' ? totalAmount : 0.0,
       };
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
@@ -267,6 +290,27 @@ class _InventoryInvoiceReviewPageState
   }
 
 
+
+  Widget _buildToggleBtn(String mode, bool isSelected) {
+    return GestureDetector(
+      onTap: () => setState(() => _paymentMode = mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          mode,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildHeaderCard() {
     return Container(
@@ -305,6 +349,20 @@ class _InventoryInvoiceReviewPageState
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary),
               ),
+              const Spacer(),
+              Container(
+                 decoration: BoxDecoration(
+                   color: Colors.grey.shade100,
+                   borderRadius: BorderRadius.circular(20),
+                 ),
+                 child: Row(
+                   mainAxisSize: MainAxisSize.min,
+                   children: [
+                     _buildToggleBtn('Credit', _paymentMode == 'Credit'),
+                     _buildToggleBtn('Cash', _paymentMode == 'Cash'),
+                   ],
+                 ),
+               ),
             ],
           ),
           const SizedBox(height: 16),
@@ -396,15 +454,6 @@ class _InventoryInvoiceReviewPageState
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.share, color: Colors.green),
-            tooltip: 'Share via WhatsApp',
-            onPressed: () {
-               ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('WhatsApp sharing coming soon!')),
-               );
-            },
-          ),
           IconButton(
             icon: const Icon(LucideIcons.trash2, color: Colors.red),
             tooltip: 'Delete Invoice',

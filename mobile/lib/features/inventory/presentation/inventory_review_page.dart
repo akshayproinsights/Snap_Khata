@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
+import 'package:mobile/shared/widgets/app_toast.dart';
 
 // ─── Grouped invoice bundle (same structure as inventory_main_page) ───────────
 class InventoryInvoiceBundle {
@@ -32,9 +33,15 @@ class InventoryInvoiceBundle {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-class InventoryReviewPage extends ConsumerWidget {
+class InventoryReviewPage extends ConsumerStatefulWidget {
   const InventoryReviewPage({super.key});
 
+  @override
+  ConsumerState<InventoryReviewPage> createState() =>
+      _InventoryReviewPageState();
+}
+
+class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
   List<InventoryInvoiceBundle> _groupItems(List<InventoryItem> items) {
     final Map<String, InventoryInvoiceBundle> groups = {};
     for (final item in items) {
@@ -88,43 +95,109 @@ class InventoryReviewPage extends ConsumerWidget {
     return DateFormat('d MMM').format(dt);
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(inventoryProvider);
+  void _syncAndFinish() async {
+    await ref.read(inventoryProvider.notifier).syncAndFinish();
+    if (!mounted) return;
+    final state = ref.read(inventoryProvider);
+    if (state.error == null) {
+      AppToast.showSuccess(context, 'Inventory synced successfully!',
+          title: 'Sync Complete');
+      context.go('/inventory');
+    } else {
+      AppToast.showError(context, state.error!, title: 'Sync Failed');
+    }
+  }
 
-    final mismatchCount =
-        state.items.where((i) => i.amountMismatch > 1.0).length;
+  Widget _buildProgressHeader(int total, int done, int pending, int error) {
+    if (total == 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.white,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Review Progress',
+                  style:
+                      TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text('$done of $total Done',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total > 0 ? done / total : 0,
+              backgroundColor: Colors.grey.shade200,
+              color: Colors.green,
+              minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              if (pending > 0)
+                _buildBadge(
+                    LucideIcons.clock, '$pending Pending', Colors.orange),
+              if (error > 0)
+                _buildBadge(
+                    LucideIcons.alertCircle, '$error Errors', Colors.red),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadge(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(text,
+              style: TextStyle(
+                  color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<InventoryState>(inventoryProvider, (previous, next) {
+      if (next.error != null && next.error != previous?.error) {
+        AppToast.showError(context, next.error!, title: 'Update Failed');
+      }
+    });
+
+    final state = ref.watch(inventoryProvider);
+    final bundles = _groupItems(state.items);
+
+    final total = bundles.length;
+    final done = bundles.where((b) => b.isVerified && !b.hasMismatch).length;
+    final pending = bundles.where((b) => !b.isVerified && !b.hasMismatch).length;
+    final error = bundles.where((b) => b.hasMismatch).length;
+    final allDone = total > 0 && done == total;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Inventory Review',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-            ),
-            if (mismatchCount > 0)
-              Text(
-                '$mismatchCount item${mismatchCount == 1 ? '' : 's'} need attention',
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFFEF4444),
-                    fontWeight: FontWeight.w600),
-              )
-            else if (!state.isLoading)
-              const Text(
-                'All entries verified ✓',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.green,
-                    fontWeight: FontWeight.w600),
-              ),
-          ],
-        ),
+        title: const Text('Pending Review'),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: state.isLoading
@@ -195,25 +268,60 @@ class InventoryReviewPage extends ConsumerWidget {
           );
         }
 
-        final bundles = _groupItems(state.items);
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: bundles.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final bundle = bundles[index];
-            return _BundleReviewTile(
-              bundle: bundle,
-              dateLabel: _dateLabel(bundle.date),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                context.push('/inventory-invoice-review', extra: bundle);
-              },
-            );
-          },
+        return Column(
+          children: [
+            _buildProgressHeader(total, done, pending, error),
+            if (state.isSyncing) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.only(
+                    left: 16, right: 16, top: 16, bottom: 100),
+                itemCount: bundles.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final bundle = bundles[index];
+                  return _BundleReviewTile(
+                    bundle: bundle,
+                    dateLabel: _dateLabel(bundle.date),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      context.push('/inventory-invoice-review', extra: bundle);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       }),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: bundles.isNotEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FloatingActionButton.extended(
+                  onPressed: state.isSyncing ? null : _syncAndFinish,
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 4,
+                  icon: state.isSyncing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(LucideIcons.checkCheck),
+                  label: Text(
+                    state.isSyncing
+                        ? 'Syncing...'
+                        : (allDone ? 'Sync & Finish' : 'Sync Anyway'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }

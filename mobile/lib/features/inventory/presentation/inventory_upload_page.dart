@@ -209,7 +209,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
     // ── Loading overlay ───────────────────────────────────────────────────
     if (state.isUploading || state.isProcessing) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.background,
         body: _InventoryLoadingOverlay(fileItems: state.fileItems),
       );
     }
@@ -219,7 +219,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         state.fileItems.any((f) => f.status == UploadFileStatus.uploading);
     if (hasStuckFiles) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.background,
         body: _InventoryLoadingOverlay(fileItems: state.fileItems),
       );
     }
@@ -227,7 +227,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
     // Restoring / checking backend guard
     if (_isCheckingBackend || state.isRestoringState) {
       return const Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.background,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -244,7 +244,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
               Text(
                 'Checking for active uploads…',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: AppTheme.textSecondary,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
@@ -257,7 +257,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
 
     // ── Camera view ───────────────────────────────────────────────────────
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.background,
       body: Stack(
         children: [
           _buildCameraBody(),
@@ -268,7 +268,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new,
-                        color: Colors.white),
+                        color: AppTheme.textPrimary),
                     onPressed: () {
                       final s = ref.read(inventoryUploadProvider);
                       if (s.isActive) return;
@@ -284,7 +284,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
                   const Text(
                     '📦  Add Inventory',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: AppTheme.textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w600),
                   ),
@@ -329,7 +329,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
           children: [
             CircularProgressIndicator(color: Color(0xFF0066FF)),
             SizedBox(height: 16),
-            Text('Starting camera...', style: TextStyle(color: Colors.white70)),
+            Text('Starting camera...', style: TextStyle(color: AppTheme.textSecondary)),
           ],
         ),
       ),
@@ -337,7 +337,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text('Camera unavailable: $e',
-              style: const TextStyle(color: Colors.white70),
+              style: const TextStyle(color: AppTheme.textSecondary),
               textAlign: TextAlign.center),
         ),
       ),
@@ -424,7 +424,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Colors.black.withValues(alpha: 0.85), Colors.transparent],
+          colors: [AppTheme.background.withValues(alpha: 0.95), AppTheme.background.withValues(alpha: 0)],
         ),
       ),
       child: Column(
@@ -436,6 +436,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
               // Gallery
               _CircleBtn(
                 icon: Icons.photo_library_outlined,
+                iconColor: AppTheme.textPrimary,
                 onTap: _pickGallery,
                 tooltip: 'Gallery',
               ),
@@ -468,7 +469,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
               _CircleBtn(
                 icon:
                     _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                iconColor: _flashOn ? Colors.yellow : Colors.white,
+                iconColor: _flashOn ? Colors.yellow.shade700 : AppTheme.textPrimary,
                 onTap: () async {
                   final mode = _flashOn ? FlashMode.off : FlashMode.torch;
                   await controller.setFlashMode(mode);
@@ -722,10 +723,10 @@ class _CircleBtn extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
+            color: Colors.black.withValues(alpha: 0.05),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: iconColor ?? Colors.white, size: 26),
+          child: Icon(icon, color: iconColor ?? AppTheme.textPrimary, size: 26),
         ),
       ),
     );
@@ -926,17 +927,20 @@ class _InventoryLoadingOverlayState
     _processingBarController.forward();
   }
 
-  int _computeStepIndex(double serverRatio) {
-    final maxIdx = _processingSteps.length - 1;
-    final serverStep = (serverRatio * maxIdx).floor().clamp(0, maxIdx);
-    int timeStep = 0;
-    if (_processingStartTime != null) {
-      final elapsed =
-          DateTime.now().difference(_processingStartTime!).inMilliseconds;
-      timeStep = (elapsed / 3000).floor().clamp(0, 2);
-    }
-    final computed = serverStep > timeStep ? serverStep : timeStep;
-    if (computed > _highWaterStep) _highWaterStep = computed;
+  /// Step index is driven purely by time so the 6 UI sub-steps advance
+  /// smoothly and realistically. The backend only reports *files* done
+  /// (0 → N), not the internal sub-steps (read header, items, quantities,
+  /// prices, totals, save) — so using the server ratio here would cause
+  /// an instant jump to Step 6 the moment one file finishes.
+  int _computeStepIndex() {
+    if (_processingStartTime == null) return _highWaterStep;
+    final elapsed =
+        DateTime.now().difference(_processingStartTime!).inMilliseconds;
+    // Advance one step every ~10 seconds (max 5 so step 6 is indeterminate
+    // until backend confirms completion).
+    final maxAutoStep = _processingSteps.length - 2; // stop at step 5 (index 4)
+    final timeStep = (elapsed ~/ 10000).clamp(0, maxAutoStep);
+    if (timeStep > _highWaterStep) _highWaterStep = timeStep;
     return _highWaterStep;
   }
 
@@ -963,20 +967,31 @@ class _InventoryLoadingOverlayState
       _startProcessingAnimation();
     }
 
+    // procServerProgress is used only for the progress BAR blend,
+    // scaled to a max of 5/6 so the bar never reaches 100% before the
+    // backend confirms completion.
     double procServerProgress = 0;
     if (processingStatus != null && processingStatus.total > 0) {
-      procServerProgress =
+      final rawRatio =
           (processingStatus.processed / processingStatus.total).clamp(0.0, 1.0);
+      // Scale to 5/6 so the bar stays below 100% while we're still processing
+      procServerProgress = rawRatio * (5 / 6);
     }
 
-    final stepIndex = _computeStepIndex(procServerProgress);
+    final stepIndex = _computeStepIndex();
     final currentStep = _processingSteps[stepIndex];
+    // procStepProgress reflects steps 1-5 only (step 6 is the final
+    // indeterminate phase, handled separately by isLastStep).
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
-    // True when we've reached the final step and are waiting for the backend
-    // to confirm completion. The progress bar goes indeterminate here — honest
-    // signalling that work is happening, not showing a fake "0% complete".
+    // Indeterminate bar on step 6: we've animated through all 5 timed steps
+    // and are now waiting for the backend to confirm completion.
+    // Also show it immediately if the backend reports all files done but
+    // status hasn't flipped to 'completed' yet.
+    final serverAllFilesReported = processingStatus != null &&
+        processingStatus.total > 0 &&
+        processingStatus.processed >= processingStatus.total;
     final isLastStep = !isUploading &&
-        stepIndex >= _processingSteps.length - 1 &&
+        (stepIndex >= _processingSteps.length - 1 || serverAllFilesReported) &&
         isProcessing;
 
     final fileCount = widget.fileItems.length;
@@ -986,7 +1001,7 @@ class _InventoryLoadingOverlayState
     final safeTipIndex = _tipIndex % tips.length;
 
     return Container(
-      decoration: const BoxDecoration(color: Colors.black),
+      decoration: const BoxDecoration(color: AppTheme.background),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Column(
@@ -1039,12 +1054,16 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? 'Sending your invoice${fileCount > 1 ? 's' : ''}'
-                                    : currentStep.title,
+                                    : isLastStep
+                                        ? _processingSteps.last.title
+                                        : currentStep.title,
                                 key: ValueKey(isUploading
                                     ? 'upload_title'
-                                    : 'step_$stepIndex'),
+                                    : isLastStep
+                                        ? 'step_final'
+                                        : 'step_$stepIndex'),
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppTheme.textPrimary,
                                   fontSize: 26,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.3,
@@ -1072,15 +1091,19 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? 'Photos are going directly to storage. You can switch tabs freely.'
-                                    : currentStep.sub,
+                                    : isLastStep
+                                        ? _processingSteps.last.sub
+                                        : currentStep.sub,
                                 key: ValueKey(isUploading
                                     ? 'upload_sub'
-                                    : 'sub_$stepIndex'),
+                                    : isLastStep
+                                        ? 'sub_final'
+                                        : 'sub_$stepIndex'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: isUploading
-                                      ? Colors.amber.shade300
-                                      : Colors.white.withValues(alpha: 0.55),
+                                      ? Colors.amber.shade900
+                                      : AppTheme.textSecondary,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                   height: 1.4,
@@ -1108,13 +1131,17 @@ class _InventoryLoadingOverlayState
                               child: Text(
                                 isUploading
                                     ? '${(uploadProgress * 100).toInt()}% uploaded'
-                                    : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
+                                    : isLastStep
+                                        ? 'Finalizing…'
+                                        : 'Step ${stepIndex + 1} of ${_processingSteps.length}',
                                 key: ValueKey(isUploading
                                     ? 'pct_${(uploadProgress * 100).toInt()}'
-                                    : 'step_lbl_$stepIndex'),
+                                    : isLastStep
+                                        ? 'step_lbl_final'
+                                        : 'step_lbl_$stepIndex'),
                                 style: TextStyle(
                                   color: isUploading
-                                      ? Colors.amber.shade400
+                                      ? Colors.amber.shade900
                                       : const Color(0xFF0066FF)
                                           .withValues(alpha: 0.85),
                                   fontSize: 13,
@@ -1196,15 +1223,13 @@ class _InventoryLoadingOverlayState
                                     horizontal: 16, vertical: 10),
                                 decoration: BoxDecoration(
                                   color: isUploading
-                                      ? Colors.amber.shade900
-                                          .withValues(alpha: 0.25)
-                                      : Colors.white.withValues(alpha: 0.06),
+                                      ? Colors.amber.shade100
+                                      : AppTheme.surface,
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                     color: isUploading
-                                        ? Colors.amber.shade700
-                                            .withValues(alpha: 0.5)
-                                        : Colors.white.withValues(alpha: 0.08),
+                                        ? Colors.amber.shade300
+                                        : AppTheme.border,
                                     width: 1,
                                   ),
                                 ),
@@ -1213,8 +1238,8 @@ class _InventoryLoadingOverlayState
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: isUploading
-                                        ? Colors.amber.shade300
-                                        : Colors.white.withValues(alpha: 0.45),
+                                        ? Colors.amber.shade900
+                                        : AppTheme.textSecondary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -1246,10 +1271,10 @@ class _PhasePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
+        color: AppTheme.surface,
         borderRadius: BorderRadius.circular(32),
         border:
-            Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+            Border.all(color: AppTheme.border, width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1281,7 +1306,7 @@ class _PillChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: active ? Colors.white : Colors.white.withValues(alpha: 0.35),
+          color: active ? Colors.white : AppTheme.textSecondary,
           fontSize: 13,
           fontWeight: active ? FontWeight.w700 : FontWeight.w500,
         ),
@@ -1322,11 +1347,11 @@ class _ThumbnailStrip extends StatelessWidget {
                     width: 54,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.image_not_supported,
-                        color: Colors.white38, size: 22),
+                        color: AppTheme.textSecondary, size: 22),
                   ),
                 ),
                 Container(

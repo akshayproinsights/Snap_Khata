@@ -64,6 +64,7 @@ class InventoryInvoiceVerifyRequest(BaseModel):
     vendor_name: str
     invoice_date: str
     payment_mode: Optional[str] = "Cash"
+    payment_date: Optional[str] = None
     amount_paid: Optional[float] = 0.0
     balance_owed: Optional[float] = 0.0
     vendor_notes: Optional[str] = None
@@ -807,6 +808,7 @@ async def verify_inventory_invoice(
             "receipt_link": receipt_link,
             "total_amount": total_amount,
             "payment_mode": request.payment_mode,
+            "payment_date": request.payment_date,
             "amount_paid": request.amount_paid,
             "balance_owed": request.balance_owed,
             "vendor_notes": request.vendor_notes

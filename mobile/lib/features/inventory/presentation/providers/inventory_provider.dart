@@ -8,22 +8,26 @@ final inventoryRepositoryProvider =
 class InventoryState {
   final List<InventoryItem> items;
   final bool isLoading;
+  final bool isSyncing;
   final String? error;
 
   InventoryState({
     this.items = const [],
     this.isLoading = false,
+    this.isSyncing = false,
     this.error,
   });
 
   InventoryState copyWith({
     List<InventoryItem>? items,
     bool? isLoading,
+    bool? isSyncing,
     String? error,
   }) {
     return InventoryState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
+      isSyncing: isSyncing ?? this.isSyncing,
       error: error,
     );
   }
@@ -106,6 +110,19 @@ class InventoryNotifier extends Notifier<InventoryState> {
       state = state.copyWith(
           isLoading: false, error: 'Failed to verify invoice: $e');
       rethrow; // Rethrow so the UI can catch and show a snackbar
+    }
+  }
+
+  Future<void> syncAndFinish() async {
+    state = state.copyWith(isSyncing: true, error: null);
+    try {
+      await Future.delayed(const Duration(milliseconds: 1000));
+      // Just fetch items to ensure we are up to date
+      await fetchItems();
+    } catch (e) {
+      state = state.copyWith(error: 'Sync failed: $e');
+    } finally {
+      state = state.copyWith(isSyncing: false);
     }
   }
 }
