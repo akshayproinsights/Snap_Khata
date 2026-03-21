@@ -144,8 +144,11 @@
             width: 800px;
             margin: 0 auto;
             transform-origin: top center;
-            padding: 32px 0 60px;
-            transition: transform 0.2s ease-out;
+            padding: 40px 0 80px;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            display: flex;
+            justify-content: center;
         }
 
         /* ─────────────────────────────────────────────────────
@@ -466,12 +469,27 @@
 
         .inv-doc {
             background: var(--white);
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            border-radius: 24px;
+            border: 1px solid rgba(15, 23, 42, 0.15);
+            border-radius: 4px; /* Shorter radius for standard doc feel */
             box-shadow: 
-                0 4px 6px -1px rgba(0, 0, 0, 0.05),
-                0 20px 40px -10px rgba(15, 23, 42, 0.08);
+                0 1px 3px rgba(0,0,0,0.1),
+                0 10px 30px -5px rgba(15, 23, 42, 0.15),
+                0 0 1px rgba(0,0,0,0.05); /* Extra crisp edge */
             overflow: hidden;
+            position: relative;
+            /* Basic A4 feel min-height */
+            min-height: 1000px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Subtle paper texture/gradient */
+        .inv-doc::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(170deg, rgba(255,255,255,0.05) 0%, rgba(248,250,252,0.02) 100%);
+            pointer-events: none;
         }
 
         /* Top header bar */
@@ -1385,15 +1403,21 @@
             const winWidth = window.innerWidth;
             const contentWidth = 800; // Fixed width for desktop feel
 
-            if (winWidth < contentWidth) {
-                const scale = winWidth / contentWidth;
+            if (winWidth < contentWidth + 40) { // Add some buffer for padding
+                const scale = (winWidth - 20) / contentWidth;
                 container.style.transform = `scale(${scale})`;
+                
                 // Adjust wrap height to match scaled container
-                const scaledHeight = container.offsetHeight * scale;
-                wrap.style.height = scaledHeight + 'px';
+                const rawHeight = container.getBoundingClientRect().height;
+                wrap.style.height = rawHeight + 'px';
+                
+                // Center fix if transform-origin is top center
+                container.style.marginLeft = 'auto';
+                container.style.marginRight = 'auto';
             } else {
                 container.style.transform = 'none';
                 wrap.style.height = 'auto';
+                container.style.margin = '0 auto';
             }
         }
 

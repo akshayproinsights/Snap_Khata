@@ -11,6 +11,7 @@ import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
   final String customerName;
@@ -530,10 +531,10 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ? group.customerName
                         : 'Customer';
 
-                    final shopName =
-                        prefs.getString('shop_title')?.isNotEmpty == true
-                            ? prefs.getString('shop_title')!
-                            : 'Our Shop';
+                    final shopProfile = ref.read(shopProvider);
+                    final shopName = shopProfile.name.isNotEmpty
+                        ? shopProfile.name
+                        : 'Our Shop';
 
                     final caption = WhatsAppUtils.getWhatsAppCaption(
                       status: OrderPaymentStatus.fullyPaid,

@@ -4,11 +4,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/theme/theme_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
-import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/settings/domain/models/shop_profile.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -22,7 +22,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopAddress = '';
   String _shopPhone = '';
   String _shopGst = '';
-  bool _isLoadingProfile = false;
+  final bool _isLoadingProfile = false;
 
   @override
   void initState() {
@@ -30,72 +30,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _loadShopDetails();
   }
 
-  /// Load from local cache first for instant UI, then fetch latest from backend.
+  /// Load from provider
   Future<void> _loadShopDetails() async {
-    // 1. Restore from local cache immediately
-    final prefs = await SharedPreferences.getInstance();
+    final profile = ref.read(shopProvider);
     setState(() {
-      _shopName = prefs.getString('shop_title') ?? '';
-      _shopAddress = prefs.getString('shop_address') ?? '';
-      _shopPhone = prefs.getString('shop_phone') ?? '';
-      _shopGst = prefs.getString('shop_gst') ?? '';
+      _shopName = profile.name;
+      _shopAddress = profile.address;
+      _shopPhone = profile.phone;
+      _shopGst = profile.gst;
     });
-
-    // 2. Fetch latest from backend
-    setState(() => _isLoadingProfile = true);
-    try {
-      final response = await ApiClient().dio.get('/api/shop-profile');
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        final name = (data['shop_name'] as String?) ?? '';
-        final address = (data['shop_address'] as String?) ?? '';
-        final phone = (data['shop_phone'] as String?) ?? '';
-        final gst = (data['shop_gst'] as String?) ?? '';
-
-        // Update local cache with backend values
-        await prefs.setString('shop_title', name);
-        await prefs.setString('shop_address', address);
-        await prefs.setString('shop_phone', phone);
-        await prefs.setString('shop_gst', gst);
-
-        if (mounted) {
-          setState(() {
-            _shopName = name;
-            _shopAddress = address;
-            _shopPhone = phone;
-            _shopGst = gst;
-          });
-        }
-      }
-    } catch (e) {
-      // Backend unavailable — local cache is still displayed, which is fine
-      debugPrint('Could not fetch shop profile from backend: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingProfile = false);
-    }
+    
+    // Trigger a sync in the background
+    ref.read(shopProvider.notifier).syncWithBackend();
   }
 
-  /// Save to both local SharedPreferences and the backend API.
+  /// Save using provider
   Future<void> _saveShopDetails() async {
-    // Save locally
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('shop_title', _shopName);
-    await prefs.setString('shop_address', _shopAddress);
-    await prefs.setString('shop_phone', _shopPhone);
-    await prefs.setString('shop_gst', _shopGst);
-
-    // Save to backend (best-effort — don't block if offline)
-    try {
-      await ApiClient().dio.post('/api/shop-profile', data: {
-        'shop_name': _shopName,
-        'shop_address': _shopAddress,
-        'shop_phone': _shopPhone,
-        'shop_gst': _shopGst,
-      });
-    } catch (e) {
-      debugPrint('Could not sync shop profile to backend: $e');
-      // Offline — SyncQueueService will retry automatically later
-    }
+    final newProfile = ShopProfile(
+      name: _shopName,
+      address: _shopAddress,
+      phone: _shopPhone,
+      gst: _shopGst,
+    );
+    await ref.read(shopProvider.notifier).updateProfile(newProfile);
   }
 
   void _showShopDetailsSheet() {

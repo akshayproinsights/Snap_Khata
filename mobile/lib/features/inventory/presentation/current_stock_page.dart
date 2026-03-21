@@ -3,14 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/inventory/data/current_stock_repository.dart';
 import 'package:mobile/features/inventory/domain/models/current_stock_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/current_stock_provider.dart';
 import 'package:mobile/shared/widgets/shimmer_placeholders.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 class CurrentStockPage extends ConsumerStatefulWidget {
   const CurrentStockPage({super.key});
@@ -22,7 +20,6 @@ class CurrentStockPage extends ConsumerStatefulWidget {
 class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  bool _isExporting = false;
 
   @override
   void dispose() {
@@ -30,28 +27,6 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     super.dispose();
   }
 
-  Future<void> _exportStock(CurrentStockState state) async {
-    setState(() => _isExporting = true);
-    try {
-      final repo = CurrentStockRepository();
-      final filePath = await repo.exportStockLevels(
-        search: state.searchQuery.isEmpty ? null : state.searchQuery,
-        statusFilter: state.statusFilter == 'all' ? null : state.statusFilter,
-        priorityFilter:
-            state.priorityFilter == 'all' ? null : state.priorityFilter,
-      );
-      // share_plus API
-      await SharePlus.instance.share(
-        ShareParams(uri: Uri.file(filePath)),
-      );
-    } catch (e) {
-      if (mounted) {
-        AppToast.showError(context, 'Export failed: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) setState(() => _isExporting = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,20 +77,6 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                 ),
             ],
           ),
-          // Export button
-          _isExporting
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.0),
-                  child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : IconButton(
-                  icon: const Icon(LucideIcons.download),
-                  tooltip: 'Export to Excel',
-                  onPressed: () => _exportStock(state),
-                ),
           // Recalculate button
           if (state.isCalculating)
             const Padding(

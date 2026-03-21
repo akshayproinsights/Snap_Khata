@@ -12,6 +12,7 @@ import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/shared/presentation/widgets/payment_summary_card.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -322,11 +323,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       ? widget.group.customerName
                       : 'Customer';
 
-                  final prefs = await SharedPreferences.getInstance();
-                  final shopName =
-                      prefs.getString('shop_title')?.isNotEmpty == true
-                          ? prefs.getString('shop_title')!
-                          : 'Our Shop';
+                  final shopProfile = ref.read(shopProvider);
+                  final shopName = shopProfile.name.isNotEmpty
+                      ? shopProfile.name
+                      : 'Our Shop';
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
                     status: OrderPaymentStatus.fullyPaid,

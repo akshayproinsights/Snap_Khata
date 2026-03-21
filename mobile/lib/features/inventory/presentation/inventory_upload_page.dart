@@ -985,13 +985,8 @@ class _InventoryLoadingOverlayState
     final procStepProgress = (stepIndex + 1) / _processingSteps.length;
     // Indeterminate bar on step 6: we've animated through all 5 timed steps
     // and are now waiting for the backend to confirm completion.
-    // Also show it immediately if the backend reports all files done but
-    // status hasn't flipped to 'completed' yet.
-    final serverAllFilesReported = processingStatus != null &&
-        processingStatus.total > 0 &&
-        processingStatus.processed >= processingStatus.total;
     final isLastStep = !isUploading &&
-        (stepIndex >= _processingSteps.length - 1 || serverAllFilesReported) &&
+        (stepIndex >= _processingSteps.length - 1) &&
         isProcessing;
 
     final fileCount = widget.fileItems.length;
@@ -1568,22 +1563,22 @@ class _ProgressBar extends StatelessWidget {
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
                   )
-                : AnimatedBuilder(
-                    animation: processingBarAnim,
-                    builder: (_, __) {
-                      final blended = procServerProgress > procStepProgress
+                : TweenAnimationBuilder<double>(
+                    tween: Tween(
+                      begin: 0,
+                      end: procServerProgress > procStepProgress
                           ? procServerProgress
-                          : procStepProgress;
-                      final animated = processingBarAnim.value;
-                      final display = blended > animated ? blended : animated;
-                      return LinearProgressIndicator(
-                        value: display.clamp(0.0, 1.0),
-                        backgroundColor:
-                            const Color(0xFF0066FF).withValues(alpha: 0.15),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xFF0066FF)),
-                      );
-                    },
+                          : procStepProgress,
+                    ),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    builder: (_, v, __) => LinearProgressIndicator(
+                      value: v,
+                      backgroundColor:
+                          const Color(0xFF0066FF).withValues(alpha: 0.15),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF0066FF)),
+                    ),
                   ),
       ),
     );

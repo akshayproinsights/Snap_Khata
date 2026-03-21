@@ -116,8 +116,43 @@ class InventoryNotifier extends Notifier<InventoryState> {
   Future<void> syncAndFinish() async {
     state = state.copyWith(isSyncing: true, error: null);
     try {
-      await Future.delayed(const Duration(milliseconds: 1000));
-      // Just fetch items to ensure we are up to date
+      // Find all pending items
+      final pendingItems = state.items.where((i) => i.verificationStatus != 'Done').toList();
+      
+      // Group them by invoice number / vendor + date
+      final Map<String, List<InventoryItem>> groups = {};
+      for (final item in pendingItems) {
+        final key = item.invoiceNumber.isNotEmpty
+            ? item.invoiceNumber
+            : '${item.invoiceDate}_${item.vendorName ?? ''}';
+        final safeKey = key.isNotEmpty ? key : item.id.toString();
+        
+        if (!groups.containsKey(safeKey)) {
+          groups[safeKey] = [];
+        }
+        groups[safeKey]!.add(item);
+      }
+      
+      // For each group, call verifyInvoice
+      for (final groupItems in groups.values) {
+        if (groupItems.isEmpty) continue;
+        final firstItem = groupItems.first;
+        
+        final totalAmount = groupItems.fold(0.0, (sum, item) => sum + item.netBill);
+        final data = {
+          'invoice_number': firstItem.invoiceNumber.isNotEmpty ? firstItem.invoiceNumber : 'Auto-Gen-${DateTime.now().millisecondsSinceEpoch}',
+          'vendor_name': firstItem.vendorName ?? 'Unknown Vendor',
+          'invoice_date': firstItem.invoiceDate,
+          'payment_mode': 'Credit',
+          'balance_owed': totalAmount,
+          'amount_paid': 0.0,
+          'item_ids': groupItems.map((i) => i.id).toList(),
+        };
+        
+        await _repository.verifyInvoice(data);
+      }
+
+      // Finally, fetch items to ensure we are up to date
       await fetchItems();
     } catch (e) {
       state = state.copyWith(error: 'Sync failed: $e');

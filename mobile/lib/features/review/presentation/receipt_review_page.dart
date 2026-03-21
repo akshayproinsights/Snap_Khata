@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:mobile/features/shared/presentation/widgets/payment_summary_card.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
@@ -333,9 +334,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               final shareUrl =
                   'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam$pModeParam$receivedParam$balanceParam';
 
-              final prefs = await SharedPreferences.getInstance();
-              final shopName = prefs.getString('shop_title')?.isNotEmpty == true
-                  ? prefs.getString('shop_title')!
+              final shopProfile = ref.read(shopProvider);
+              final shopName = shopProfile.name.isNotEmpty
+                  ? shopProfile.name
                   : 'Our Shop';
 
               OrderPaymentStatus status;

@@ -101,8 +101,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
     final poState = ref.watch(purchaseOrderProvider);
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
-    final mismatchCount = itemsAsync.maybeWhen(
-      data: (items) => items.where((i) => i.amountMismatch > 1.0).length,
+    final pendingCount = itemsAsync.maybeWhen(
+      data: (items) => items.where((i) => i.verificationStatus != 'Done').length,
       orElse: () => 0,
     );
 
@@ -130,7 +130,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildQuickLinksCard(context, mismatchCount),
+              _buildQuickLinksCard(context, pendingCount),
               const SizedBox(height: 28),
               Row(
                 children: [
@@ -273,7 +273,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
     );
   }
 
-  Widget _buildQuickLinksCard(BuildContext context, int mismatchCount) {
+  Widget _buildQuickLinksCard(BuildContext context, int pendingCount) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -305,11 +305,11 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
               _buildActionItem(
                 context: context,
                 icon: LucideIcons.clipboardCheck,
-                color: mismatchCount > 0
+                color: pendingCount > 0
                     ? const Color(0xFFEF4444)
                     : Colors.grey.shade400,
                 title: 'Review',
-                badgeCount: mismatchCount,
+                badgeCount: pendingCount,
                 onTap: () {
                   HapticFeedback.lightImpact();
                   context.push('/inventory-review');

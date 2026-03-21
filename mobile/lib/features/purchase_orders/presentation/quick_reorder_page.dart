@@ -51,29 +51,21 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
         foregroundColor: AppTheme.textPrimary,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.shoppingBag),
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              context.pushNamed('purchase-orders');
-            },
-            tooltip: 'View Purchase Orders',
-          ),
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(LucideIcons.shoppingCart),
+                icon: const Icon(LucideIcons.shoppingCart, size: 28),
                 onPressed: () {
                   HapticFeedback.lightImpact();
-                  context.pushNamed('create-po');
+                  context.pushNamed('purchase-orders');
                 },
-                tooltip: 'Draft PO',
+                tooltip: 'View Purchase Orders',
               ),
               if (poState.draft.items.isNotEmpty)
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 4,
+                  top: 4,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
@@ -91,7 +83,7 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                 ),
             ],
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 24),
         ],
       ),
       body: Column(

@@ -995,7 +995,6 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
     final isUploading = uploadState.isUploading;
     final isProcessing = uploadState.isProcessing;
     final uploadProgress = uploadState.uploadProgress;
-    final processingStatus = uploadState.processingStatus;
 
     // Detect phase switch: uploading → processing
     if (_wasUploading && isProcessing && !isUploading) {
@@ -1012,13 +1011,8 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
 
     // Indeterminate bar on step 6: we've animated through all 5 timed steps
     // and are now waiting for the backend to confirm completion.
-    // Also show it immediately if the backend reports all files done but
-    // status hasn't flipped to 'completed' yet.
-    final serverAllFilesReported = processingStatus != null &&
-        processingStatus.total > 0 &&
-        processingStatus.processed >= processingStatus.total;
     final isLastStep = !isUploading &&
-        (stepIndex >= _processingSteps.length - 1 || serverAllFilesReported) &&
+        (stepIndex >= _processingSteps.length - 1) &&
         isProcessing;
 
     // Pick the right tips list
@@ -1249,27 +1243,22 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                             ],
                           ),
                           const SizedBox(height: 12),
-                          AnimatedBuilder(
-                            animation: _processingBarController,
-                            builder: (_, __) {
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: TweenAnimationBuilder<double>(
-                                  tween: Tween(begin: 0, end: barValue),
-                                  duration: const Duration(milliseconds: 500),
-                                  curve: Curves.easeOut,
-                                  builder: (_, v, __) =>
-                                      LinearProgressIndicator(
-                                    value: isLastStep ? null : v,
-                                    minHeight: 8,
-                                    backgroundColor: const Color(0xFFEDEEEF),
-                                    valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                            Color(0xFF0058BE)),
-                                  ),
-                                ),
-                              );
-                            },
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0, end: barValue),
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeOut,
+                              builder: (_, v, __) =>
+                                  LinearProgressIndicator(
+                                value: isLastStep ? null : v,
+                                minHeight: 8,
+                                backgroundColor: const Color(0xFFEDEEEF),
+                                valueColor:
+                                    const AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF0058BE)),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 20),
                           _PhaseRow(
