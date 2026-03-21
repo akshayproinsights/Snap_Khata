@@ -30,28 +30,32 @@ class WhatsAppUtils {
     required String businessName,
     required String orderNumber,
     required double totalAmount,
+    double? paidAmount,
     double? pendingAmount,
     String? upiDeepLink,
   }) {
     final totalFmt = formatIndianCurrency(totalAmount);
-    final pendingFmt =
-        pendingAmount != null ? formatIndianCurrency(pendingAmount) : '';
+    final paidFmt = paidAmount != null ? formatIndianCurrency(paidAmount) : '';
+    final pendingFmt = pendingAmount != null ? formatIndianCurrency(pendingAmount) : '';
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
         return 'Hi $customerName,\n'
-            'Your order from *$businessName* is ready. Please check the receipt link for full details.\n'
-            '⚠️ *Amount Due: $totalFmt*\n'
+            'Your order from *$businessName* is ready. 📝\n\n'
+            '⚠️ *Amount Due: $totalFmt*\n\n'
             'Thank you for choosing *$businessName*.';
 
       case OrderPaymentStatus.partiallyPaid:
         return 'Hi $customerName,\n'
-            'We have received your advance for *Order #$orderNumber*. The detailed order snapshot is at the link below.\n'
-            '⏳ *Balance Pending: $pendingFmt*';
+            'Your order with $businessName has been successfully generated. 📝\n\n'
+            'Here is your payment summary:\n'
+            '🛒 Total Bill: $totalFmt\n'
+            '✅ Amount Paid: $paidFmt\n'
+            '⏳ Pending Due: $pendingFmt';
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi $customerName,\n'
-            'Your order with $businessName has been successfully generated.\n'
+            'Your order with $businessName has been successfully generated. 📝\n\n'
             '💳 Amount Paid: $totalFmt';
     }
   }

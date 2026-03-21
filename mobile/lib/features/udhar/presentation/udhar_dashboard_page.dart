@@ -20,7 +20,7 @@ class UdharDashboardPage extends ConsumerWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Udhar / Ledger Dashboard'),
+          title: const Text('Credit / Ledger Dashboard'),
         ),
         body: dashboardState.isLoading && dashboardState.summary == null
             ? const Center(child: CircularProgressIndicator())
@@ -120,7 +120,7 @@ class UdharDashboardPage extends ConsumerWidget {
               builder: (context) => const AddUdharEntrySheet(),
             );
           },
-          label: const Text('New Udhar Entry'),
+          label: const Text('New Credit Entry'),
           icon: const Icon(Icons.add),
           backgroundColor: AppTheme.primary,
           foregroundColor: Colors.white,

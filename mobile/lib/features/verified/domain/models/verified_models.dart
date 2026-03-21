@@ -14,6 +14,10 @@ class VerifiedInvoice {
   final String uploadDate;
   final String? gstMode;
   final String? taxableRowIds;
+  final String? paymentMode;
+  final double? receivedAmount;
+  final double? balanceDue;
+  final String? customerDetails;
 
   VerifiedInvoice({
     required this.rowId,
@@ -31,6 +35,10 @@ class VerifiedInvoice {
     required this.uploadDate,
     this.gstMode,
     this.taxableRowIds,
+    this.paymentMode,
+    this.receivedAmount,
+    this.balanceDue,
+    this.customerDetails,
   });
 
   factory VerifiedInvoice.fromJson(Map<String, dynamic> json) {
@@ -74,6 +82,10 @@ class VerifiedInvoice {
           '',
       gstMode: json['gst_mode']?.toString(),
       taxableRowIds: json['taxable_row_ids']?.toString(),
+      paymentMode: json['payment_mode']?.toString() ?? json['Payment Mode']?.toString(),
+      receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'])?.toString() ?? ''),
+      balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'])?.toString() ?? ''),
+      customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
     );
   }
 
@@ -95,6 +107,10 @@ class VerifiedInvoice {
       'upload_date': uploadDate,
       if (gstMode != null) 'gst_mode': gstMode,
       if (taxableRowIds != null) 'taxable_row_ids': taxableRowIds,
+      if (paymentMode != null) 'payment_mode': paymentMode,
+      if (receivedAmount != null) 'received_amount': receivedAmount,
+      if (balanceDue != null) 'balance_due': balanceDue,
+      if (customerDetails != null) 'customer_details': customerDetails,
     };
   }
 
@@ -114,6 +130,10 @@ class VerifiedInvoice {
     String? uploadDate,
     String? gstMode,
     String? taxableRowIds,
+    String? paymentMode,
+    double? receivedAmount,
+    double? balanceDue,
+    String? customerDetails,
   }) {
     return VerifiedInvoice(
       rowId: rowId ?? this.rowId,
@@ -131,6 +151,10 @@ class VerifiedInvoice {
       uploadDate: uploadDate ?? this.uploadDate,
       gstMode: gstMode ?? this.gstMode,
       taxableRowIds: taxableRowIds ?? this.taxableRowIds,
+      paymentMode: paymentMode ?? this.paymentMode,
+      receivedAmount: receivedAmount ?? this.receivedAmount,
+      balanceDue: balanceDue ?? this.balanceDue,
+      customerDetails: customerDetails ?? this.customerDetails,
     );
   }
 }

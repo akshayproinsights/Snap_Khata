@@ -115,7 +115,7 @@ class _AddUdharEntrySheetState extends ConsumerState<AddUdharEntrySheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'New Udhar Entry',
+                      'New Credit Entry',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                     IconButton(

@@ -125,7 +125,7 @@ class InventoryHubPage extends ConsumerWidget {
             icon: LucideIcons.wallet,
             iconColor: const Color(0xFFE11D48),
             iconBg: const Color(0xFFFFE4E6),
-            title: 'Vendor Udhar',
+            title: 'Vendor Credit',
             subtitle: 'Track your pending dues to vendors',
             badge: null,
             onTap: () {

@@ -8,6 +8,10 @@ class InvoiceGroup {
   String vehicleNumber;
   String mobileNumber;
   String uploadDate;
+  String? paymentMode;
+  double? receivedAmount;
+  double? balanceDue;
+  String? customerDetails;
   double totalAmount = 0;
   List<VerifiedInvoice> items = [];
 
@@ -19,5 +23,9 @@ class InvoiceGroup {
     required this.vehicleNumber,
     required this.mobileNumber,
     required this.uploadDate,
+    this.paymentMode,
+    this.receivedAmount,
+    this.balanceDue,
+    this.customerDetails,
   });
 }

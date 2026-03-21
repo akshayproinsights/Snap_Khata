@@ -65,6 +65,10 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
           vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
           uploadDate: record.uploadDate,
+          paymentMode: record.paymentMode,
+          receivedAmount: record.receivedAmount,
+          balanceDue: record.balanceDue,
+          customerDetails: record.customerDetails,
         );
       } else {
         final existingDt = DateTime.tryParse(groups[safeId]!.uploadDate) ?? DateTime(0);
@@ -510,7 +514,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                     final savedMode = prefs
                         .getString('gst_mode_order_${group.receiptNumber}');
                     final gstParam = (savedMode != null && savedMode != 'none')
-                        ? '&gst_mode=$savedMode'
+                        ? '&g=$savedMode'
                         : '';
 
                     final authState = ref.read(authProvider);
@@ -519,7 +523,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         : '';
 
                     final link =
-                        'https://mydigientry.com/receipt.html?id=${group.receiptNumber}$gstParam$usernameParam';
+                        'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
 
                     final customerNameMsg = group.customerName.isNotEmpty &&
                             group.customerName.toLowerCase() != 'unknown'

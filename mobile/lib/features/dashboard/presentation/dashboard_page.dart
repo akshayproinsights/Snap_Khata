@@ -186,6 +186,10 @@ class _RecentOrdersTab extends ConsumerWidget {
           vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
           uploadDate: record.uploadDate,
+          paymentMode: record.paymentMode,
+          receivedAmount: record.receivedAmount,
+          balanceDue: record.balanceDue,
+          customerDetails: record.customerDetails,
         );
       } else {
         // Update uploadDate if the new record is more recent

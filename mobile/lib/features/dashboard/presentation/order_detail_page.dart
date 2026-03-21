@@ -62,6 +62,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // GST State
   GstMode _gstMode = GstMode.none;
 
+  // Payment State
+  String _paymentMode = 'Cash';
+  double _receivedAmount = 0.0;
+  bool _isReceivedChecked = false;
+  late TextEditingController _receivedAmountController;
+  late TextEditingController _creditDetailsController;
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +133,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     customerCtrl = TextEditingController(text: widget.group.customerName);
     vehicleCtrl = TextEditingController(text: widget.group.vehicleNumber);
 
+    _paymentMode = widget.group.paymentMode ?? 'Cash';
+    _receivedAmount = widget.group.receivedAmount ?? widget.group.totalAmount;
+    _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
+    _receivedAmountController = TextEditingController(
+        text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _receivedAmount.toStringAsFixed(0) : '') : '');
+    _creditDetailsController = TextEditingController(text: widget.group.customerDetails ?? '');
+
     itemCtrls = widget.group.items.map((item) {
       return ItemDetailCtrl(
         rowId: item.rowId,
@@ -150,12 +164,36 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     for (var ctrl in itemCtrls) {
       ctrl.dispose();
     }
+    _receivedAmountController.dispose();
+    _creditDetailsController.dispose();
     super.dispose();
   }
 
   Future<void> _saveChanges() async {
     setState(() => isSaving = true);
     final notifier = ref.read(verifiedProvider.notifier);
+
+    double newParts = 0;
+    double newLabor = 0;
+    
+    // First pass: calculate totals
+    for (int i = 0; i < widget.group.items.length; i++) {
+        final ctrl = itemCtrls[i];
+        final double amt = double.tryParse(ctrl.amtCtrl.text) ?? widget.group.items[i].amount;
+        final type = ctrl.typeCtrl.text.toUpperCase();
+        if (type.contains('LABOUR') || type.contains('LABOR') || type.contains('SERVICE')) {
+            newLabor += amt;
+        } else {
+            newParts += amt;
+        }
+    }
+    
+    double newGst = 0;
+    if (_gstMode == GstMode.excluded) newGst = newParts * 0.18;
+    else if (_gstMode == GstMode.included) newGst = newParts * 18 / 118;
+    
+    double grandTotal = newParts + newLabor + newGst;
+    double calculatedBalanceDue = _paymentMode == 'Credit' ? (grandTotal - _receivedAmount) : 0.0;
 
     double newTotal = 0;
 
@@ -177,6 +215,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         quantity: qty,
         rate: rate,
         amount: amt,
+        paymentMode: _paymentMode,
+        receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
+        balanceDue: calculatedBalanceDue,
+        customerDetails: _creditDetailsController.text,
       );
 
       await notifier.updateRecord(updatedItem);
@@ -190,6 +232,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     widget.group.customerName = customerCtrl.text;
     widget.group.vehicleNumber = vehicleCtrl.text;
     widget.group.totalAmount = newTotal;
+    widget.group.paymentMode = _paymentMode;
+    widget.group.receivedAmount = _paymentMode == 'Credit' ? _receivedAmount : grandTotal;
+    widget.group.balanceDue = calculatedBalanceDue;
+    widget.group.customerDetails = _creditDetailsController.text;
 
     setState(() {
       isSaving = false;
@@ -257,7 +303,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
                   final gstParam = _gstMode == GstMode.none
                       ? ''
-                      : '&gst_mode=${_gstMode.name}';
+                      : '&g=${_gstMode.name}';
 
                   final authState = ref.read(authProvider);
                   final usernameParam = authState.user?.username != null
@@ -265,7 +311,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       : '';
 
                   final link =
-                      'https://mydigientry.com/receipt.html?id=${widget.group.receiptNumber}$gstParam$usernameParam';
+                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
 
                   final customerNameMsg = widget
                               .group.customerName.isNotEmpty &&
@@ -715,18 +761,289 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // 4. Totals & Receipt
   // ─────────────────────────────────────────────────────────────
   Widget _buildTotalsCard() {
+    final grandTotal = _totalAfterGst(widget.group);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: PaymentSummaryCard(
-        gstMode: _gstMode,
-        partsSubtotal: _partsSubtotal(widget.group),
-        laborSubtotal: _laborSubtotal(widget.group),
-        gstAmount: _gstAmount(_partsSubtotal(widget.group)),
-        grandTotal: _totalAfterGst(widget.group),
-        originalTotal: widget.group.totalAmount,
-        onGstModeChanged: _saveGstMode,
+      child: Column(
+        children: [
+          PaymentSummaryCard(
+            gstMode: _gstMode,
+            partsSubtotal: _partsSubtotal(widget.group),
+            laborSubtotal: _laborSubtotal(widget.group),
+            gstAmount: _gstAmount(_partsSubtotal(widget.group)),
+            grandTotal: grandTotal,
+            originalTotal: widget.group.totalAmount,
+            onGstModeChanged: _saveGstMode,
+          ),
+          _buildPaymentSection(grandTotal),
+        ],
       ),
     );
+  }
+
+  Widget _buildPaymentSection(double grandTotal) {
+    if (!isEditing) {
+      // View Mode
+      return Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(top: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Payment Type', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _paymentMode == 'Cash' ? Colors.green.shade50 : Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(_paymentMode, style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            if (_paymentMode == 'Credit') ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Received', style: TextStyle(fontSize: 15)),
+                  Text('\u20B9 ${_formatAmount(_receivedAmount)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                   const Text('Balance Due', style: TextStyle(color: AppTheme.success, fontSize: 15, fontWeight: FontWeight.bold)),
+                   Text('\u20B9 ${_formatAmount(grandTotal - _receivedAmount)}', style: const TextStyle(color: AppTheme.success, fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              if (_creditDetailsController.text.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Notes', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                      const SizedBox(height: 4),
+                      Text(_creditDetailsController.text, style: const TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      );
+    }
+    
+    // Edit Mode
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Payment Type',
+                  style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold)),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PaymentToggleBtn(
+                      title: 'Credit',
+                      isSelected: _paymentMode == 'Credit',
+                      onTap: () {
+                        setState(() {
+                          _paymentMode = 'Credit';
+                        });
+                      },
+                    ),
+                    _PaymentToggleBtn(
+                      title: 'Cash',
+                      isSelected: _paymentMode == 'Cash',
+                      onTap: () {
+                        setState(() {
+                          _paymentMode = 'Cash';
+                          _receivedAmount = grandTotal;
+                          _receivedAmountController.text = _formatAmount(grandTotal);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Text('Total Amount',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              const Text('\u20B9 ',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              SizedBox(
+                width: 100,
+                child: Text(
+                  _formatAmount(grandTotal),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          if (_paymentMode == 'Credit') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isReceivedChecked = !_isReceivedChecked;
+                      if (!_isReceivedChecked) {
+                        _receivedAmount = 0;
+                        _receivedAmountController.clear();
+                      } else {
+                        _receivedAmount = grandTotal;
+                        _receivedAmountController.text =
+                            _formatAmount(grandTotal);
+                      }
+                    });
+                  },
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isReceivedChecked
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: _isReceivedChecked
+                            ? AppTheme.primary
+                            : Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Received', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                const Text('\u20B9 ',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _receivedAmountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                      border: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey.shade300)),
+                      enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey.shade300)),
+                      focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(color: AppTheme.primary)),
+                      fillColor: Colors.transparent,
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _receivedAmount = double.tryParse(val) ?? 0.0;
+                        _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Text('Balance Due',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
+                const Spacer(),
+                const Text('\u20B9 ',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500)),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    _formatAmount(grandTotal - _receivedAmount),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _creditDetailsController,
+              decoration: InputDecoration(
+                labelText: 'Customer Details / Notes',
+                labelStyle:
+                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatAmount(double amount) {
+    if (amount == amount.roundToDouble()) {
+      return amount.toInt().toString();
+    }
+    return amount.toStringAsFixed(2);
   }
 
   void _showReceiptDialog(BuildContext context) {
@@ -953,6 +1270,50 @@ class _ItemRow extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: AppTheme.primary)),
+      ),
+    );
+  }
+}
+
+class _PaymentToggleBtn extends StatelessWidget {
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PaymentToggleBtn({
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }

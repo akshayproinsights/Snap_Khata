@@ -19,24 +19,25 @@
 
     <style>
         :root {
-            --bg: #f1f5f9;
+            --bg: #f8fafc;
             --white: #ffffff;
             --border: #e2e8f0;
-            --border-strong: #cbd5e1;
+            --border-strong: #94a3b8;
             --text-primary: #0f172a;
-            --text-secondary: #64748b;
+            --text-secondary: #475569;
             --text-muted: #94a3b8;
             --accent: #4f46e5;
-            --accent-light: #ede9fe;
-            --green: #16a34a;
-            --green-bg: #f0fdf4;
-            --green-border: #bbf7d0;
-            --amber: #d97706;
+            --accent-dark: #3730a3;
+            --accent-light: #eef2ff;
+            --green: #10b981;
+            --green-bg: #ecfdf5;
+            --green-border: #a7f3d0;
+            --amber: #f59e0b;
             --amber-bg: #fffbeb;
-            --amber-border: #fde68a;
-            --red: #dc2626;
-            --invoice-bg: #fafaf9;
-            --invoice-border: #1c1917;
+            --amber-border: #fef3c7;
+            --red: #ef4444;
+            --invoice-bg: #ffffff;
+            --invoice-border: #0f172a;
         }
 
         * {
@@ -134,6 +135,17 @@
         /* ── Content wrapper ── */
         #content-wrap {
             display: none;
+            width: 100%;
+            overflow-x: hidden;
+        }
+ 
+        /* ── Scaled Desktop Container (The "Desktop Mode" Secret) ── */
+        .scaled-container {
+            width: 800px;
+            margin: 0 auto;
+            transform-origin: top center;
+            padding: 32px 0 60px;
+            transition: transform 0.2s ease-out;
         }
 
         /* ─────────────────────────────────────────────────────
@@ -169,20 +181,32 @@
 
         .os-card {
             background: var(--white);
-            border-radius: 20px;
+            border-radius: 24px;
             box-shadow:
-                0 1px 3px rgba(0, 0, 0, 0.04),
-                0 8px 32px rgba(15, 23, 42, 0.08);
+                0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                0 20px 40px -10px rgba(15, 23, 42, 0.12);
             overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.8);
         }
 
         .os-hero {
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1a1a4e 100%);
-            padding: 32px 28px 28px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #312e81 100%);
+            padding: 40px 32px 32px;
             color: #fff;
+            position: relative;
+        }
+
+        .os-hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
         }
 
         .os-hero-top {
+            position: relative;
+            z-index: 1;
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
@@ -222,6 +246,8 @@
         }
 
         .os-meta {
+            position: relative;
+            z-index: 1;
             display: flex;
             gap: 24px;
             flex-wrap: wrap;
@@ -434,41 +460,55 @@
            GST TAX INVOICE STYLES
         ───────────────────────────────────────────────────── */
         .inv-page {
-            max-width: 800px;
+            width: 100%;
             margin: 0 auto;
-            padding: 24px 16px 60px;
         }
 
         .inv-doc {
             background: var(--white);
-            border: 2px solid var(--invoice-border);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 24px;
+            box-shadow: 
+                0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                0 20px 40px -10px rgba(15, 23, 42, 0.08);
+            overflow: hidden;
         }
 
         /* Top header bar */
         .inv-heading-bar {
-            background: var(--invoice-border);
+            background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
             color: #fff;
             text-align: center;
             padding: 14px;
-            letter-spacing: 3px;
-            font-size: 13px;
-            font-weight: 700;
+            letter-spacing: 5px;
+            font-size: 12px;
+            font-weight: 800;
             text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .inv-heading-bar::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
         }
 
         .inv-shop-header {
-            padding: 24px 28px;
+            padding: 32px 32px 28px;
             border-bottom: 2px solid var(--invoice-border);
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             gap: 20px;
+            background: linear-gradient(to bottom, #fcfdfd, #ffffff);
         }
 
         .inv-shop-name {
-            font-size: 26px;
-            font-weight: 900;
+            font-size: 28px;
+            font-weight: 800;
             color: var(--invoice-border);
             letter-spacing: -0.5px;
             margin-bottom: 6px;
@@ -526,7 +566,8 @@
         /* Invoice details row */
         .inv-details-row {
             display: flex;
-            border-bottom: 2px solid var(--invoice-border);
+            border-bottom: 1px solid var(--border);
+            background: #ffffff;
         }
 
         .inv-col {
@@ -535,7 +576,7 @@
         }
 
         .inv-col:first-child {
-            border-right: 1px solid var(--invoice-border);
+            border-right: 1px solid var(--border);
         }
 
         .inv-col-header {
@@ -565,13 +606,14 @@
         }
 
         .inv-table th {
-            background: #f1f5f9;
-            border: 1px solid var(--invoice-border);
-            padding: 10px 14px;
-            font-size: 11px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            padding: 12px 14px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
             text-align: left;
         }
 
@@ -608,13 +650,13 @@
         /* Invoice totals */
         .inv-totals-wrap {
             display: flex;
-            border-top: 2px solid var(--invoice-border);
+            border-top: 1px solid var(--border);
         }
 
         .inv-totals-spacer {
             flex: 1;
-            padding: 16px 20px;
-            border-right: 2px solid var(--invoice-border);
+            padding: 24px 32px;
+            border-right: 1px solid var(--border);
             display: flex;
             align-items: flex-end;
         }
@@ -648,10 +690,13 @@
         }
 
         .inv-totals-row.grand {
-            background: var(--invoice-border);
+            background: #0f172a;
             color: #fff;
             font-size: 15px;
             font-weight: 800;
+            border-radius: 8px; /* Slightly nicer look for the total */
+            margin: 4px 8px;
+            padding: 12px 16px;
         }
 
         .inv-totals-row .label {
@@ -664,14 +709,14 @@
 
         /* Invoice footer */
         .inv-footer {
-            border-top: 2px solid var(--invoice-border);
-            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            padding: 24px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 16px;
             flex-wrap: wrap;
-            background: #fafaf9;
+            background: #f8fafc;
         }
 
         .inv-footer-note {
@@ -698,7 +743,7 @@
         .inv-sign-line {
             width: 160px;
             height: 1px;
-            background: var(--invoice-border);
+            background: var(--border-strong);
             margin: 30px 0 4px auto;
         }
 
@@ -750,8 +795,20 @@
             }
 
             .os-card,
-            .inv-doc {
+            .inv-doc,
+            .premium-card {
                 box-shadow: none;
+                border: none;
+                margin: 0;
+            }
+            .scaled-viewport {
+                display: block;
+            }
+            .scaled-content {
+                transform: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
 
             .fab-print {
@@ -759,61 +816,7 @@
             }
         }
 
-        @media (max-width: 640px) {
-            .os-hero {
-                padding: 24px 20px;
-            }
-
-            .os-shop-name {
-                font-size: 21px;
-            }
-
-            .os-customer-strip,
-            .os-totals,
-            .os-footer {
-                padding: 16px 20px;
-            }
-
-            .os-table th,
-            .os-table td {
-                padding: 10px 12px;
-                font-size: 13px;
-            }
-
-            .inv-shop-header {
-                flex-direction: column;
-            }
-
-            .inv-gst-badge {
-                text-align: left;
-            }
-
-            .inv-details-row {
-                flex-direction: column;
-            }
-
-            .inv-col:first-child {
-                border-right: none;
-                border-bottom: 1px solid var(--invoice-border);
-            }
-
-            .inv-totals-wrap {
-                flex-direction: column;
-            }
-
-            .inv-totals-spacer {
-                border-right: none;
-                border-bottom: 2px solid var(--invoice-border);
-            }
-
-            .inv-totals-table {
-                width: 100%;
-            }
-
-            .inv-sign-block {
-                display: none;
-            }
-        }
+        /* Removed media max-width 640px to enable proper scaled preview */
     </style>
 </head>
 
@@ -908,15 +911,19 @@
         // ── main ─────────────────────────────────────────────────────────────
         async function fetchAndRender() {
             const params = new URLSearchParams(window.location.search);
-            let orderId = params.get('id');
+            
+            // Support 'i' or 'id' for orderId
+            let orderId = params.get('i') || params.get('id');
             if (!orderId) {
-                const m = window.location.search.match(/[?&]id(?:=|%3D)([^&]+)/i);
+                const m = window.location.search.match(/[?&](?:id|i)(?:=|%3D)([^&]+)/i);
                 if (m) orderId = decodeURIComponent(m[1]);
             }
             if (!orderId) { showError('Invalid Link', 'No receipt ID found in URL.'); return; }
 
-            const gstMode = params.get('gst_mode') || 'none'; // none | included | excluded
-            const uParam = params.get('u'); // none | included | excluded
+            // Support 'g' or 'gst_mode'
+            const gstMode = params.get('g') || params.get('gst_mode') || 'none'; // none | included | excluded
+            
+            const uParam = params.get('u'); // username
 
             try {
                 let apiUrl = `${API_BASE}/api/public/receipts/${orderId}`;
@@ -927,10 +934,17 @@
                 if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
                 const data = await resp.json();
 
-                // Override backend data with unsaved UI state from URL params
-                if (params.has('pm')) data.payment_mode = params.get('pm');
-                if (params.has('ra')) data.received_amount = Number(params.get('ra'));
-                if (params.has('bd')) data.balance_due = Number(params.get('bd'));
+                // Support 'p' or 'pm' for payment_mode
+                if (params.has('p')) data.payment_mode = params.get('p');
+                else if (params.has('pm')) data.payment_mode = params.get('pm');
+
+                // Support 'r' or 'ra' for received_amount
+                if (params.has('r')) data.received_amount = Number(params.get('r'));
+                else if (params.has('ra')) data.received_amount = Number(params.get('ra'));
+
+                // Support 'b' or 'bd' for balance_due
+                if (params.has('b')) data.balance_due = Number(params.get('b'));
+                else if (params.has('bd')) data.balance_due = Number(params.get('bd'));
 
                 if (gstMode === 'none') {
                     renderOrderSummary(data);
@@ -1020,8 +1034,9 @@
             const wordsTotal = numberToWords(Math.round(grandTotal));
 
             const html = `
-            <div class="inv-page">
-                <div class="inv-doc">
+            <div class="scaled-container">
+                <div class="inv-page">
+                    <div class="inv-doc">
                     <div class="inv-heading-bar">Order Summary</div>
 
                     <div class="inv-shop-header">
@@ -1036,7 +1051,7 @@
                         <div class="inv-gst-badge">
                             <div style="margin-top:8px;">
                                 <span class="inv-status-pill ${isPaid ? 'inv-paid' : 'inv-pending'}">
-                                    ${isPaid ? '✓ PAID' : 'PENDING'}
+                                    ${(isPaid && data.payment_mode === 'Credit') ? 'PARTIAL' : (isPaid ? '✓ PAID' : 'PENDING')}
                                 </span>
                             </div>
                         </div>
@@ -1123,6 +1138,7 @@
                             <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${data.shop_name || ''}</div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>`;
 
@@ -1231,8 +1247,9 @@
             const sgst = gstAmt / 2;
 
             const html = `
-            <div class="inv-page">
-                <div class="inv-doc">
+            <div class="scaled-container">
+                <div class="inv-page">
+                    <div class="inv-doc">
                     <div class="inv-heading-bar">Tax Invoice</div>
 
                     <div class="inv-shop-header">
@@ -1251,7 +1268,7 @@
                             ` : ''}
                             <div style="margin-top:8px;">
                                 <span class="inv-status-pill ${isPaid ? 'inv-paid' : 'inv-pending'}">
-                                    ${isPaid ? '✓ PAID' : 'PENDING'}
+                                    ${(isPaid && data.payment_mode === 'Credit') ? 'PARTIAL' : (isPaid ? '✓ PAID' : 'PENDING')}
                                 </span>
                             </div>
                         </div>
@@ -1350,6 +1367,7 @@
                             <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${data.shop_name || ''}</div>
                         </div>
                     </div>
+                    </div>
                 </div>
             </div>`;
 
@@ -1359,7 +1377,33 @@
             hide('loader');
         }
 
-        document.addEventListener('DOMContentLoaded', fetchAndRender);
+        function applyResponsiveScale() {
+            const container = document.querySelector('.scaled-container');
+            const wrap = document.getElementById('content-wrap');
+            if (!container || !wrap) return;
+
+            const winWidth = window.innerWidth;
+            const contentWidth = 800; // Fixed width for desktop feel
+
+            if (winWidth < contentWidth) {
+                const scale = winWidth / contentWidth;
+                container.style.transform = `scale(${scale})`;
+                // Adjust wrap height to match scaled container
+                const scaledHeight = container.offsetHeight * scale;
+                wrap.style.height = scaledHeight + 'px';
+            } else {
+                container.style.transform = 'none';
+                wrap.style.height = 'auto';
+            }
+        }
+
+        async function init() {
+            await fetchAndRender();
+            applyResponsiveScale();
+            window.addEventListener('resize', applyResponsiveScale);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 

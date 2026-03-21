@@ -318,34 +318,49 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               }
 
               final gstParam =
-                  _gstMode == GstMode.none ? '' : '&gst_mode=${_gstMode.name}';
+                  _gstMode == GstMode.none ? '' : '&g=${_gstMode.name}';
 
               final authState = ref.read(authProvider);
               final usernameParam = authState.user?.username != null
                   ? '&u=${authState.user!.username}'
                   : '';
 
-              final paymentModeParam = '&pm=${Uri.encodeComponent(_paymentMode)}';
               final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
-              final receivedParam = '&ra=${_receivedAmount.toStringAsFixed(2)}';
-              final balanceParam = '&bd=${balanceDue.toStringAsFixed(2)}';
+              final pModeParam = '&p=${Uri.encodeComponent(_paymentMode)}';
+              final receivedParam = '&r=${_receivedAmount.toStringAsFixed(2)}';
+              final balanceParam = '&b=${balanceDue.toStringAsFixed(2)}';
 
               final shareUrl =
-                  'https://mydigientry.com/receipt.html?id=${group.receiptNumber}$gstParam$usernameParam$paymentModeParam$receivedParam$balanceParam';
+                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam$pModeParam$receivedParam$balanceParam';
 
               final prefs = await SharedPreferences.getInstance();
               final shopName = prefs.getString('shop_title')?.isNotEmpty == true
                   ? prefs.getString('shop_title')!
                   : 'Our Shop';
 
+              OrderPaymentStatus status;
+              if (_paymentMode == 'Cash') {
+                status = OrderPaymentStatus.fullyPaid;
+              } else {
+                if (_receivedAmount >= totalAmount) {
+                  status = OrderPaymentStatus.fullyPaid;
+                } else if (_receivedAmount > 0) {
+                  status = OrderPaymentStatus.partiallyPaid;
+                } else {
+                  status = OrderPaymentStatus.unpaid;
+                }
+              }
+
               final caption = WhatsAppUtils.getWhatsAppCaption(
-                status: OrderPaymentStatus.fullyPaid,
+                status: status,
                 customerName: header?.customerName?.isNotEmpty == true
                     ? header!.customerName!
                     : 'Customer',
                 businessName: shopName,
                 orderNumber: group.receiptNumber,
                 totalAmount: totalAmount,
+                paidAmount: _receivedAmount,
+                pendingAmount: balanceDue,
               );
               final message =
                   '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— $shopName';

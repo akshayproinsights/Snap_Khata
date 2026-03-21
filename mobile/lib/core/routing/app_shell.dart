@@ -78,7 +78,7 @@ class AppShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(LucideIcons.book),
                 selectedIcon: Icon(LucideIcons.book, color: AppTheme.primary),
-                label: 'UDHAR',
+                label: 'CREDIT',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.layoutGrid),

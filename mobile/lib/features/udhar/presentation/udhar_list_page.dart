@@ -56,7 +56,7 @@ class UdharListPage extends ConsumerWidget {
           Icon(LucideIcons.wallet, color: Colors.grey.shade400, size: 64),
           const SizedBox(height: 16),
           const Text(
-            'No pending Udhar',
+            'No pending Credit',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
