@@ -466,3 +466,129 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
     except Exception as e:
         logger.error(f"Error creating manual entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class TogglePaidStatusRequest(BaseModel):
+    is_paid: bool
+
+@router.post("/ledgers/{ledger_id}/transactions/{transaction_id}/toggle-paid")
+async def toggle_transaction_paid_status(
+    ledger_id: int,
+    transaction_id: int,
+    request: TogglePaidStatusRequest,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Toggle the paid status of a customer invoice transaction.
+    When marked as paid, automatically creates a linked PAYMENT transaction.
+    When marked as unpaid, deletes the linked PAYMENT transaction.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # 1. Fetch the transaction and verify it belongs to the user and ledger
+        tx_resp = db.client.table('ledger_transactions') \
+            .select('*') \
+            .eq('id', transaction_id) \
+            .eq('ledger_id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not tx_resp.data:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+            
+        tx = tx_resp.data[0]
+        
+        # We only allow toggling paid status on INVOICE transactions for now
+        if tx.get('transaction_type') != 'INVOICE':
+            raise HTTPException(status_code=400, detail="Only INVOICE transactions can be marked as paid")
+            
+        current_paid_status = tx.get('is_paid', False)
+        
+        # If the status is already what's requested, do nothing
+        if current_paid_status == request.is_paid:
+            return {"status": "success", "message": "Status unchanged"}
+            
+        # 2. Fetch the ledger to update its balance
+        ledger_resp = db.client.table('customer_ledgers') \
+            .select('*') \
+            .eq('id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not ledger_resp.data:
+            raise HTTPException(status_code=404, detail="Ledger not found")
+            
+        ledger = ledger_resp.data[0]
+        current_balance = float(ledger.get('balance_due', 0))
+        tx_amount = float(tx.get('amount', 0))
+        now = datetime.utcnow().isoformat()
+        
+        if request.is_paid:
+            # MARING AS PAID
+            # Create a PAYMENT transaction
+            payment_resp = db.client.table('ledger_transactions').insert({
+                'username': username,
+                'ledger_id': ledger_id,
+                'transaction_type': 'PAYMENT',
+                'amount': tx_amount,
+                'notes': f"Auto-generated payment for Invoice {tx.get('receipt_number', '')}",
+                'linked_transaction_id': transaction_id # Link it to the invoice
+            }).execute()
+            
+            if not payment_resp.data:
+                raise HTTPException(status_code=500, detail="Failed to create payment transaction")
+                
+            payment_id = payment_resp.data[0]['id']
+            
+            # Update the invoice transaction
+            db.client.table('ledger_transactions').update({
+                'is_paid': True,
+                'linked_transaction_id': payment_id # Link invoice to the new payment
+            }).eq('id', transaction_id).execute()
+            
+            # Update customer balance (PAYMENT decreases balance due)
+            new_balance = current_balance - tx_amount
+            db.client.table('customer_ledgers').update({
+                'balance_due': new_balance,
+                'last_payment_date': now,
+                'updated_at': now
+            }).eq('id', ledger_id).execute()
+            
+        else:
+            # MARKING AS UNPAID
+            linked_payment_id = tx.get('linked_transaction_id')
+            
+            if linked_payment_id:
+                # Delete the linked PAYMENT transaction
+                db.client.table('ledger_transactions').delete().eq('id', linked_payment_id).execute()
+                
+            # Update the invoice transaction
+            db.client.table('ledger_transactions').update({
+                'is_paid': False,
+                'linked_transaction_id': None
+            }).eq('id', transaction_id).execute()
+            
+            # Update customer balance (Reverting a PAYMENT increases balance due)
+            new_balance = current_balance + tx_amount
+            db.client.table('customer_ledgers').update({
+                'balance_due': new_balance,
+                'updated_at': now
+            }).eq('id', ledger_id).execute()
+            
+        return {
+            "status": "success",
+            "message": f"Successfully marked as {'paid' if request.is_paid else 'unpaid'}",
+            "new_balance": new_balance,
+            "is_paid": request.is_paid
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling transaction paid status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

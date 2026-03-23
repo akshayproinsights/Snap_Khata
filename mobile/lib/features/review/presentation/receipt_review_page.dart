@@ -318,21 +318,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 totalAmount = group.header!.amount;
               }
 
-              final gstParam =
-                  _gstMode == GstMode.none ? '' : '&g=${_gstMode.name}';
-
               final authState = ref.read(authProvider);
               final usernameParam = authState.user?.username != null
                   ? '&u=${authState.user!.username}'
                   : '';
 
-              final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
-              final pModeParam = '&p=${Uri.encodeComponent(_paymentMode)}';
-              final receivedParam = '&r=${_receivedAmount.toStringAsFixed(2)}';
-              final balanceParam = '&b=${balanceDue.toStringAsFixed(2)}';
+              final double balanceDue =
+                  _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
               final shareUrl =
-                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam$pModeParam$receivedParam$balanceParam';
+                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$usernameParam';
 
               final shopProfile = ref.read(shopProvider);
               final shopName = shopProfile.name.isNotEmpty

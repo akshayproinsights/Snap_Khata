@@ -19,6 +19,7 @@ class InventoryInvoiceBundle {
   double totalAmount;
   bool hasMismatch;
   bool isVerified;
+  String createdAt;
 
   InventoryInvoiceBundle({
     required this.invoiceNumber,
@@ -29,6 +30,7 @@ class InventoryInvoiceBundle {
     required this.totalAmount,
     required this.hasMismatch,
     required this.isVerified,
+    required this.createdAt,
   });
 }
 
@@ -62,6 +64,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
           totalAmount: 0,
           hasMismatch: false,
           isVerified: true, // assume verified until we find otherwise
+          createdAt: item.createdAt ?? '',
         );
       }
       final bundle = groups[safeKey]!;
@@ -72,14 +75,25 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       if (item.verificationStatus != 'Done') bundle.isVerified = false;
     }
 
-    // Mismatched bundles first, then verified
-    return groups.values.toList()
+    final allBundles = groups.values.toList();
+
+    // Mismatched bundles first, then newest uploaded first (using createdAt if available, else date)
+    return allBundles
       ..sort((a, b) {
         if (a.hasMismatch && !b.hasMismatch) return -1;
         if (!a.hasMismatch && b.hasMismatch) return 1;
+        
+        // Use createdAt for precise newest-first sorting, fallback to invoice date
+        if (a.createdAt.isNotEmpty && b.createdAt.isNotEmpty) {
+          final cA = DateTime.tryParse(a.createdAt) ?? DateTime(0);
+          final cB = DateTime.tryParse(b.createdAt) ?? DateTime(0);
+          final dateCmp = cB.compareTo(cA); // Newest first
+          if (dateCmp != 0) return dateCmp;
+        }
+
         final dA = DateTime.tryParse(a.date) ?? DateTime(0);
         final dB = DateTime.tryParse(b.date) ?? DateTime(0);
-        return dB.compareTo(dA);
+        return dB.compareTo(dA); // Newest date first
       });
   }
 
@@ -109,7 +123,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
   }
 
   Widget _buildProgressHeader(int total, int done, int pending, int error) {
-    if (total == 0) return const SizedBox.shrink();
+    if (total == 0 || (pending == 0 && error == 0 && done == 0)) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.all(16),
       color: Colors.white,
@@ -183,13 +198,15 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     });
 
     final state = ref.watch(inventoryProvider);
-    final bundles = _groupItems(state.items);
+    final allBundles = _groupItems(state.items);
 
-    final total = bundles.length;
-    final done = bundles.where((b) => b.isVerified && !b.hasMismatch).length;
-    final pending = bundles.where((b) => !b.isVerified && !b.hasMismatch).length;
-    final error = bundles.where((b) => b.hasMismatch).length;
+    final total = allBundles.length;
+    final done = allBundles.where((b) => b.isVerified && !b.hasMismatch).length;
+    final pending = allBundles.where((b) => !b.isVerified && !b.hasMismatch).length;
+    final error = allBundles.where((b) => b.hasMismatch).length;
     final allDone = total > 0 && done == total;
+
+    final bundles = allBundles.where((b) => !b.isVerified).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -216,11 +233,11 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         ],
       ),
       body: Builder(builder: (context) {
-        if (state.isLoading && state.items.isEmpty) {
+        if (state.isLoading && bundles.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (state.error != null && state.items.isEmpty) {
+        if (state.error != null && bundles.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -245,7 +262,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
           );
         }
 
-        if (state.items.isEmpty) {
+        if (bundles.isEmpty) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(40),

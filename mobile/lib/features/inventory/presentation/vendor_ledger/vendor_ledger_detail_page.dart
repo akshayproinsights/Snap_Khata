@@ -212,7 +212,8 @@ class _VendorLedgerDetailPageState
         orElse: () => widget.ledger);
 
     // Calculate aggregated stats from available transactions
-    final txList = _transactions ?? [];
+    // Hide auto-generated payments by filtering out those with a linkedTransactionId
+    final txList = _transactions?.where((tx) => tx.linkedTransactionId == null).toList() ?? [];
     double totalSpend = 0;
     int ordersCount = 0;
     DateTime? lastOrderDate;
@@ -410,7 +411,6 @@ class _VendorLedgerDetailPageState
 
   Widget _buildTransactionCard(VendorLedgerTransaction tx, bool isPayment) {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(16),
@@ -423,73 +423,166 @@ class _VendorLedgerDetailPageState
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
-              color: isPayment ? Colors.green.shade600 : AppTheme.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isPayment
-                      ? 'Payment Sent'
-                      : (tx.invoiceNumber?.isNotEmpty == true ? '#${tx.invoiceNumber}' : 'Purchase Order'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  dateFormatter.format(tx.createdAt.toLocal()),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: EdgeInsets.zero,
+          title: Row(
             children: [
-              Text(
-                '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: isPayment ? Colors.green.shade600 : AppTheme.textPrimary,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
+                  color: isPayment ? Colors.green.shade600 : AppTheme.primary,
+                  size: 20,
                 ),
               ),
-              if (tx.notes?.isNotEmpty == true)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    tx.notes!,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            isPayment
+                                ? 'Payment Sent'
+                                : (tx.invoiceNumber?.isNotEmpty == true ? '#${tx.invoiceNumber}' : 'Purchase Order'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: AppTheme.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!isPayment && tx.isPaid) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Text(
+                              'PAID',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      dateFormatter.format(tx.createdAt.toLocal()),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
                     style: TextStyle(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isPayment ? Colors.green.shade600 : AppTheme.textPrimary,
                     ),
                   ),
-                ),
+                  if (tx.notes?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        tx.notes!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
-        ],
+          children: [
+            if (!isPayment)
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Divider(height: 1, color: AppTheme.border),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Invoice Date', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                            const SizedBox(height: 4),
+                            Text(dateFormatter.format(tx.createdAt.toLocal()), style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                          ],
+                        ),
+                        _buildMarkAsPaidButton(tx),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildMarkAsPaidButton(VendorLedgerTransaction tx) {
+    if (tx.isPaid) {
+      return TextButton.icon(
+        onPressed: () => _togglePaidStatus(tx, false),
+        icon: Icon(LucideIcons.xCircle, size: 16, color: Colors.red.shade600),
+        label: Text('Mark as Unpaid', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold)),
+      );
+    } else {
+      return ElevatedButton.icon(
+        onPressed: () => _togglePaidStatus(tx, true),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green.shade600,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        icon: const Icon(LucideIcons.checkCircle, size: 16),
+        label: const Text('Mark as Paid', style: TextStyle(fontWeight: FontWeight.bold)),
+      );
+    }
+  }
+
+  Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool markAsPaid) async {
+    final success = await ref.read(vendorLedgerProvider.notifier).toggleTransactionPaidStatus(tx.id, markAsPaid);
+    if (success) {
+      _loadTransactions();
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update status')));
+      }
+    }
   }
 }

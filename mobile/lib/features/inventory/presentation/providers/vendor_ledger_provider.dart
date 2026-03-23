@@ -82,6 +82,19 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
+  Future<bool> toggleTransactionPaidStatus(int transactionId, bool markAsPaid) async {
+    try {
+      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId/toggle-paid', data: {
+        'is_paid': markAsPaid,
+      });
+      // Refresh list after successful toggle
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<bool> deleteLedger(int ledgerId) async {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');

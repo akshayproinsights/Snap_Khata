@@ -737,8 +737,9 @@ async def get_inventory_items(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get inventory items with optional filtering
-    Default: only show items with amount_mismatch > 0
+    Get inventory items with optional filtering.
+    Default (show_all=False): Only show PENDING items (verification_status != 'Done')
+    With show_all=True: Show all items including verified ones
     """
     from database import get_database_client
     
@@ -749,9 +750,10 @@ async def get_inventory_items(
         # Base query
         query = db.client.table("inventory_items").select("*").eq("username", username)
         
-        # Apply filter if not showing all
+        # CRITICAL: Apply filtering for reviews - exclude verified items
         if not show_all:
-            query = query.gt("amount_mismatch", 0)
+            # Only show items that are NOT verified (pending review)
+            query = query.neq("verification_status", "Done")
         
         # Order by created_at descending
         query = query.order("created_at", desc=True)

@@ -13,6 +13,7 @@ class InventoryItem {
   final String? uploadDate;
   final String? verificationStatus;
   final double? rowAccuracy;
+  final String? createdAt; // Track when item was created for batch identification
 
   InventoryItem({
     required this.id,
@@ -29,6 +30,7 @@ class InventoryItem {
     this.uploadDate,
     this.verificationStatus,
     this.rowAccuracy,
+    this.createdAt,
   });
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
@@ -50,6 +52,7 @@ class InventoryItem {
       rowAccuracy: json['row_accuracy'] != null
           ? double.tryParse(json['row_accuracy'].toString())
           : null,
+      createdAt: json['created_at']?.toString(),
     );
   }
 
@@ -69,6 +72,7 @@ class InventoryItem {
       'upload_date': uploadDate,
       'verification_status': verificationStatus,
       'row_accuracy': rowAccuracy,
+      'created_at': createdAt,
     };
   }
 
@@ -87,6 +91,7 @@ class InventoryItem {
     String? uploadDate,
     String? verificationStatus,
     double? rowAccuracy,
+    String? createdAt,
   }) {
     return InventoryItem(
       id: id ?? this.id,
@@ -103,6 +108,7 @@ class InventoryItem {
       uploadDate: uploadDate ?? this.uploadDate,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       rowAccuracy: rowAccuracy ?? this.rowAccuracy,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

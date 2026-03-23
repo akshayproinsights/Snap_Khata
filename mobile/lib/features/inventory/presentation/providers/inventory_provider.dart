@@ -10,12 +10,14 @@ class InventoryState {
   final bool isLoading;
   final bool isSyncing;
   final String? error;
+  final DateTime? batchTimestamp; // Track when last batch was processed to identify new items
 
   InventoryState({
     this.items = const [],
     this.isLoading = false,
     this.isSyncing = false,
     this.error,
+    this.batchTimestamp,
   });
 
   InventoryState copyWith({
@@ -23,12 +25,14 @@ class InventoryState {
     bool? isLoading,
     bool? isSyncing,
     String? error,
+    DateTime? batchTimestamp,
   }) {
     return InventoryState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
       isSyncing: isSyncing ?? this.isSyncing,
       error: error,
+      batchTimestamp: batchTimestamp ?? this.batchTimestamp,
     );
   }
 }
@@ -115,10 +119,15 @@ class InventoryNotifier extends Notifier<InventoryState> {
 
   Future<void> syncAndFinish() async {
     state = state.copyWith(isSyncing: true, error: null);
+    final previousItems = state.items; // save for rollback
     try {
       // Find all pending items
       final pendingItems = state.items.where((i) => i.verificationStatus != 'Done').toList();
       
+      // Optimistic Update: instantly remove pending items from UI
+      final newItems = state.items.where((i) => i.verificationStatus == 'Done').toList();
+      state = state.copyWith(items: newItems);
+
       // Group them by invoice number / vendor + date
       final Map<String, List<InventoryItem>> groups = {};
       for (final item in pendingItems) {
@@ -134,6 +143,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       }
       
       // For each group, call verifyInvoice
+      final futures = <Future<void>>[];
       for (final groupItems in groups.values) {
         if (groupItems.isEmpty) continue;
         final firstItem = groupItems.first;
@@ -149,13 +159,15 @@ class InventoryNotifier extends Notifier<InventoryState> {
           'item_ids': groupItems.map((i) => i.id).toList(),
         };
         
-        await _repository.verifyInvoice(data);
+        futures.add(_repository.verifyInvoice(data));
       }
+
+      await Future.wait(futures);
 
       // Finally, fetch items to ensure we are up to date
       await fetchItems();
     } catch (e) {
-      state = state.copyWith(error: 'Sync failed: $e');
+      state = state.copyWith(error: 'Sync failed: $e', items: previousItems);
     } finally {
       state = state.copyWith(isSyncing: false);
     }

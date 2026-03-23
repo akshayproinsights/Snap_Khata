@@ -20,25 +20,25 @@
 
     <style>
         :root {
-            --bg: #f8fafc;
+            --bg: #eceff1;
             --white: #ffffff;
-            --border: #e2e8f0;
-            --border-strong: #94a3b8;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --text-muted: #94a3b8;
-            --accent: #4f46e5;
-            --accent-dark: #3730a3;
-            --accent-light: #eef2ff;
-            --green: #10b981;
-            --green-bg: #ecfdf5;
-            --green-border: #a7f3d0;
-            --amber: #f59e0b;
-            --amber-bg: #fffbeb;
-            --amber-border: #fef3c7;
-            --red: #ef4444;
+            --border: #cccccc;
+            --border-strong: #000000;
+            --text-primary: #000000;
+            --text-secondary: #333333;
+            --text-muted: #555555;
+            --accent: #000000;
+            --accent-dark: #000000;
+            --accent-light: #f5f5f5;
+            --green: #000000;
+            --green-bg: #ffffff;
+            --green-border: #cccccc;
+            --amber: #000000;
+            --amber-bg: #ffffff;
+            --amber-border: #cccccc;
+            --red: #000000;
             --invoice-bg: #ffffff;
-            --invoice-border: #0f172a;
+            --invoice-border: #000000;
         }
 
         * {
@@ -49,7 +49,7 @@
         }
 
         body {
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: 'Inter', Arial, sans-serif;
             background: var(--bg);
             color: var(--text-primary);
             line-height: 1.6;
@@ -160,12 +160,8 @@
 
         .inv-doc {
             background: var(--white);
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            box-shadow: 
-                0 4px 6px -1px rgba(0,0,0,0.05),
-                0 10px 15px -3px rgba(0,0,0,0.1),
-                0 0 0 1px rgba(0,0,0,0.02);
+            border: 1px solid #000000;
+            border-radius: 2px;
             overflow: hidden;
             position: relative;
             min-height: 1000px;
@@ -179,7 +175,8 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            background: #ffffff;
+            background: var(--white);
+            border-bottom: 1px solid var(--border-strong);
         }
 
         .inv-doc-type {
@@ -233,13 +230,15 @@
         }
 
         .inv-paid {
-            background: #dcfce7;
-            color: #166534;
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid #000000;
         }
 
         .inv-pending {
-            background: #fef3c7;
-            color: #b45309;
+            background: #ffffff;
+            color: #000000;
+            border: 1px dashed #000000;
         }
 
         .inv-details-row {
@@ -303,7 +302,7 @@
 
         .inv-table td {
             padding: 16px 8px;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--border);
             color: var(--text-primary);
             vertical-align: top;
         }
@@ -331,10 +330,11 @@
         .inv-amount-words {
             max-width: 320px;
             font-size: 12px;
-            color: var(--text-secondary);
-            background: #f8fafc;
-            padding: 16px;
-            border-radius: 8px;
+            color: var(--text-primary);
+            background: var(--white);
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
             margin-top: 8px;
         }
         
@@ -380,24 +380,26 @@
         }
 
         .inv-totals-row.received {
-            color: var(--accent);
+            color: var(--text-primary);
             font-weight: 500;
         }
-        .inv-totals-row.received .amount { color: var(--accent); font-weight: 600; }
+        .inv-totals-row.received .amount { color: var(--text-primary); font-weight: 600; }
 
         .inv-totals-row.balance {
-            color: #b91c1c;
-            font-weight: 600;
+            color: var(--text-primary);
+            font-weight: 700;
             padding: 12px 16px;
-            background: #fef2f2;
-            border-radius: 8px;
+            background: var(--white);
+            border-top: 1px dashed var(--border-strong);
+            border-bottom: 1px dashed var(--border-strong);
+            border-radius: 0;
             margin-top: 8px;
         }
-        .inv-totals-row.balance .amount { color: #b91c1c; font-weight: 700; }
+        .inv-totals-row.balance .amount { color: var(--text-primary); font-weight: 800; }
 
         .inv-footer {
             padding: 32px 48px;
-            background: #f8fafc;
+            background: var(--white);
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
@@ -602,9 +604,6 @@
             }
             if (!orderId) { showError('Invalid Link', 'No receipt ID found in URL.'); return; }
 
-            // Support 'g' or 'gst_mode'
-            const gstMode = params.get('g') || params.get('gst_mode') || 'none'; // none | included | excluded
-            
             const uParam = params.get('u'); // username
 
             try {
@@ -615,6 +614,11 @@
                 const resp = await fetch(apiUrl);
                 if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
                 const data = await resp.json();
+
+                // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
+                let gstMode = data.gst_mode && data.gst_mode !== 'none' ? data.gst_mode : 'none';
+                if (params.has('g')) gstMode = params.get('g');
+                else if (params.has('gst_mode')) gstMode = params.get('gst_mode');
 
                 // Support 'p' or 'pm' for payment_mode
                 if (params.has('p')) data.payment_mode = params.get('p');
@@ -670,7 +674,7 @@
 
             // Parts
             if (taxableItems.length > 0) {
-                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts</td></tr>`;
+                itemsHtml += `<tr><td colspan="5" style="background:#f9f9f9;border-top:1px solid #000;border-bottom:1px solid #000;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -692,7 +696,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr><td colspan="5" style="height:8px;"></td></tr>`;
                 }
-                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing</td></tr>`;
+                itemsHtml += `<tr><td colspan="5" style="background:#f9f9f9;border-top:1px solid #000;border-bottom:1px solid #000;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -795,6 +799,18 @@
                                     <span class="label">Total Amount</span>
                                     <span class="amount">${fmtMoney(grandTotal)}</span>
                                 </div>
+                                ${(data.received_amount !== undefined && data.received_amount !== null) ? `
+                                <div class="inv-totals-row received">
+                                    <span class="label">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</span>
+                                    <span class="amount">${fmtMoney(data.received_amount)}</span>
+                                </div>
+                                ` : ''}
+                                ${(data.balance_due !== undefined && data.balance_due !== null) ? `
+                                <div class="inv-totals-row balance">
+                                    <span class="label">Balance Due</span>
+                                    <span class="amount">${fmtMoney(data.balance_due)}</span>
+                                </div>
+                                ` : ''}
                             </div>
                         </div>
 
@@ -860,7 +876,7 @@
 
             // Taxable items (Parts)
             if (taxableItems.length > 0) {
-                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts (Taxable @ 18%)</td></tr>`;
+                itemsHtml += `<tr><td colspan="8" style="background:#f9f9f9;border-top:1px solid #000;border-bottom:1px solid #000;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts (Taxable @ 18%)</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -888,7 +904,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr><td colspan="8" style="height:8px;"></td></tr>`;
                 }
-                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing (No GST)</td></tr>`;
+                itemsHtml += `<tr><td colspan="8" style="background:#f9f9f9;border-top:1px solid #000;border-bottom:1px solid #000;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing (No GST)</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -1013,6 +1029,18 @@
                                     <span class="label">Grand Total</span>
                                     <span class="amount">${fmtMoney(grandTotal)}</span>
                                 </div>
+                                ${(data.received_amount !== undefined && data.received_amount !== null) ? `
+                                <div class="inv-totals-row received">
+                                    <span class="label">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</span>
+                                    <span class="amount">${fmtMoney(data.received_amount)}</span>
+                                </div>
+                                ` : ''}
+                                ${(data.balance_due !== undefined && data.balance_due !== null) ? `
+                                <div class="inv-totals-row balance">
+                                    <span class="label">Balance Due</span>
+                                    <span class="amount">${fmtMoney(data.balance_due)}</span>
+                                </div>
+                                ` : ''}
                             </div>
                         </div>
 

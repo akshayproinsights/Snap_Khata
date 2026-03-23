@@ -164,6 +164,7 @@ async def get_public_receipt(receipt_number: str, u: str = None):
             "shop_address": shop_address,
             "shop_phone": shop_phone,
             "shop_gst": shop_gst,
+            "gst_mode": header.get("gst_mode") or "none",
             "items": items
         }
 

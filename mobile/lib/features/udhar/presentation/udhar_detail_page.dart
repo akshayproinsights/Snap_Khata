@@ -8,6 +8,11 @@ import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 class UdharDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -405,16 +410,23 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _transactions == null || _transactions!.isEmpty
                     ? _buildEmptyState()
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                        itemCount: _transactions!.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final tx = _transactions![index];
-                          return _buildTransactionCard(tx);
-                        },
-                      ),
+                    : Builder(builder: (context) {
+                        final visibleTxs = _transactions!
+                            .where((tx) => !(tx.transactionType == 'PAYMENT' &&
+                                tx.linkedTransactionId != null))
+                            .toList();
+                        if (visibleTxs.isEmpty) return _buildEmptyState();
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                          itemCount: visibleTxs.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final tx = visibleTxs[index];
+                            return _buildTransactionCard(tx);
+                          },
+                        );
+                      }),
           ),
         ],
       ),
@@ -561,6 +573,189 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     );
   }
 
+  Future<void> _togglePaidStatus(LedgerTransaction tx, bool isPaid) async {
+    // Show loading indicator wrapper
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final success = await ref
+        .read(udharProvider.notifier)
+        .toggleTransactionPaidStatus(widget.ledger.id, tx.id, isPaid);
+
+    if (mounted) {
+      Navigator.pop(context); // Close dialog
+
+      if (success) {
+        _loadTransactions();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isPaid
+                  ? 'Invoice marked as Paid! 🎉'
+                  : 'Invoice marked as Unpaid.',
+            ),
+            backgroundColor: isPaid ? Colors.green.shade600 : Colors.orange.shade700,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark invoice as ${isPaid ? 'paid' : 'unpaid'}.'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildMarkAsPaidButton(LedgerTransaction tx) {
+    if (tx.isPaid) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton.icon(
+              onPressed: () => _togglePaidStatus(tx, false),
+              icon: const Icon(LucideIcons.xCircle, color: Colors.orange, size: 18),
+              label: const Text(
+                'Mark as Unpaid',
+                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: () => _togglePaidStatus(tx, true),
+            icon: const Icon(LucideIcons.checkCircle2, color: Colors.white, size: 20),
+            label: const Text(
+              'Mark as Paid',
+              style: TextStyle(
+                  color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendWhatsAppReminder(LedgerTransaction tx) async {
+    HapticFeedback.lightImpact();
+
+    final authState = ref.read(authProvider);
+    final usernameParam = authState.user?.username != null
+        ? '&u=${authState.user!.username}'
+        : '';
+        
+    final link = 'https://mydigientry.com/receipt.html?i=${tx.receiptNumber}$usernameParam';
+    
+    final customerNameMsg = widget.ledger.customerName.isNotEmpty && widget.ledger.customerName.toLowerCase() != 'unknown'
+        ? widget.ledger.customerName
+        : 'Customer';
+
+    final shopProfile = ref.read(shopProvider);
+    final shopName = shopProfile.name.isNotEmpty
+        ? shopProfile.name
+        : 'Our Shop';
+
+    final pendingFmt = WhatsAppUtils.formatIndianCurrency(widget.ledger.balanceDue);
+    
+    final message = 'Hi $customerNameMsg,\n\n'
+        'This is a gentle reminder from *$shopName* regarding your pending balance.\n\n'
+        '⚠️ *Total Amount Due: $pendingFmt*\n\n'
+        'Please find your invoice receipt for reference:\n$link\n\n'
+        'Thank you for your business!';
+
+    final phoneController = TextEditingController(text: widget.ledger.customerPhone ?? '');
+
+    if (!context.mounted) return;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Send WhatsApp Reminder'),
+        content: TextField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: 'Customer Phone Number',
+            prefixText: '+91 ',
+            hintText: 'e.g. 9876543210',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, phoneController.text),
+            child: const Text('Send Reminder'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      final opened = await WhatsAppUtils.openWhatsAppChat(
+        phone: result,
+        message: message,
+      );
+
+      if (!context.mounted) return;
+
+      if (!opened) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp. Please ensure it is installed.')),
+        );
+      }
+    }
+  }
+
+  Widget _buildWhatsAppReminderButton(LedgerTransaction tx) {
+    if (tx.transactionType != 'INVOICE' || tx.receiptNumber == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: OutlinedButton.icon(
+        onPressed: () => _sendWhatsAppReminder(tx),
+        icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green, size: 18),
+        label: const Text('Send Reminder on WhatsApp', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.green.shade200),
+          minimumSize: const Size(double.infinity, 44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
     final isInvoice = tx.transactionType == 'INVOICE';
@@ -575,69 +770,80 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: canTap
-            ? () => _navigateToOrderDetails(tx)
-            : null,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // Colored left accent bar
-              Container(
-                width: 4,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    bottomLeft: Radius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.fromLTRB(4, 8, 14, 8),
+            childrenPadding: EdgeInsets.zero,
+            title: Row(
+              children: [
+                // Icon
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    shape: BoxShape.circle,
                   ),
+                  child: Icon(txIcon, color: accentColor, size: 18),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              // Icon
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(txIcon, color: accentColor, size: 18),
-              ),
-              const SizedBox(width: 12),
-
-              // Content
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                // Content
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        txTitle,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: AppTheme.textPrimary,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              txTitle,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isInvoice && tx.isPaid)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Text(
+                                'PAID',
+                                style: TextStyle(
+                                  color: Colors.green.shade700,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        dateFormatter.format(tx.createdAt.toLocal()),
+                        isInvoice ? 'Invoice Date: ${dateFormatter.format(tx.createdAt.toLocal())}' : dateFormatter.format(tx.createdAt.toLocal()),
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppTheme.textSecondary,
@@ -659,34 +865,50 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     ],
                   ),
                 ),
+              ],
+            ),
+            trailing: SizedBox(
+               width: 80,
+               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: accentColor,
+                    ),
+                  ),
+                  Icon(
+                    LucideIcons.chevronDown,
+                    size: 16,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
               ),
-
-              // Amount + tap hint
-              Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: accentColor,
+            ),
+            children: [
+              if (isInvoice)
+                 _buildMarkAsPaidButton(tx),
+              if (canTap && !tx.isPaid)
+                _buildWhatsAppReminderButton(tx),
+              if (canTap)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: OutlinedButton.icon(
+                      onPressed: () => _navigateToOrderDetails(tx),
+                      icon: const Icon(LucideIcons.fileText, size: 16),
+                      label: const Text('View Invoice Summary'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
-                    if (canTap) ...[
-                      const SizedBox(height: 4),
-                      Icon(
-                        LucideIcons.chevronRight,
-                        size: 16,
-                        color: Colors.grey.shade400,
-                      ),
-                    ],
-                  ],
                 ),
-              ),
             ],
           ),
         ),

@@ -92,6 +92,19 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  Future<bool> toggleTransactionPaidStatus(int ledgerId, int transactionId, bool isPaid) async {
+    try {
+      await _dio.post(
+        '/api/udhar/ledgers/$ledgerId/transactions/$transactionId/toggle-paid',
+        data: {'is_paid': isPaid},
+      );
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<OrderLineItem>> fetchOrderItems(String receiptNumber) async {
     try {
       final response = await _dio.get('/api/invoices/receipt/$receiptNumber/items');

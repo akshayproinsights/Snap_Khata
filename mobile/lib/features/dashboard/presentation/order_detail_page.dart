@@ -305,17 +305,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 onPressed: () async {
                   HapticFeedback.lightImpact();
 
-                  final gstParam = _gstMode == GstMode.none
-                      ? ''
-                      : '&g=${_gstMode.name}';
-
                   final authState = ref.read(authProvider);
                   final usernameParam = authState.user?.username != null
                       ? '&u=${authState.user!.username}'
                       : '';
 
                   final link =
-                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
+                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$usernameParam';
 
                   final customerNameMsg = widget
                               .group.customerName.isNotEmpty &&
