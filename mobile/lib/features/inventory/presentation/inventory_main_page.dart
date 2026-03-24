@@ -891,8 +891,8 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     color: AppTheme.textSecondary))),
-                        const SizedBox(width: 8),
-                        const SizedBox(
+                        SizedBox(width: 8),
+                        SizedBox(
                             width: 70,
                             child: Text('Net Amt',
                                 textAlign: TextAlign.right,
