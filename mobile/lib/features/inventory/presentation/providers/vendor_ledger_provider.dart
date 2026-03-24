@@ -95,6 +95,53 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
+  Future<bool> deleteTransaction(int transactionId) async {
+    try {
+      await _dio.delete('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId');
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> batchTogglePaidStatus(List<int> transactionIds, bool markAsPaid) async {
+    try {
+      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/batch-toggle-paid', data: {
+        'transaction_ids': transactionIds,
+        'is_paid': markAsPaid,
+      });
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> batchDeleteTransactions(List<int> transactionIds) async {
+    try {
+      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/batch-delete', data: {
+        'transaction_ids': transactionIds,
+      });
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<List<dynamic>> fetchInvoiceItems(String invoiceNumber) async {
+    try {
+      final response = await _dio.get('/api/inventory/items', queryParameters: {
+        'invoice_number': invoiceNumber,
+        'show_all': true,
+      });
+      return response.data['items'] ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<bool> deleteLedger(int ledgerId) async {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');

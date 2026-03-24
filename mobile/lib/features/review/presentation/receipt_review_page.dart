@@ -232,6 +232,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Widget build(BuildContext context) {
     // Read fresh group from state to reflect updates immediately
     final state = ref.watch(reviewProvider);
+    final shopProfile = ref.watch(shopProvider);
     final group = state.groups.firstWhere(
         (g) => g.receiptNumber == widget.group.receiptNumber,
         orElse: () => widget.group);
@@ -336,7 +337,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               final shareUrl =
                   'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
 
-              final shopProfile = ref.read(shopProvider);
               final shopName = shopProfile.name.isNotEmpty
                   ? shopProfile.name
                   : 'Our Shop';

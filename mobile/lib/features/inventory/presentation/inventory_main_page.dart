@@ -130,9 +130,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
           style: TextStyle(
               fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
         ),
-        actions: [
-          _buildPoBadge(context, poState),
-          const SizedBox(width: 8),
+        actions: const [
+          SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
@@ -143,7 +142,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildQuickLinksCard(context, pendingCount),
+              _buildQuickLinksCard(context, pendingCount, poState),
               const SizedBox(height: 28),
               Row(
                 children: [
@@ -246,47 +245,9 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
     );
   }
 
-  Widget _buildPoBadge(BuildContext context, PurchaseOrderState poState) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        IconButton(
-          icon: const Icon(LucideIcons.shoppingCart),
-          tooltip: 'Purchase Orders',
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            context.push('/purchase-orders');
-          },
-        ),
-        if (poState.hasDraftItems)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.error,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-              child: Text(
-                poState.draftCount > 99 ? '99+' : '${poState.draftCount}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  height: 1.1,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
 
-  Widget _buildQuickLinksCard(BuildContext context, int pendingCount) {
+  Widget _buildQuickLinksCard(
+      BuildContext context, int pendingCount, PurchaseOrderState poState) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -305,7 +266,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Quick Actions',
+            'Quick Links',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
@@ -346,6 +307,17 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
                 onTap: () {
                   HapticFeedback.lightImpact();
                   context.push('/inventory-item-mapping');
+                },
+              ),
+              _buildActionItem(
+                context: context,
+                icon: LucideIcons.shoppingCart,
+                color: const Color(0xFFEA580C),
+                title: 'Orders',
+                badgeCount: poState.draftCount,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/purchase-orders');
                 },
               ),
             ],
@@ -1009,14 +981,17 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                                        ),
                                      )
                                    else if ((item.rate * item.qty - item.netBill).abs() > 1.0)
-                                     Text(
-                                       '(Incl. Taxes)',
-                                       textAlign: TextAlign.right,
-                                       style: TextStyle(
-                                         fontSize: 8.5,
-                                         height: 1.2,
-                                         fontWeight: FontWeight.w500,
-                                         color: Colors.grey.shade500,
+                                     Padding(
+                                       padding: const EdgeInsets.only(top: 1),
+                                       child: Text(
+                                         '(Incl. Taxes)',
+                                         textAlign: TextAlign.right,
+                                         style: TextStyle(
+                                           fontSize: 10,
+                                           height: 1.1,
+                                           fontWeight: FontWeight.w500,
+                                           color: Colors.grey.shade500,
+                                         ),
                                        ),
                                      ),
                                  ],

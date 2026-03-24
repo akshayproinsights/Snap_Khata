@@ -249,6 +249,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final shopProfile = ref.watch(shopProvider);
     final hasLink = widget.group.receiptLink.isNotEmpty &&
         widget.group.receiptLink != 'null';
 
@@ -340,7 +341,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       ? widget.group.customerName
                       : 'Customer';
 
-                  final shopProfile = ref.read(shopProvider);
                   final shopName = shopProfile.name.isNotEmpty
                       ? shopProfile.name
                       : 'Our Shop';

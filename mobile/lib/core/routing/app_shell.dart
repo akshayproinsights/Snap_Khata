@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/shared/presentation/widgets/global_task_banner.dart';
-import 'package:mobile/core/network/sync_provider.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
-import 'package:toastification/toastification.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AppShell extends ConsumerWidget {
@@ -51,12 +49,6 @@ class AppShell extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-          // Sync Indicator overlaid at top right
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            right: 16,
-            child: _SyncIndicator(),
           ),
         ],
       ),
@@ -183,69 +175,3 @@ class _UploadLockOverlay extends StatelessWidget {
   }
 }
 
-class _SyncIndicator extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final syncState = ref.watch(syncProvider);
-
-    if (syncState.pendingCount == 0 && !syncState.isSyncing) {
-      return IconButton(
-        icon: const Icon(LucideIcons.cloudLightning,
-            color: Colors.grey, size: 20),
-        onPressed: () {
-          toastification.show(
-            context: context,
-            title: const Text('All Caught Up'),
-            description: const Text('All your data is synced to the cloud.'),
-            type: ToastificationType.success,
-            style: ToastificationStyle.flatColored,
-            autoCloseDuration: const Duration(seconds: 3),
-          );
-        },
-      ).animate().fadeIn(duration: 300.ms);
-    }
-
-    return Stack(
-      children: [
-        IconButton(
-          icon: Icon(
-            syncState.isSyncing ? LucideIcons.refreshCcw : LucideIcons.cloudOff,
-            color: syncState.isSyncing ? AppTheme.primary : AppTheme.warning,
-            size: 24,
-          ),
-          onPressed: () {
-            toastification.show(
-              context: context,
-              title: const Text('Offline Mode'),
-              description: Text(
-                  '${syncState.pendingCount} action(s) saved offline. They will sync automatically when you reconnect.'),
-              type: ToastificationType.warning,
-              style: ToastificationStyle.flatColored,
-              autoCloseDuration: const Duration(seconds: 5),
-            );
-          },
-        ),
-        if (syncState.pendingCount > 0)
-          Positioned(
-            right: 4,
-            top: 4,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: AppTheme.error,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '${syncState.pendingCount}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-      ],
-    ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack);
-  }
-}

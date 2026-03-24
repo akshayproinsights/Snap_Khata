@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
+from typing import Optional
 from database import get_database_client
 
 router = APIRouter()
 
 @router.get("/receipts/{receipt_number}")
-async def get_public_receipt(receipt_number: str, u: str = None):
+async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
     """
     Fetch basic public info for a receipt given its receipt_number.
     This endpoint does not require authentication, so anyone with the link can view it.
@@ -53,7 +54,7 @@ async def get_public_receipt(receipt_number: str, u: str = None):
             raise HTTPException(status_code=404, detail="Receipt not found")
 
         # ── Shop name & details from user profile ─────────────────────────────────
-        shop_name = "Business Name"
+        shop_name = "Our Shop"
         shop_address = ""
         shop_phone = ""
         shop_gst = ""

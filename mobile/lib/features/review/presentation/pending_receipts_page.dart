@@ -64,6 +64,10 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft),
+          onPressed: () => context.go('/dashboard'),
+        ),
         title: const Text('Pending Review'),
         centerTitle: false,
       ),

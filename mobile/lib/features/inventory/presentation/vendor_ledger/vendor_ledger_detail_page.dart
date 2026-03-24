@@ -24,6 +24,10 @@ class _VendorLedgerDetailPageState
 
   List<VendorLedgerTransaction>? _transactions;
   bool _isLoading = true;
+  
+  // Selection state
+  final Set<int> _selectedIds = {};
+  bool get _isSelectionMode => _selectedIds.isNotEmpty;
 
   @override
   void initState() {
@@ -44,6 +48,139 @@ class _VendorLedgerDetailPageState
       _transactions = transactions;
       _isLoading = false;
     });
+  }
+
+  void _toggleSelection(int id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _handleBatchMarkAsPaid(bool paid) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(paid ? 'Mark as Paid' : 'Mark as Unpaid'),
+        content: Text('Are you sure you want to mark ${_selectedIds.length} transactions as ${paid ? 'paid' : 'unpaid'}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Confirm', style: TextStyle(color: paid ? Colors.green : Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await ref.read(vendorLedgerProvider.notifier).batchTogglePaidStatus(_selectedIds.toList(), paid);
+      if (success) {
+        _clearSelection();
+        _loadTransactions();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update transactions')));
+      }
+    }
+  }
+
+  Future<void> _handleBatchDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Transactions'),
+        content: Text('Are you sure you want to delete ${_selectedIds.length} transactions? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final success = await ref.read(vendorLedgerProvider.notifier).batchDeleteTransactions(_selectedIds.toList());
+      if (success) {
+        _clearSelection();
+        _loadTransactions();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete transactions')));
+      }
+    }
+  }
+
+  void _showTransactionItemsDialog(VendorLedgerTransaction tx) async {
+    if (tx.invoiceNumber == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          return FutureBuilder<List<dynamic>>(
+            future: ref.read(vendorLedgerProvider.notifier).fetchInvoiceItems(tx.invoiceNumber!),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+              }
+              
+              final items = snapshot.data ?? [];
+              
+              return Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Items in Invoice #${tx.invoiceNumber}', 
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+                        IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (items.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(child: Text('No items found for this invoice')),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: items.length,
+                          separatorBuilder: (context, index) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(item['description'] ?? 'No Description', 
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                              subtitle: Text('Qty: ${item['quantity'] ?? 0} | Rate: ₹${item['rate'] ?? 0}',
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                              trailing: Text('₹${item['net_bill'] ?? item['amount'] ?? 0}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   void _showAddPaymentDialog(BuildContext context) {
@@ -231,145 +368,213 @@ class _VendorLedgerDetailPageState
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: _isSelectionMode 
+          ? IconButton(icon: const Icon(LucideIcons.x), onPressed: _clearSelection)
+          : IconButton(
+              icon: const Icon(LucideIcons.arrowLeft),
+              onPressed: () => Navigator.pop(context),
+            ),
+        title: _isSelectionMode ? Text('${_selectedIds.length} Selected') : null,
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.moreVertical),
-            onPressed: () {},
-          )
+          if (!_isSelectionMode)
+            IconButton(
+              icon: const Icon(LucideIcons.moreVertical),
+              onPressed: () {},
+            )
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Profile
-            Text(
-              currentLedger.vendorName,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.checkCircle2, 
-                       size: 14, color: AppTheme.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Verified Supplier',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-
-            // Metrics Grid (Stitch AI Layout)
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.8,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildMetricCard(
-                  'Total Spend', 
-                  currencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
-                ),
-                _buildMetricCard('Orders', '$ordersCount'),
-                _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
-                _buildMetricCard(
-                  'Last Order', 
-                  lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
-                ),
-              ],
-            ),
-
-
-            // Transactions Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Recent Transactions',
-                  style: TextStyle(
-                    fontSize: 18,
+                // Header Profile
+                Text(
+                  currentLedger.vendorName,
+                  style: const TextStyle(
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
                     color: AppTheme.textPrimary,
                   ),
                 ),
-                TextButton(
-                  onPressed: () => _showAddPaymentDialog(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.primary,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Row(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.indianRupee, size: 14),
-                      SizedBox(width: 6),
-                      Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Icon(LucideIcons.checkCircle2, 
+                           size: 14, color: AppTheme.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Verified Supplier',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                        ),
+                      ),
                     ],
                   ),
-                )
+                ),
+                
+                const SizedBox(height: 24),
+
+                // Metrics Grid (Stitch AI Layout)
+                GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.8,
+                  children: [
+                    _buildMetricCard(
+                      'Total Spend', 
+                      currencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
+                    ),
+                    _buildMetricCard('Orders', '$ordersCount'),
+                    _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
+                    _buildMetricCard(
+                      'Last Order', 
+                      lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
+                    ),
+                  ],
+                ),
+
+
+                // Transactions Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Recent Transactions',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (!_isSelectionMode)
+                      TextButton(
+                        onPressed: () => _showAddPaymentDialog(context),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.primary,
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(LucideIcons.indianRupee, size: 14),
+                            SizedBox(width: 6),
+                            Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      )
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Transactions List
+                _isLoading
+                    ? const Center(child: Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: CircularProgressIndicator(),
+                      ))
+                    : txList.isEmpty
+                        ? const Center(
+                            child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Text('No transactions found',
+                                style: TextStyle(color: AppTheme.textSecondary)),
+                          ))
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: txList.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final tx = txList[index];
+                              final isPayment = tx.transactionType == 'PAYMENT';
+                              return _buildTransactionCard(tx, isPayment);
+                            },
+                          ),
+                
+                const SizedBox(height: 100), // More padding for batch bar
               ],
             ),
-            const SizedBox(height: 16),
+          ),
+          if (_isSelectionMode)
+            Positioned(
+              bottom: 24,
+              left: 16,
+              right: 16,
+              child: _buildBatchActionBar(),
+            ),
+        ],
+      ),
+    );
+  }
 
-            // Transactions List
-            _isLoading
-                ? const Center(child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: CircularProgressIndicator(),
-                  ))
-                : txList.isEmpty
-                    ? const Center(
-                        child: Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: Text('No transactions found',
-                            style: TextStyle(color: AppTheme.textSecondary)),
-                      ))
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: txList.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final tx = txList[index];
-                          final isPayment = tx.transactionType == 'PAYMENT';
-                          return _buildTransactionCard(tx, isPayment);
-                        },
-                      ),
-            
-            const SizedBox(height: 48), // Padding bottom
-          ],
-        ),
+  Widget _buildBatchActionBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.textPrimary,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildBatchActionButton(
+            LucideIcons.checkCircle, 
+            'Mark Paid', 
+            Colors.green.shade400, 
+            () => _handleBatchMarkAsPaid(true)
+          ),
+          Container(height: 24, width: 1, color: Colors.white24),
+          _buildBatchActionButton(
+            LucideIcons.xCircle, 
+            'Mark Unpaid', 
+            Colors.orange.shade400, 
+            () => _handleBatchMarkAsPaid(false)
+          ),
+          Container(height: 24, width: 1, color: Colors.white24),
+          _buildBatchActionButton(
+            LucideIcons.trash2, 
+            'Delete', 
+            Colors.red.shade400, 
+            _handleBatchDelete
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
@@ -410,11 +615,14 @@ class _VendorLedgerDetailPageState
 
 
   Widget _buildTransactionCard(VendorLedgerTransaction tx, bool isPayment) {
-    return Container(
+    final isSelected = _selectedIds.contains(tx.id);
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: isSelected ? AppTheme.primary.withValues(alpha: 0.05) : AppTheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.border, width: isSelected ? 2 : 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -423,131 +631,158 @@ class _VendorLedgerDetailPageState
           ),
         ],
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          childrenPadding: EdgeInsets.zero,
-          title: Row(
+      child: InkWell(
+        onLongPress: () {
+          // HapticFeedback.heavyImpact();
+          _toggleSelection(tx.id);
+        },
+        onTap: () {
+          if (_isSelectionMode) {
+            _toggleSelection(tx.id);
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
-                  color: isPayment ? Colors.green.shade600 : AppTheme.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            isPayment
-                                ? 'Payment Sent'
-                                : (tx.invoiceNumber?.isNotEmpty == true ? '#${tx.invoiceNumber}' : 'Purchase Order'),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: AppTheme.textPrimary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    if (_isSelectionMode) ...[
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isSelected ? AppTheme.primary : Colors.transparent,
+                          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.textSecondary, width: 2),
                         ),
-                        if (!isPayment && tx.isPaid) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Text(
-                              'PAID',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade700,
+                        child: Icon(LucideIcons.check, size: 12, color: isSelected ? Colors.white : Colors.transparent),
+                      ),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
+                        color: isPayment ? Colors.green.shade600 : AppTheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  isPayment
+                                      ? 'Payment Sent'
+                                      : (tx.invoiceNumber?.isNotEmpty == true ? '#${tx.invoiceNumber}' : 'Purchase Order'),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
+                              if (!isPayment && tx.isPaid) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.green.shade200),
+                                  ),
+                                  child: Text(
+                                    'PAID',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            dateFormatter.format(tx.createdAt.toLocal()),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      dateFormatter.format(tx.createdAt.toLocal()),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: isPayment ? Colors.green.shade600 : AppTheme.textPrimary,
-                    ),
-                  ),
-                  if (tx.notes?.isNotEmpty == true)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        tx.notes!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          children: [
-            if (!isPayment)
-              Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Divider(height: 1, color: AppTheme.border),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Invoice Date', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                            const SizedBox(height: 4),
-                            Text(dateFormatter.format(tx.createdAt.toLocal()), style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                            if (!isPayment && !_isSelectionMode)
+                               IconButton(
+                                 icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.primary),
+                                 padding: EdgeInsets.zero,
+                                 constraints: const BoxConstraints(),
+                                 onPressed: () => _showTransactionItemsDialog(tx),
+                                 tooltip: 'Review Items',
+                               ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: isPayment ? Colors.green.shade600 : AppTheme.textPrimary,
+                              ),
+                            ),
                           ],
                         ),
-                        _buildMarkAsPaidButton(tx),
+                        if (tx.notes?.isNotEmpty == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              tx.notes!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
                 ),
               ),
-          ],
+              if (!isPayment && !_isSelectionMode) ...[
+                const Divider(height: 1, color: AppTheme.border),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _buildMarkAsPaidButton(tx),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

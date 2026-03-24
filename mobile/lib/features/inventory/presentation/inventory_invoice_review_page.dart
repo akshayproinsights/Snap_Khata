@@ -837,25 +837,26 @@ class _InventoryInvoiceReviewPageState
             ],
           ),
 
-          // Mismatch error hint
+          // Mismatch hint (Incl. Taxes)
           if (hasMismatch) ...[
             const SizedBox(height: 12),
             Container(
                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                decoration: BoxDecoration(
-                 color: Colors.red.shade100.withValues(alpha: 0.5),
+                 color: Colors.grey.shade100,
                  borderRadius: BorderRadius.circular(6),
+                 border: Border.all(color: Colors.grey.shade300),
                ),
                child: Row(
                children: [
-                  Icon(LucideIcons.alertTriangle,
-                      size: 14, color: Colors.red.shade700),
+                  Icon(LucideIcons.info,
+                      size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Math Error: Qty × Rate ≠ Amount  (diff ₹${item.amountMismatch.toStringAsFixed(2)})',
+                      'Amount includes Taxes/Discounts  (diff ₹${item.amountMismatch.abs().toStringAsFixed(2)})',
                       style: TextStyle(
-                          color: Colors.red.shade700,
+                          color: Colors.grey.shade700,
                           fontSize: 11,
                           fontWeight: FontWeight.w600),
                     ),

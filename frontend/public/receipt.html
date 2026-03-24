@@ -609,6 +609,7 @@
             let itemsHtml = '';
             
             if (taxableItems.length > 0) {
+                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -625,6 +626,7 @@
             }
 
             if (nonTaxableItems.length > 0) {
+                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -659,7 +661,7 @@
                     <div class="inv-doc">
                         <div class="inv-header-grid">
                             <div class="inv-shop-info">
-                                <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
+                                <div class="inv-shop-name">${data.shop_name || 'Our Shop'}</div>
                                 <div class="inv-shop-detail">
                                     ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
                                     ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
@@ -702,8 +704,8 @@
                         <div class="inv-summary-grid">
                             <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
                                 <!-- split empty left side under totals -->
-                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><strong>Spare Parts:</strong> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${laborSubtotal > 0 ? `<div><strong>Servicing:</strong> ${fmtMoney(laborSubtotal)}</div>` : ''}
+                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
@@ -797,6 +799,7 @@
             let itemsHtml = '';
 
             if (taxableItems.length > 0) {
+                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -822,6 +825,7 @@
             }
 
             if (nonTaxableItems.length > 0) {
+                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
@@ -859,7 +863,7 @@
                     <div class="inv-doc">
                         <div class="inv-header-grid">
                             <div class="inv-shop-info">
-                                <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
+                                <div class="inv-shop-name">${data.shop_name || 'Our Shop'}</div>
                                 <div class="inv-shop-detail">
                                     ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
                                     ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
@@ -904,8 +908,8 @@
                         <div class="inv-summary-grid">
                             <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
                                 <!-- split empty left side under totals -->
-                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><strong>Spare Parts:</strong> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${laborSubtotal > 0 ? `<div><strong>Servicing:</strong> ${fmtMoney(laborSubtotal)}</div>` : ''}
+                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">

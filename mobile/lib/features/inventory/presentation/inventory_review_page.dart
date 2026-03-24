@@ -217,6 +217,10 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
         surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft),
+          onPressed: () => context.go('/dashboard'),
+        ),
         title: const Text('Pending Review'),
         centerTitle: false,
         actions: [

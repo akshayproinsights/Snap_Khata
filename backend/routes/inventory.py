@@ -734,6 +734,7 @@ def process_inventory_sync(
 @router.get("/items")
 async def get_inventory_items(
     show_all: bool = False,
+    invoice_number: Optional[str] = None,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -754,6 +755,10 @@ async def get_inventory_items(
         if not show_all:
             # Only show items that are NOT verified (pending review)
             query = query.neq("verification_status", "Done")
+        
+        # Apply invoice_number filter if provided
+        if invoice_number:
+            query = query.eq("invoice_number", invoice_number)
         
         # Order by created_at descending
         query = query.order("created_at", desc=True)
