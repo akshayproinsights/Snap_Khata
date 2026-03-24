@@ -9,6 +9,7 @@ import 'package:mobile/features/purchase_orders/presentation/providers/purchase_
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
+import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 
 // ─── Grouped invoice bundle ──────────────────────────────────────────────────
 class _InvoiceBundle {
@@ -788,26 +789,54 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                                     fontWeight: FontWeight.w800)),
                           )
                         else
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('Verified',
-                                    style: TextStyle(
-                                        color: Colors.green,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800)),
-                                const SizedBox(width: 3),
-                                Icon(LucideIcons.checkCircle2,
-                                    size: 11, color: Colors.green.shade600),
-                              ],
+                          InkWell(
+                            onTap: bundle.receiptLink.isNotEmpty ? () {
+                              HapticFeedback.lightImpact();
+                              InteractiveImageGallery.show(
+                                context,
+                                imageUrls: [bundle.receiptLink],
+                              );
+                            } : () {
+                              HapticFeedback.lightImpact();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('No receipt image available')),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: bundle.receiptLink.isNotEmpty 
+                                  ? Colors.green.shade50 
+                                  : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: bundle.receiptLink.isNotEmpty 
+                                    ? Colors.green.shade200 
+                                    : Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.eye,
+                                    size: 14,
+                                    color: bundle.receiptLink.isNotEmpty 
+                                      ? Colors.green.shade700 
+                                      : Colors.grey.shade500,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('View',
+                                      style: TextStyle(
+                                          color: bundle.receiptLink.isNotEmpty 
+                                              ? Colors.green 
+                                              : Colors.grey.shade600,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800)),
+                                ],
+                              ),
                             ),
                           ),
                         const SizedBox(height: 6),
@@ -862,10 +891,10 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                     color: AppTheme.textSecondary))),
-                        SizedBox(width: 8),
-                        SizedBox(
-                            width: 64,
-                            child: Text('Amount',
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                            width: 70,
+                            child: Text('Net Amt',
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                     fontSize: 11,
@@ -940,17 +969,34 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                             ),
                             const SizedBox(width: 8),
                             SizedBox(
-                              width: 64,
-                              child: Text(
-                                '₹${item.netBill.toStringAsFixed(0)}',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: rowMismatch
-                                      ? const Color(0xFFEF4444)
-                                      : AppTheme.textPrimary,
-                                ),
+                              width: 70,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '₹${item.netBill.toStringAsFixed(0)}',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: rowMismatch
+                                          ? const Color(0xFFEF4444)
+                                          : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  if (rowMismatch)
+                                    const Text(
+                                      '(+Tax/Fees)',
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        height: 1.2,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],

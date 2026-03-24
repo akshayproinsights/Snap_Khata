@@ -142,23 +142,50 @@ async def get_public_receipt(receipt_number: str, u: str = None):
             or header.get("created_at")
         )
 
-        calc_received = total_amount - float(header.get("balance_due") or 0.0)
-        received_amount = float(header.get("received_amount") or 0.0)
-        if received_amount <= 0:
-            received_amount = calc_received if calc_received > 0 else 0.0
+        # ── Payment Details ───────────────────────────────────────────────────────
+        payment_mode = header.get("payment_mode") or "Cash"
+        db_received = header.get("received_amount")
+        
+        # If received_amount is explicitly in the DB, use it.
+        if db_received is not None:
+            received_amount = float(db_received)
+        elif payment_mode.lower() == "cash" or is_paid:
+            # If it's Cash or already verified and we have no received_amount, assume fully paid
+            if payment_mode.lower() == "credit":
+                 # But if it's credit, maybe they paid nothing?
+                 received_amount = 0.0
+            else:
+                 received_amount = total_amount
+        else:
+            received_amount = 0.0
+
+        # Calculate accurate balance_due
+        balance_due = max(0.0, total_amount - received_amount)
+
+        # Set accurate status
+        if balance_due > 0:
+            if received_amount > 0:
+                final_status = "PARTIAL"
+            else:
+                final_status = "DUE"
+        else:
+            final_status = "PAID"
+
+        # Overwrite paid_amount based on actual received
+        actual_paid_amount = received_amount if received_amount <= total_amount else total_amount
 
         return {
             "id": header.get("receipt_number"),
             "customer_name": header.get("customer_name") or "Customer",
             "customer_phone": header.get("mobile_number") or "",
             "total_amount": total_amount,
-            "paid_amount": total_amount if is_paid else 0,
-            "status": "PAID" if is_paid else "PENDING",
+            "paid_amount": actual_paid_amount,
+            "status": final_status,
             "created_at": display_date,
             "vehicle_number": header.get("vehicle_number") or "",
             "odometer_reading": header.get("odometer") or "",
-            "balance_due": float(header.get("balance_due") or 0.0),
-            "payment_mode": header.get("payment_mode") or "Cash",
+            "balance_due": balance_due,
+            "payment_mode": payment_mode,
             "received_amount": received_amount,
             "shop_name": shop_name,
             "shop_address": shop_address,

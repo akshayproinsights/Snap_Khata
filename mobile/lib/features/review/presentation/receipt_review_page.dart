@@ -195,7 +195,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     return formatted;
   }
 
-  void _markAllDone() {
+  Future<void> _saveCurrentState() async {
     final group = widget.group;
     final header = group.header;
 
@@ -212,18 +212,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
       );
-      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+      await ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
     }
 
     for (var item in group.lineItems) {
       if (item.verificationStatus != 'Done') {
         final newRecord = item.copyWith(verificationStatus: 'Done');
-        ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+        await ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
       }
     }
+  }
 
-    // Automatically go back after marking done
-    context.pop();
+  void _markAllDone() async {
+    await _saveCurrentState();
+    if (mounted) context.pop();
   }
 
   @override
@@ -312,6 +314,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             icon: const FaIcon(FontAwesomeIcons.whatsapp,
                 color: AppTheme.primary),
             onPressed: () async {
+              // Ensure all changes are saved before generating and sharing the receipt link
+              await _saveCurrentState();
+
               // Calculate total amount from line items, fallback to header amount if line items total is zero
               double totalAmount = _totalAfterGst(group);
               if (totalAmount == 0.0 && group.header != null) {
@@ -326,8 +331,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               final double balanceDue =
                   _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
+              final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
+              
               final shareUrl =
-                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$usernameParam';
+                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
 
               final shopProfile = ref.read(shopProvider);
               final shopName = shopProfile.name.isNotEmpty

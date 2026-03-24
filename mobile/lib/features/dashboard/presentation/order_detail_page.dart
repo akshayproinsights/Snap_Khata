@@ -305,13 +305,34 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 onPressed: () async {
                   HapticFeedback.lightImpact();
 
+                  // Ensure all changes are saved before generating and sharing the receipt link
+                  await _saveChanges();
+
+                  final double totalAmount = _totalAfterGst(widget.group);
+                  final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
+
+                  OrderPaymentStatus status;
+                  if (_paymentMode == 'Cash') {
+                    status = OrderPaymentStatus.fullyPaid;
+                  } else {
+                    if (_receivedAmount >= totalAmount) {
+                      status = OrderPaymentStatus.fullyPaid;
+                    } else if (_receivedAmount > 0) {
+                      status = OrderPaymentStatus.partiallyPaid;
+                    } else {
+                      status = OrderPaymentStatus.unpaid;
+                    }
+                  }
+
                   final authState = ref.read(authProvider);
                   final usernameParam = authState.user?.username != null
                       ? '&u=${authState.user!.username}'
                       : '';
 
+                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
+
                   final link =
-                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$usernameParam';
+                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
 
                   final customerNameMsg = widget
                               .group.customerName.isNotEmpty &&
@@ -325,13 +346,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       : 'Our Shop';
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
-                    status: OrderPaymentStatus.fullyPaid,
+                    status: status,
                     customerName: customerNameMsg,
                     businessName: shopName,
                     orderNumber: widget.group.receiptNumber.isNotEmpty
                         ? widget.group.receiptNumber
                         : 'Recent',
-                    totalAmount: _totalAfterGst(widget.group),
+                    totalAmount: totalAmount,
+                    paidAmount: _paymentMode == 'Credit' ? _receivedAmount : totalAmount,
+                    pendingAmount: balanceDue,
                   );
                   final message =
                       '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— $shopName';

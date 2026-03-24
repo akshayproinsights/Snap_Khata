@@ -90,11 +90,6 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
       return dB.compareTo(dA);
     });
 
-    double totalBilled = 0;
-    for (var r in partyRecords) {
-      totalBilled += r.amount;
-    }
-
     // Determine display title: vehicle number is primary, customer name secondary
     final String headerTitle = widget.vehicleNumber.isNotEmpty
         ? widget.vehicleNumber
@@ -200,16 +195,6 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
             ),
           ),
 
-          // ── Balance Summary ───────────────────────────
-          SliverToBoxAdapter(
-            child: _BalanceSummaryCard(
-              totalBilled: totalBilled,
-              totalPaid:
-                  totalBilled, // We assume verified = paid for now in this app
-              pending: 0,
-            ),
-          ),
-
           // ── Timeline Header ───────────────────────────
           SliverToBoxAdapter(
             child: Padding(
@@ -255,118 +240,6 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
             ),
         ],
       ),
-    );
-  }
-}
-
-// ── Balance Summary Card ─────────────────────────────────────────────────
-
-class _BalanceSummaryCard extends StatelessWidget {
-  final double totalBilled;
-  final double totalPaid;
-  final double pending;
-
-  const _BalanceSummaryCard({
-    required this.totalBilled,
-    required this.totalPaid,
-    required this.pending,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _SummaryCell(
-            label: 'Total Billed',
-            value: currencyFormat.format(totalBilled),
-            color: AppTheme.textPrimary,
-          ),
-          _Divider(),
-          _SummaryCell(
-            label: 'Total Paid',
-            value: currencyFormat.format(totalPaid),
-            color: const Color(0xFF1B8A2A),
-          ),
-          _Divider(),
-          _SummaryCell(
-            label: pending < 0 ? 'Overpaid' : 'Pending',
-            value: currencyFormat.format(pending.abs()),
-            color: pending > 0 ? AppTheme.error : const Color(0xFF1B8A2A),
-            bold: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  final bool bold;
-
-  const _SummaryCell({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.bold = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
-              color: color,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textSecondary.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 40,
-      color: AppTheme.border,
     );
   }
 }
@@ -536,14 +409,30 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ? shopProfile.name
                         : 'Our Shop';
 
+                    OrderPaymentStatus status;
+                    if (group.paymentMode == 'Cash') {
+                      status = OrderPaymentStatus.fullyPaid;
+                    } else {
+                      final received = group.receivedAmount ?? 0.0;
+                      if (received >= group.totalAmount) {
+                        status = OrderPaymentStatus.fullyPaid;
+                      } else if (received > 0) {
+                        status = OrderPaymentStatus.partiallyPaid;
+                      } else {
+                        status = OrderPaymentStatus.unpaid;
+                      }
+                    }
+
                     final caption = WhatsAppUtils.getWhatsAppCaption(
-                      status: OrderPaymentStatus.fullyPaid,
+                      status: status,
                       customerName: customerNameMsg,
                       businessName: shopName,
                       orderNumber: group.receiptNumber.isNotEmpty
                           ? group.receiptNumber
                           : 'Recent',
                       totalAmount: group.totalAmount,
+                      paidAmount: group.paymentMode == 'Credit' ? (group.receivedAmount ?? 0.0) : group.totalAmount,
+                      pendingAmount: group.balanceDue,
                     );
                     final message =
                         '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— $shopName';

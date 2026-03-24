@@ -20,25 +20,25 @@
 
     <style>
         :root {
-            --bg: #eceff1;
+            --bg: #f8fafc;
             --white: #ffffff;
-            --border: #cccccc;
-            --border-strong: #000000;
-            --text-primary: #000000;
-            --text-secondary: #333333;
-            --text-muted: #555555;
-            --accent: #000000;
-            --accent-dark: #000000;
-            --accent-light: #f5f5f5;
-            --green: #000000;
-            --green-bg: #ffffff;
-            --green-border: #cccccc;
-            --amber: #000000;
-            --amber-bg: #ffffff;
-            --amber-border: #cccccc;
-            --red: #000000;
+            --border: #e2e8f0;
+            --border-strong: #94a3b8;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent: #4f46e5;
+            --accent-dark: #3730a3;
+            --accent-light: #eef2ff;
+            --green: #10b981;
+            --green-bg: #ecfdf5;
+            --green-border: #a7f3d0;
+            --amber: #f59e0b;
+            --amber-bg: #fffbeb;
+            --amber-border: #fef3c7;
+            --red: #ef4444;
             --invoice-bg: #ffffff;
-            --invoice-border: #000000;
+            --invoice-border: #0f172a;
         }
 
         * {
@@ -49,7 +49,7 @@
         }
 
         body {
-            font-family: 'Inter', Arial, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text-primary);
             line-height: 1.6;
@@ -151,195 +151,257 @@
         }
 
         /* ─────────────────────────────────────────────────────
-           TABULAR DOCUMENT STYLES
+           PREMIUM DOCUMENT STYLES
         ───────────────────────────────────────────────────── */
         .inv-page {
             width: 100%;
             margin: 0 auto;
-            color: var(--text-primary);
-        }
-
-        .inv-doc-title {
-            text-align: center;
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            color: #334155;
         }
 
         .inv-doc {
-            background: #fff;
-            border: 1px solid var(--border-strong);
-            width: 100%;
+            background: var(--white);
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 
+                0 4px 6px -1px rgba(0,0,0,0.05),
+                0 10px 15px -3px rgba(0,0,0,0.1),
+                0 0 0 1px rgba(0,0,0,0.02);
+            overflow: hidden;
+            position: relative;
+            min-height: 1000px;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-primary);
+        }
+
+        .inv-shop-header {
+            padding: 48px 48px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background: #ffffff;
+        }
+
+        .inv-doc-type {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
             margin-bottom: 24px;
-        }
-
-        .inv-header-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            border-bottom: 1px solid var(--border-strong);
-        }
-
-        .inv-shop-info {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-strong);
+            display: block;
         }
 
         .inv-shop-name {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1e293b;
-            text-transform: uppercase;
+            font-size: 26px;
+            font-weight: 800;
+            color: #111827;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
             margin-bottom: 8px;
         }
 
-        .inv-shop-detail, .inv-gst-number {
+        .inv-shop-detail {
             font-size: 13px;
-            color: #334155;
+            color: var(--text-secondary);
+            line-height: 1.6;
         }
 
-        .inv-meta-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        .inv-badge-container {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
         }
 
-        .inv-bill-to {
-            padding: 12px 16px;
-            border-right: 1px solid var(--border-strong);
+        .inv-gst-number {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: 'Noto Sans', monospace;
         }
 
-        .inv-invoice-details {
-            padding: 12px 16px;
+        .inv-status-pill {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .inv-paid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .inv-pending {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .inv-details-row {
+            display: flex;
+            padding: 0 48px 32px;
+            justify-content: space-between;
+        }
+        
+        .inv-details-grid {
+            display: flex;
+            gap: 80px;
         }
 
         .inv-col-label {
-            font-size: 13px;
-            font-weight: 700;
-            color: #1e293b;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
             margin-bottom: 8px;
         }
 
         .inv-col-val {
-            font-size: 13px;
-            color: #334155;
-            line-height: 1.5;
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
         }
 
         .inv-col-val strong {
             font-weight: 600;
-            color: #1e293b;
+            color: var(--text-primary);
+        }
+
+        .inv-table-container {
+            padding: 0 48px;
+            flex-grow: 1;
         }
 
         .inv-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            border-bottom: 1px solid var(--border-strong);
         }
 
         .inv-table th {
-            padding: 8px;
-            font-weight: 700;
-            color: #1e293b;
+            padding: 12px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
             border-bottom: 1px solid var(--border-strong);
-            border-right: 1px solid var(--border-strong);
             text-align: left;
         }
 
-        .inv-table th:last-child {
-            border-right: none;
-        }
+        .inv-table th:first-child, .inv-table td:first-child { padding-left: 0; }
+        .inv-table th:last-child, .inv-table td:last-child { padding-right: 0; }
+
+        .inv-table th.right { text-align: right; }
+        .inv-table th.center { text-align: center; }
 
         .inv-table td {
-            padding: 8px;
-            color: #334155;
-            border-right: 1px solid var(--border-strong);
+            padding: 16px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text-primary);
             vertical-align: top;
         }
 
-        .inv-table td:last-child {
-            border-right: none;
+        .inv-table td.right { 
+            text-align: right; 
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .inv-table td.center { 
+            text-align: center; 
         }
 
-        .inv-table .right { text-align: right; }
-        .inv-table .center { text-align: center; }
-
-        .inv-summary-grid {
-            display: grid;
-            grid-template-columns: 1fr 320px;
+        .inv-table tbody tr:last-child td {
             border-bottom: 1px solid var(--border-strong);
-        }
-
-        .inv-empty-left {
-            padding: 12px 16px;
-            border-right: 1px solid var(--border-strong);
         }
 
         .inv-totals-wrap {
-            padding: 0;
-        }
-
-        .inv-totals-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .inv-totals-table td {
-            padding: 6px 12px;
-            color: #334155;
-            border-bottom: 1px solid var(--border-strong);
-        }
-
-        .inv-totals-table tr:last-child td {
-            border-bottom: none; /* Let the container border handle it */
-        }
-
-        .inv-totals-table td.label-col {
-            border-right: 1px solid var(--border-strong);
-            font-weight: 600;
-        }
-        
-        .inv-totals-table td.amount-col {
-            text-align: right;
-            font-weight: 600;
-            color: #1e293b;
-        }
-        
-        .inv-amount-words-title {
-            font-weight: 600;
-            color: #1e293b;
+            display: flex;
+            padding: 32px 48px;
+            justify-content: space-between;
+            align-items: flex-end;
         }
 
         .inv-amount-words {
-            color: #334155;
-            margin-top: 4px;
-        }
-
-        .inv-terms {
-            padding: 8px 16px;
-            border-bottom: 1px solid var(--border-strong);
-            font-size: 13px;
-            color: #334155;
-        }
-
-        .inv-terms-title {
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 4px;
-        }
-
-        .inv-footer-grid {
-            display: grid;
-            grid-template-columns: 1fr 320px;
-        }
-
-        .inv-footer-left {
+            max-width: 320px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: #f8fafc;
             padding: 16px;
-            border-right: 1px solid var(--border-strong);
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        
+        .inv-amount-words-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .inv-totals-table {
+            width: 320px;
+        }
+
+        .inv-totals-row {
             display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .inv-totals-row .amount {
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            font-weight: 500;
+        }
+
+        .inv-totals-row.grand {
+            margin-top: 8px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-strong);
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .inv-totals-row.grand .amount {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .inv-totals-row.received {
+            color: var(--accent);
+            font-weight: 500;
+        }
+        .inv-totals-row.received .amount { color: var(--accent); font-weight: 600; }
+
+        .inv-totals-row.balance {
+            color: #b91c1c;
+            font-weight: 600;
+            padding: 12px 16px;
+            background: #fef2f2;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        .inv-totals-row.balance .amount { color: #b91c1c; font-weight: 700; }
+
+        .inv-footer {
+            padding: 32px 48px;
+            background: #f8fafc;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-top: 1px solid var(--border-strong);
         }
 
         .inv-footer-note {
@@ -356,25 +418,21 @@
 
         .inv-footer-brand span { color: var(--accent); }
 
-        .inv-sign-block {
-            padding: 16px;
-            padding-top: 64px; /* Space for signature */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-end;
-        }
+        .inv-sign-block { text-align: right; }
 
         .inv-sign-line {
             width: 160px;
             height: 1px;
             background: var(--text-muted);
-            margin: 0 0 8px 0;
+            margin: 0 0 12px auto;
         }
 
         .inv-sign-label {
-            font-size: 12px;
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         /* ── FAB Print ── */
@@ -544,6 +602,9 @@
             }
             if (!orderId) { showError('Invalid Link', 'No receipt ID found in URL.'); return; }
 
+            // Support 'g' or 'gst_mode'
+            const gstMode = params.get('g') || params.get('gst_mode') || 'none'; // none | included | excluded
+            
             const uParam = params.get('u'); // username
 
             try {
@@ -554,11 +615,6 @@
                 const resp = await fetch(apiUrl);
                 if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
                 const data = await resp.json();
-
-                // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
-                let gstMode = data.gst_mode && data.gst_mode !== 'none' ? data.gst_mode : 'none';
-                if (params.has('g')) gstMode = params.get('g');
-                else if (params.has('gst_mode')) gstMode = params.get('gst_mode');
 
                 // Support 'p' or 'pm' for payment_mode
                 if (params.has('p')) data.payment_mode = params.get('p');
@@ -592,6 +648,7 @@
             const items = Array.isArray(data.items) ? data.items : [];
             const isPaid = data.status === 'PAID';
 
+            // Separate taxable (parts) and non-taxable (labor) items
             const taxableItems = items.filter(i => {
                 const t = String(i.type || '').toLowerCase();
                 return t !== 'labor' && t !== 'labour' && t !== 'service';
@@ -601,147 +658,148 @@
                 return t === 'labor' || t === 'labour' || t === 'service';
             });
 
+            // Calculate subtotals
             const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
             const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
-            const subtotal = partsSubtotal + laborSubtotal;
+
+            // Grand Total (since no GST)
+            const subtotal = items.reduce((s, i) => s + Number(i.amount || 0), 0);
             const grandTotal = Number(data.total_amount) || subtotal;
 
             let itemsHtml = '';
-            
+
+            // Parts
             if (taxableItems.length > 0) {
+                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
+
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Spare Part'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">${fmtMoney(amount)}</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
                     </tr>`;
                 });
             }
 
+            // Labor
             if (nonTaxableItems.length > 0) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr><td colspan="5" style="height:8px;"></td></tr>`;
+                }
+                itemsHtml += `<tr><td colspan="5" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
+
                     itemsHtml += `
                     <tr>
-                        <td class="center">${taxableItems.length + idx + 1}</td>
+                        <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Servicing'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">${fmtMoney(amount)}</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
                     </tr>`;
                 });
             }
-            
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
-            itemsHtml += `
-            <tr>
-               <td></td>
-               <td style="font-weight:700;">Total</td>
-               <td class="center" style="font-weight:700;">${totalQty}</td>
-               <td></td>
-               <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
-            </tr>`;
+
+            if (items.length === 0) {
+                itemsHtml = `<tr><td colspan="5" style="text-align:center;padding:32px;color:#94a3b8;">No line items for this receipt.</td></tr>`;
+            }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
 
             const html = `
             <div class="scaled-container">
                 <div class="inv-page">
-                    <div class="inv-doc-title">Order Summary</div>
                     <div class="inv-doc">
-                        <div class="inv-header-grid">
-                            <div class="inv-shop-info">
+                        <div class="inv-shop-header">
+                            <div>
+                                <span class="inv-doc-type">Order Summary</span>
                                 <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
+                                ${(data.shop_address || data.shop_phone) ? `
                                 <div class="inv-shop-detail">
-                                    Phone: ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                                    ${data.shop_address ? `${data.shop_address}<br>` : ''}
+                                    ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                                </div>` : ''}
+                            </div>
+                            <div class="inv-badge-container">
+                                <div>
+                                    <span class="inv-status-pill ${isPaid ? 'inv-paid' : 'inv-pending'}">
+                                        ${(isPaid && data.payment_mode === 'Credit') ? 'PARTIAL' : (isPaid ? 'PAID' : 'PENDING')}
+                                    </span>
                                 </div>
                             </div>
-                            <div class="inv-meta-grid">
-                                <div class="inv-bill-to">
-                                    <div class="inv-col-label">Bill To:</div>
+                        </div>
+
+                        <div class="inv-details-row">
+                            <div class="inv-details-grid">
+                                <div>
+                                    <div class="inv-col-label">Order Details</div>
+                                    <div class="inv-col-val">
+                                        <div><strong>Order No:</strong> #${data.id || '—'}</div>
+                                        <div><strong>Date:</strong> ${fmtDate(data.created_at)}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="inv-col-label">Bill To</div>
                                     <div class="inv-col-val">
                                         <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
-                                        ${data.customer_phone ? `<div>Contact No: +91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
-                                        ${data.vehicle_number ? `<div style="margin-top:4px;">Vehicle: ${data.vehicle_number}</div>` : ''}
-                                        ${data.odometer_reading ? `<div>Odometer: ${data.odometer_reading} km</div>` : ''}
-                                    </div>
-                                </div>
-                                <div class="inv-invoice-details">
-                                    <div class="inv-col-label">Order Details:</div>
-                                    <div class="inv-col-val">
-                                        <div>No: ${data.id || '—'}</div>
-                                        <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${data.status === 'PAID' ? '#16a34a' : '#ea580c'}">${data.status}</div>
+                                        ${data.customer_phone ? `<div>+91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
+                                        ${data.vehicle_number ? `<div style="margin-top:4px;"><strong>Vehicle:</strong> ${data.vehicle_number}</div>` : ''}
+                                        ${data.odometer_reading ? `<div><strong>Odometer:</strong> ${data.odometer_reading} km</div>` : ''}
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <table class="inv-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:5%">#</th>
-                                    <th style="width:45%">Item Name</th>
-                                    <th class="center" style="width:10%">Quantity</th>
-                                    <th class="right" style="width:20%">Price/ Unit (₹)</th>
-                                    <th class="right" style="width:20%">Amount(₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-
-                        <div class="inv-summary-grid">
-                            <div class="inv-empty-left">
-                                <!-- empty left side under totals -->
-                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
-                            </div>
-                            <div class="inv-totals-wrap">
-                                <table class="inv-totals-table">
+                        <div class="inv-table-container">
+                            <table class="inv-table">
+                                <thead>
                                     <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(subtotal)}</td>
+                                        <th class="center" style="width:5%">#</th>
+                                        <th style="width:45%">Description</th>
+                                        <th class="center" style="width:10%">Qty</th>
+                                        <th class="right" style="width:20%">Rate</th>
+                                        <th class="right" style="width:20%">Total</th>
                                     </tr>
-                                    <tr>
-                                        <td class="label-col">Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2" style="border-bottom: 1px solid var(--border-strong);">
-                                            <div class="inv-amount-words-title">Order Amount In Words :</div>
-                                            <div class="inv-amount-words">${wordsTotal} Rupees only</div>
-                                        </td>
-                                    </tr>
-                                    ${(data.received_amount !== undefined && data.received_amount !== null) ? `
-                                    <tr>
-                                        <td class="label-col">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(data.received_amount)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    ${(data.balance_due !== undefined && data.balance_due !== null) ? `
-                                    <tr>
-                                        <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(data.balance_due)}</td>
-                                    </tr>
-                                    ` : ''}
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div class="inv-terms">
-                            <div class="inv-terms-title">Terms And Conditions:</div>
-                            <div>Thank you for doing business with us.</div>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
                         </div>
 
-                        <div class="inv-footer-grid">
-                            <div class="inv-footer-left">
+                        <div class="inv-totals-wrap">
+                            <div>
+                                <div class="inv-amount-words-title">Amount in Words</div>
+                                <div class="inv-amount-words">Rupees ${wordsTotal} Only</div>
+                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:12px;">Spare Parts: ${fmtMoney(partsSubtotal)} &nbsp;|&nbsp; Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
+                            </div>
+                            <div class="inv-totals-table">
+                                ${partsSubtotal > 0.01 && laborSubtotal > 0.01 ? `
+                                <div class="inv-totals-row">
+                                    <span class="label">Spare Parts</span>
+                                    <span class="amount">${fmtMoney(partsSubtotal)}</span>
+                                </div>
+                                <div class="inv-totals-row">
+                                    <span class="label">Servicing</span>
+                                    <span class="amount">${fmtMoney(laborSubtotal)}</span>
+                                </div>
+                                ` : ''}
+                                <div class="inv-totals-row grand">
+                                    <span class="label">Total Amount</span>
+                                    <span class="amount">${fmtMoney(grandTotal)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="inv-footer">
+                            <div>
                                 <div class="inv-footer-note">This is a digital order summary and does not require a signature.</div>
                                 <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
                             </div>
@@ -752,9 +810,7 @@
                         </div>
                     </div>
                 </div>
-            </div>`;
-
-            $('content-wrap').innerHTML = html;
+            </div>`;\n\n            $('content-wrap').innerHTML = html;
             $('content-wrap').style.display = 'block';
             $('fabPrint').style.display = 'block';
             hide('loader');
@@ -769,6 +825,7 @@
             const items = Array.isArray(data.items) ? data.items : [];
             const isPaid = data.status === 'PAID';
 
+            // Separate taxable (parts) and non-taxable (labor) items
             const taxableItems = items.filter(i => {
                 const t = String(i.type || '').toLowerCase();
                 return t !== 'labor' && t !== 'labour' && t !== 'service';
@@ -778,170 +835,187 @@
                 return t === 'labor' || t === 'labour' || t === 'service';
             });
 
+            // Calculate subtotals
             const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
             const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
 
+            // GST calculation (only on parts)
             let gstAmt, grandTotal;
             if (gstMode === 'included') {
                 gstAmt = partsSubtotal * 18 / 118;
-                grandTotal = Number(data.total_amount) || (partsSubtotal + laborSubtotal);
+                grandTotal = partsSubtotal + laborSubtotal; // total unchanged
             } else { // excluded
                 gstAmt = partsSubtotal * 0.18;
-                grandTotal = Number(data.total_amount) || (partsSubtotal + gstAmt + laborSubtotal);
+                grandTotal = partsSubtotal + gstAmt + laborSubtotal;
             }
 
-            const taxableValue = gstMode === 'included' ? partsSubtotal - gstAmt : partsSubtotal;
+            const taxableValue = gstMode === 'included'
+                ? partsSubtotal - gstAmt   // base without GST
+                : partsSubtotal;           // already net
 
+            // Build items HTML with Part/Labor labels
             let itemsHtml = '';
 
+            // Taxable items (Parts)
             if (taxableItems.length > 0) {
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Spare Parts (Taxable @ 18%)</td></tr>`;
                 taxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
-                    // Base amount is without GST. Total amount includes GST.
+                    // In 'included' mode, back-calculate the taxable unit rate
                     const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                    // Note: baseRate differs for included vs excluded
-                    const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
-                    const gstAmountForItem = baseAmt * 0.18;
-                    const totalForItem = baseAmt + gstAmountForItem;
+                    const baseRate = gstMode === 'included' ? (rate > 0 ? rate * 100 / 118 : baseAmt / qty) : (rate > 0 ? rate : amount / qty);
 
-                    // the image shows columns: Quantity | Price/ Unit (₹) | GST(₹) | Amount(₹)
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Spare Part'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(baseRate)}</td>
-                        <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
-                        <td class="right">${fmtMoney(totalForItem)}</td>
+                        <td class="right">${fmtMoney(baseAmt)}</td>
+                        <td class="center" style="color:#d97706;font-weight:600;">18%</td>
+                        <td class="right" style="color:#d97706;font-weight:600;">${fmtMoney(baseAmt * 0.18)}</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(baseAmt * 1.18)}</td>
                     </tr>`;
                 });
             }
 
+            // Non-taxable items (Labor)
             if (nonTaxableItems.length > 0) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr><td colspan="8" style="height:8px;"></td></tr>`;
+                }
+                itemsHtml += `<tr><td colspan="8" style="background:#f8fafc;padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Servicing (No GST)</td></tr>`;
                 nonTaxableItems.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
+
                     itemsHtml += `
                     <tr>
-                        <td class="center">${taxableItems.length + idx + 1}</td>
+                        <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Servicing'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">—</td>
                         <td class="right">${fmtMoney(amount)}</td>
+                        <td class="center" style="color:#94a3b8;">—</td>
+                        <td class="right" style="color:#94a3b8;">—</td>
+                        <td class="right" style="font-weight:700;">${fmtMoney(amount)}</td>
                     </tr>`;
                 });
             }
-            
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
-            let totalGstAmt = gstAmt;
-            itemsHtml += `
-            <tr>
-               <td></td>
-               <td style="font-weight:700;">Total</td>
-               <td class="center" style="font-weight:700;">${totalQty}</td>
-               <td></td>
-               <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
-               <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
-            </tr>`;
+
+            if (items.length === 0) {
+                itemsHtml = `<tr><td colspan="8" style="text-align:center;padding:32px;color:#94a3b8;">No line items for this receipt.</td></tr>`;
+            }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
+            const cgst = gstAmt / 2;
+            const sgst = gstAmt / 2;
 
             const html = `
             <div class="scaled-container">
                 <div class="inv-page">
-                    <div class="inv-doc-title">Tax Invoice</div>
                     <div class="inv-doc">
-                        <div class="inv-header-grid">
-                            <div class="inv-shop-info">
+                        <div class="inv-shop-header">
+                            <div>
+                                <span class="inv-doc-type">Tax Invoice</span>
                                 <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
+                                ${(data.shop_address || data.shop_phone) ? `
                                 <div class="inv-shop-detail">
-                                    Phone: ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
-                                </div>
-                                ${data.shop_gst ? `<div class="inv-gst-number">GSTIN: ${data.shop_gst}</div>` : ''}
+                                    ${data.shop_address ? `${data.shop_address}<br>` : ''}
+                                    ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                                </div>` : ''}
                             </div>
-                            <div class="inv-meta-grid">
-                                <div class="inv-bill-to">
-                                    <div class="inv-col-label">Bill To:</div>
+                            <div class="inv-badge-container">
+                                ${data.shop_gst ? `
+                                <div>
+                                    <div class="inv-col-label" style="margin-bottom:2px">GSTIN</div>
+                                    <div class="inv-gst-number">${data.shop_gst}</div>
+                                </div>
+                                ` : ''}
+                                <div>
+                                    <span class="inv-status-pill ${isPaid ? 'inv-paid' : 'inv-pending'}">
+                                        ${(isPaid && data.payment_mode === 'Credit') ? 'PARTIAL' : (isPaid ? 'PAID' : 'PENDING')}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="inv-details-row">
+                            <div class="inv-details-grid">
+                                <div>
+                                    <div class="inv-col-label">Invoice Details</div>
+                                    <div class="inv-col-val">
+                                        <div><strong>Invoice No:</strong> #${data.id || '—'}</div>
+                                        <div><strong>Date:</strong> ${fmtDate(data.created_at)}</div>
+                                        <div style="margin-top:6px;font-size:11px;color:#64748b;">GST @18% on Parts ${gstMode === 'included' ? '(Included inside Rate)' : '(Excluded)'}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="inv-col-label">Bill To</div>
                                     <div class="inv-col-val">
                                         <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
-                                        ${data.customer_phone ? `<div>Contact No: +91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
-                                        ${data.vehicle_number ? `<div style="margin-top:4px;">Vehicle: ${data.vehicle_number}</div>` : ''}
-                                        ${data.odometer_reading ? `<div>Odometer: ${data.odometer_reading} km</div>` : ''}
-                                    </div>
-                                </div>
-                                <div class="inv-invoice-details">
-                                    <div class="inv-col-label">Invoice Details:</div>
-                                    <div class="inv-col-val">
-                                        <div>No: ${data.id || '—'}</div>
-                                        <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${data.status === 'PAID' ? '#16a34a' : '#ea580c'}">${data.status}</div>
+                                        ${data.customer_phone ? `<div>+91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
+                                        ${data.vehicle_number ? `<div style="margin-top:4px;"><strong>Vehicle:</strong> ${data.vehicle_number}</div>` : ''}
+                                        ${data.odometer_reading ? `<div><strong>Odometer:</strong> ${data.odometer_reading} km</div>` : ''}
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <table class="inv-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:5%">#</th>
-                                    <th style="width:31%">Item Name</th>
-                                    <th class="center" style="width:10%">Quantity</th>
-                                    <th class="right" style="width:16%">Price/ Unit (₹)</th>
-                                    <th class="right" style="width:18%">GST(₹)</th>
-                                    <th class="right" style="width:20%">Amount(₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
-
-                        <div class="inv-summary-grid">
-                            <div class="inv-empty-left">
-                                <!-- empty left side under totals -->
-                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
-                            </div>
-                            <div class="inv-totals-wrap">
-                                <table class="inv-totals-table">
+                        <div class="inv-table-container">
+                            <table class="inv-table">
+                                <thead>
                                     <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
+                                        <th class="center" style="width:4%">#</th>
+                                        <th style="width:36%">Description</th>
+                                        <th class="center" style="width:6%">Qty</th>
+                                        <th class="right" style="width:14%">Base Rate</th>
+                                        <th class="right" style="width:14%">Base Amt</th>
+                                        <th class="right" style="width:11%">GST</th>
+                                        <th class="right" style="width:15%">Total</th>
                                     </tr>
-                                    <tr>
-                                        <td class="label-col">Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2" style="border-bottom: 1px solid var(--border-strong);">
-                                            <div class="inv-amount-words-title">Invoice Amount In Words :</div>
-                                            <div class="inv-amount-words">${wordsTotal} Rupees only</div>
-                                        </td>
-                                    </tr>
-                                    ${(data.received_amount !== undefined && data.received_amount !== null) ? `
-                                    <tr>
-                                        <td class="label-col">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(data.received_amount)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    ${(data.balance_due !== undefined && data.balance_due !== null) ? `
-                                    <tr>
-                                        <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(data.balance_due)}</td>
-                                    </tr>
-                                    ` : ''}
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div class="inv-terms">
-                            <div class="inv-terms-title">Terms And Conditions:</div>
-                            <div>Thank you for doing business with us.</div>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
                         </div>
 
-                        <div class="inv-footer-grid">
-                            <div class="inv-footer-left">
+                        <div class="inv-totals-wrap">
+                            <div>
+                                <div class="inv-amount-words-title">Amount in Words</div>
+                                <div class="inv-amount-words">Rupees ${wordsTotal} Only</div>
+                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;margin-top:12px;">Spare Parts: ${fmtMoney(partsSubtotal)} &nbsp;|&nbsp; Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
+                            </div>
+                            <div class="inv-totals-table">
+                                <div class="inv-totals-row">
+                                    <span class="label">Taxable Amount (Parts)</span>
+                                    <span class="amount">${fmtMoney(taxableValue)}</span>
+                                </div>
+                                <div class="inv-totals-row" style="color:#475569;">
+                                    <span class="label">CGST @9%</span>
+                                    <span class="amount">${fmtMoney(cgst)}</span>
+                                </div>
+                                <div class="inv-totals-row" style="color:#475569;">
+                                    <span class="label">SGST @9%</span>
+                                    <span class="amount">${fmtMoney(sgst)}</span>
+                                </div>
+                                ${laborSubtotal > 0.01 ? `
+                                <div class="inv-totals-row" style="margin-top:4px;">
+                                    <span class="label">Servicing (No GST)</span>
+                                    <span class="amount">${fmtMoney(laborSubtotal)}</span>
+                                </div>
+                                ` : ''}
+                                <div class="inv-totals-row grand">
+                                    <span class="label">Grand Total</span>
+                                    <span class="amount">${fmtMoney(grandTotal)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="inv-footer">
+                            <div>
                                 <div class="inv-footer-note">This is a computer-generated invoice and does not require a signature.</div>
                                 <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
                             </div>
@@ -952,9 +1026,7 @@
                         </div>
                     </div>
                 </div>
-            </div>`;
-
-            $('content-wrap').innerHTML = html;
+            </div>`;\n\n            $('content-wrap').innerHTML = html;
             $('content-wrap').style.display = 'block';
             $('fabPrint').style.display = 'block';
             hide('loader');

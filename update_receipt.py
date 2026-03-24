@@ -1,156 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
+import re
 
-<head>
-    <meta charset="UTF-8" />
-    <!-- Force desktop view on mobile (CamScanner style) -->
-    <meta name="viewport" content="width=850" />
-    <title id="pageTitle">Order Summary • SnapKhata</title>
+with open('frontend/public/receipt.html', 'r', encoding='utf-8') as f:
+    content = f.read()
 
-    <!-- Open Graph -->
-    <meta property="og:title" id="ogTitle" content="Order Summary • SnapKhata" />
-    <meta property="og:description" content="View your complete order details and receipt." />
-    <meta property="og:type" content="website" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans:wght@400;600;700&display=swap"
-        rel="stylesheet">
-
-    <style>
-        :root {
-            --bg: #eceff1;
-            --white: #ffffff;
-            --border: #cccccc;
-            --border-strong: #000000;
-            --text-primary: #000000;
-            --text-secondary: #333333;
-            --text-muted: #555555;
-            --accent: #000000;
-            --accent-dark: #000000;
-            --accent-light: #f5f5f5;
-            --green: #000000;
-            --green-bg: #ffffff;
-            --green-border: #cccccc;
-            --amber: #000000;
-            --amber-bg: #ffffff;
-            --amber-border: #cccccc;
-            --red: #000000;
-            --invoice-bg: #ffffff;
-            --invoice-border: #000000;
-        }
-
-        * {
-            box-sizing: border-box;
-            -webkit-font-smoothing: antialiased;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Inter', Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
-
-        /* ── Loader ── */
-        .loader-wrap {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            background: var(--bg);
-        }
-
-        .spinner {
-            width: 44px;
-            height: 44px;
-            border: 4px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.9s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .loader-text {
-            color: var(--text-secondary);
-            font-size: 15px;
-            font-weight: 500;
-        }
-
-        .loader-sub {
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-
-        /* ── Error ── */
-        .error-wrap {
-            min-height: 100vh;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
-            text-align: center;
-        }
-
-        .error-icon {
-            font-size: 52px;
-            margin-bottom: 16px;
-        }
-
-        .error-title {
-            font-size: 22px;
-            font-weight: 800;
-            color: var(--red);
-            margin-bottom: 8px;
-        }
-
-        .error-desc {
-            color: var(--text-secondary);
-            max-width: 380px;
-            margin-bottom: 24px;
-        }
-
-        .btn-retry {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 12px 28px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-
-        /* ── Content wrapper ── */
-        #content-wrap {
-            display: none;
-            width: 100%;
-            overflow-x: hidden;
-        }
- 
-        
-        /* ── Desktop Container ── */
-        .scaled-container {
-            width: 850px;
-            margin: 0 auto;
-            padding: 40px 0 80px;
-            display: flex;
-            justify-content: center;
-        }
-
-        /* ─────────────────────────────────────────────────────
+# Replace CSS
+css_start_marker = "/* ─────────────────────────────────────────────────────\n           PREMIUM DOCUMENT STYLES\n        ───────────────────────────────────────────────────── */"
+css_end_marker = "/* ── FAB Print ── */"
+new_css = """/* ─────────────────────────────────────────────────────
            TABULAR DOCUMENT STYLES
         ───────────────────────────────────────────────────── */
         .inv-page {
@@ -377,216 +233,18 @@
             color: var(--text-muted);
         }
 
-        /* ── FAB Print ── */
-        .fab-print {
-            position: fixed;
-            bottom: 28px;
-            right: 28px;
-            z-index: 50;
-        }
+        """
 
-        .fab-print button {
-            border: none;
-            padding: 14px 26px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 14px;
-            font-weight: 600;
-            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
-            cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+start_idx = content.find(css_start_marker)
+end_idx = content.find(css_end_marker)
+if start_idx != -1 and end_idx != -1:
+    content = content[:start_idx] + new_css + content[end_idx:]
 
-        .fab-print button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 28px rgba(79, 70, 229, 0.5);
-        }
+# Replace renderOrderSummary
+os_start = content.find("function renderOrderSummary(data) {")
+os_end = content.find("        // ─────────────────────────────────────────────────────────────────────\n        // GST INVOICE renderer")
 
-        @media print {
-            body {
-                background: #fff;
-            }
-
-            .os-page,
-            .inv-page {
-                padding: 0;
-                max-width: 100%;
-            }
-
-            .os-card,
-            .inv-doc,
-            .premium-card {
-                box-shadow: none;
-                border: none;
-                margin: 0;
-            }
-            .scaled-viewport {
-                display: block;
-            }
-            .scaled-content {
-                transform: none !important;
-                width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-
-            .fab-print {
-                display: none;
-            }
-        }
-
-        /* Removed media max-width 640px to enable proper scaled preview */
-    </style>
-</head>
-
-<body>
-    <!-- Loader -->
-    <div id="loader" class="loader-wrap">
-        <div class="spinner"></div>
-        <div class="loader-text">Loading details…</div>
-        <div class="loader-sub">Fetching your receipt securely</div>
-    </div>
-
-    <!-- Error -->
-    <div id="error-screen" class="error-wrap">
-        <div class="error-icon">⚠️</div>
-        <h2 class="error-title" id="error-title">Receipt Not Found</h2>
-        <p class="error-desc" id="error-message">The receipt link is invalid or data is unavailable.</p>
-        <button class="btn-retry" onclick="window.location.reload()">Try Again</button>
-    </div>
-
-    <!-- Main content (injected by JS) -->
-    <div id="content-wrap"></div>
-
-    <!-- FAB -->
-    <div class="fab-print" id="fabPrint" style="display:none;">
-        <button type="button" onclick="window.print()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-            </svg>
-            Download / Print
-        </button>
-    </div>
-
-    <script>
-        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:8000'
-            : window.location.origin;
-
-        // ── helpers ──────────────────────────────────────────────────────────
-        const $ = id => document.getElementById(id);
-        const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
-        const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
-
-        const fmtMoney = v => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const fmtDate = raw => {
-            if (!raw) return '—';
-            try {
-                let d;
-                if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
-                    const [dd, mm, yyyy] = raw.split('-');
-                    d = new Date(`${yyyy}-${mm}-${dd}`);
-                } else {
-                    d = new Date(raw);
-                }
-                if (isNaN(d)) return raw;
-                return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-            } catch { return raw; }
-        };
-
-        function showError(title, msg) {
-            hide('loader');
-            const el = $('error-screen');
-            if (el) { el.style.display = 'flex'; }
-            if (title) $('error-title').textContent = title;
-            if (msg) $('error-message').textContent = msg;
-        }
-
-        function numberToWords(n) {
-            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
-                'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-            if (n === 0) return 'Zero';
-            function below1000(num) {
-                if (num < 20) return ones[num];
-                if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
-                return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + below1000(num % 100) : '');
-            }
-            let result = '';
-            const crore = Math.floor(n / 10000000); n %= 10000000;
-            const lakh = Math.floor(n / 100000); n %= 100000;
-            const thousand = Math.floor(n / 1000); n %= 1000;
-            const rest = n;
-            if (crore) result += below1000(crore) + ' Crore ';
-            if (lakh) result += below1000(lakh) + ' Lakh ';
-            if (thousand) result += below1000(thousand) + ' Thousand ';
-            if (rest) result += below1000(rest);
-            return result.trim();
-        }
-
-        // ── main ─────────────────────────────────────────────────────────────
-        async function fetchAndRender() {
-            const params = new URLSearchParams(window.location.search);
-            
-            // Support 'i' or 'id' for orderId
-            let orderId = params.get('i') || params.get('id');
-            if (!orderId) {
-                const m = window.location.search.match(/[?&](?:id|i)(?:=|%3D)([^&]+)/i);
-                if (m) orderId = decodeURIComponent(m[1]);
-            }
-            if (!orderId) { showError('Invalid Link', 'No receipt ID found in URL.'); return; }
-
-            const uParam = params.get('u'); // username
-
-            try {
-                let apiUrl = `${API_BASE}/api/public/receipts/${orderId}`;
-                if (uParam) {
-                    apiUrl += `?u=${encodeURIComponent(uParam)}`;
-                }
-                const resp = await fetch(apiUrl);
-                if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
-                const data = await resp.json();
-
-                // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
-                let gstMode = data.gst_mode && data.gst_mode !== 'none' ? data.gst_mode : 'none';
-                if (params.has('g')) gstMode = params.get('g');
-                else if (params.has('gst_mode')) gstMode = params.get('gst_mode');
-
-                // Support 'p' or 'pm' for payment_mode
-                if (params.has('p')) data.payment_mode = params.get('p');
-                else if (params.has('pm')) data.payment_mode = params.get('pm');
-
-                // Support 'r' or 'ra' for received_amount
-                if (params.has('r')) data.received_amount = Number(params.get('r'));
-                else if (params.has('ra')) data.received_amount = Number(params.get('ra'));
-
-                // Support 'b' or 'bd' for balance_due
-                if (params.has('b')) data.balance_due = Number(params.get('b'));
-                else if (params.has('bd')) data.balance_due = Number(params.get('bd'));
-
-                if (gstMode === 'none') {
-                    renderOrderSummary(data);
-                } else {
-                    renderGstInvoice(data, gstMode);
-                }
-            } catch (err) {
-                if (err.message === 'not_found') showError('Receipt Not Found', 'We could not locate this receipt.');
-                else showError('Unable to Load', 'Please check your connection and try again.');
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // ORDER SUMMARY renderer
-        // ─────────────────────────────────────────────────────────────────────
-        function renderOrderSummary(data) {
+new_os = """function renderOrderSummary(data) {
             document.title = `Order Summary #${data.id || '—'} • SnapKhata`;
 
             const items = Array.isArray(data.items) ? data.items : [];
@@ -760,10 +418,14 @@
             hide('loader');
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // GST INVOICE renderer
-        // ─────────────────────────────────────────────────────────────────────
-        function renderGstInvoice(data, gstMode) {
+"""
+content = content[:os_start] + new_os + content[os_end:]
+
+# Replace renderGstInvoice
+os_start = content.find("function renderGstInvoice(data, gstMode) {")
+os_end = content.find("        async function init() {")
+
+new_os = """function renderGstInvoice(data, gstMode) {
             document.title = `Tax Invoice #${data.id || '—'} • SnapKhata`;
 
             const items = Array.isArray(data.items) ? data.items : [];
@@ -960,12 +622,10 @@
             hide('loader');
         }
 
-        async function init() {
-            await fetchAndRender();
-        }
+"""
+content = content[:os_start] + new_os + content[os_end:]
 
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
-</body>
+with open('frontend/public/receipt.html', 'w', encoding='utf-8') as f:
+    f.write(content)
 
-</html>
+print("Updated frontend/public/receipt.html successfully!")
