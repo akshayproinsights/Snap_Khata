@@ -86,7 +86,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
       final bundle = groups[safeKey]!;
       bundle.items.add(item);
       bundle.totalAmount += item.netBill;
-      if (item.amountMismatch > 1.0) bundle.hasMismatch = true;
+      if (item.amountMismatch.abs() > 1.0) bundle.hasMismatch = true;
     }
 
     return groups.values.toList()
@@ -103,7 +103,19 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
     final pendingCount = itemsAsync.maybeWhen(
-      data: (items) => items.where((i) => i.verificationStatus != 'Done').length,
+      data: (items) {
+        final Map<String, bool> unverifiedReceipts = {};
+        for (final item in items) {
+          if (item.verificationStatus != 'Done') {
+            final key = item.invoiceNumber.isNotEmpty
+                ? item.invoiceNumber
+                : '${item.invoiceDate}_${item.vendorName ?? ''}';
+            final safeKey = key.isNotEmpty ? key : item.id.toString();
+            unverifiedReceipts[safeKey] = true;
+          }
+        }
+        return unverifiedReceipts.length;
+      },
       orElse: () => 0,
     );
 
@@ -905,7 +917,7 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                   ),
                   const Divider(height: 1),
                   ...visibleItems.map((item) {
-                    final rowMismatch = item.amountMismatch > 1.0;
+                    final rowMismatch = item.amountMismatch.abs() > 1.0;
                     return InkWell(
                       onTap: () => _showItemHistory(item),
                       child: Container(
@@ -986,18 +998,29 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                                     ),
                                   ),
                                   if (rowMismatch)
-                                    const Text(
-                                      '(+Tax/Fees)',
-                                      textAlign: TextAlign.right,
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        height: 1.2,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFFEF4444),
-                                      ),
-                                    ),
-                                ],
-                              ),
+                                     const Text(
+                                       '(+Tax/Fees)',
+                                       textAlign: TextAlign.right,
+                                       style: TextStyle(
+                                         fontSize: 9,
+                                         height: 1.2,
+                                         fontWeight: FontWeight.w600,
+                                         color: Color(0xFFEF4444),
+                                       ),
+                                     )
+                                   else if ((item.rate * item.qty - item.netBill).abs() > 1.0)
+                                     Text(
+                                       '(Incl. Taxes)',
+                                       textAlign: TextAlign.right,
+                                       style: TextStyle(
+                                         fontSize: 8.5,
+                                         height: 1.2,
+                                         fontWeight: FontWeight.w500,
+                                         color: Colors.grey.shade500,
+                                       ),
+                                     ),
+                                 ],
+                               ),
                             ),
                           ],
                         ),

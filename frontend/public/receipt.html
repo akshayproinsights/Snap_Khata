@@ -661,7 +661,8 @@
                             <div class="inv-shop-info">
                                 <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
                                 <div class="inv-shop-detail">
-                                    Phone: ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                                    ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
+                                    ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
                                 </div>
                             </div>
                             <div class="inv-meta-grid">
@@ -699,9 +700,10 @@
                         </table>
 
                         <div class="inv-summary-grid">
-                            <div class="inv-empty-left">
-                                <!-- empty left side under totals -->
-                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
+                            <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
+                                <!-- split empty left side under totals -->
+                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><strong>Spare Parts:</strong> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${laborSubtotal > 0 ? `<div><strong>Servicing:</strong> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
@@ -721,7 +723,7 @@
                                     </tr>
                                     ${(data.received_amount !== undefined && data.received_amount !== null) ? `
                                     <tr>
-                                        <td class="label-col">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
                                         <td class="amount-col">${fmtMoney(data.received_amount)}</td>
                                     </tr>
                                     ` : ''}
@@ -859,7 +861,8 @@
                             <div class="inv-shop-info">
                                 <div class="inv-shop-name">${data.shop_name || 'Business Name'}</div>
                                 <div class="inv-shop-detail">
-                                    Phone: ${data.shop_phone ? `+91 ${String(data.shop_phone).replace('+91', '').trim()}` : ''}
+                                    ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
+                                    ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
                                 </div>
                                 ${data.shop_gst ? `<div class="inv-gst-number">GSTIN: ${data.shop_gst}</div>` : ''}
                             </div>
@@ -899,9 +902,10 @@
                         </table>
 
                         <div class="inv-summary-grid">
-                            <div class="inv-empty-left">
-                                <!-- empty left side under totals -->
-                                ${laborSubtotal > 0.01 ? `<div style="font-size:11px;color:#64748b;">Spare Parts: ${fmtMoney(partsSubtotal)} | Servicing: ${fmtMoney(laborSubtotal)}</div>` : ''}
+                            <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
+                                <!-- split empty left side under totals -->
+                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><strong>Spare Parts:</strong> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${laborSubtotal > 0 ? `<div><strong>Servicing:</strong> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
@@ -921,7 +925,7 @@
                                     </tr>
                                     ${(data.received_amount !== undefined && data.received_amount !== null) ? `
                                     <tr>
-                                        <td class="label-col">Received ${data.payment_mode ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
                                         <td class="amount-col">${fmtMoney(data.received_amount)}</td>
                                     </tr>
                                     ` : ''}

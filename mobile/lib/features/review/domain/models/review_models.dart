@@ -35,7 +35,7 @@ class ReviewRecord {
     if (verificationStatus.toLowerCase() == 'duplicate receipt number') {
       return true;
     }
-    if (amountMismatch != null && amountMismatch!.abs() > 0.01) {
+    if (amountMismatch != null && amountMismatch!.abs() >= 1.0) {
       return true;
     }
     if (receiptNumber.trim().isEmpty) {

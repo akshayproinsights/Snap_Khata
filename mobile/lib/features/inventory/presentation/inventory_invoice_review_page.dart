@@ -420,14 +420,14 @@ class _InventoryInvoiceReviewPageState
     // Mismatch items first
     final sortedItems = List<InventoryItem>.from(currentItems);
     sortedItems.sort((a, b) {
-      final aMis = a.amountMismatch > 1.0;
-      final bMis = b.amountMismatch > 1.0;
+      final aMis = a.amountMismatch.abs() > 1.0;
+      final bMis = b.amountMismatch.abs() > 1.0;
       if (aMis && !bMis) return -1;
       if (!aMis && bMis) return 1;
       return a.id.compareTo(b.id);
     });
 
-    final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch > 1.0);
+    final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0);
     final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + item.netBill);
 
     return Scaffold(
@@ -650,7 +650,7 @@ class _InventoryInvoiceReviewPageState
   }
 
   Widget _buildItemCard(InventoryItem item) {
-    final hasMismatch = item.amountMismatch > 1.0;
+    final hasMismatch = item.amountMismatch.abs() > 1.0;
 
     Color borderColor = AppTheme.border;
     Color bgColor = Colors.white;

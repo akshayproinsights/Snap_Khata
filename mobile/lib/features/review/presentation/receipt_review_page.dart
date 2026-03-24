@@ -314,8 +314,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             icon: const FaIcon(FontAwesomeIcons.whatsapp,
                 color: AppTheme.primary),
             onPressed: () async {
-              // Ensure all changes are saved before generating and sharing the receipt link
-              await _saveCurrentState();
+              // Start saving changes in the background without blocking the UI dialog
+              final saveFuture = _saveCurrentState();
 
               // Calculate total amount from line items, fallback to header amount if line items total is zero
               double totalAmount = _totalAfterGst(group);
@@ -401,6 +401,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               );
 
               if (result != null && result.isNotEmpty && context.mounted) {
+                // Ensure the background save completed before sharing the link,
+                // so the user sees the updated information when they open it.
+                await saveFuture;
+
                 final opened = await WhatsAppUtils.openWhatsAppChat(
                   phone: result,
                   message: message,
@@ -1055,7 +1059,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     // Checking if amount mismatch exists
     final hasMismatch =
-        item.amountMismatch != null && item.amountMismatch!.abs() > 0.01;
+        item.amountMismatch != null && item.amountMismatch!.abs() >= 1.0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_upload_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 
 // ─── Grouped invoice bundle (same structure as inventory_main_page) ───────────
@@ -70,7 +71,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       final bundle = groups[safeKey]!;
       bundle.items.add(item);
       bundle.totalAmount += item.netBill;
-      if (item.amountMismatch > 1.0) bundle.hasMismatch = true;
+      if (item.amountMismatch.abs() > 1.0) bundle.hasMismatch = true;
       // If any item is NOT verified, the whole bundle is not verified
       if (item.verificationStatus != 'Done') bundle.isVerified = false;
     }
@@ -198,6 +199,9 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     });
 
     final state = ref.watch(inventoryProvider);
+    final uploadState = ref.watch(inventoryUploadProvider);
+    final skippedCount = uploadState.processingStatus?.skipped ?? 0;
+
     final allBundles = _groupItems(state.items);
 
     final total = allBundles.length;
@@ -289,6 +293,32 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
           children: [
             _buildProgressHeader(total, done, pending, error),
             if (state.isSyncing) const LinearProgressIndicator(),
+            if (skippedCount > 0)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.info, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '$skippedCount duplicate${skippedCount == 1 ? '' : 's'} skipped from recent upload.',
+                        style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.only(
