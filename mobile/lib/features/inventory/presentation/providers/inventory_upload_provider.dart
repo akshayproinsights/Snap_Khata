@@ -32,6 +32,9 @@ class InventoryUploadState {
   /// The UI MUST show a loading screen (NOT the camera) while this is true.
   final bool isRestoringState;
 
+  /// The final status object when processing completes — used for results summary
+  final UploadTaskStatus? lastCompletedStatus;
+
   InventoryUploadState({
     this.fileItems = const [],
     this.isUploading = false,
@@ -41,6 +44,7 @@ class InventoryUploadState {
     this.error,
     this.activeTaskId,
     this.isRestoringState = true,
+    this.lastCompletedStatus,
   });
 
   int get pendingCount =>
@@ -65,6 +69,8 @@ class InventoryUploadState {
     String? activeTaskId,
     bool clearActiveTaskId = false,
     bool? isRestoringState,
+    UploadTaskStatus? lastCompletedStatus,
+    bool clearLastCompletedStatus = false,
   }) {
     return InventoryUploadState(
       fileItems: fileItems ?? this.fileItems,
@@ -76,6 +82,9 @@ class InventoryUploadState {
       activeTaskId:
           clearActiveTaskId ? null : (activeTaskId ?? this.activeTaskId),
       isRestoringState: isRestoringState ?? this.isRestoringState,
+      lastCompletedStatus: clearLastCompletedStatus
+          ? null
+          : (lastCompletedStatus ?? this.lastCompletedStatus),
     );
   }
 }
@@ -591,6 +600,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       fileItems: done,
       isProcessing: false,
       clearActiveTaskId: true,
+      lastCompletedStatus: status,
     );
 
     // Build banner message with duplicate-skip summary
@@ -605,13 +615,11 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       () => AppRouter.router.go('/inventory-review'),
     );
 
-    // Guaranteed direct navigation: fires after 800ms regardless of UI state.
-    // This covers the edge case where fileItems was empty when _handleCompleted
-    // ran (e.g., state lost during app lifecycle), so allDone stays false and
-    // ref.listen in the page never triggers. The UI's ref.listen fires first
-    // at 600ms, so this is a safe fallback — navigating twice to the same route
-    // is a no-op in go_router.
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // Guaranteed direct navigation after 4s — gives user time to read the summary.
+    // The UI's ref.listen in the page fires at ~600ms and is suppressed when
+    // lastCompletedStatus is set (the page shows the summary instead).
+    // This 4s timer is the fallback for state-loss scenarios.
+    Future.delayed(const Duration(milliseconds: 4000), () {
       AppRouter.router.go('/inventory-review');
     });
   }

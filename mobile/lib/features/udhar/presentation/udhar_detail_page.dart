@@ -681,6 +681,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         ? shopProfile.name
         : 'Our Shop';
 
+    // Log shop name for debugging
+    debugPrint('Udhar WhatsApp message - Shop name: "$shopName" (from shopProfile.name: "${shopProfile.name}")');
+    debugPrint('Udhar WhatsApp message - Customer: $customerNameMsg, Balance: ${widget.ledger.balanceDue}');
+
     final pendingFmt = WhatsAppUtils.formatIndianCurrency(widget.ledger.balanceDue);
     
     final message = 'Hi $customerNameMsg,\n\n'

@@ -142,6 +142,24 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
+  /// Fetches the receipt_link (original photo URL) for a given invoice number.
+  Future<String?> fetchReceiptLink(String invoiceNumber) async {
+    try {
+      final response = await _dio.get('/api/inventory/items', queryParameters: {
+        'invoice_number': invoiceNumber,
+        'show_all': true,
+      });
+      final items = response.data['items'] as List?;
+      if (items != null && items.isNotEmpty) {
+        final link = items.first['receipt_link'] as String?;
+        if (link != null && link.isNotEmpty && link != 'null') return link;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> deleteLedger(int ledgerId) async {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');

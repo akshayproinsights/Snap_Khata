@@ -770,13 +770,14 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     }
 
     double gstAmount = 0;
+    double combinedSubtotal = partsBase + laborBase;
     if (gstModeStr == 'excluded') {
-      gstAmount = partsBase * 0.18;
+      gstAmount = combinedSubtotal * 0.18;
     } else if (gstModeStr == 'included') {
-      gstAmount = partsBase * 18 / 118;
+      gstAmount = combinedSubtotal * 18 / 118;
     }
 
-    double grandTotal = partsBase + laborBase;
+    double grandTotal = combinedSubtotal;
     if (gstModeStr == 'excluded') {
       grandTotal += gstAmount;
     }

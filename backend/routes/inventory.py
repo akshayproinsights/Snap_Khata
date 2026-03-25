@@ -667,9 +667,21 @@ def process_inventory_sync(
         logger.info(f"Processing completed. Results: {results}")
 
         skipped_count = results.get("skipped_count", 0)
+        skipped_details = results.get("skipped_duplicates", [])
 
-        # Duplicates list is now always empty (auto-skipped), but we keep the
-        # status key for backward-compat in case old clients check it.
+        # Build compact skipped summary list for mobile display:
+        # [{ file_key, invoice_number, invoice_date, receipt_link, message }]
+        skipped_summary = []
+        for dup in skipped_details:
+            rec = dup.get("existing_record", {})
+            skipped_summary.append({
+                "file_key": dup.get("file_key", ""),
+                "invoice_number": rec.get("invoice_number", ""),
+                "invoice_date": rec.get("invoice_date", ""),
+                "receipt_link": rec.get("receipt_link", ""),
+                "message": dup.get("message", "Already uploaded previously"),
+            })
+
         update_db_status({
             "status": "completed",
             "progress": {
@@ -677,6 +689,8 @@ def process_inventory_sync(
                 "processed": results["processed"],
                 "failed": results["failed"],
                 "skipped": skipped_count,
+                "skipped_details": skipped_summary,
+                "errors": results.get("errors", []),
             },
             "message": _build_completion_message(results["processed"], skipped_count, results["failed"]),
             "current_file": "All complete",

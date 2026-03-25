@@ -56,6 +56,12 @@ class UploadTaskStatus {
   final int skipped; // duplicates auto-skipped (FIX-3)
   final List<dynamic>? duplicates;
 
+  /// Detailed per-file duplicate info: [{invoice_number, invoice_date, receipt_link, message}]
+  final List<Map<String, dynamic>> skippedDetails;
+
+  /// Error messages from failed files
+  final List<String> errors;
+
   UploadTaskStatus({
     required this.taskId,
     required this.status,
@@ -65,18 +71,28 @@ class UploadTaskStatus {
     required this.failed,
     this.skipped = 0,
     this.duplicates,
+    this.skippedDetails = const [],
+    this.errors = const [],
   });
 
   factory UploadTaskStatus.fromJson(Map<String, dynamic> json) {
+    final progress = json['progress'] as Map<String, dynamic>? ?? {};
+    final rawSkippedDetails = progress['skipped_details'] as List<dynamic>? ?? [];
+    final rawErrors = progress['errors'] as List<dynamic>? ?? [];
+
     return UploadTaskStatus(
       taskId: json['task_id'] ?? '',
       status: json['status'] ?? 'unknown',
       message: json['message'] ?? '',
-      total: json['progress']?['total'] ?? 0,
-      processed: json['progress']?['processed'] ?? 0,
-      failed: json['progress']?['failed'] ?? 0,
-      skipped: json['progress']?['skipped'] ?? json['skipped_count'] ?? 0,
+      total: progress['total'] ?? 0,
+      processed: progress['processed'] ?? 0,
+      failed: progress['failed'] ?? 0,
+      skipped: progress['skipped'] ?? json['skipped_count'] ?? 0,
       duplicates: json['duplicates'],
+      skippedDetails: rawSkippedDetails
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      errors: rawErrors.map((e) => e.toString()).toList(),
     );
   }
 }

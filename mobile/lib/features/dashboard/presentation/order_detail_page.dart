@@ -115,17 +115,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       })
       .fold(0.0, (s, i) => s + i.amount);
 
-  double _gstAmount(double partsSubtotal) {
-    if (_gstMode == GstMode.excluded) return partsSubtotal * 0.18;
-    if (_gstMode == GstMode.included) return partsSubtotal * 18 / 118;
+  double _gstAmount(double amount) {
+    if (_gstMode == GstMode.excluded) return amount * 0.18;
+    if (_gstMode == GstMode.included) return amount * 18 / 118;
     return 0;
   }
 
   double _totalAfterGst(InvoiceGroup group) {
     final parts = _partsSubtotal(group);
     final labor = _laborSubtotal(group);
-    if (_gstMode == GstMode.excluded) return parts + _gstAmount(parts) + labor;
-    return parts + labor;
+    final combined = parts + labor;
+    if (_gstMode == GstMode.excluded) return combined + _gstAmount(combined);
+    return combined;
   }
 
   void _initControllers() {
@@ -191,9 +192,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     
     double newGst = 0;
     if (_gstMode == GstMode.excluded) {
-      newGst = newParts * 0.18;
+      newGst = (newParts + newLabor) * 0.18;
     } else if (_gstMode == GstMode.included) {
-      newGst = newParts * 18 / 118;
+      newGst = (newParts + newLabor) * 18 / 118;
     }
     
     double grandTotal = newParts + newLabor + newGst;
@@ -344,6 +345,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   final shopName = shopProfile.name.isNotEmpty
                       ? shopProfile.name
                       : 'Our Shop';
+
+                  // Log shop name for debugging
+                  debugPrint('WhatsApp message - Shop name: "$shopName" (from shopProfile.name: "${shopProfile.name}")');
+                  debugPrint('WhatsApp message - Payment mode: $_paymentMode');
+                  debugPrint('WhatsApp message - GST mode: $_gstMode');
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
                     status: status,
@@ -792,7 +798,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             gstMode: _gstMode,
             partsSubtotal: _partsSubtotal(widget.group),
             laborSubtotal: _laborSubtotal(widget.group),
-            gstAmount: _gstAmount(_partsSubtotal(widget.group)),
+            gstAmount: _gstAmount(_partsSubtotal(widget.group) + _laborSubtotal(widget.group)),
             grandTotal: grandTotal,
             originalTotal: widget.group.totalAmount,
             onGstModeChanged: _saveGstMode,

@@ -764,75 +764,85 @@ def process_invoices_sync(
         
         logger.info(f"Processing completed. Results: {results}")
         
-        # Check for duplicates
-        if results.get("duplicates"):
-            duplicate_count = len(results["duplicates"])
-            processed_count = results["processed"]
-            msg = f"Processed {processed_count} invoice{'s' if processed_count != 1 else ''}, found {duplicate_count} duplicate{'s' if duplicate_count != 1 else ''}"
-            if processed_count == 0:
-                msg = f"All files are duplicates: {duplicate_count} file{'s' if duplicate_count != 1 else ''}"
+        # Build compact skipped summary list for mobile display
+        duplicate_list = results.get("duplicates", [])
+        skipped_count = len(duplicate_list)
+        skipped_summary = []
+        for dup in duplicate_list:
+            existing = dup.get("existing_invoice", {})
+            skipped_summary.append({
+                "file_key": dup.get("file_key", ""),
+                "receipt_number": existing.get("receipt_number", ""),
+                "invoice_date": existing.get("date", ""),
+                "message": "Already uploaded previously",
+            })
 
-            update_db_status({
-                "status": "duplicate_detected",
-                "progress": {
-                    "total": results["total"],
-                    "processed": results["processed"],
-                    "failed": results["failed"]
-                },
-                "duplicates": results["duplicates"],
-                "uploaded_r2_keys": r2_file_keys,
-                "message": msg
-            })
-            
-            logger.info(f"Duplicates detected: {len(results['duplicates'])}")
-        else:
-            update_db_status({
-                "status": "completed",
-                "progress": {
-                    "total": results["total"],
-                    "processed": results["processed"],
-                    "failed": results["failed"]
-                },
-                "end_time": datetime.now().isoformat(),
-                "message": f"Successfully processed {results['processed']} invoices",
-                "current_file": "All complete"
-            })
-            
-            # AUTO-RECALCULATION: Trigger stock recalculation after successful processing
-            # This ensures stock levels are always up-to-date
-            # Advisory locks prevent race conditions with concurrent recalculations
-            if results["processed"] > 0:
-                logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
+        # Build human-readable completion message
+        parts = []
+        if results["processed"] > 0:
+            parts.append(f"{results['processed']} invoice{'s' if results['processed'] != 1 else ''} processed")
+        if skipped_count > 0:
+            parts.append(f"{skipped_count} duplicate{'s' if skipped_count != 1 else ''} skipped")
+        if results["failed"] > 0:
+            parts.append(f"{results['failed']} failed")
+        completion_msg = ", ".join(parts) if parts else "No invoices were processed"
+
+        # Always mark completed — summary screen will show the breakdown
+        update_db_status({
+            "status": "completed",
+            "progress": {
+                "total": results["total"],
+                "processed": results["processed"],
+                "failed": results["failed"],
+                "skipped": skipped_count,
+                "skipped_details": skipped_summary,
+                "errors": results.get("errors", []),
+            },
+            "duplicates": duplicate_list,   # keep for backwards-compat
+            "uploaded_r2_keys": r2_file_keys,
+            "end_time": datetime.now().isoformat(),
+            "message": completion_msg,
+            "current_file": "All complete",
+        })
+
+        if skipped_count:
+            logger.info(f"Duplicates detected: {skipped_count}")
+
+        # AUTO-RECALCULATION: Trigger stock recalculation after successful processing
+        # This ensures stock levels are always up-to-date
+        # Advisory locks prevent race conditions with concurrent recalculations
+        if results["processed"] > 0:
+            logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
+            try:
+                from routes.stock_routes import recalculate_stock_wrapper
+                
+                # Create a task_id for tracking
+                recalc_task_id = str(uuid.uuid4())
+                
+                # Initialize task in DB (required for wrapper updates)
                 try:
-                    from routes.stock_routes import recalculate_stock_wrapper
-                    
-                    # Create a task_id for tracking
-                    recalc_task_id = str(uuid.uuid4())
-                    
-                    # Initialize task in DB (required for wrapper updates)
-                    try:
-                        db = get_database_client()
-                        db.insert("recalculation_tasks", {
-                            "task_id": recalc_task_id,
-                            "username": username,
-                            "status": "queued",
-                            "message": "Auto-triggered after upload",
-                            "progress": {"total": 0, "processed": 0},
-                            "created_at": datetime.utcnow().isoformat()
-                        })
-                    except Exception as db_err:
-                        logger.warning(f"Could not create recalculation task record: {db_err}")
-                        # Proceed anyway, wrapper might fail on update but calculation might run
-                    
-                    # Run in background (uses stock_executor thread pool)
-                    # Pass BOTH task_id and username as required by wrapper
-                    recalculate_stock_wrapper(recalc_task_id, username)
-                    
-                    logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
-                except Exception as e:
-                    logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
-                    # Don't fail the upload if recalculation fails
-                    # User can manually trigger recalculation later
+                    db = get_database_client()
+                    db.insert("recalculation_tasks", {
+                        "task_id": recalc_task_id,
+                        "username": username,
+                        "status": "queued",
+                        "message": "Auto-triggered after upload",
+                        "progress": {"total": 0, "processed": 0},
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+                except Exception as db_err:
+                    logger.warning(f"Could not create recalculation task record: {db_err}")
+                    # Proceed anyway, wrapper might fail on update but calculation might run
+                
+                # Run in background (uses stock_executor thread pool)
+                # Pass BOTH task_id and username as required by wrapper
+                recalculate_stock_wrapper(recalc_task_id, username)
+                
+                logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
+            except Exception as e:
+                logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
+                # Don't fail the upload if recalculation fails
+                # User can manually trigger recalculation later
 
         
         if results["errors"]:

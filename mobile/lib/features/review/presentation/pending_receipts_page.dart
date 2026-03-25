@@ -8,6 +8,8 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
+import 'package:mobile/features/shared/presentation/widgets/upload_results_summary.dart';
 
 class PendingReceiptsPage extends ConsumerStatefulWidget {
   final int skippedCount;
@@ -54,12 +56,16 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       }
     });
     final state = ref.watch(reviewProvider);
+    final uploadState = ref.watch(uploadProvider);
     final groups = state.groups;
 
     final allDone = groups.isNotEmpty && groups.every((g) => g.isComplete);
     final pendingCount = groups.where((g) => g.status == 'Pending').length;
     final doneCount = groups.where((g) => g.status == 'Done').length;
     final errorCount = groups.where((g) => g.status == 'Error').length;
+
+    final completedStatus = uploadState.lastCompletedStatus;
+    final showSummaryOverlay = completedStatus != null;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -71,68 +77,93 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
         title: const Text('Pending Review'),
         centerTitle: false,
       ),
-      body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (widget.skippedCount > 0)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(left: 16, right: 16, top: 16),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFDE68A)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('⏭️', style: TextStyle(fontSize: 18)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'We skipped ${widget.skippedCount} image${widget.skippedCount > 1 ? 's' : ''} since they were already uploaded.',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF92400E),
-                                height: 1.4,
-                                fontWeight: FontWeight.w500),
-                          ),
+      body: Stack(
+        children: [
+          // ── Main list body ───────────────────────────────────────
+          state.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    // Old skippedCount fallback banner (when lastCompletedStatus unavailable)
+                    if (!showSummaryOverlay && widget.skippedCount > 0)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(
+                            left: 16, right: 16, top: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: const Color(0xFFFDE68A)),
                         ),
-                      ],
-                    ),
-                  ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
-                _buildProgressHeader(
-                    groups.length, doneCount, pendingCount, errorCount),
-                if (state.isSyncing)
-                  LinearProgressIndicator(
-                      value: state.syncProgress?.percentage != null
-                          ? state.syncProgress!.percentage / 100
-                          : null),
-                Expanded(
-                  child: groups.isEmpty
-                      ? const Center(child: Text('All caught up! 🎉'))
-                      : ListView.separated(
-                          padding: const EdgeInsets.only(
-                              left: 16, right: 16, top: 16, bottom: 100),
-                          itemCount: groups.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            return _buildReceiptCard(groups[index])
-                                .animate()
-                                .fadeIn(
-                                    duration: 300.ms, delay: (50 * index).ms)
-                                .slideY(begin: 0.1, curve: Curves.easeOut);
-                          },
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('⏭️',
+                                style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'We skipped ${widget.skippedCount} image${widget.skippedCount > 1 ? 's' : ''} since they were already uploaded.',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF92400E),
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
                         ),
-                )
-              ],
+                      ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
+                    _buildProgressHeader(
+                        groups.length, doneCount, pendingCount, errorCount),
+                    if (state.isSyncing)
+                      LinearProgressIndicator(
+                          value: state.syncProgress?.percentage != null
+                              ? state.syncProgress!.percentage / 100
+                              : null),
+                    Expanded(
+                      child: groups.isEmpty
+                          ? const Center(child: Text('All caught up! 🎉'))
+                          : ListView.separated(
+                              padding: const EdgeInsets.only(
+                                  left: 16,
+                                  right: 16,
+                                  top: 16,
+                                  bottom: 100),
+                              itemCount: groups.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                return _buildReceiptCard(groups[index])
+                                    .animate()
+                                    .fadeIn(
+                                        duration: 300.ms,
+                                        delay: (50 * index).ms)
+                                    .slideY(
+                                        begin: 0.1,
+                                        curve: Curves.easeOut);
+                              },
+                            ),
+                    )
+                  ],
+                ),
+
+          // ── Results summary overlay ──────────────────────────────
+          if (showSummaryOverlay)
+            UploadResultsSummary(
+              status: completedStatus,
+              ctaLabel: 'Review Orders →',
+              onDismiss: () {
+                ref.read(uploadProvider.notifier).clearCompletedStatus();
+              },
             ),
+        ],
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: groups.isNotEmpty
+      floatingActionButton: (!showSummaryOverlay && groups.isNotEmpty)
           ? Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: SizedBox(

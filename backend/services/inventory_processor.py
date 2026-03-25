@@ -117,7 +117,7 @@ def process_vendor_invoice(
         )
         
         # Parse response
-        json_text = response.text.strip()
+        json_text = response.text.strip() if response.text else "{}"
         extracted_data = json.loads(json_text)
         
         # Handle case where Gemini returns just the items array instead of full structure
@@ -147,10 +147,11 @@ def process_vendor_invoice(
         if items:
             valid_items = 0
             for item in items:
-                desc = str(item.get("description", "")).strip()
-                part = str(item.get("part_number", "")).strip()
-                if desc and desc.lower() != "n/a" or part and part.lower() != "n/a":
-                    valid_items += 1
+                if isinstance(item, dict):
+                    desc = str(item.get("description", "")).strip()
+                    part = str(item.get("part_number", "")).strip()
+                    if desc and desc.lower() != "n/a" or part and part.lower() != "n/a":
+                        valid_items += 1
             
             if valid_items == 0:
                 logger.warning("Quality Check Failed: Items found but all appear empty/N/A. Forcing fallback.")
@@ -158,8 +159,8 @@ def process_vendor_invoice(
         
         # Get token usage
         usage = response.usage_metadata
-        input_tokens = usage.prompt_token_count if usage else 0
-        output_tokens = usage.candidates_token_count if usage else 0
+        input_tokens = (usage.prompt_token_count or 0) if usage else 0
+        output_tokens = (usage.candidates_token_count or 0) if usage else 0
         total_tokens = input_tokens + output_tokens
         
         # Calculate cost
@@ -183,16 +184,25 @@ def process_vendor_invoice(
                 config=config_pro
             )
             
-            json_text = response_pro.text.strip()
+            json_text = response_pro.text.strip() if response_pro.text else "{}"
             extracted_data = json.loads(json_text)
+            
+            # Handle case where Pro model also returns just the items array
+            if isinstance(extracted_data, list):
+                extracted_data = {
+                    "invoice_type": "Printed",
+                    "invoice_date": "",
+                    "invoice_number": "",
+                    "items": extracted_data
+                }
             
             # Recalculate with Pro model
             items = extracted_data.get("items", [])
             accuracy = calculate_accuracy(items)
             
             usage_pro = response_pro.usage_metadata
-            input_tokens = usage_pro.prompt_token_count if usage_pro else 0
-            output_tokens = usage_pro.candidates_token_count if usage_pro else 0
+            input_tokens = (usage_pro.prompt_token_count or 0) if usage_pro else 0
+            output_tokens = (usage_pro.candidates_token_count or 0) if usage_pro else 0
             total_tokens = input_tokens + output_tokens
             cost_inr = calculate_cost_inr(input_tokens, output_tokens, "Pro")
             
@@ -274,14 +284,14 @@ def convert_to_inventory_rows(
     else:
         date_to_store = None
     
-    def safe_float(val, default=0):
+    def safe_float(val: Any, default: float = 0.0) -> float:
         """Safely convert to float"""
         if val is None or val == "" or val == "N/A":
-            return default
+            return float(default)
         try:
             return float(val)
         except (ValueError, TypeError):
-            return default
+            return float(default)
     
     def get_bbox_json(data_dict, field_name):
         """Extract bbox and convert to JSON, or None if missing"""
@@ -292,32 +302,33 @@ def convert_to_inventory_rows(
     
     rows = []
     for idx, item in enumerate(items):
-        qty = safe_float(item.get("quantity"), 1)
-        rate = safe_float(item.get("rate"), 0)
-        taxable_amount = safe_float(item.get("amount"), 0)
+        if not isinstance(item, dict):
+            continue
+        qty = safe_float(item.get("quantity"), 1.0)
+        rate = safe_float(item.get("rate"), 0.0)
+        taxable_amount = safe_float(item.get("amount"), 0.0)
         
         # Calculate derived fields
-        disc_percent = safe_float(item.get("disc_percent"), 0)
-        cgst_percent = safe_float(item.get("cgst_percent"), 0)
-        sgst_percent = safe_float(item.get("sgst_percent"), 0)
+        disc_percent = safe_float(item.get("disc_percent"), 0.0)
+        cgst_percent = safe_float(item.get("cgst_percent"), 0.0)
+        sgst_percent = safe_float(item.get("sgst_percent"), 0.0)
         
         discounted_price = ((100 - disc_percent) * taxable_amount) / 100
         taxed_amount = (cgst_percent + sgst_percent) * discounted_price / 100
         net_bill = discounted_price + taxed_amount
         
         # Calculate amount mismatch (for printed invoices)
-        invoice_type = header.get("invoice_type", "Printed")
+        invoice_type = str(header.get("invoice_type", "Printed"))
+        amount_mismatch: float = 0.0
         if invoice_type.lower() == "printed":
             calc_amount = qty * rate
-            amount_mismatch = abs(calc_amount - taxable_amount)
-        else:
-            amount_mismatch = 0.0
+            amount_mismatch = float(abs(calc_amount - taxable_amount))
         
         # Build inventory row
         # Generate unique row_id: use UUID to prevent any collisions
         # Format: first 8 chars of image_hash + UUID + index for traceability
-        unique_id = uuid.uuid4().hex[:8]
-        row_id = f"{image_hash[:8]}_{unique_id}_{idx}"
+        unique_id = str(uuid.uuid4()).split('-')[0]
+        row_id = f"{str(image_hash):.8}_{unique_id}_{idx}"
         
         row = {
             # System columns
@@ -353,10 +364,10 @@ def convert_to_inventory_rows(
             "sgst_percent": sgst_percent,
             
             # Calculated fields
-            "discounted_price": round(discounted_price, 2),
-            "taxed_amount": round(taxed_amount, 2),
-            "net_bill": round(net_bill, 2),
-            "amount_mismatch": round(amount_mismatch, 2),
+            "discounted_price": float(f"{discounted_price:.2f}"),
+            "taxed_amount": float(f"{taxed_amount:.2f}"),
+            "net_bill": float(f"{net_bill:.2f}"),
+            "amount_mismatch": float(f"{amount_mismatch:.2f}"),
             
             # AI model tracking
             "model_used": model_used,
@@ -469,9 +480,9 @@ def process_single_inventory_item(
                 .limit(1) \
                 .execute()
 
-            if dup_check.data:
+            if dup_check.data and isinstance(dup_check.data, list) and len(dup_check.data) > 0:
                 existing = dup_check.data[0]
-                upload_date = existing.get("upload_date")
+                upload_date = existing.get("upload_date") if isinstance(existing, dict) else None
                 date_msg = f"already uploaded on {upload_date}" if upload_date else "already uploaded previously"
                 logger.info(f"Auto-skipping duplicate {file_key} (hash={img_hash[:8]}…)")
                 result["success"] = True
@@ -566,9 +577,7 @@ def process_inventory_batch(
         f"{max_workers} workers, force_upload={force_upload}"
     )
 
-    processed = 0
-    failed = 0
-    skipped_count = 0
+    counters: Dict[str, int] = {"processed": 0, "failed": 0, "skipped_count": 0, "completed_count": 0}
     skipped_duplicates: List[Dict[str, Any]] = []
     errors: List[str] = []
 
@@ -584,40 +593,39 @@ def process_inventory_batch(
             for file_key in file_keys
         }
 
-        completed_count = 0
         for future in as_completed(future_to_file):
-            completed_count += 1
+            counters["completed_count"] += 1
             file_key = future_to_file[future]
             try:
                 result = future.result()
 
                 if result.get("skipped"):
                     # Auto-skipped duplicate — accumulate for summary
-                    skipped_count += 1
+                    counters["skipped_count"] += 1
                     if result.get("duplicate"):
                         skipped_duplicates.append(result["duplicate"])
                     logger.info(f"Skipped duplicate: {file_key}")
 
                 elif result.get("success"):
-                    processed += 1
+                    counters["processed"] += 1
 
                 else:
-                    failed += 1
+                    counters["failed"] += 1
                     if result.get("error"):
                         errors.append(result["error"])
 
             except Exception as exc:
                 logger.error(f"Exception for {file_key}: {exc}")
-                failed += 1
+                counters["failed"] += 1
                 errors.append(f"System error processing {file_key}: {str(exc)}")
 
             if progress_callback:
-                progress_callback(completed_count, failed, len(file_keys), file_key)
+                progress_callback(counters["completed_count"], counters["failed"], len(file_keys), file_key)
 
     results = {
-        "processed": processed,
-        "failed": failed,
-        "skipped_count": skipped_count,
+        "processed": counters["processed"],
+        "failed": counters["failed"],
+        "skipped_count": counters["skipped_count"],
         "skipped_duplicates": skipped_duplicates,
         "errors": errors,
         "duplicates": [],  # kept for backward-compat; always empty now (no blocking)
@@ -625,7 +633,7 @@ def process_inventory_batch(
     }
 
     logger.info(
-        f"Batch done: {processed} processed, {skipped_count} skipped (duplicates), "
-        f"{failed} failed"
+        f"Batch done: {counters['processed']} processed, {counters['skipped_count']} skipped (duplicates), "
+        f"{counters['failed']} failed"
     )
     return results

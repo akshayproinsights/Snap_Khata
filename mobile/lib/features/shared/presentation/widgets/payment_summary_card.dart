@@ -8,7 +8,7 @@ class PaymentSummaryCard extends StatelessWidget {
   final GstMode gstMode;
   final double partsSubtotal; // sum of taxable items
   final double laborSubtotal; // sum of non-taxable items
-  final double gstAmount; // GST on partsSubtotal only
+  final double gstAmount; // Total GST
   final double grandTotal; // parts + labor + GST (if excluded)
   final double originalTotal; // original total from header or simple sum
   final void Function(GstMode) onGstModeChanged;
@@ -81,7 +81,7 @@ class PaymentSummaryCard extends StatelessWidget {
                         )),
                     Text(
                       isGstInvoice
-                          ? 'GST Invoice @18% on Parts'
+                          ? 'GST Invoice @18% on Parts & Labor'
                           : 'Order Summary',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
@@ -186,8 +186,8 @@ class PaymentSummaryCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   _AmountRow(
                     label: gstMode == GstMode.included
-                        ? 'GST @18% on Parts (included within)'
-                        : 'GST @18% on Parts (excluded, added on top)',
+                        ? 'GST @18% (included within)'
+                        : 'GST @18% (excluded, added on top)',
                     value: gstMode == GstMode.included
                         ? '₹${_fmt(gstAmount)} ✓'
                         : '+ ₹${_fmt(gstAmount)}',
@@ -238,7 +238,7 @@ class PaymentSummaryCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Excluded GST adds ₹${_fmt(gstAmount)} on parts — '
+                            'Excluded GST adds ₹${_fmt(gstAmount)} — '
                             'new total ₹${_fmt(grandTotal)} '
                             '(original: ₹${_fmt(originalTotal)})',
                             style: const TextStyle(
@@ -255,7 +255,7 @@ class PaymentSummaryCard extends StatelessWidget {
                 if (gstMode == GstMode.included) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'GST @18% on parts is already included within the prices.',
+                    'GST @18% is already included within the prices.',
                     style: TextStyle(
                       color: Colors.greenAccent.withValues(alpha: 0.75),
                       fontSize: 11,

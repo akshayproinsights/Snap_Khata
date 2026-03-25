@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import '../../domain/models/vendor_ledger_models.dart';
 import '../providers/vendor_ledger_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class VendorLedgerDetailPage extends ConsumerStatefulWidget {
   final VendorLedger ledger;
@@ -114,71 +115,177 @@ class _VendorLedgerDetailPageState
     }
   }
 
-  void _showTransactionItemsDialog(VendorLedgerTransaction tx) async {
+
+  /// Opens a dialog showing the original receipt photo for the given transaction.
+  void _showReceiptPhotoDialog(VendorLedgerTransaction tx) async {
     if (tx.invoiceNumber == null) return;
-    
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppTheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Consumer(
-        builder: (context, ref, _) {
-          return FutureBuilder<List<dynamic>>(
-            future: ref.read(vendorLedgerProvider.notifier).fetchInvoiceItems(tx.invoiceNumber!),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-              }
-              
-              final items = snapshot.data ?? [];
-              
-              return Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white38,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Items in Invoice #${tx.invoiceNumber}', 
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
-                        IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (items.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: Center(child: Text('No items found for this invoice')),
-                      )
-                    else
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: items.length,
-                          separatorBuilder: (context, index) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final item = items[index];
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(item['description'] ?? 'No Description', 
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                              subtitle: Text('Qty: ${item['quantity'] ?? 0} | Rate: ₹${item['rate'] ?? 0}',
-                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                              trailing: Text('₹${item['net_bill'] ?? item['amount'] ?? 0}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            );
-                          },
+                    const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Invoice #${tx.invoiceNumber}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
-                    const SizedBox(height: 16),
+                    ),
+                    IconButton(
+                      icon: const Icon(LucideIcons.x, color: Colors.white70),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ],
                 ),
-              );
-            },
-          );
-        },
+              ),
+              const Divider(color: Colors.white12),
+              // Receipt photo area
+              Expanded(
+                child: FutureBuilder<String?>(
+                  future: ref.read(vendorLedgerProvider.notifier).fetchReceiptLink(tx.invoiceNumber!),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 12),
+                            Text('Loading receipt...', style: TextStyle(color: Colors.white54)),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final receiptLink = snapshot.data;
+
+                    if (receiptLink == null || receiptLink.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(LucideIcons.imageOff, color: Colors.white38, size: 48),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'No receipt photo available',
+                              style: TextStyle(color: Colors.white54, fontSize: 15),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Invoice #${tx.invoiceNumber}',
+                              style: const TextStyle(color: Colors.white30, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl: receiptLink,
+                          fit: BoxFit.contain,
+                          width: double.infinity,
+                          placeholder: (context, url) => Container(
+                            height: 300,
+                            color: Colors.white10,
+                            child: const Center(
+                              child: CircularProgressIndicator(color: Colors.white),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            height: 200,
+                            color: Colors.white10,
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
+                                SizedBox(height: 8),
+                                Text('Could not load receipt image',
+                                  style: TextStyle(color: Colors.white54)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Action buttons
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _togglePaidStatus(tx, !tx.isPaid);
+                        },
+                        icon: Icon(
+                          tx.isPaid ? LucideIcons.xCircle : LucideIcons.checkCircle,
+                          size: 16,
+                          color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
+                        ),
+                        label: Text(
+                          tx.isPaid ? 'Mark as Unpaid' : 'Mark as Paid',
+                          style: TextStyle(
+                            color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -462,9 +569,22 @@ class _VendorLedgerDetailPageState
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    if (!_isSelectionMode)
+                    if (_isSelectionMode)
+                      // In selection mode: show Select All / Deselect All
                       TextButton(
-                        onPressed: () => _showAddPaymentDialog(context),
+                        onPressed: () {
+                          final invoiceTxIds = txList
+                              .where((t) => t.transactionType != 'PAYMENT')
+                              .map((t) => t.id)
+                              .toSet();
+                          setState(() {
+                            if (_selectedIds.containsAll(invoiceTxIds)) {
+                              _selectedIds.clear();
+                            } else {
+                              _selectedIds.addAll(invoiceTxIds);
+                            }
+                          });
+                        },
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.primary,
                           backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
@@ -473,13 +593,68 @@ class _VendorLedgerDetailPageState
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        child: const Row(
-                          children: [
-                            Icon(LucideIcons.indianRupee, size: 14),
-                            SizedBox(width: 6),
-                            Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
+                        child: Builder(builder: (context) {
+                          final invoiceTxIds = txList
+                              .where((t) => t.transactionType != 'PAYMENT')
+                              .map((t) => t.id)
+                              .toSet();
+                          final allSelected = _selectedIds.containsAll(invoiceTxIds) && invoiceTxIds.isNotEmpty;
+                          return Text(
+                            allSelected ? 'Deselect All' : 'Select All',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          );
+                        }),
+                      )
+                    else
+                      Row(
+                        children: [
+                          // Select button
+                          TextButton(
+                            onPressed: () {
+                              // Enter selection mode by selecting the first invoice transaction
+                              final firstInvoiceTx = txList.firstWhere(
+                                (t) => t.transactionType != 'PAYMENT',
+                                orElse: () => txList.first,
+                              );
+                              _toggleSelection(firstInvoiceTx.id);
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.primary,
+                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(LucideIcons.checkSquare, size: 14),
+                                SizedBox(width: 6),
+                                Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Pay button
+                          TextButton(
+                            onPressed: () => _showAddPaymentDialog(context),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.primary,
+                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(LucideIcons.indianRupee, size: 14),
+                                SizedBox(width: 6),
+                                Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ],
                       )
                   ],
                 ),
@@ -738,8 +913,8 @@ class _VendorLedgerDetailPageState
                                  icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.primary),
                                  padding: EdgeInsets.zero,
                                  constraints: const BoxConstraints(),
-                                 onPressed: () => _showTransactionItemsDialog(tx),
-                                 tooltip: 'Review Items',
+                                 onPressed: () => _showReceiptPhotoDialog(tx),
+                                 tooltip: 'View Receipt Photo',
                                ),
                             const SizedBox(width: 8),
                             Text(

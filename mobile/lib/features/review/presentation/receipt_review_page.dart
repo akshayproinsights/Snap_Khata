@@ -112,7 +112,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await prefs.setString('gst_mode_${widget.group.receiptNumber}', mode.name);
   }
 
-  // ── GST computed helpers (on PARTS only) ─────────────────────────────────
+  // ── GST computed helpers ─────────────────────────────────
   // Uses positive match for 'PART' — same logic as order_detail_page.dart
   // and the visual partsItems grouping below.
   // FALLBACK: if NO items have a recognized type (all null/empty), treat all
@@ -144,17 +144,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       })
       .fold(0.0, (s, i) => s + i.amount);
 
-  double _gstAmount(double partsSubtotal) {
-    if (_gstMode == GstMode.excluded) return partsSubtotal * 0.18;
-    if (_gstMode == GstMode.included) return partsSubtotal * 18 / 118;
+  double _gstAmount(double totalSubtotal) {
+    if (_gstMode == GstMode.excluded) return totalSubtotal * 0.18;
+    if (_gstMode == GstMode.included) return totalSubtotal * 18 / 118;
     return 0;
   }
 
   double _totalAfterGst(InvoiceReviewGroup group) {
-    final parts = _partsSubtotal(group);
-    final labor = _laborSubtotal(group);
-    if (_gstMode == GstMode.excluded) return parts + _gstAmount(parts) + labor;
-    return parts + labor; // included or none: total unchanged
+    final totalSubtotal = _partsSubtotal(group) + _laborSubtotal(group);
+    if (_gstMode == GstMode.excluded) return totalSubtotal + _gstAmount(totalSubtotal);
+    return totalSubtotal; // included or none: total unchanged
   }
 
   void _showFullImage(String imageUrl) {
@@ -341,6 +340,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ? shopProfile.name
                   : 'Our Shop';
 
+              // Log shop name for debugging
+              debugPrint('Receipt review WhatsApp message - Shop name: "$shopName" (from shopProfile.name: "${shopProfile.name}")');
+              debugPrint('Receipt review WhatsApp message - Payment mode: $_paymentMode');
+              debugPrint('Receipt review WhatsApp message - GST mode: $_gstMode');
+
               OrderPaymentStatus status;
               if (_paymentMode == 'Cash') {
                 status = OrderPaymentStatus.fullyPaid;
@@ -523,7 +527,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   gstMode: _gstMode,
                   partsSubtotal: _partsSubtotal(group),
                   laborSubtotal: _laborSubtotal(group),
-                  gstAmount: _gstAmount(_partsSubtotal(group)),
+                  gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
                   grandTotal: _totalAfterGst(group),
                   originalTotal: group.header?.amount ??
                       (_partsSubtotal(group) + _laborSubtotal(group)),

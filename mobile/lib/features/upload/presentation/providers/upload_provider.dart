@@ -38,6 +38,10 @@ class UploadState {
   /// The UI MUST show a loading screen (NOT the camera page) while this is true.
   final bool isRestoringState;
 
+  /// Snapshot of the completed task status, used to display the results summary
+  /// overlay. Cleared when the user dismisses the summary.
+  final UploadTaskStatus? lastCompletedStatus;
+
   // ── Sequential duplicate review queue (mirrors web app logic) ────────────
   /// Full list of duplicate objects returned by backend.
   final List<dynamic> duplicateQueue;
@@ -76,6 +80,7 @@ class UploadState {
     this.filesToForceUpload = const [],
     this.allR2Keys = const [],
     this.skippedDuplicatesCount = 0,
+    this.lastCompletedStatus,
   });
 
   int get pendingCount =>
@@ -116,6 +121,8 @@ class UploadState {
     List<String>? filesToForceUpload,
     List<String>? allR2Keys,
     int? skippedDuplicatesCount,
+    UploadTaskStatus? lastCompletedStatus,
+    bool clearLastCompletedStatus = false,
   }) {
     return UploadState(
       fileItems: fileItems ?? this.fileItems,
@@ -139,6 +146,9 @@ class UploadState {
       allR2Keys: allR2Keys ?? this.allR2Keys,
       skippedDuplicatesCount:
           skippedDuplicatesCount ?? this.skippedDuplicatesCount,
+      lastCompletedStatus: clearLastCompletedStatus
+          ? null
+          : (lastCompletedStatus ?? this.lastCompletedStatus),
     );
   }
 }
@@ -667,6 +677,7 @@ class UploadNotifier extends Notifier<UploadState> {
 
   Future<void> _handleCompleted() async {
     await UploadPersistenceService.clearTask(); // ✅ clean up disk
+    final completedStatus = state.processingStatus;
     final done = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.processing) {
         return item.copyWith(status: UploadFileStatus.done);
@@ -677,12 +688,18 @@ class UploadNotifier extends Notifier<UploadState> {
       fileItems: done,
       isProcessing: false,
       clearActiveTaskId: true,
+      lastCompletedStatus: completedStatus,
     );
     _backgroundTask.completeTaskWithAction(
       'Orders ready to review!',
       'Review',
       () => AppRouter.router.go('/review'),
     );
+  }
+
+  /// Called by the review page when the user dismisses the summary overlay.
+  void clearCompletedStatus() {
+    state = state.copyWith(clearLastCompletedStatus: true);
   }
 
   Future<void> _handleProcessingFailed(String message) async {

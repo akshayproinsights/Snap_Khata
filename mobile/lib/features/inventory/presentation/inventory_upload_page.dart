@@ -174,14 +174,18 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   Widget build(BuildContext context) {
     final state = ref.watch(inventoryUploadProvider);
 
-    // Auto-navigate to inventory-review when done
+    // Auto-navigate to inventory-review when done.
+    // Suppressed if lastCompletedStatus has skipped or failed items — we show
+    // the results summary first and let the user tap "Go to Review".
     ref.listen(inventoryUploadProvider, (previous, next) async {
       final wasAlreadyDone = previous?.allDone == true;
       if (next.allDone && !wasAlreadyDone) {
+        final last = next.lastCompletedStatus;
+        final hasDetails = last != null &&
+            (last.skipped > 0 || last.failed > 0 || last.processed == 0);
+        if (hasDetails) return; // Let the summary screen handle navigation
         await Future.delayed(const Duration(milliseconds: 600));
         if (!context.mounted) return;
-        // Navigate FIRST, then clear — avoids a rebuild that would show the
-        // camera screen momentarily before the route transition completes.
         context.go('/inventory-review');
         ref.read(inventoryUploadProvider.notifier).clearFiles();
       }
@@ -196,7 +200,21 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
       );
     }
 
-    // ── Success view ──────────────────────────────────────────────────────
+    // ── Results summary (has skipped/failed detail to show) ───────────────
+    final completedStatus = state.lastCompletedStatus;
+    if (state.allDone && completedStatus != null &&
+        (completedStatus.skipped > 0 || completedStatus.failed > 0 ||
+            completedStatus.processed == 0)) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: _buildBasicAppBar(),
+        body: SafeArea(
+          child: _buildResultsSummaryView(completedStatus),
+        ),
+      );
+    }
+
+    // ── Pure-success view (all processed, nothing skipped/failed) ─────────
     if (state.allDone) {
       return Scaffold(
         backgroundColor: AppTheme.background,
@@ -601,6 +619,299 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
           ),
         ],
       ).animate().fadeIn().slideY(begin: 0.1),
+    );
+  }
+
+  /// Rich results summary — shown whenever there are skipped duplicates or failures.
+  Widget _buildResultsSummaryView(UploadTaskStatus status) {
+    final processed = status.processed;
+    final skipped = status.skipped;
+    final failed = status.failed;
+    final skippedDetails = status.skippedDetails;
+
+
+    final allDuplicates = processed == 0 && failed == 0 && skipped > 0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header icon + title
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: allDuplicates
+                        ? const Color(0xFFFFF3E0)
+                        : (failed > 0
+                            ? AppTheme.error.withValues(alpha: 0.10)
+                            : AppTheme.success.withValues(alpha: 0.12)),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    allDuplicates
+                        ? LucideIcons.copy
+                        : (failed > 0
+                            ? LucideIcons.alertTriangle
+                            : LucideIcons.clipboardCheck),
+                    size: 52,
+                    color: allDuplicates
+                        ? const Color(0xFFE65100)
+                        : (failed > 0 ? AppTheme.error : AppTheme.success),
+                  ),
+                ).animate().scale(
+                    duration: 400.ms, curve: Curves.easeOutBack,
+                    begin: const Offset(0.6, 0.6)),
+                const SizedBox(height: 16),
+                Text(
+                  allDuplicates
+                      ? 'Already Uploaded'
+                      : 'Upload Summary',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: allDuplicates
+                        ? const Color(0xFFE65100)
+                        : AppTheme.textPrimary,
+                  ),
+                ).animate().fadeIn(delay: 150.ms),
+                if (allDuplicates) ...
+                  [
+                    const SizedBox(height: 6),
+                    const Text(
+                      'These invoices were already in your system.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                    ).animate().fadeIn(delay: 200.ms),
+                  ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // ── Stats row ────────────────────────────────────────────────────
+          Row(
+            children: [
+              if (processed > 0)
+                Expanded(
+                  child: _StatChip(
+                    icon: LucideIcons.checkCircle2,
+                    color: AppTheme.success,
+                    count: processed,
+                    label: 'Added',
+                  ),
+                ),
+              if (processed > 0 && (skipped > 0 || failed > 0))
+                const SizedBox(width: 10),
+              if (skipped > 0)
+                Expanded(
+                  child: _StatChip(
+                    icon: LucideIcons.copy,
+                    color: const Color(0xFFE65100),
+                    count: skipped,
+                    label: 'Duplicate${skipped == 1 ? '' : 's'}',
+                  ),
+                ),
+              if (skipped > 0 && failed > 0) const SizedBox(width: 10),
+              if (failed > 0)
+                Expanded(
+                  child: _StatChip(
+                    icon: LucideIcons.xCircle,
+                    color: AppTheme.error,
+                    count: failed,
+                    label: 'Failed',
+                  ),
+                ),
+            ],
+          ).animate().fadeIn(delay: 250.ms),
+
+          // ── Duplicate details ─────────────────────────────────────────────
+          if (skippedDetails.isNotEmpty) ...
+            [
+              const SizedBox(height: 24),
+              const Text(
+                '⏭️  Skipped — Already Uploaded',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...skippedDetails.map((dup) {
+                final inv = dup['invoice_number'] as String? ?? '';
+                final date = dup['invoice_date'] as String? ?? '';
+                final msg = dup['message'] as String? ?? 'Already uploaded previously';
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8F5),
+                    border: Border.all(color: const Color(0xFFFFCCBC)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.copy,
+                          size: 18, color: Color(0xFFE65100)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              inv.isNotEmpty ? 'Invoice #$inv' : 'Invoice (no number)',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            if (date.isNotEmpty)
+                              Text(
+                                date,
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                            Text(
+                              msg,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFE65100),
+                                  fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(delay: 300.ms).slideX(begin: 0.1);
+              }),
+            ],
+
+          // ── Failed details ─────────────────────────────────────────────────
+          if (failed > 0) ...
+            [
+              const SizedBox(height: 20),
+              const Text(
+                '❌  Failed to Read',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.06),
+                  border: Border.all(color: AppTheme.error.withValues(alpha: 0.25)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(LucideIcons.camera,
+                            size: 18, color: AppTheme.error.withValues(alpha: 0.8)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$failed invoice${failed == 1 ? '' : 's'} could not be read by AI.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '💡 Tip: Retake the photo with better lighting and make sure the invoice is flat and fully visible inside the frame.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: 350.ms),
+            ],
+
+          const SizedBox(height: 32),
+
+          // ── CTA buttons ────────────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                ref.read(inventoryUploadProvider.notifier).clearFiles();
+                context.go('/inventory-review');
+              },
+              icon: const Icon(LucideIcons.packageCheck,
+                  color: Colors.white, size: 20),
+              label: Text(
+                processed > 0 ? 'Go to Pending Review  →' : 'Back to Inventory  →',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    processed > 0 ? AppTheme.success : AppTheme.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                elevation: 6,
+              ),
+            ),
+          ).animate().fadeIn(delay: 450.ms).slideY(begin: 0.3),
+
+          if (failed > 0) ...
+            [
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref.read(inventoryUploadProvider.notifier).forceReset();
+                  },
+                  icon: const Icon(LucideIcons.camera, size: 18),
+                  label: const Text('Retake Failed Photos'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.border),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ).animate().fadeIn(delay: 500.ms),
+            ],
+
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Redirecting automatically in a few seconds…',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary.withValues(alpha: 0.6)),
+            ),
+          ).animate().fadeIn(delay: 600.ms),
+        ],
+      ),
     );
   }
 
@@ -1485,6 +1796,58 @@ class _PhaseRow extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _StatChip: small summary tile showing count + icon + label
+// Used in the results summary view
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  final String label;
+
+  const _StatChip({
+    required this.icon,
+    required this.color,
+    required this.count,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 22, color: color),
+          const SizedBox(height: 6),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color.withValues(alpha: 0.8),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

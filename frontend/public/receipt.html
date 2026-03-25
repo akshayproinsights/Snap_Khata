@@ -785,16 +785,18 @@
             const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
             const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
 
+            const totalSubtotal = partsSubtotal + laborSubtotal;
+
             let gstAmt, grandTotal;
             if (gstMode === 'included') {
-                gstAmt = partsSubtotal * 18 / 118;
-                grandTotal = Number(data.total_amount) || (partsSubtotal + laborSubtotal);
+                gstAmt = totalSubtotal * 18 / 118;
+                grandTotal = Number(data.total_amount) || totalSubtotal;
             } else { // excluded
-                gstAmt = partsSubtotal * 0.18;
-                grandTotal = Number(data.total_amount) || (partsSubtotal + gstAmt + laborSubtotal);
+                gstAmt = totalSubtotal * 0.18;
+                grandTotal = Number(data.total_amount) || (totalSubtotal + gstAmt);
             }
 
-            const taxableValue = gstMode === 'included' ? partsSubtotal - gstAmt : partsSubtotal;
+            const taxableValue = gstMode === 'included' ? totalSubtotal - gstAmt : totalSubtotal;
 
             let itemsHtml = '';
 
@@ -830,14 +832,19 @@
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
+                    const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
+                    const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
+                    const gstAmountForItem = baseAmt * 0.18;
+                    const totalForItem = baseAmt + gstAmountForItem;
+                    
                     itemsHtml += `
                     <tr>
                         <td class="center">${taxableItems.length + idx + 1}</td>
                         <td>${item.name || 'Servicing'}</td>
                         <td class="center">${qty}</td>
-                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">—</td>
-                        <td class="right">${fmtMoney(amount)}</td>
+                        <td class="right">${fmtMoney(baseRate)}</td>
+                        <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                        <td class="right">${fmtMoney(totalForItem)}</td>
                     </tr>`;
                 });
             }
