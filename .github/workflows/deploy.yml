@@ -6,17 +6,114 @@ on:
       - main
 
 jobs:
-  deploy:
+  # ── BUILD JOB: Build all frontend assets on GitHub Actions ───────────────
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@master
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 1. Setup Flutter ──────────────────────────────────────────────────
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: ./mobile
+        run: flutter build web --release
+
+      # ── 2. Setup Node.js for React frontend ─────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies and build React
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ── 3. Upload build artifacts ────────────────────────────────────────
+      - name: Upload Flutter Web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: mobile/build/web/
+          retention-days: 1
+
+      - name: Upload React build
+        uses: actions/upload-artifact@v4
+        with:
+          name: react-web-build
+          path: frontend/dist/
+          retention-days: 1
+
+  # ── DEPLOY JOB: Transfer files and restart services on server ────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 1. Download build artifacts ───────────────────────────────────────
+      - name: Download Flutter Web build
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: mobile/build/web/
+
+      - name: Download React build
+        uses: actions/download-artifact@v4
+        with:
+          name: react-web-build
+          path: frontend/dist/
+
+      # ── 2. Deploy Flutter Web files via SCP ─────────────────────────────
+      - name: Deploy Flutter Web to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HETZNER_HOST }}
-          username: root
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "mobile/build/web/*"
+          target: "/home/deploy/Snap_Khata/mobile/build/web/"
+          strip_components: 3
+          overwrite: true
+
+      # ── 3. Deploy React frontend files via SCP ────────────────────────────
+      - name: Deploy React Web to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "frontend/dist/*"
+          target: "/home/deploy/Snap_Khata/frontend/dist/"
+          strip_components: 2
+          overwrite: true
+
+      # ── 4. Update backend code and restart services via SSH ─────────────
+      - name: Deploy backend and restart services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             cd ~/Snap_Khata
+            
+            # Pull latest code (backend changes, configs, etc.)
             git pull origin main
 
             # Update .env file with secrets from GitHub
@@ -24,42 +121,44 @@ jobs:
               sed -i "s/\${GOOGLE_API_KEY}/${{ secrets.GOOGLE_API_KEY }}/g" backend/.env
             fi
 
-            # ── 1. Python Backend ──────────────────────────────────────────────
+            # ── Python Backend ────────────────────────────────────────────
             cd backend
-            source venv/bin/activate
-            pip install -r requirements.txt
+            
+            # Fix permissions and update dependencies
+            if [ -d venv ]; then
+              # Ensure venv is owned by deploy user and has correct permissions
+              sudo chown -R deploy:deploy venv/
+              chmod -R u+rwX venv/
+              
+              # Activate and update
+              source venv/bin/activate
+              pip install --upgrade pip
+              pip install -r requirements.txt
+            else
+              echo "WARNING: Virtual environment not found. Creating new venv..."
+              python3 -m venv venv
+              source venv/bin/activate
+              pip install --upgrade pip
+              pip install -r requirements.txt
+            fi
             cd ..
 
-            # ── 2. Flutter Web App (Mobile companion) ──────────────────────────
-            cd mobile
-            flutter build web --release
-            cd ..
-
-            # ── 3. React Web App (mydigientry.com) ────────────────────────────
-            cd frontend
-            npm install
-            npm run build
-            cd ..
-
-            # Ensure 'serve' is available globally for PM2
-            which serve || npm install -g serve
-
-            # ── 4. Nginx Setup (idempotent — safe to run every deploy) ────────
+            # ── Nginx Setup (idempotent) ────────────────────────────────
             # Install Nginx if not present
-            which nginx || (apt-get update -qq && apt-get install -y -qq nginx)
+            which nginx || (sudo apt-get update -qq && sudo apt-get install -y -qq nginx)
 
             # Link our config if not already linked
             CONF_SRC="$HOME/Snap_Khata/nginx/mydigientry.conf"
             CONF_DST="/etc/nginx/sites-enabled/mydigientry.conf"
             if [ ! -f "$CONF_DST" ]; then
-              cp "$CONF_SRC" "$CONF_DST"
+              sudo cp "$CONF_SRC" "$CONF_DST"
               # Disable default site to avoid conflicts
-              rm -f /etc/nginx/sites-enabled/default
+              sudo rm -f /etc/nginx/sites-enabled/default
             fi
 
             # Test config then reload
-            nginx -t && systemctl reload nginx
+            sudo nginx -t && sudo systemctl reload nginx
 
-            # ── 5. Restart all PM2 Services ───────────────────────────────────
+            # ── Restart all PM2 Services ───────────────────────────────
             pm2 restart ecosystem.config.js --update-env
             pm2 save
