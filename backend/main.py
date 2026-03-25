@@ -3,7 +3,7 @@ Main FastAPI application.
 Handles routing, middleware, and application lifecycle.
 """
 print("SnapKhata Backend is starting......Final Doneee..")
-# Final check done yep done yes git yep done api done yesss
+# Final check done yep done yes git yep done api done yesss finally
 # Initial deployment trigger done yeah d addddd
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
