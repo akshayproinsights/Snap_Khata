@@ -38,7 +38,8 @@ const ReviewDatesPage: React.FC = () => {
         const counts = {
             pending: 0,
             completed: 0,
-            duplicates: 0
+            duplicates: 0,
+            duplicateImages: 0
         };
 
         records.forEach(r => {
@@ -49,6 +50,8 @@ const ReviewDatesPage: React.FC = () => {
                 counts.completed++;
             } else if (status === 'duplicate receipt number') {
                 counts.duplicates++;
+            } else if (status === 'duplicate image') {
+                counts.duplicateImages++;
             }
         });
 
@@ -57,11 +60,11 @@ const ReviewDatesPage: React.FC = () => {
 
     // Filter records based on showCompleted toggle
     const filteredRecords = useMemo(() => {
-        // Show Pending and Duplicate Receipt Number by default
+        // Show Pending, Duplicate Receipt Number, and Duplicate Image by default
         // If showCompleted is true, also show Done records
         return records.filter(r => {
             const status = r['Verification Status'] || 'Pending';
-            if (status === 'Pending' || status === 'Duplicate Receipt Number') {
+            if (status === 'Pending' || status === 'Duplicate Receipt Number' || status === 'Duplicate Image') {
                 return true;
             }
             if (status === 'Done' && showCompleted) {
@@ -341,11 +344,18 @@ const ReviewDatesPage: React.FC = () => {
                             {statusCounts.duplicates > 0 && (
                                 <div className="flex items-center gap-2">
                                     <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
-                                        {statusCounts.duplicates} Duplicates
+                                        {statusCounts.duplicates} Duplicate Receipts
                                     </span>
                                 </div>
                             )}
-                            {statusCounts.pending === 0 && statusCounts.completed === 0 && statusCounts.duplicates === 0 && (
+                            {statusCounts.duplicateImages > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                                        {statusCounts.duplicateImages} Duplicate Images
+                                    </span>
+                                </div>
+                            )}
+                            {statusCounts.pending === 0 && statusCounts.completed === 0 && statusCounts.duplicates === 0 && statusCounts.duplicateImages === 0 && (
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-gray-600">All caught up! 🎉</span>
                                 </div>

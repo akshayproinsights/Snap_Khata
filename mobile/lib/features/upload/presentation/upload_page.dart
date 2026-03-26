@@ -181,7 +181,18 @@ class _UploadPageState extends ConsumerState<UploadPage>
       }
     });
 
-    // (Duplicate review logic removed)
+    // ── DUPLICATE DETECTED ────────────────────────────────────────────────
+    if (state.hasDuplicate && state.currentDuplicate != null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: _buildBasicAppBar(),
+        body: SafeArea(
+          child: Center(
+            child: _buildDuplicateReviewView(state, ref, context),
+          ),
+        ),
+      );
+    }
 
     // ── Actual upload error (not duplicate) ───────────────────────────────
     if (state.failedCount > 0 && state.pendingCount == 0) {
@@ -715,6 +726,168 @@ class _UploadPageState extends ConsumerState<UploadPage>
             'Taking you to review automatically...',
             style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ).animate().fadeIn(delay: 700.ms),
+        ],
+      ),
+    );
+  }
+
+  // ── DUPLICATE REVIEW SCREEN ────────────────────────────────────────────
+  Widget _buildDuplicateReviewView(UploadState state, WidgetRef ref, BuildContext context) {
+    final duplicate = state.currentDuplicate as Map<String, dynamic>? ?? {};
+    final existingInvoice = duplicate['existing_invoice'] as Map<String, dynamic>? ?? {};
+    final index = state.currentDuplicateIndex + 1;
+    final total = state.duplicateQueue.length;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ── Header ──
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                const Icon(LucideIcons.alertTriangle,
+                    size: 48, color: Colors.orange),
+                const SizedBox(height: 12),
+                const Text(
+                  'Duplicate Invoice Detected',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Duplicate $index of $total',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Comparison Details ──
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppTheme.border),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '📋 Existing Invoice',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.success,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildDetailRow('Invoice #', existingInvoice['receipt_number']?.toString() ?? 'N/A'),
+                _buildDetailRow('Date', existingInvoice['date']?.toString() ?? 'N/A'),
+                if (existingInvoice['customer'] != null && (existingInvoice['customer'] as String).isNotEmpty)
+                  _buildDetailRow('Customer', existingInvoice['customer']?.toString() ?? 'N/A'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Action Buttons ──
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ref.read(uploadProvider.notifier).skipCurrentDuplicate();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: AppTheme.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Skip This File'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    ref.read(uploadProvider.notifier).replaceCurrentDuplicate();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Replace Old Record'),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Progress indicator ──
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: index / total,
+              minHeight: 6,
+              backgroundColor: AppTheme.border.withValues(alpha: 0.3),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

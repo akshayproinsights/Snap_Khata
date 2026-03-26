@@ -47,7 +47,7 @@ class WhatsAppUtils {
 
       case OrderPaymentStatus.partiallyPaid:
         return 'Hi $customerName,\n'
-            'Your order with $businessName has been successfully generated. 📝\n\n'
+            'Your order with *$businessName* has been successfully generated. 📝\n\n'
             'Here is your payment summary:\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
@@ -55,7 +55,7 @@ class WhatsAppUtils {
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi $customerName,\n'
-            'Your order with $businessName has been successfully generated. 📝\n\n'
+            'Your order with *$businessName* has been successfully generated. 📝\n\n'
             '💳 Amount Paid: $totalFmt';
     }
   }

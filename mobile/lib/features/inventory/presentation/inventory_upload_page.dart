@@ -200,6 +200,17 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
       );
     }
 
+    // ── Duplicate review view (when duplicates need user action) ───────────
+    if (state.hasDuplicate && state.currentDuplicate != null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: _buildBasicAppBar(),
+        body: SafeArea(
+          child: _buildDuplicateReviewView(state),
+        ),
+      );
+    }
+
     // ── Results summary (has skipped/failed detail to show) ───────────────
     final completedStatus = state.lastCompletedStatus;
     if (state.allDone && completedStatus != null &&
@@ -1000,6 +1011,184 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
             'Taking you to inventory review automatically...',
             style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ).animate().fadeIn(delay: 700.ms),
+        ],
+      ),
+    );
+  }
+
+  /// Duplicate review view — shown when duplicates need user action
+  Widget _buildDuplicateReviewView(InventoryUploadState state) {
+    final current = state.currentDuplicate;
+    if (current == null) {
+      return const Center(child: Text('No duplicate to review'));
+    }
+
+    final invoiceNumber = current['invoice_number'] as String? ?? '';
+    final invoiceDate = current['invoice_date'] as String? ?? '';
+    final message = current['message'] as String? ?? 'Already uploaded previously';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    LucideIcons.copy,
+                    size: 52,
+                    color: Color(0xFFE65100),
+                  ),
+                ).animate().scale(
+                    duration: 400.ms, curve: Curves.easeOutBack,
+                    begin: const Offset(0.6, 0.6)),
+                const SizedBox(height: 16),
+                Text(
+                  'Duplicate Invoice Detected',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFE65100),
+                  ),
+                ).animate().fadeIn(delay: 150.ms),
+                const SizedBox(height: 6),
+                Text(
+                  'This invoice was already uploaded to your inventory.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                ).animate().fadeIn(delay: 200.ms),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // Duplicate details card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8F5),
+              border: Border.all(color: const Color(0xFFFFCCBC)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (invoiceNumber.isNotEmpty) ...[
+                  const Text(
+                    'Invoice Number',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    invoiceNumber,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (invoiceDate.isNotEmpty) ...[
+                  const Text(
+                    'Invoice Date',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    invoiceDate,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                const Text(
+                  'Message',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFFE65100),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(delay: 250.ms),
+
+          const SizedBox(height: 24),
+
+          // Progress indicator
+          Center(
+            child: Text(
+              'Duplicate ${state.currentDuplicateIndex + 1} of ${state.duplicateQueue.length}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref.read(inventoryUploadProvider.notifier).skipDuplicate();
+                  },
+                  icon: const Icon(LucideIcons.skipForward, size: 18),
+                  label: const Text('Skip This File'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: AppTheme.textPrimary,
+                    side: BorderSide(color: AppTheme.border),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    ref.read(inventoryUploadProvider.notifier).replaceDuplicate();
+                  },
+                  icon: const Icon(LucideIcons.refreshCw, size: 18),
+                  label: const Text('Replace Old'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: const Color(0xFFE65100),
+                  ),
+                ),
+              ),
+            ],
+          ).animate().fadeIn(delay: 300.ms).slideX(begin: 0.1),
         ],
       ),
     );

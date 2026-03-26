@@ -691,7 +691,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         'This is a gentle reminder from *$shopName* regarding your pending balance.\n\n'
         '⚠️ *Total Amount Due: $pendingFmt*\n\n'
         'Please find your invoice receipt for reference:\n$link\n\n'
-        'Thank you for your business!';
+        'Thank you for your business!\n— *$shopName*';
 
     final phoneController = TextEditingController(text: widget.ledger.customerPhone ?? '');
 

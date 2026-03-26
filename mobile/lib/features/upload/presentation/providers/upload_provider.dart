@@ -720,12 +720,22 @@ class UploadNotifier extends Notifier<UploadState> {
   }
 
   Future<void> _handleDuplicate() async {
-    await UploadPersistenceService.clearTask();
+    // ❌ DO NOT clear task yet! User needs to review and decide on each duplicate first!
+    // await UploadPersistenceService.clearTask();
+    
     final dupStatus = state.processingStatus;
     final duplicates = List<dynamic>.from(dupStatus?.duplicates ?? []);
 
-    final int skippedCount = duplicates.length;
+    if (duplicates.isEmpty) {
+      // No duplicates to show — complete normally
+      await UploadPersistenceService.clearTask();
+      finishDuplicateReview();
+      return;
+    }
 
+    // ✅ SET UP STATE TO SHOW DUPLICATE MODAL
+    // This mirrors the web app's sequential duplicate review workflow
+    
     final done = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.processing) {
         return item.copyWith(status: UploadFileStatus.done);
@@ -736,16 +746,17 @@ class UploadNotifier extends Notifier<UploadState> {
     state = state.copyWith(
       fileItems: done,
       isProcessing: false,
-      hasDuplicate: false, // We aren't showing the queue anymore
-      clearActiveTaskId: true,
-      skippedDuplicatesCount: skippedCount,
-      // no need to set duplicateQueue, etc. since we're done
+      hasDuplicate: true, // ✅ SHOW THE DUPLICATE MODAL!
+      clearActiveTaskId: false, // Keep task ID — might need to retry
+      duplicateQueue: duplicates, // ✅ Load all duplicates
+      currentDuplicateIndex: 0, // ✅ Start at first duplicate
+      filesToSkip: [],
+      filesToForceUpload: [],
     );
-    _backgroundTask.completeTaskWithAction(
-      'Orders ready to review!',
-      'Review',
-      () =>
-          AppRouter.router.go('/review', extra: {'skippedCount': skippedCount}),
+
+    // ✅ Notify user that duplicate review UI is now available
+    _backgroundTask.updateTask(
+      'Duplicate ${state.currentDuplicateIndex + 1}/${duplicates.length} — tap to review',
     );
   }
 

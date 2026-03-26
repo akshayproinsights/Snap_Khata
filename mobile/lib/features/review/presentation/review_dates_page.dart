@@ -61,6 +61,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
     int pending = 0;
     int completed = 0;
     int duplicates = 0;
+    int duplicateImages = 0;
     int total = 0;
 
     final records = <ReviewRecord>[];
@@ -76,13 +77,15 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
           completed++;
         } else if (status == 'duplicate receipt number') {
           duplicates++;
+        } else if (status == 'duplicate image') {
+          duplicateImages++;
         }
       }
     }
 
     final filteredRecords = records.where((r) {
       final status = r.verificationStatus.toLowerCase();
-      if (status == 'pending' || status == 'duplicate receipt number') {
+      if (status == 'pending' || status == 'duplicate receipt number' || status == 'duplicate image') {
         return true;
       }
       if (status == 'done' && _showCompleted) {
@@ -120,7 +123,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                   ref.read(reviewProvider.notifier).fetchReviewData(),
               child: Column(
                 children: [
-                  _buildStatsHeader(pending, completed, duplicates, total),
+                  _buildStatsHeader(pending, completed, duplicates, duplicateImages, total),
                   if (state.isSyncing)
                     LinearProgressIndicator(
                       value: state.syncProgress?.percentage != null
@@ -219,7 +222,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
   }
 
   Widget _buildStatsHeader(
-      int pending, int completed, int duplicates, int total) {
+      int pending, int completed, int duplicates, int duplicateImages, int total) {
     if (total == 0) return const SizedBox.shrink();
     final double completePercent = total > 0 ? (completed / total) : 0;
 
@@ -242,9 +245,12 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                 _buildStatIndicator('$completed Completed',
                     Colors.green.shade700, Colors.green.shade50),
               if (duplicates > 0)
-                _buildStatIndicator('$duplicates Duplicates',
+                _buildStatIndicator('$duplicates Duplicate Receipts',
                     Colors.orange.shade700, Colors.orange.shade50),
-              if (pending == 0 && completed == 0 && duplicates == 0)
+              if (duplicateImages > 0)
+                _buildStatIndicator('$duplicateImages Duplicate Images',
+                    Colors.red.shade700, Colors.red.shade50),
+              if (pending == 0 && completed == 0 && duplicates == 0 && duplicateImages == 0)
                 const Text('All caught up! 🎉',
                     style:
                         TextStyle(color: AppTheme.textSecondary, fontSize: 14)),

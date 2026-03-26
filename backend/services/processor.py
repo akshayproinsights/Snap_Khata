@@ -1112,6 +1112,10 @@ def process_invoices_batch(
             # Create verification records in Supabase
             create_verification_records_supabase(all_rows, username)
             
+            # Create duplicate records in verification_dates for skipped duplicates
+            if results.get("duplicates"):
+                create_duplicate_records_supabase(results["duplicates"], username)
+            
             if progress_callback:
                 progress_callback(results["processed"], results["failed"], len(file_keys), "Complete!")
             
@@ -1399,3 +1403,55 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
     except Exception as e:
         logger.error(f"Error creating verification records in Supabase: {e}")
         raise
+
+
+def create_duplicate_records_supabase(duplicates: List[Dict[str, Any]], username: str):
+    """
+    Create duplicate records in verification_dates table for skipped duplicates.
+    This helps users see what happened to all their uploaded files in the review page.
+    
+    Args:
+        duplicates: List of duplicate dictionaries from process_invoices_batch
+        username: Username for RLS
+    """
+    try:
+        db = get_database_client()
+        
+        for dup in duplicates:
+            existing_invoice = dup.get('existing_invoice', {})
+            file_key = dup.get('file_key', '')
+            
+            # Extract filename from file_key
+            filename = file_key.split('/')[-1] if '/' in file_key else file_key
+            
+            # Create duplicate record for verification_dates
+            duplicate_record = {
+                'username': username,
+                'receipt_number': existing_invoice.get('receipt_number', 'N/A'),
+                'date': existing_invoice.get('date'),
+                'audit_findings': f"Duplicate Image: Matches existing receipt {existing_invoice.get('receipt_number', 'N/A')}",
+                'verification_status': 'Duplicate Image',
+                'receipt_link': existing_invoice.get('receipt_link', ''),
+                'upload_date': existing_invoice.get('upload_date'),
+                'r2_file_path': file_key,  # Store the duplicate file path
+                'image_hash': dup.get('image_hash', '')[:64] if dup.get('image_hash') else ''
+            }
+            
+            # Add optional fields if they exist
+            if existing_invoice.get('customer'):
+                duplicate_record['customer_name'] = existing_invoice.get('customer')
+            
+            if existing_invoice.get('mobile_number'):
+                duplicate_record['mobile_number'] = existing_invoice.get('mobile_number')
+            
+            if existing_invoice.get('vehicle_number'):
+                duplicate_record['vehicle_number'] = existing_invoice.get('vehicle_number')
+            
+            # Insert into verification_dates
+            db.insert('verification_dates', duplicate_record)
+            logger.info(f"Created duplicate record for skipped file: {filename} (matches receipt {existing_invoice.get('receipt_number', 'N/A')})")
+        
+        logger.info(f"Created {len(duplicates)} duplicate records in verification_dates")
+        
+    except Exception as e:
+        logger.error(f"Error creating duplicate records: {e}")

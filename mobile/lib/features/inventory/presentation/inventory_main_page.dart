@@ -301,23 +301,23 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
               ),
               _buildActionItem(
                 context: context,
+                icon: LucideIcons.shoppingCart,
+                color: const Color(0xFFEA580C),
+                title: 'PO',
+                badgeCount: poState.draftCount,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/purchase-orders');
+                },
+              ),
+              _buildActionItem(
+                context: context,
                 icon: LucideIcons.gitMerge,
                 color: const Color(0xFF3B82F6),
                 title: 'Link Items',
                 onTap: () {
                   HapticFeedback.lightImpact();
                   context.push('/inventory-item-mapping');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.shoppingCart,
-                color: const Color(0xFFEA580C),
-                title: 'Orders',
-                badgeCount: poState.draftCount,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/purchase-orders');
                 },
               ),
             ],

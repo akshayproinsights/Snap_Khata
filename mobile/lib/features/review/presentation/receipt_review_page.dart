@@ -370,7 +370,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 pendingAmount: balanceDue,
               );
               final message =
-                  '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— $shopName';
+                  '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
 
               // Open custom input dialog for phone number (pre-filled if available from DB)
               final phoneController =

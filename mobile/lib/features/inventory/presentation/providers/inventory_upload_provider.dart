@@ -35,6 +35,16 @@ class InventoryUploadState {
   /// The final status object when processing completes — used for results summary
   final UploadTaskStatus? lastCompletedStatus;
 
+  // ── Duplicate handling (similar to upload feature) ────────────────────────
+  /// True when duplicates were detected and need user review
+  final bool hasDuplicate;
+
+  /// Queue of duplicate items to review
+  final List<dynamic> duplicateQueue;
+
+  /// Index of the current duplicate being reviewed
+  final int currentDuplicateIndex;
+
   InventoryUploadState({
     this.fileItems = const [],
     this.isUploading = false,
@@ -45,6 +55,9 @@ class InventoryUploadState {
     this.activeTaskId,
     this.isRestoringState = true,
     this.lastCompletedStatus,
+    this.hasDuplicate = false,
+    this.duplicateQueue = const [],
+    this.currentDuplicateIndex = 0,
   });
 
   int get pendingCount =>
@@ -59,6 +72,12 @@ class InventoryUploadState {
   /// True when a task is actively running (upload OR processing)
   bool get isActive => isUploading || isProcessing;
 
+  /// Get the current duplicate being reviewed
+  dynamic get currentDuplicate =>
+      duplicateQueue.isNotEmpty && currentDuplicateIndex < duplicateQueue.length
+          ? duplicateQueue[currentDuplicateIndex]
+          : null;
+
   InventoryUploadState copyWith({
     List<UploadFileItem>? fileItems,
     bool? isUploading,
@@ -71,6 +90,9 @@ class InventoryUploadState {
     bool? isRestoringState,
     UploadTaskStatus? lastCompletedStatus,
     bool clearLastCompletedStatus = false,
+    bool? hasDuplicate,
+    List<dynamic>? duplicateQueue,
+    int? currentDuplicateIndex,
   }) {
     return InventoryUploadState(
       fileItems: fileItems ?? this.fileItems,
@@ -85,6 +107,9 @@ class InventoryUploadState {
       lastCompletedStatus: clearLastCompletedStatus
           ? null
           : (lastCompletedStatus ?? this.lastCompletedStatus),
+      hasDuplicate: hasDuplicate ?? this.hasDuplicate,
+      duplicateQueue: duplicateQueue ?? this.duplicateQueue,
+      currentDuplicateIndex: currentDuplicateIndex ?? this.currentDuplicateIndex,
     );
   }
 }
@@ -596,15 +621,23 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       }
       return item;
     }).toList();
+    
+    // Check for duplicates and populate queue if found
+    final skipped = status?.skipped ?? 0;
+    final skippedDetails = status?.skippedDetails ?? [];
+    final hasDuplicates = skipped > 0 && skippedDetails.isNotEmpty;
+    
     state = state.copyWith(
       fileItems: done,
       isProcessing: false,
       clearActiveTaskId: true,
       lastCompletedStatus: status,
+      hasDuplicate: hasDuplicates,
+      duplicateQueue: skippedDetails,
+      currentDuplicateIndex: 0,
     );
 
     // Build banner message with duplicate-skip summary
-    final skipped = status?.skipped ?? 0;
     final bannerMsg = skipped > 0
         ? 'Inventory ready! ($skipped duplicate${skipped == 1 ? '' : 's'} skipped)'
         : 'Inventory ready to review!';
@@ -684,6 +717,57 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       );
       _backgroundTask.completeTask('Inventory upload error');
     }
+  }
+
+  // ─────────────────── Duplicate Review Methods ──────────────────────────────
+
+  /// Move to the next duplicate in the queue
+  void nextDuplicate() {
+    final nextIndex = state.currentDuplicateIndex + 1;
+    if (nextIndex >= state.duplicateQueue.length) {
+      // All duplicates reviewed
+      finishDuplicateReview();
+    } else {
+      state = state.copyWith(currentDuplicateIndex: nextIndex);
+    }
+  }
+
+  /// Skip the current duplicate and move to the next
+  void skipDuplicate() {
+    nextDuplicate();
+  }
+
+  /// Replace the old record with the new one (for inventory, this means
+  /// we need to delete the old record and allow the new one to be processed)
+  void replaceDuplicate() async {
+    final current = state.currentDuplicate;
+    if (current == null) return;
+
+    try {
+      // For inventory, we can't really "replace" since the image is already
+      // processed. Instead, we'll just note that the user wanted to replace
+      // and move to the next duplicate.
+      // In a real implementation, we might need to:
+      // 1. Delete the old inventory item
+      // 2. Re-process the new image
+      // But for now, we'll just skip to the next duplicate
+      nextDuplicate();
+    } catch (e) {
+      // Handle error
+      nextDuplicate();
+    }
+  }
+
+  /// Finish the duplicate review process
+  void finishDuplicateReview() {
+    state = state.copyWith(
+      hasDuplicate: false,
+      duplicateQueue: [],
+      currentDuplicateIndex: 0,
+    );
+    
+    // Navigate to inventory review
+    AppRouter.router.go('/inventory-review');
   }
 }
 

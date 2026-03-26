@@ -1,5 +1,9 @@
 name: Deploy App to Hetzner
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+
 on:
   push:
     branches:
@@ -12,6 +16,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
 
       # ── 1. Setup Flutter ──────────────────────────────────────────────────
       - name: Setup Flutter
@@ -32,9 +40,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
+
 
       - name: Install dependencies and build React
         working-directory: ./frontend
@@ -64,6 +73,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
 
       # ── 1. Download build artifacts ───────────────────────────────────────
       - name: Download Flutter Web build
@@ -112,8 +125,12 @@ jobs:
           script: |
             cd ~/Snap_Khata
             
+            # Ensure safe directory to avoid Git 128 errors
+            git config --global --add safe.directory /home/deploy/Snap_Khata
+
             # Pull latest code (backend changes, configs, etc.)
             git pull origin main
+
 
             # Update .env file with secrets from GitHub
             if [ -f backend/.env ]; then
