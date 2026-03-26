@@ -1,0 +1,3 @@
+[submodule "stitch-skills"]
+	path = stitch-skills
+	url = https://github.com/google-labs-code/stitch-skills

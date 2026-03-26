@@ -207,6 +207,17 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
                     // Actions
                     Row(
                       children: [
+                        if (widget.onDelete != null)
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.white),
+                            onPressed: () {
+                              _handleDelete();
+                            },
+                            tooltip: 'Delete',
+                            style: IconButton.styleFrom(
+                                backgroundColor: Colors.black45),
+                          ),
                         IconButton(
                           icon: const Icon(Icons.close, color: Colors.white),
                           onPressed: () => Navigator.of(context).pop(),
