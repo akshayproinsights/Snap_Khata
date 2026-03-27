@@ -74,6 +74,10 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       if (item.amountMismatch.abs() > 1.0) bundle.hasMismatch = true;
       // If any item is NOT verified, the whole bundle is not verified
       if (item.verificationStatus != 'Done') bundle.isVerified = false;
+      // Track most recent upload date
+      if (item.createdAt != null && (bundle.createdAt.isEmpty || item.createdAt!.compareTo(bundle.createdAt) > 0)) {
+        bundle.createdAt = item.createdAt!;
+      }
     }
 
     final allBundles = groups.values.toList();
@@ -378,7 +382,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
 }
 
 // ─── Bundle Review Tile ───────────────────────────────────────────────────────
-class _BundleReviewTile extends StatelessWidget {
+class _BundleReviewTile extends ConsumerWidget {
   final InventoryInvoiceBundle bundle;
   final String dateLabel;
   final VoidCallback onTap;
@@ -390,7 +394,7 @@ class _BundleReviewTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
@@ -573,7 +577,15 @@ class _BundleReviewTile extends StatelessWidget {
                               fontSize: 11,
                               fontWeight: FontWeight.w800)),
                     ),
-                  const SizedBox(height: 6),
+                  IconButton(
+                    icon: Icon(LucideIcons.trash2,
+                        size: 18, color: AppTheme.error.withValues(alpha: 0.7)),
+                    onPressed: () => _confirmDelete(context, ref, bundle),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 20,
+                  ),
+                  const SizedBox(height: 10),
                   Icon(LucideIcons.chevronRight,
                       size: 18, color: Colors.grey.shade400),
                 ],
@@ -583,5 +595,49 @@ class _BundleReviewTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, InventoryInvoiceBundle bundle) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Invoice?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+            'Are you sure you want to delete this invoice for "${bundle.vendorName}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final ids = bundle.items.map((i) => i.id).toList();
+      await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invoice deleted successfully'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+    }
   }
 }

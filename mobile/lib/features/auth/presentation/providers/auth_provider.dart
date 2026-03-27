@@ -46,6 +46,14 @@ class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
     _repository = ref.watch(authRepositoryProvider);
+    
+    // Register global 401 handler
+    ApiClient.onUnauthorized = () {
+      if (state.isAuthenticated) {
+        logout();
+      }
+    };
+    
     Future.microtask(() => _checkInitialAuth());
     return AuthState(isLoading: true);
   }

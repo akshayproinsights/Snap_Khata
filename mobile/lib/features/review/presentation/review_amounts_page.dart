@@ -87,9 +87,25 @@ class _ReviewAmountsPageState extends ConsumerState<ReviewAmountsPage> {
     }).toList();
 
     filteredRecords.sort((a, b) {
-      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
-      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
-      return yA.compareTo(yB);
+      // 1. Primary sort: Receipt Number (keep items of same receipt together)
+      if (a.receiptNumber != b.receiptNumber) {
+        return a.receiptNumber.compareTo(b.receiptNumber);
+      }
+
+      // 2. Secondary sort: BBox Y Coordinate (if available)
+      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1)
+          ? a.lineItemBbox![1]
+          : null;
+      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1)
+          ? b.lineItemBbox![1]
+          : null;
+
+      if (yA != null && yB != null && (yA - yB).abs() > 0.001) {
+        return yA.compareTo(yB);
+      }
+
+      // 3. Tertiary sort: Original extraction index (parsed from rowId)
+      return a.sortIndex.compareTo(b.sortIndex);
     });
 
     return Scaffold(

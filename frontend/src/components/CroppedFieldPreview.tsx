@@ -181,9 +181,27 @@ const CroppedFieldPreview: React.FC<CroppedFieldPreviewProps> = ({
                         const label = fieldLabels[field] || field;
 
                         if (!bbox) {
+                            // No bbox available — show a small clickable thumbnail that opens the full image
                             return (
-                                <div key={field} className="text-xs text-gray-400">
-                                    {label}: N/A
+                                <div key={field} className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-gray-500 uppercase font-medium">
+                                        {label}
+                                    </span>
+                                    <div
+                                        className="border border-gray-300 rounded bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow overflow-hidden flex items-center justify-center h-12"
+                                        onClick={() => setIsModalOpen(true)}
+                                        title="Click to view full receipt"
+                                    >
+                                        {imageUrl ? (
+                                            <img
+                                                src={imageUrl}
+                                                alt={`${label} - click to expand`}
+                                                className="h-full w-auto object-contain opacity-70 hover:opacity-100 transition-opacity"
+                                            />
+                                        ) : (
+                                            <span className="text-xs text-gray-400">No image</span>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         }

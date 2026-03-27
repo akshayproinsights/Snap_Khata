@@ -948,6 +948,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             initialValue: header.customerName ?? '',
             decoration: _inputDecoration('Customer Name').copyWith(
               prefixIcon: const Icon(LucideIcons.user, size: 16),
+              prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
             ),
             onSaved: (val) {
               if (val != header.customerName) {
@@ -964,6 +965,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   initialValue: header.vehicleNumber ?? '',
                   decoration: _inputDecoration('Vehicle Number').copyWith(
                     prefixIcon: const Icon(LucideIcons.car, size: 16),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
                   ),
                   onSaved: (val) {
                     if (val != header.vehicleNumber) {
@@ -980,6 +982,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   keyboardType: TextInputType.phone,
                   decoration: _inputDecoration('Mobile Number').copyWith(
                     prefixIcon: const Icon(LucideIcons.phone, size: 16),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
                     errorText: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10) ? 'Must be 10 digits' : null,
                     enabledBorder: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
                         ? OutlineInputBorder(
@@ -1304,7 +1307,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         borderSide: BorderSide(color: Colors.grey.shade300),
       ),
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
     );
   }
 }

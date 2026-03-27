@@ -31,6 +31,15 @@ class ReviewRecord {
   final String? taxableRowIds;
 
   // New helper getter for validation hoisting
+  // New helper for stable sorting when BBox is missing
+  int get sortIndex {
+    final parts = rowId.split('_');
+    if (parts.length > 1) {
+      return int.tryParse(parts.last) ?? 0;
+    }
+    return 0;
+  }
+
   bool get hasError {
     if (verificationStatus.toLowerCase() == 'duplicate receipt number') {
       return true;

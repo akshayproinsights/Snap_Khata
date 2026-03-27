@@ -189,7 +189,7 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
         # If limit is specified and <= 1000, use simple query (fast path)
         if limit is not None and limit <= 1000:
             logger.info(f"Fetching {limit} most recent verified invoices for {username}")
-            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True)
+            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True).order('receipt_number').order('row_id')
             query = query.limit(limit)
             result = query.execute()
             logger.info(f"✅ Fetched {len(result.data) if result.data else 0} verified invoice records")
@@ -203,7 +203,7 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
         logger.info(f"Fetching ALL verified invoice records for {username} (paginated, for filtering)")
         
         while True:
-            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True)
+            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True).order('receipt_number').order('row_id')
             query = query.limit(batch_size).offset(current_offset)
             result = query.execute()
             
@@ -261,7 +261,8 @@ def get_verification_amounts(username: str) -> List[Dict[str, Any]]:
     """
     try:
         db = get_database_client()
-        result = db.query('verification_amounts').eq('username', username).order('created_at', desc=True).execute()
+        # Sort by receipt_number and row_id to keep items together and in extraction order
+        result = db.query('verification_amounts').eq('username', username).order('receipt_number').order('row_id').execute()
         return result.data if result.data else []
     
     except Exception as e:

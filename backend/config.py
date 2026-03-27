@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # JWT Configuration
     jwt_secret: str = Field(default="your-secret-key-change-in-production", alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
-    jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")  # 24 hours
+    jwt_expire_minutes: int = Field(default=43200, alias="JWT_EXPIRE_MINUTES")  # 30 days
     
     # CORS
     cors_origins: list = Field(default=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://snapkhata-prod.web.app", "https://mydigientry.com", "https://www.mydigientry.com", "http://192.168.1.18:8000", "http://192.168.1.18:3000", "http://192.168.1.18:5173", "http://localhost:8080", "http://127.0.0.1:8080"], alias="CORS_ORIGINS")

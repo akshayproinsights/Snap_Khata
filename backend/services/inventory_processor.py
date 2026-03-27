@@ -34,10 +34,12 @@ logger = logging.getLogger(__name__)
 # Rate limiter for API calls — Gemini Flash supports 250+ RPM
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
-# Model Configuration
-PRIMARY_MODEL = "gemini-3-flash-preview"
-FALLBACK_MODEL = "gemini-3-pro-preview"
-ACCURACY_THRESHOLD = 50.0  # Switch to Pro if accuracy < 50%
+# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
+FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
 
 # ── Gemini client singleton ───────────────────────────────────────────────────
 # Thread-safe: genai.Client is stateless and safe to share across threads.
@@ -100,114 +102,146 @@ def process_vendor_invoice(
     import io
     img = Image.open(io.BytesIO(image_bytes))
 
-    try:
-        # Try with Flash model first
-        logger.info(f"Trying {PRIMARY_MODEL} for vendor invoice extraction...")
-        
-        config = types.GenerateContentConfig(
-            system_instruction=vendor_prompt,
-            response_mime_type="application/json",
-            temperature=0.1
-        )
-        
-        response = client.models.generate_content(
-            model=PRIMARY_MODEL,
-            contents=[img, "Extract all vendor invoice data according to the instructions."],
-            config=config
-        )
-        
-        # Parse response
-        json_text = response.text.strip() if response.text else "{}"
-        extracted_data = json.loads(json_text)
-        
-        # Handle case where Gemini returns just the items array instead of full structure
-        if isinstance(extracted_data, list):
-            extracted_data = {
-                "invoice_type": "Printed",
-                "invoice_date": "",
-                "invoice_number": "",
-                "items": extracted_data
-            }
-        
-        # Calculate accuracy
-        items = extracted_data.get("items", [])
-        accuracy = calculate_accuracy(items)
-        
-        # QUALITY CHECK: Penalize if critical fields are missing
-        # This handles cases where Flash returns a valid JSON but with empty fields/template
-        header = extracted_data.get("header", {}) if isinstance(extracted_data.get("header"), dict) else {}
-        vendor_name = extracted_data.get("vendor_name", "") or header.get("vendor_name", "")
-        # Note: invoice_number might be missing on some valid bills, but vendor_name is critical for stock
-        
-        if not vendor_name or not str(vendor_name).strip():
-            logger.warning("Quality Check Failed: Missing Vendor Name. Forcing fallback to Pro model.")
-            accuracy = 0.0
-            
-        # Also check if we have items but they are empty "N/A" placeholders
-        if items:
-            valid_items = 0
-            for item in items:
-                if isinstance(item, dict):
-                    desc = str(item.get("description", "")).strip()
-                    part = str(item.get("part_number", "")).strip()
-                    if desc and desc.lower() != "n/a" or part and part.lower() != "n/a":
-                        valid_items += 1
-            
-            if valid_items == 0:
-                logger.warning("Quality Check Failed: Items found but all appear empty/N/A. Forcing fallback.")
-                accuracy = 0.0
-        
-        # Get token usage
-        usage = response.usage_metadata
-        input_tokens = (usage.prompt_token_count or 0) if usage else 0
-        output_tokens = (usage.candidates_token_count or 0) if usage else 0
-        total_tokens = input_tokens + output_tokens
-        
-        # Calculate cost
-        cost_inr = calculate_cost_inr(input_tokens, output_tokens, "Flash")
-        
-        model_used = "Flash"
-        
-        # Fallback to Pro if accuracy is low
-        if accuracy < ACCURACY_THRESHOLD:
-            logger.warning(f"Flash accuracy ({accuracy}%) < {ACCURACY_THRESHOLD}%, falling back to Pro model...")
-            
-            config_pro = types.GenerateContentConfig(
+    def _run_model(model_name: str, tier_label: str):
+        """Call Gemini and return (extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr)."""
+        logger.info(f"Trying {model_name} ({tier_label}) for vendor invoice extraction...")
+        try:
+            cfg = types.GenerateContentConfig(
                 system_instruction=vendor_prompt,
                 response_mime_type="application/json",
                 temperature=0.1
             )
-            
-            response_pro = client.models.generate_content(
-                model=FALLBACK_MODEL,
+            # Add timeout to prevent hanging
+            resp = client.models.generate_content(
+                model=model_name,
                 contents=[img, "Extract all vendor invoice data according to the instructions."],
-                config=config_pro
+                config=cfg
             )
+            json_text = resp.text.strip() if resp.text else "{}"
             
-            json_text = response_pro.text.strip() if response_pro.text else "{}"
-            extracted_data = json.loads(json_text)
+            # Robust JSON cleaning (remove markdown blocks if present)
+            if json_text.startswith("```json"):
+                json_text = json_text[7:]
+            if json_text.startswith("```"):
+                json_text = json_text[3:]
+            if json_text.endswith("```"):
+                json_text = json_text[:-3]
+            json_text = json_text.strip()
+
+            try:
+                data = json.loads(json_text)
+            except json.JSONDecodeError:
+                logger.error(f"{tier_label}: JSON Decode Error. Response: {json_text[:200]}...")
+                return None, [], 0.0, 0, 0, 0.0
             
-            # Handle case where Pro model also returns just the items array
-            if isinstance(extracted_data, list):
-                extracted_data = {
-                    "invoice_type": "Printed",
-                    "invoice_date": "",
-                    "invoice_number": "",
-                    "items": extracted_data
+            # Ensure data is a dictionary
+            if not isinstance(data, dict):
+                if isinstance(data, list):
+                    data = {"invoice_type": "Printed", "invoice_date": "", "invoice_number": "", "items": data}
+                else:
+                    data = {"invoice_type": "Printed", "invoice_date": "", "invoice_number": "", "items": []}
+            
+            # Ensure data is a dictionary for the linter and safe access
+            working_data: Dict[str, Any] = data if isinstance(data, dict) else {}
+            
+            _items = working_data.get("items", [])
+            acc = calculate_accuracy(_items)
+
+            # Quality checks
+            hdr = working_data.get("header", {}) if isinstance(working_data.get("header"), dict) else {}
+            vname = working_data.get("vendor_name", "") or hdr.get("vendor_name", "")
+            if not vname or not str(vname).strip():
+                logger.warning(f"{tier_label}: Missing Vendor Name — forcing escalation.")
+                # We don't set acc=0 here anymore, let the specific check handle it
+                # to allow returning partial data if Pro also fails
+            
+            if _items:
+                valid = sum(
+                    1 for it in _items
+                    if isinstance(it, dict) and (
+                        (str(it.get("description", "")).strip() and str(it.get("description", "")).strip().lower() != "n/a")
+                        or (str(it.get("part_number", "")).strip() and str(it.get("part_number", "")).strip().lower() != "n/a")
+                    )
+                )
+                if valid == 0:
+                    logger.warning(f"{tier_label}: All items empty/N/A — forcing escalation.")
+                    acc = min(acc, 30.0) # Penalty for no items
+
+            usage = resp.usage_metadata
+            in_tok  = (usage.prompt_token_count or 0) if usage else 0
+            out_tok = (usage.candidates_token_count or 0) if usage else 0
+            cost    = calculate_cost_inr(in_tok, out_tok, model_name)
+            return data, _items, acc, in_tok, out_tok, cost
+        except Exception as e:
+            logger.error(f"Error in _run_model for {tier_label}: {e}")
+            return None, [], 0.0, 0, 0, 0.0
+
+    try:
+        best_res_stored: Optional[Dict[str, Any]] = None
+        
+        # ── Tier 1: Lite ─────────────────────────────────────────────────────
+        try:
+            extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                _run_model(LITE_MODEL, "Lite")
+            model_used = "Lite"
+            
+            if extracted_data:
+                best_res_stored = {
+                    "data": extracted_data, "items": items, "acc": accuracy,
+                    "in": input_tokens, "out": output_tokens, "cost": cost_inr, "model": "Lite"
                 }
-            
-            # Recalculate with Pro model
-            items = extracted_data.get("items", [])
-            accuracy = calculate_accuracy(items)
-            
-            usage_pro = response_pro.usage_metadata
-            input_tokens = (usage_pro.prompt_token_count or 0) if usage_pro else 0
-            output_tokens = (usage_pro.candidates_token_count or 0) if usage_pro else 0
-            total_tokens = input_tokens + output_tokens
-            cost_inr = calculate_cost_inr(input_tokens, output_tokens, "Pro")
-            
-            model_used = "Pro"
-            logger.info(f"Pro model accuracy: {accuracy}%")
+        except Exception as e:
+            logger.error(f"Lite tier crash: {e}")
+            accuracy = 0.0
+
+        # ── Tier 2: Flash (if Lite failed or accuracy < threshold) ───────────
+        if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
+            logger.warning(f"Lite finished with {accuracy}% accuracy (threshold {ACCURACY_THRESHOLD}%). Escalating...")
+            try:
+                f_data, f_items, f_acc, f_in, f_out, f_cost = _run_model(FLASH_MODEL, "Flash")
+                if f_data:
+                    # If Flash succeeded, update our working result
+                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                        f_data, f_items, f_acc, f_in, f_out, f_cost
+                    model_used = "Flash"
+                    best_res_stored = {
+                        "data": f_data, "items": f_items, "acc": f_acc,
+                        "in": f_in, "out": f_out, "cost": f_cost, "model": "Flash"
+                    }
+            except Exception as e:
+                logger.error(f"Flash tier crash: {e}")
+                # Keep Lite result if we had one
+
+        # ── Tier 3: Pro (if Flash failed or accuracy < threshold) ────────────
+        if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
+            logger.warning(f"Flash finished with {accuracy}% accuracy. Escalating to Pro...")
+            try:
+                p_data, p_items, p_acc, p_in, p_out, p_cost = _run_model(PRO_MODEL, "Pro")
+                if p_data:
+                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                        p_data, p_items, p_acc, p_in, p_out, p_cost
+                    model_used = "Pro"
+                    best_res_stored = {
+                        "data": p_data, "items": p_items, "acc": p_acc,
+                        "in": p_in, "out": p_out, "cost": p_cost, "model": "Pro"
+                    }
+            except Exception as e:
+                logger.error(f"Pro tier crash: {e}")
+
+        if not best_res_stored:
+            logger.error("All models (Lite, Flash, Pro) failed to return a result.")
+            return None
+
+        # Re-assign from best result for consistency
+        extracted_data = best_res_stored["data"]
+        items = best_res_stored["items"]
+        accuracy = best_res_stored["acc"]
+        input_tokens = best_res_stored["in"]
+        output_tokens = best_res_stored["out"]
+        cost_inr = best_res_stored["cost"]
+        model_used = best_res_stored["model"]
+
+        total_tokens = input_tokens + output_tokens
         
         # Transform to match expected format
         result = {
@@ -293,13 +327,17 @@ def convert_to_inventory_rows(
         except (ValueError, TypeError):
             return float(default)
     
-    def get_bbox_json(data_dict, field_name):
-        """Extract bbox and convert to JSON, or None if missing"""
-        bbox = data_dict.get(f"{field_name}_bbox")
-        if bbox and isinstance(bbox, dict):
-            return bbox
-        return None
-    
+    # BBOX DISABLED: Bbox extraction removed from Gemini prompt to speed up processing.
+    # DB columns are kept intact (receiving NULL) so they can be re-enabled without schema changes.
+    # To re-enable: restore bbox fields in vendor_gemini prompt + uncomment get_bbox_json below.
+    # --- BBOX CODE (commented out, not deleted) ---
+    # def get_bbox_json(data_dict, field_name):
+    #     """Extract bbox and convert to JSON, or None if missing"""
+    #     bbox = data_dict.get(f"{field_name}_bbox")
+    #     if bbox and isinstance(bbox, dict):
+    #         return bbox
+    #     return None
+
     rows = []
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
@@ -379,18 +417,30 @@ def convert_to_inventory_rows(
             "accuracy_score": item.get("confidence", 0),
             "row_accuracy": item.get("confidence", 0),
             
-            # Bounding boxes
-            "part_number_bbox": get_bbox_json(item, "part_number"),
-            "batch_bbox": get_bbox_json(item, "batch"),
-            "description_bbox": get_bbox_json(item, "description"),
-            "hsn_bbox": get_bbox_json(item, "hsn"),
-            "qty_bbox": get_bbox_json(item, "quantity"),
-            "rate_bbox": get_bbox_json(item, "rate"),
-            "disc_percent_bbox": get_bbox_json(item, "disc_percent"),
-            "taxable_amount_bbox": get_bbox_json(item, "amount"),
-            "cgst_percent_bbox": get_bbox_json(item, "cgst_percent"),
-            "sgst_percent_bbox": get_bbox_json(item, "sgst_percent"),
-            "line_item_row_bbox": get_bbox_json(item, "line_item_row"),
+            # BBOX DISABLED: all set to None (NULL in DB), columns preserved for future re-enable
+            "part_number_bbox": None,
+            "batch_bbox": None,
+            "description_bbox": None,
+            "hsn_bbox": None,
+            "qty_bbox": None,
+            "rate_bbox": None,
+            "disc_percent_bbox": None,
+            "taxable_amount_bbox": None,
+            "cgst_percent_bbox": None,
+            "sgst_percent_bbox": None,
+            "line_item_row_bbox": None,
+            # --- BBOX CODE (commented out, not deleted) ---
+            # "part_number_bbox": get_bbox_json(item, "part_number"),
+            # "batch_bbox": get_bbox_json(item, "batch"),
+            # "description_bbox": get_bbox_json(item, "description"),
+            # "hsn_bbox": get_bbox_json(item, "hsn"),
+            # "qty_bbox": get_bbox_json(item, "quantity"),
+            # "rate_bbox": get_bbox_json(item, "rate"),
+            # "disc_percent_bbox": get_bbox_json(item, "disc_percent"),
+            # "taxable_amount_bbox": get_bbox_json(item, "amount"),
+            # "cgst_percent_bbox": get_bbox_json(item, "cgst_percent"),
+            # "sgst_percent_bbox": get_bbox_json(item, "sgst_percent"),
+            # "line_item_row_bbox": get_bbox_json(item, "line_item_row"),
         }
         
         rows.append(row)

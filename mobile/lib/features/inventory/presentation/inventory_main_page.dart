@@ -8,6 +8,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
 import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 
@@ -20,6 +21,8 @@ class _InvoiceBundle {
   final List<InventoryItem> items;
   double totalAmount;
   bool hasMismatch;
+  bool isVerified;
+  String createdAt;
 
   _InvoiceBundle({
     required this.invoiceNumber,
@@ -29,6 +32,8 @@ class _InvoiceBundle {
     required this.items,
     required this.totalAmount,
     required this.hasMismatch,
+    required this.isVerified,
+    required this.createdAt,
   });
 }
 
@@ -81,16 +86,37 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
           items: [],
           totalAmount: 0,
           hasMismatch: false,
+          isVerified: true, // assume verified until we find otherwise
+          createdAt: item.createdAt ?? '',
         );
       }
       final bundle = groups[safeKey]!;
       bundle.items.add(item);
       bundle.totalAmount += item.netBill;
       if (item.amountMismatch.abs() > 1.0) bundle.hasMismatch = true;
+      // If any item is NOT verified, the whole bundle is not verified
+      if (item.verificationStatus != 'Done') bundle.isVerified = false;
+      // Track most recent upload date
+      if (item.createdAt != null && (bundle.createdAt.isEmpty || item.createdAt!.compareTo(bundle.createdAt) > 0)) {
+        bundle.createdAt = item.createdAt!;
+      }
     }
 
     return groups.values.toList()
       ..sort((a, b) {
+        // 1. Reviewed (isVerified) first
+        if (a.isVerified && !b.isVerified) return -1;
+        if (!a.isVerified && b.isVerified) return 1;
+
+        // 2. Most recent upload (createdAt) first
+        if (a.createdAt.isNotEmpty && b.createdAt.isNotEmpty) {
+          final cA = DateTime.tryParse(a.createdAt) ?? DateTime(0);
+          final cB = DateTime.tryParse(b.createdAt) ?? DateTime(0);
+          final createdCmp = cB.compareTo(cA);
+          if (createdCmp != 0) return createdCmp;
+        }
+
+        // 3. Fallback to invoice date
         final dA = DateTime.tryParse(a.date) ?? DateTime(0);
         final dB = DateTime.tryParse(b.date) ?? DateTime(0);
         return dB.compareTo(dA);
@@ -823,6 +849,15 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                               ),
                             ),
                           ),
+                        IconButton(
+                          icon: Icon(LucideIcons.trash2,
+                              size: 18,
+                              color: AppTheme.error.withValues(alpha: 0.7)),
+                          onPressed: () => _confirmDelete(context, ref, bundle),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          splashRadius: 20,
+                        ),
                         const SizedBox(height: 6),
                         AnimatedRotation(
                           turns: _isExpanded ? 0.5 : 0,
@@ -1064,5 +1099,49 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, _InvoiceBundle bundle) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Invoice?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+            'Are you sure you want to delete this invoice for "${bundle.vendorName}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final ids = bundle.items.map((i) => i.id).toList();
+      await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invoice deleted successfully'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+    }
   }
 }

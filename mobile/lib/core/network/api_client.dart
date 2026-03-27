@@ -13,6 +13,9 @@ class ApiClient {
   // For emulator/simulator use 'http://10.0.2.2:8000' (Android) or 'http://127.0.0.1:8000' (iOS sim).
   // For production, set to your deployed API URL.
   static final String _defaultBaseUrl = 'http://77.42.26.79:8000';
+  
+  // Callback for unauthorized access (401)
+  static VoidCallback? onUnauthorized;
 
   ApiClient._internal() {
     dio = Dio(BaseOptions(
@@ -40,7 +43,10 @@ class ApiClient {
             // Handle token expiration/unauthorized access globally
             final prefs = await SharedPreferences.getInstance();
             await prefs.remove('auth_token');
-            // We could use an event bus or navigation key to redirect to login
+            // Trigger global unauthorized callback if registered
+            if (onUnauthorized != null) {
+              onUnauthorized!();
+            }
           } else if (e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.receiveTimeout ||
               e.type == DioExceptionType.connectionError ||

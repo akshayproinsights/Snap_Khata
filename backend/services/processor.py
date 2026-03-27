@@ -40,10 +40,11 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 
 MAX_RETRIES = 5
 
-# Model Configuration
-PRIMARY_MODEL = "gemini-3-flash-preview"  # Gemini 3 Flash
-FALLBACK_MODEL = "gemini-3-pro-preview"   # Gemini 3 Pro
-ACCURACY_THRESHOLD = 70.0  # Switch to Pro model if accuracy < 70%
+# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
+FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+ACCURACY_THRESHOLD = 70.0  # escalate to next tier if accuracy < 70%
 
 # Pricing Configuration (USD per 1M tokens)
 # Gemini 3 Flash Preview pricing (approximate)
@@ -181,83 +182,83 @@ def normalize_text_field(text: str, field_type: str = "general") -> str:
     return text
 
 
-def calculate_bbox_distance(bbox1: Optional[Dict], bbox2: Optional[Dict]) -> float:
-    """
-    Calculate normalized distance between two bounding boxes.
-    Returns distance between centers as a percentage of image diagonal.
-    
-    Args:
-        bbox1: First bbox dict with x, y, width, height (normalized 0-1)
-        bbox2: Second bbox dict with x, y, width, height (normalized 0-1)
-    
-    Returns:
-        Normalized distance (0.0 = same position, 1.414 = opposite corners)
-    """
-    if not bbox1 or not bbox2:
-        return float('inf')
-    
-    try:
-        # Get centers of each bbox
-        center1_x = bbox1['x'] + bbox1['width'] / 2
-        center1_y = bbox1['y'] + bbox1['height'] / 2
-        center2_x = bbox2['x'] + bbox2['width'] / 2
-        center2_y = bbox2['y'] + bbox2['height'] / 2
-        
-        # Euclidean distance (normalized coordinates so diagonal = sqrt(2))
-        dx = center2_x - center1_x
-        dy = center2_y - center1_y
-        distance = (dx**2 + dy**2) ** 0.5
-        
-        return distance
-    except (KeyError, TypeError):
-        return float('inf')
+# def calculate_bbox_distance(bbox1: Optional[Dict], bbox2: Optional[Dict]) -> float:
+#     """
+#     Calculate normalized distance between two bounding boxes.
+#     Returns distance between centers as a percentage of image diagonal.
+#     
+#     Args:
+#         bbox1: First bbox dict with x, y, width, height (normalized 0-1)
+#         bbox2: Second bbox dict with x, y, width, height (normalized 0-1)
+#     
+#     Returns:
+#         Normalized distance (0.0 = same position, 1.414 = opposite corners)
+#     """
+#     if not bbox1 or not bbox2:
+#         return float('inf')
+#     
+#     try:
+#         # Get centers of each bbox
+#         center1_x = bbox1['x'] + bbox1['width'] / 2
+#         center1_y = bbox1['y'] + bbox1['height'] / 2
+#         center2_x = bbox2['x'] + bbox2['width'] / 2
+#         center2_y = bbox2['y'] + bbox2['height'] / 2
+#         
+#         # Euclidean distance (normalized coordinates so diagonal = sqrt(2))
+#         dx = center2_x - center1_x
+#         dy = center2_y - center1_y
+#         distance = (dx**2 + dy**2) ** 0.5
+#         
+#         return distance
+#     except (KeyError, TypeError):
+#         return float('inf')
 
 
-def should_use_combined_bbox(receipt_bbox: Optional[Dict], date_bbox: Optional[Dict], 
-                              threshold: float = 0.3) -> bool:
-    """
-    Determine if date and receipt should use a combined bbox.
-    
-    Args:
-        receipt_bbox: Receipt number bounding box
-        date_bbox: Date bounding box
-        threshold: Max normalized distance to combine (default 0.3 = 30% of diagonal)
-    
-    Returns:
-        True if bboxes are close enough to combine
-    """
-    distance = calculate_bbox_distance(receipt_bbox, date_bbox)
-    is_close = distance < threshold
-    
-    if receipt_bbox and date_bbox:
-        logger.debug(f"Bbox distance: {distance:.3f} (threshold: {threshold}) -> Combine: {is_close}")
-    
-    return is_close
+# def should_use_combined_bbox(receipt_bbox: Optional[Dict], date_bbox: Optional[Dict], 
+#                               threshold: float = 0.3) -> bool:
+#     """
+#     Determine if date and receipt should use a combined bbox.
+#     
+#     Args:
+#         receipt_bbox: Receipt number bounding box
+#         date_bbox: Date bounding box
+#         threshold: Max normalized distance to combine (default 0.3 = 30% of diagonal)
+#     
+#     Returns:
+#         True if bboxes are close enough to combine
+#     """
+#     distance = calculate_bbox_distance(receipt_bbox, date_bbox)
+#     is_close = distance < threshold
+#     
+#     if receipt_bbox and date_bbox:
+#         logger.debug(f"Bbox distance: {distance:.3f} (threshold: {threshold}) -> Combine: {is_close}")
+#     
+#     return is_close
 
 
-def create_combined_bbox(bbox1: Dict, bbox2: Dict) -> Dict:
-    """
-    Create a minimal bounding box that encompasses both input bboxes.
-    
-    Args:
-        bbox1: First bbox dict
-        bbox2: Second bbox dict
-    
-    Returns:
-        Combined bbox dict with normalized coordinates
-    """
-    # Find min/max coordinates
-    min_x = min(bbox1['x'], bbox2['x'])
-    min_y = min(bbox1['y'], bbox2['y'])
-    max_x = max(bbox1['x'] + bbox1['width'], bbox2['x'] + bbox2['width'])
-    max_y = max(bbox1['y'] + bbox1['height'], bbox2['y'] + bbox2['height'])
-    
-    return {
-        'x': min_x,
-        'y': min_y,
-        'width': max_x - min_x,
-        'height': max_y - min_y
-    }
+# def create_combined_bbox(bbox1: Dict, bbox2: Dict) -> Dict:
+#     """
+#     Create a minimal bounding box that encompasses both input bboxes.
+#     
+#     Args:
+#         bbox1: First bbox dict
+#         bbox2: Second bbox dict
+#     
+#     Returns:
+#         Combined bbox dict with normalized coordinates
+#     """
+#     # Find min/max coordinates
+#     min_x = min(bbox1['x'], bbox2['x'])
+#     min_y = min(bbox1['y'], bbox2['y'])
+#     max_x = max(bbox1['x'] + bbox1['width'], bbox2['x'] + bbox2['width'])
+#     max_y = max(bbox1['y'] + bbox1['height'], bbox2['y'] + bbox2['height'])
+#     
+#     return {
+#         'x': min_x,
+#         'y': min_y,
+#         'width': max_x - min_x,
+#         'height': max_y - min_y
+#     }
 
 
 def process_single_invoice(
@@ -268,8 +269,8 @@ def process_single_invoice(
 ) -> Optional[Dict[str, Any]]:
     """
     Process a single invoice image with Gemini AI using google-genai SDK.
-    Uses gemini-3-flash-preview by default, with automatic fallback to
-    gemini-3-pro-preview if accuracy is below threshold.
+    Uses a 3-tier cascade: gemini-3.1-flash-lite-preview → gemini-3-flash-preview →
+    gemini-3.1-pro-preview, escalating when accuracy is below threshold.
     
     Args:
         image_bytes: Image file content
@@ -306,31 +307,39 @@ def process_single_invoice(
         print(f"{'='*80}\n", flush=True)
         logger.info(f"Processing image: {filename}")
         
-        # Try with primary model (Flash) first
-        model_name = PRIMARY_MODEL
-        fallback_attempted = False
+        # 3-tier cascade: Lite → Flash → Pro
+        # Each tier gets its own full retry cycle.
+        # A lower-tier result is stored as backup so if a higher tier fails
+        # we can still return the best result we have.
+        model_name = LITE_MODEL
+        fallback_attempted = False   # True once any escalation is triggered
         fallback_reason = ""
-        flash_result = None  # Store Flash result in case we need it as fallback
-        processing_errors = []  # Collect all errors
-        
-        # CRITICAL FIX: Give Pro model its own full retry cycle
-        # Try Flash first, then if fallback needed, try Pro with fresh retries
-        for model_attempt in [PRIMARY_MODEL, FALLBACK_MODEL]:
+        best_result: Optional[Dict[str, Any]] = None           # Best result from any completed tier
+        processing_errors = []       # Collect all errors
+        needs_escalation = False     # Signal to move to next tier
+        escalation_reason = ""
+        data: Dict[str, Any] = {}    # Initialize data dictionary to avoid uninitialized variable errors
+
+        # Each model gets its own full retry cycle via the outer loop.
+        for model_attempt in [LITE_MODEL, FLASH_MODEL, PRO_MODEL]:
             model_name = model_attempt
-            
-            # Skip Pro model if fallback wasn't triggered
-            if model_name == FALLBACK_MODEL and not fallback_attempted:
+
+            # Skip Flash/Pro unless the previous tier triggered an escalation
+            if model_name in (FLASH_MODEL, PRO_MODEL) and not needs_escalation:
                 continue
-            
+            needs_escalation = False  # Reset for this tier
+
             # Log model being attempted
-            if model_name == FALLBACK_MODEL:
-                print(f"[FALLBACK] Starting Pro model attempt after Flash fallback: {fallback_reason}", flush=True)
-                logger.info(f"Starting Pro model attempt after Flash fallback: {fallback_reason}")
+            tier_label = {LITE_MODEL: "Lite", FLASH_MODEL: "Flash", PRO_MODEL: "Pro"}.get(model_name, model_name)
+            if model_name == LITE_MODEL:
+                print(f"[AI] Starting Lite model attempt", flush=True)
+                logger.info("Starting Lite model attempt")
             else:
-                print(f"[AI] Starting Flash model attempt", flush=True)
-                logger.info(f"Starting Flash model attempt")
+                print(f"[ESCALATE] Starting {tier_label} model attempt after escalation: {fallback_reason}", flush=True)
+                logger.info(f"Starting {tier_label} model attempt after escalation: {fallback_reason}")
             
             # Generate content with retry logic (full retries for each model)
+            tier_succeeded = False   # Tracks if this tier managed to return ANY valid JSON
             for attempt in range(MAX_RETRIES):
                 try:
                     limiter.wait()
@@ -380,6 +389,23 @@ def process_single_invoice(
                     # Parse JSON
                     try:
                         data = json.loads(text)
+                        
+                        # Fix for cases where Gemini returns a list instead of header/items dict
+                        if not isinstance(data, dict):
+                            if isinstance(data, list):
+                                logger.info(f"Model {model_name} returned a list; wrapping in standard response structure.")
+                                data = {
+                                    "header": {
+                                        "invoice_type": "Printed",
+                                        "overall_confidence": 70,
+                                        "receipt_number_confidence": 70,
+                                        "date_confidence": 70
+                                    },
+                                    "items": data
+                                }
+                            else:
+                                data = {"header": {}, "items": []}
+                                
                     except json.JSONDecodeError as json_err:
                         # Enhanced error logging with actual response
                         error_msg = f"JSON parse error on attempt {attempt + 1}: {json_err}"
@@ -408,66 +434,60 @@ def process_single_invoice(
                     
                     logger.info(f"Confidences - Overall: {overall_conf}%, Receipt: {receipt_conf}%, Date: {date_conf}%")
                     
+                    # BBOX DISABLED: Gemini no longer asked to return bbox data (speeds up processing)
+                    # To re-enable: uncomment the block below and restore bbox fields in the prompt
                     # DEBUG: Check if bbox data is present in Gemini response
-                    has_bbox = any(k.endswith('_bbox') for k in header.keys())
-                    if not has_bbox:
-                        logger.warning("⚠️  BBOX MISSING: Gemini did NOT return bbox data!")
-                    else:
-                        logger.info(f"✓ BBOX FOUND: receipt_number_bbox = {header.get('receipt_number_bbox')}")
+                    # has_bbox = any(k.endswith('_bbox') for k in header.keys())
+                    # if not has_bbox:
+                    #     logger.warning("⚠️  BBOX MISSING: Gemini did NOT return bbox data!")
+                    # else:
+                    #     logger.info(f"✓ BBOX FOUND: receipt_number_bbox = {header.get('receipt_number_bbox')}")
+                    # # DEBUG: Check if line_item_row_bbox is present in items
+                    # items = data.get("items", [])
+                    # if items:
+                    #     sample_item = items[0]
+                    #     if 'line_item_row_bbox' in sample_item:
+                    #         logger.info(f"✓ LINE_ITEM_ROW_BBOX FOUND: {sample_item.get('line_item_row_bbox')}")
+                    #     else:
+                    #         logger.warning(f"⚠️ LINE_ITEM_ROW_BBOX MISSING! Item keys: {list(sample_item.keys())}")
                     
-                    # DEBUG: Check if line_item_row_bbox is present in items
-                    items = data.get("items", [])
-                    if items:
-                        sample_item = items[0]
-                        if 'line_item_row_bbox' in sample_item:
-                            logger.info(f"✓ LINE_ITEM_ROW_BBOX FOUND: {sample_item.get('line_item_row_bbox')}")
-                        else:
-                            logger.warning(f"⚠️ LINE_ITEM_ROW_BBOX MISSING! Item keys: {list(sample_item.keys())}")
                     
-                    
-                    # Check if we need to fallback to Pro model (only for Flash)
-                    if model_name == PRIMARY_MODEL:
-                        needs_fallback = False
-                        fallback_reason_temp = ""
-                        
-                        # Fallback triggers:
+                    # Check if we need to escalate to the next tier
+                    # (only relevant when we are NOT already on the final tier)
+                    if model_name != PRO_MODEL:
+                        escalation_reason_temp = ""
+
+                        # Escalation triggers:
                         # 1. Overall item accuracy < ACCURACY_THRESHOLD (70%)
-                        # 2. Overall Image Confidence < ACCURACY_THRESHOLD (70%)
+                        # 2. Overall image confidence < ACCURACY_THRESHOLD (70%)
                         # 3. Receipt number confidence < 50%
-                        # NOTE: Date confidence is NOT checked - if date is missing from invoice,
-                        #       a better model won't help. User will manually correct in Review Dates tab.
-                        
+                        # NOTE: Date confidence is NOT checked — if date is missing,
+                        #       a better model won't help; user corrects in Review Dates tab.
+
                         if accuracy < ACCURACY_THRESHOLD:
-                            needs_fallback = True
-                            fallback_reason_temp = f"Item Accuracy {accuracy:.2f}% < {ACCURACY_THRESHOLD}%"
+                            escalation_reason_temp = f"Item Accuracy {accuracy:.2f}% < {ACCURACY_THRESHOLD}%"
                         elif overall_conf < ACCURACY_THRESHOLD:
-                            needs_fallback = True
-                            fallback_reason_temp = f"Overall Image Confidence {overall_conf}% < {ACCURACY_THRESHOLD}%"
+                            escalation_reason_temp = f"Overall Image Confidence {overall_conf}% < {ACCURACY_THRESHOLD}%"
                         elif receipt_conf < 50:
-                            needs_fallback = True
-                            fallback_reason_temp = f"Receipt Confidence {receipt_conf}% < 50%"
-                        
-                        if needs_fallback:
-                            # Store Flash result and trigger Pro attempt
+                            escalation_reason_temp = f"Receipt Confidence {receipt_conf}% < 50%"
+
+                        if escalation_reason_temp:
+                            # Store current result as backup and escalate
                             fallback_attempted = True
-                            fallback_reason = fallback_reason_temp
-                            
-                            # Calculate cost for Flash attempt
-                            flash_cost = calculate_cost_inr(input_tokens, output_tokens, model_name)
-                            
-                            # Store Flash result as backup
-                            flash_result = {
+                            fallback_reason = escalation_reason_temp
+                            tier_cost = calculate_cost_inr(input_tokens, output_tokens, model_name)
+                            best_result = {
                                 "data": data,
                                 "model_used": model_name,
                                 "model_accuracy": round(accuracy, 2),
                                 "input_tokens": input_tokens,
                                 "output_tokens": output_tokens,
                                 "total_tokens": total_tokens,
-                                "cost_inr": flash_cost
+                                "cost_inr": tier_cost
                             }
-                            
-                            logger.warning(f"⚠️ Fallback triggered: {fallback_reason}. Will try {FALLBACK_MODEL}")
-                            break  # Exit Flash retry loop to try Pro model
+                            logger.warning(f"⚠️ Escalation triggered: {fallback_reason}. Trying next tier.")
+                            needs_escalation = True
+                            break  # Exit retry loop to advance to next tier
                     
                     # If we got here, processing succeeded!
                     # Calculate cost
@@ -496,6 +516,7 @@ def process_single_invoice(
                     if fallback_attempted:
                         logger.info(f"  ℹ️ Fallback was used: {fallback_reason}")
                     
+                    tier_succeeded = True
                     return data
                     
                 except json.JSONDecodeError as e:
@@ -504,6 +525,12 @@ def process_single_invoice(
                     if attempt == MAX_RETRIES - 1:
                         processing_errors.append(f"{model_name} failed after {MAX_RETRIES} attempts: {e}")
                         logger.error(f"❌ {model_name} failed to parse JSON after {MAX_RETRIES} attempts")
+                        
+                        # Trigger escalation if not already on the final tier
+                        if model_name != PRO_MODEL:
+                            needs_escalation = True
+                            fallback_reason = f"{model_name} JSON parsing failed after all retries"
+                            logger.info(f"Escalating from {model_name} due to repeated parsing failures.")
                     else:
                         time.sleep(2 ** attempt)  # Exponential backoff
                     
@@ -513,39 +540,43 @@ def process_single_invoice(
                     processing_errors.append(f"{model_name} error: {str(e)}")
                     if attempt == MAX_RETRIES - 1:
                         logger.error(f"❌ {model_name} failed after {MAX_RETRIES} attempts")
+                        
+                        # Trigger escalation if not already on the final tier
+                        if model_name != PRO_MODEL:
+                            needs_escalation = True
+                            err_msg = str(e)
+                            fallback_reason = f"{model_name} experienced repeated exceptions: {err_msg[0:100]}"
+                            logger.info(f"Escalating from {model_name} due to repeated exceptions.")
                     else:
                         time.sleep(2 ** attempt)
             
-            # If Pro model just failed and we have Flash result, use it
-            if model_name == FALLBACK_MODEL and flash_result:
-                logger.warning(f"⚠️ Pro model failed, falling back to Flash result")
-                
-                # Use Flash result but mark that Pro was attempted
-                data = flash_result["data"]
+            # If this tier failed and we have a result from a lower tier, use it
+            if needs_escalation is False and best_result:
+                # This tier completed its retries without success; use best stored result
+                logger.warning(f"⚠️ {tier_label} model failed, using best previous tier result")
+                data = best_result["data"]
                 data["receipt_link"] = receipt_link
                 data["upload_date"] = get_ist_now_str()
-                data["model_used"] = flash_result["model_used"]
-                data["model_accuracy"] = flash_result["model_accuracy"]
-                data["input_tokens"] = flash_result["input_tokens"]
-                data["output_tokens"] = flash_result["output_tokens"]
-                data["total_tokens"] = flash_result["total_tokens"]
-                data["cost_inr"] = flash_result["cost_inr"]
+                data["model_used"] = best_result["model_used"]
+                data["model_accuracy"] = best_result["model_accuracy"]
+                data["input_tokens"] = best_result["input_tokens"]
+                data["output_tokens"] = best_result["output_tokens"]
+                data["total_tokens"] = best_result["total_tokens"]
+                data["cost_inr"] = best_result["cost_inr"]
                 data["fallback_attempted"] = True
                 data["fallback_reason"] = fallback_reason
-                data["processing_errors"] = " | ".join(processing_errors)
-                
-                logger.info(f"✓ Using Flash result: {filename} | Accuracy: {flash_result['model_accuracy']}% | Cost: ₹{flash_result['cost_inr']:.4f}")
-                logger.info(f"  ⚠️ Pro model attempted but failed: {processing_errors[-1] if processing_errors else 'Unknown error'}")
-                
+                data["processing_errors"] = " | ".join(processing_errors) if processing_errors else None
+                logger.info(f"✓ Using {best_result['model_used']} result: {filename} | Accuracy: {best_result['model_accuracy']}%")
+                logger.info(f"  ⚠️ {tier_label} attempted but failed: {processing_errors[-1] if processing_errors else 'Unknown error'}")
                 return data
         
     except Exception as outer_err:
         print(f"\n[ERROR] Processing failed for {filename}: {outer_err}\n", flush=True)
         logger.error(f"Unhandled exception processing {filename}: {outer_err}")
     
-    # If we got here, both models failed completely
+    # If we got here, all three tiers failed completely
     print(f"\n[ERROR] Processing failed for {filename}\n", flush=True)
-    logger.error(f"Complete failure: Both Flash and Pro models failed for {filename}")
+    logger.error(f"Complete failure: Lite, Flash, and Pro models all failed for {filename}")
     logger.error(f"   Errors: {' | '.join(processing_errors)}")
     return None
 
@@ -729,7 +760,7 @@ def convert_to_dataframe_rows(
         
         # Build row dynamically based on database schema
         # Map Gemini JSON fields → database columns
-        row = {}
+        row: Dict[str, Any] = {}
         
         # System columns (always present)
         row["row_id"] = f"{header.get('receipt_number', '')}_{idx}"
@@ -754,38 +785,35 @@ def convert_to_dataframe_rows(
         row["fallback_reason"] = fallback_reason
         row["processing_errors"] = processing_errors
         
-        # Bounding box data (from Gemini, optional)
-        # Store as JSON strings for JSONB columns, handle missing gracefully
-        def get_bbox_json(data_dict, field_name):
-            """Extract bbox and convert to JSON string, or None if missing"""
-            bbox = data_dict.get(f"{field_name}_bbox")
-            if bbox and isinstance(bbox, dict):
-                return bbox  # Supabase client handles dict → JSONB automatically
-            return None
-        
-        # Header bbox (same for all line items from same receipt)
-        row["receipt_number_bbox"] = get_bbox_json(header, "receipt_number")
-        row["date_bbox"] = get_bbox_json(header, "date")
-        
-        # SMART BBOX COMBINATION LOGIC
-        # Check if we should combine date and receipt into one bbox
-        combined_bbox = None
-        receipt_bbox = row["receipt_number_bbox"]
-        date_bbox = row["date_bbox"]
-        
-        # Check if Gemini provided a combined bbox explicitly (if we update prompt later)
-        gemini_combined = header.get("date_and_receipt_combined_bbox")
-        if gemini_combined:
-             combined_bbox = gemini_combined
-        # Otherwise calculate if we should combine them based on proximity
-        elif should_use_combined_bbox(receipt_bbox, date_bbox, threshold=0.3):
-             combined_bbox = create_combined_bbox(receipt_bbox, date_bbox)
-             
-        row["date_and_receipt_combined_bbox"] = combined_bbox
-        
-        
-        # Line item bbox - only the full row bbox
-        row["line_item_row_bbox"] = get_bbox_json(item, "line_item_row")  # Entire row bbox
+        # BBOX DISABLED: Bbox extraction removed from Gemini prompt to speed up processing.
+        # DB columns are kept intact (receiving NULL) so they can be re-enabled without schema changes.
+        # To re-enable: restore bbox fields in adnak.json gemini prompt + uncomment code below.
+        # row["receipt_number_bbox"] = None
+        # row["date_bbox"] = None
+        # row["date_and_receipt_combined_bbox"] = None
+        # row["line_item_row_bbox"] = None
+        # --- BBOX CODE (commented out, not deleted) ---
+        # def get_bbox_json(data_dict, field_name):
+        #     """Extract bbox and convert to JSON string, or None if missing"""
+        #     bbox = data_dict.get(f"{field_name}_bbox")
+        #     if bbox and isinstance(bbox, dict):
+        #         return bbox  # Supabase client handles dict → JSONB automatically
+        #     return None
+        # # Header bbox (same for all line items from same receipt)
+        # row["receipt_number_bbox"] = get_bbox_json(header, "receipt_number")
+        # row["date_bbox"] = get_bbox_json(header, "date")
+        # # SMART BBOX COMBINATION LOGIC
+        # combined_bbox = None
+        # receipt_bbox = row["receipt_number_bbox"]
+        # date_bbox = row["date_bbox"]
+        # gemini_combined = header.get("date_and_receipt_combined_bbox")
+        # if gemini_combined:
+        #      combined_bbox = gemini_combined
+        # elif should_use_combined_bbox(receipt_bbox, date_bbox, threshold=0.3):
+        #      combined_bbox = create_combined_bbox(receipt_bbox, date_bbox)
+        # row["date_and_receipt_combined_bbox"] = combined_bbox
+        # # Line item bbox - only the full row bbox
+        # row["line_item_row_bbox"] = get_bbox_json(item, "line_item_row")
         
         # Core business columns (from Gemini JSON)
         row["receipt_number"] = header.get("receipt_number", "")
@@ -846,7 +874,7 @@ def process_invoices_batch(
     storage = get_storage_client()
     # sheets_client removed - now using Supabase via database_helpers
     
-    results = {
+    results: Dict[str, Any] = {
         "total": len(file_keys),
         "processed": 0,
         "failed": 0,
@@ -916,7 +944,7 @@ def process_invoices_batch(
             
             # Process with automated system (with user-specific prompt)
             print(f"[AI PROCESSING] {file_key}", flush=True)
-            invoice_data = process_single_invoice(image_bytes, file_key, receipt_link, username)
+            invoice_data: Optional[Dict[str, Any]] = process_single_invoice(image_bytes, file_key, receipt_link, username)
             
             if invoice_data:
                 # Add image hash to invoice data
@@ -1045,8 +1073,8 @@ def process_invoices_batch(
             db = get_database_client()
             
             # Insert rows into Supabase (batch insert)
-            saved_count = 0
-            failed_inserts = 0
+            saved_count: int = 0
+            failed_inserts: int = 0
             
             for row in all_rows:
                 try:
@@ -1269,7 +1297,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                 else:
                     receipt_num = None
 
-                date_row = {
+                date_row: Dict[str, Any] = {
                     'username': username,
                     'receipt_number': receipt_num,
                     'date': row.get('date'),
@@ -1278,9 +1306,9 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     'receipt_link': row.get('receipt_link'),
                     'upload_date': row.get('upload_date'),
                     'row_id': row.get('row_id'),
-                    'receipt_number_bbox': row.get('receipt_number_bbox'),
-                    'date_bbox': row.get('date_bbox'),
-                    'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
+                    # 'receipt_number_bbox': row.get('receipt_number_bbox'),
+                    # 'date_bbox': row.get('date_bbox'),
+                    # 'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                     'customer_name': row.get('customer'),
                     'mobile_number': row.get('mobile_number'),
                     'vehicle_number': row.get('vehicle_number')
@@ -1367,7 +1395,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     # NEW: Get header_id from our map
                     header_id = header_ids_map.get(receipt_num) if header_ids_map else None
                     
-                    amount_row = {
+                    amount_row: Dict[str, Any] = {
                         'username': username,
                         'verification_status': row.get('verification_status'),  # Use calculated status (Done or Pending)
                         'receipt_number': receipt_num,
@@ -1379,8 +1407,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                         'amount_mismatch': row.get('amount_mismatch'),
                         'receipt_link': row.get('receipt_link'),
                         'row_id': row.get('row_id'),
-                        'line_item_row_bbox': row.get('line_item_row_bbox'),  # Only use row-level bbox
-                        'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
+                        # 'line_item_row_bbox': row.get('line_item_row_bbox'),  # Only use row-level bbox
+                        # 'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                         'customer_name': row.get('customer'),
                         'mobile_number': row.get('mobile_number'),
                         'type': row.get('type')
@@ -1425,7 +1453,7 @@ def create_duplicate_records_supabase(duplicates: List[Dict[str, Any]], username
             filename = file_key.split('/')[-1] if '/' in file_key else file_key
             
             # Create duplicate record for verification_dates
-            duplicate_record = {
+            duplicate_record: Dict[str, Any] = {
                 'username': username,
                 'receipt_number': existing_invoice.get('receipt_number', 'N/A'),
                 'date': existing_invoice.get('date'),
