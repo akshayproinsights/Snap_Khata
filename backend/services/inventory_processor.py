@@ -36,7 +36,7 @@ limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
+# LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
 FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
@@ -120,18 +120,15 @@ def process_vendor_invoice(
             json_text = resp.text.strip() if resp.text else "{}"
             
             # Robust JSON cleaning (remove markdown blocks if present)
-            if json_text.startswith("```json"):
-                json_text = json_text[7:]
-            if json_text.startswith("```"):
-                json_text = json_text[3:]
-            if json_text.endswith("```"):
-                json_text = json_text[:-3]
-            json_text = json_text.strip()
+            json_text = json_text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
             try:
                 data = json.loads(json_text)
             except json.JSONDecodeError:
-                logger.error(f"{tier_label}: JSON Decode Error. Response: {json_text[:200]}...")
+                preview = str(json_text)
+                if len(preview) > 200:
+                    preview = preview[:200] + "..."
+                logger.error(f"{tier_label}: JSON Decode Error. Response: {preview}")
                 return None, [], 0.0, 0, 0, 0.0
             
             # Ensure data is a dictionary
@@ -178,41 +175,25 @@ def process_vendor_invoice(
 
     try:
         best_res_stored: Optional[Dict[str, Any]] = None
+        accuracy = 0.0
         
-        # ── Tier 1: Lite ─────────────────────────────────────────────────────
+        # ── Tier 1: Flash (formerly Tier 2) ──────────────────────────────────
         try:
-            extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-                _run_model(LITE_MODEL, "Lite")
-            model_used = "Lite"
-            
-            if extracted_data:
+            f_data, f_items, f_acc, f_in, f_out, f_cost = _run_model(FLASH_MODEL, "Flash")
+            if f_data:
+                extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                    f_data, f_items, f_acc, f_in, f_out, f_cost
+                model_used = "Flash"
                 best_res_stored = {
-                    "data": extracted_data, "items": items, "acc": accuracy,
-                    "in": input_tokens, "out": output_tokens, "cost": cost_inr, "model": "Lite"
+                    "data": f_data, "items": f_items, "acc": f_acc,
+                    "in": f_in, "out": f_out, "cost": f_cost, "model": "Flash"
                 }
         except Exception as e:
-            logger.error(f"Lite tier crash: {e}")
+            logger.error(f"Flash tier crash: {e}")
+            # Ensure accuracy is initialized for the next tier check
             accuracy = 0.0
 
-        # ── Tier 2: Flash (if Lite failed or accuracy < threshold) ───────────
-        if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
-            logger.warning(f"Lite finished with {accuracy}% accuracy (threshold {ACCURACY_THRESHOLD}%). Escalating...")
-            try:
-                f_data, f_items, f_acc, f_in, f_out, f_cost = _run_model(FLASH_MODEL, "Flash")
-                if f_data:
-                    # If Flash succeeded, update our working result
-                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-                        f_data, f_items, f_acc, f_in, f_out, f_cost
-                    model_used = "Flash"
-                    best_res_stored = {
-                        "data": f_data, "items": f_items, "acc": f_acc,
-                        "in": f_in, "out": f_out, "cost": f_cost, "model": "Flash"
-                    }
-            except Exception as e:
-                logger.error(f"Flash tier crash: {e}")
-                # Keep Lite result if we had one
-
-        # ── Tier 3: Pro (if Flash failed or accuracy < threshold) ────────────
+        # ── Tier 2: Pro (if Flash failed or accuracy < threshold) ────────────
         if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
             logger.warning(f"Flash finished with {accuracy}% accuracy. Escalating to Pro...")
             try:
@@ -229,7 +210,7 @@ def process_vendor_invoice(
                 logger.error(f"Pro tier crash: {e}")
 
         if not best_res_stored:
-            logger.error("All models (Lite, Flash, Pro) failed to return a result.")
+            logger.error("All models (Flash, Pro) failed to return a result.")
             return None
 
         # Re-assign from best result for consistency
@@ -417,7 +398,7 @@ def convert_to_inventory_rows(
             "accuracy_score": item.get("confidence", 0),
             "row_accuracy": item.get("confidence", 0),
             
-            # BBOX DISABLED: all set to None (NULL in DB), columns preserved for future re-enable
+        # BBOX DISABLED: all set to None (NULL in DB), columns preserved for future re-enable
             "part_number_bbox": None,
             "batch_bbox": None,
             "description_bbox": None,
@@ -429,19 +410,21 @@ def convert_to_inventory_rows(
             "cgst_percent_bbox": None,
             "sgst_percent_bbox": None,
             "line_item_row_bbox": None,
-            # --- BBOX CODE (commented out, not deleted) ---
-            # "part_number_bbox": get_bbox_json(item, "part_number"),
-            # "batch_bbox": get_bbox_json(item, "batch"),
-            # "description_bbox": get_bbox_json(item, "description"),
-            # "hsn_bbox": get_bbox_json(item, "hsn"),
-            # "qty_bbox": get_bbox_json(item, "quantity"),
-            # "rate_bbox": get_bbox_json(item, "rate"),
-            # "disc_percent_bbox": get_bbox_json(item, "disc_percent"),
-            # "taxable_amount_bbox": get_bbox_json(item, "amount"),
-            # "cgst_percent_bbox": get_bbox_json(item, "cgst_percent"),
-            # "sgst_percent_bbox": get_bbox_json(item, "sgst_percent"),
-            # "line_item_row_bbox": get_bbox_json(item, "line_item_row"),
         }
+        
+        # Extract extra fields
+        standard_item_keys = {
+            "part_number", "batch", "description", "hsn", "quantity", "rate", 
+            "amount", "disc_percent", "cgst_percent", "sgst_percent", "confidence"
+        }
+        standard_header_keys = {
+            "invoice_type", "invoice_date", "invoice_number", "vendor_name", "source_file"
+        }
+        
+        item_extra = {k: v for k, v in item.items() if k not in standard_item_keys and not k.endswith("_bbox")}
+        header_extra = {k: v for k, v in header.items() if k not in standard_header_keys and not k.endswith("_bbox")}
+        extra_fields = {**header_extra, **item_extra}
+        row["extra_fields"] = extra_fields
         
         rows.append(row)
     
@@ -598,7 +581,7 @@ def process_inventory_batch(
     file_keys: List[str],
     r2_bucket: str,
     username: str,
-    progress_callback: Optional[Callable] = None,
+    progress_callback: Optional[Callable[[int, int, int, str], None]] = None,
     force_upload: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -634,7 +617,7 @@ def process_inventory_batch(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_file = {
             executor.submit(
-                process_single_inventory_item,
+                process_single_inventory_item,  # type: ignore
                 file_key,
                 r2_bucket,
                 username,
@@ -669,8 +652,9 @@ def process_inventory_batch(
                 counters["failed"] += 1
                 errors.append(f"System error processing {file_key}: {str(exc)}")
 
-            if progress_callback:
-                progress_callback(counters["completed_count"], counters["failed"], len(file_keys), file_key)
+            cb = progress_callback
+            if cb is not None:
+                cb(counters["completed_count"], counters["failed"], len(file_keys), file_key)
 
     results = {
         "processed": counters["processed"],

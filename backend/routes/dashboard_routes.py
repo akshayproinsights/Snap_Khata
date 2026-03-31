@@ -2,7 +2,7 @@
 Dashboard Metrics API Routes
 Provides aggregated data for custom dashboard visualizations.
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -434,11 +434,9 @@ async def get_stock_alerts(
 
 @router.get("/kpis", response_model=DashboardKPIs)
 async def get_dashboard_kpis(
+    request: Request,
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    customer_name: Optional[str] = Query(None, description="Filter by customer name"),
-    vehicle_number: Optional[str] = Query(None, description="Filter by vehicle number"),
-    part_number: Optional[str] = Query(None, description="Filter by part number"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -482,13 +480,15 @@ async def get_dashboard_kpis(
         curr_query = curr_query.gte(date_col, current_from)
         curr_query = curr_query.lte(date_col, current_to)
         
-        # Apply optional filters
-        if customer_name:
-            curr_query = curr_query.ilike("customer_name", f"%{customer_name}%")
-        if vehicle_number:
-            curr_query = curr_query.ilike("car_number", f"%{vehicle_number}%")
-        if part_number:
-            curr_query = curr_query.ilike("description", f"%{part_number}%")
+        # Apply optional filters dynamically based on config
+        search_filters = revenue_config.get("search_filters", [])
+        for f in search_filters:
+            key = f.get("key")
+            db_column = f.get("db_column")
+            if key and db_column:
+                val = request.query_params.get(key)
+                if val:
+                    curr_query = curr_query.ilike(db_column, f"%{val}%")
         
         curr_items = (curr_query.execute()).data or []
         
@@ -506,12 +506,13 @@ async def get_dashboard_kpis(
         prev_query = prev_query.lte(date_col, prev_to)
         
         # Apply same filters to previous period for fair comparison
-        if customer_name:
-            prev_query = prev_query.ilike("customer_name", f"%{customer_name}%")
-        if vehicle_number:
-            prev_query = prev_query.ilike("car_number", f"%{vehicle_number}%")
-        if part_number:
-            prev_query = prev_query.ilike("description", f"%{part_number}%")
+        for f in search_filters:
+            key = f.get("key")
+            db_column = f.get("db_column")
+            if key and db_column:
+                val = request.query_params.get(key)
+                if val:
+                    prev_query = prev_query.ilike(db_column, f"%{val}%")
         
         prev_items = (prev_query.execute()).data or []
         
@@ -604,11 +605,9 @@ async def get_dashboard_kpis(
 
 @router.get("/daily-sales-volume", response_model=List[DailySalesVolume])
 async def get_daily_sales_volume(
+    request: Request,
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    customer_name: Optional[str] = Query(None, description="Filter by customer name"),
-    vehicle_number: Optional[str] = Query(None, description="Filter by vehicle number"),
-    part_number: Optional[str] = Query(None, description="Filter by part number"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -636,13 +635,15 @@ async def get_daily_sales_volume(
         query = query.gte(date_col, date_from_str)
         query = query.lte(date_col, date_to_str)
         
-        # Apply optional filters
-        if customer_name:
-            query = query.ilike("customer_name", f"%{customer_name}%")
-        if vehicle_number:
-            query = query.ilike("car_number", f"%{vehicle_number}%")
-        if part_number:
-            query = query.ilike("description", f"%{part_number}%")
+        # Apply optional filters dynamically based on config
+        search_filters = revenue_config.get("search_filters", [])
+        for f in search_filters:
+            key = f.get("key")
+            db_column = f.get("db_column")
+            if key and db_column:
+                val = request.query_params.get(key)
+                if val:
+                    query = query.ilike(db_column, f"%{val}%")
         
         query = query.order(date_col)
         
@@ -911,15 +912,16 @@ async def search_inventory(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/autocomplete/customers")
-async def get_customer_suggestions(
+@router.get("/autocomplete/{filter_key}")
+async def get_autocomplete_suggestions(
+    filter_key: str,
     q: str = Query(..., min_length=2, description="Search query (min 2 characters)"),
     limit: int = Query(10, ge=1, le=50, description="Maximum suggestions to return"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Get customer name suggestions for autocomplete.
-    Returns distinct customer names matching the query.
+    Get generic autocomplete suggestions for a given filter key.
+    Resolves the filter key to a database column via user config.
     """
     username = current_user.get("username")
     db = get_database_client()
@@ -928,125 +930,47 @@ async def get_customer_suggestions(
         config = get_user_config(username)
         revenue_config = config.get("dashboard_visuals", {}).get("revenue_metrics", {})
         data_source = revenue_config.get("data_source", "verified_invoices")
+        search_filters = revenue_config.get("search_filters", [])
         
-        # Query for distinct customer names matching the search
+        # Find the specific db column for this filter_key
+        db_column = None
+        for f in search_filters:
+            if f.get("key") == filter_key:
+                db_column = f.get("db_column")
+                break
+                
+        if not db_column:
+            logger.warning(f"Filter key '{filter_key}' not found in configuration for {username}")
+            return []
+
+        # Query for distinct values matching the search
         response = db.client.table(data_source)\
-            .select("customer_name")\
+            .select(db_column)\
             .eq("username", username)\
-            .ilike("customer_name", f"%{q}%")\
+            .ilike(db_column, f"%{q}%")\
             .limit(1000)\
             .execute()
         
         items = response.data or []
         
         # Get distinct values and count occurrences
-        customer_counts: Dict[str, int] = {}
+        value_counts: Dict[str, int] = {}
         for item in items:
-            customer = item.get("customer_name")
-            if customer and customer.strip():
-                customer_counts[customer] = customer_counts.get(customer, 0) + 1
+            val = item.get(db_column)
+            if val and str(val).strip():
+                val_str = str(val).strip()
+                value_counts[val_str] = value_counts.get(val_str, 0) + 1
         
         # Sort by frequency (most common first) and limit results
-        suggestions = sorted(customer_counts.keys(), key=lambda x: customer_counts[x], reverse=True)[:limit]
+        suggestions = sorted(value_counts.keys(), key=lambda x: value_counts[x], reverse=True)[:limit]
         
-        logger.info(f"Customer autocomplete for '{q}': {len(suggestions)} suggestions")
+        logger.info(f"Autocomplete for '{filter_key}' ({q}): {len(suggestions)} suggestions")
         return suggestions
         
     except Exception as e:
-        logger.error(f"Error getting customer suggestions: {e}")
+        logger.error(f"Error getting suggestions for {filter_key}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get("/autocomplete/vehicles")
-async def get_vehicle_suggestions(
-    q: str = Query(..., min_length=2, description="Search query (min 2 characters)"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum suggestions to return"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get vehicle number suggestions for autocomplete.
-    Returns distinct vehicle numbers matching the query.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        config = get_user_config(username)
-        revenue_config = config.get("dashboard_visuals", {}).get("revenue_metrics", {})
-        data_source = revenue_config.get("data_source", "verified_invoices")
-        
-        # Query for distinct vehicle numbers matching the search
-        response = db.client.table(data_source)\
-            .select("car_number")\
-            .eq("username", username)\
-            .ilike("car_number", f"%{q}%")\
-            .limit(1000)\
-            .execute()
-        
-        items = response.data or []
-        
-        # Get distinct values and count occurrences
-        vehicle_counts: Dict[str, int] = {}
-        for item in items:
-            vehicle = item.get("car_number")
-            if vehicle and vehicle.strip():
-                vehicle_counts[vehicle] = vehicle_counts.get(vehicle, 0) + 1
-        
-        # Sort by frequency (most common first) and limit results
-        suggestions = sorted(vehicle_counts.keys(), key=lambda x: vehicle_counts[x], reverse=True)[:limit]
-        
-        logger.info(f"Vehicle autocomplete for '{q}': {len(suggestions)} suggestions")
-        return suggestions
-        
-    except Exception as e:
-        logger.error(f"Error getting vehicle suggestions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/autocomplete/parts")
-async def get_part_suggestions(
-    q: str = Query(..., min_length=2, description="Search query (min 2 characters)"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum suggestions to return"),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get part number suggestions for autocomplete.
-    Returns distinct part numbers matching the query.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        config = get_user_config(username)
-        revenue_config = config.get("dashboard_visuals", {}).get("revenue_metrics", {})
-        data_source = revenue_config.get("data_source", "verified_invoices")
-        
-        # Query for distinct part descriptions matching the search
-        response =db.client.table(data_source)\
-            .select("description")\
-            .eq("username", username)\
-            .ilike("description", f"%{q}%")\
-            .limit(1000)\
-            .execute()
-        
-        items = response.data or []
-        
-        # Get distinct values and count occurrences
-        part_counts: Dict[str, int] = {}
-        for item in items:
-            part = item.get("description")
-            if part and part.strip():
-                part_counts[part] = part_counts.get(part, 0) + 1
-        
-        # Sort by frequency (most common first) and limit results
-        suggestions = sorted(part_counts.keys(), key=lambda x: part_counts[x], reverse=True)[:limit]
-        
-        logger.info(f"Part autocomplete for '{q}': {len(suggestions)} suggestions")
-        return suggestions
-        
-    except Exception as e:
-        logger.error(f"Error getting part suggestions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/update-stock")

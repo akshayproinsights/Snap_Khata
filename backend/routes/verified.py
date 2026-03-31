@@ -52,7 +52,6 @@ async def get_verified_invoices_route(
     date_from: Optional[str] = Query(None, description="Date from (DD-MM-YYYY)"),
     date_to: Optional[str] = Query(None, description="Date to (DD-MM-YYYY)"),
     receipt_number: Optional[str] = Query(None, description="Filter by receipt number"),
-    vehicle_number: Optional[str] = Query(None, description="Filter by vehicle/car number"),
     customer_name: Optional[str] = Query(None, description="Filter by customer name"),
     description: Optional[str] = Query(None, description="Filter by description"),
     limit: Optional[int] = Query(None, description="Limit results"),
@@ -69,7 +68,7 @@ async def get_verified_invoices_route(
     try:
         # Check if any filters are active
         has_filters = bool(search or date_from or date_to or receipt_number or 
-                          vehicle_number or customer_name or description)
+                          customer_name or description)
         
         # Load ALL records to search across entire dataset
         initial_limit = None
@@ -99,15 +98,6 @@ async def get_verified_invoices_route(
         if receipt_number and 'receipt_number' in df.columns:
             df = df[df['receipt_number'].astype(str).str.contains(receipt_number, case=False, na=False)]
         
-        # Apply vehicle number filter
-        if vehicle_number:
-            vehicle_col = None
-            for col in ['car_number', 'vehicle_number']:
-                if col in df.columns:
-                    vehicle_col = col
-                    break
-            if vehicle_col:
-                df = df[df[vehicle_col].astype(str).str.contains(vehicle_number, case=False, na=False)]
         
         # Apply customer name filter
         if customer_name and 'customer_name' in df.columns:

@@ -3,25 +3,66 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 
-class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+class RegistrationPage extends ConsumerStatefulWidget {
+  const RegistrationPage({super.key});
 
   @override
-  ConsumerState<LoginPage> createState() => _LoginPageState();
+  ConsumerState<RegistrationPage> createState() => _RegistrationPageState();
 }
 
-class _LoginPageState extends ConsumerState<LoginPage> {
+class _RegistrationPageState extends ConsumerState<RegistrationPage> {
   String _username = '';
+  String _shopName = '';
   String _password = '';
+  String? _selectedIndustry;
+  List<String> _industries = [];
+  bool _isLoadingIndustries = true;
 
-  void _handleLogin() async {
-    if (_username.isEmpty || _password.isEmpty) return;
+  @override
+  void initState() {
+    super.initState();
+    _fetchIndustries();
+  }
 
-    await ref.read(authProvider.notifier).login(_username, _password);
+  Future<void> _fetchIndustries() async {
+    try {
+      final repo = AuthRepository();
+      final industries = await repo.getIndustries();
+      if (mounted) {
+        setState(() {
+          _industries = industries;
+          if (industries.isNotEmpty) {
+            _selectedIndustry = industries.first;
+          }
+          _isLoadingIndustries = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.showError(context, 'Failed to load industries', title: 'Error');
+        setState(() {
+          _isLoadingIndustries = false;
+        });
+      }
+    }
+  }
+
+  void _handleRegister() async {
+    if (_username.isEmpty || _shopName.isEmpty || _password.isEmpty || _selectedIndustry == null) {
+      AppToast.showError(context, 'Please fill all fields', title: 'Error');
+      return;
+    }
+
+    try {
+      await ref.read(authProvider.notifier).register(_username, _password, _shopName, _selectedIndustry!);
+    } catch (e) {
+      // Error will be shown by auth state listener
+    }
   }
 
   @override
@@ -33,18 +74,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (next.isAuthenticated) {
         context.go('/dashboard');
       }
-      if (next.error != null) {
-        AppToast.showError(context, next.error!, title: 'Login Failed');
+      if (next.error != null && previous?.error != next.error) {
+        AppToast.showError(context, next.error!, title: 'Registration Failed');
       }
     });
 
     return Scaffold(
       backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft, color: AppTheme.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 48.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -69,33 +117,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
-                // Trust Badge
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(LucideIcons.shieldCheck,
-                        color: AppTheme.success, size: 16),
-                    const SizedBox(width: 4),
-                    const Text('100% Secure',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 12)),
-                    const SizedBox(width: 12),
-                    Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                            color: AppTheme.border, shape: BoxShape.circle)),
-                    const SizedBox(width: 12),
-                    const Text('🇮🇳 Made in India',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 48),
-
-                // Login Card
+                // Register Card
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -115,7 +139,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     children: [
                       const Center(
                         child: Text(
-                          'Login to Your Account',
+                          'Create an Account',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -125,16 +149,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                       const SizedBox(height: 32),
 
+                      const Text('Shop Name',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      MobileTextField(
+                        initialValue: _shopName,
+                        placeholder: 'Enter your shop name',
+                        textInputAction: TextInputAction.next,
+                        onSave: (val) {
+                          setState(() {
+                            _shopName = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
                       const Text('User ID',
                           style: TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 14)),
                       const SizedBox(height: 8),
-                      // MobileTextField is primarily an auto-saving component, but we can use it here
-                      // by intercepting the state via onSave/onChanged.
-                      // For a standard login form, tracking the text value is simpler. Let's adapt MobileTextField.
                       MobileTextField(
                         initialValue: _username,
-                        placeholder: 'Enter your User ID',
+                        placeholder: 'Choose a User ID',
                         textInputAction: TextInputAction.next,
                         onSave: (val) {
                           setState(() {
@@ -150,23 +187,63 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(height: 8),
                       MobileTextField(
                         initialValue: _password,
-                        placeholder: 'Enter your password',
+                        placeholder: 'Choose a password',
                         obscureText: true,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _handleLogin(),
+                        textInputAction: TextInputAction.next,
                         onSave: (val) {
                           setState(() {
                             _password = val;
                           });
                         },
                       ),
+                      const SizedBox(height: 20),
+
+                      const Text('Industry',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      
+                      _isLoadingIndustries 
+                        ? const Center(child: Padding(
+                           padding: EdgeInsets.all(8.0),
+                           child: CircularProgressIndicator(),
+                        ))
+                        : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppTheme.border),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedIndustry,
+                              isExpanded: true,
+                              icon: const Icon(LucideIcons.chevronDown),
+                              hint: const Text('Select Industry'),
+                              items: _industries.map((String industry) {
+                                return DropdownMenuItem<String>(
+                                  value: industry,
+                                  child: Text(
+                                    industry.substring(0, 1).toUpperCase() + industry.substring(1),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                setState(() {
+                                  _selectedIndustry = newValue;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+
                       const SizedBox(height: 32),
 
                       SizedBox(
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: authState.isLoading ? null : _handleLogin,
+                          onPressed: authState.isLoading ? null : _handleRegister,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primary,
                             shape: RoundedRectangleBorder(
@@ -182,7 +259,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                       color: Colors.white, strokeWidth: 3),
                                 )
                               : const Text(
-                                  'Login',
+                                  'Sign Up',
                                   style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold),
@@ -193,16 +270,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.push('/register'),
-                    child: const Text('New user? Sign Up here', 
-                      style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 14)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
+                const SizedBox(height: 24),
                 // Footer
                 const Row(
                   mainAxisAlignment: MainAxisAlignment.center,

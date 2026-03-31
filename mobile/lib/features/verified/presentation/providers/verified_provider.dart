@@ -43,7 +43,6 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
     String? dateFrom,
     String? dateTo,
     String? receiptNumber,
-    String? vehicleNumber,
     String? customerName,
     String? description,
   }) async {
@@ -54,7 +53,6 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
         dateFrom: dateFrom,
         dateTo: dateTo,
         receiptNumber: receiptNumber,
-        vehicleNumber: vehicleNumber,
         customerName: customerName,
         description: description,
       );

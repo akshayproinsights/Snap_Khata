@@ -20,9 +20,7 @@ class DashboardState {
   final String? error;
 
   // Advanced filters
-  final String customerFilter;
-  final String vehicleFilter;
-  final String partNumberFilter;
+  final Map<String, String> dynamicFilters;
   final bool filtersExpanded;
 
   DashboardState({
@@ -35,22 +33,13 @@ class DashboardState {
     this.period = DashboardPeriod.month,
     this.isLoading = false,
     this.error,
-    this.customerFilter = '',
-    this.vehicleFilter = '',
-    this.partNumberFilter = '',
+    this.dynamicFilters = const {},
     this.filtersExpanded = false,
   });
 
-  bool get hasActiveFilters =>
-      customerFilter.isNotEmpty ||
-      vehicleFilter.isNotEmpty ||
-      partNumberFilter.isNotEmpty;
+  bool get hasActiveFilters => dynamicFilters.values.any((item) => item.isNotEmpty);
 
-  int get activeFilterCount => [
-        customerFilter,
-        vehicleFilter,
-        partNumberFilter,
-      ].where((f) => f.isNotEmpty).length;
+  int get activeFilterCount => dynamicFilters.values.where((item) => item.isNotEmpty).length;
 
   DashboardState copyWith({
     DashboardKPIs? kpis,
@@ -62,9 +51,7 @@ class DashboardState {
     DashboardPeriod? period,
     bool? isLoading,
     String? error,
-    String? customerFilter,
-    String? vehicleFilter,
-    String? partNumberFilter,
+    Map<String, String>? dynamicFilters,
     bool? filtersExpanded,
   }) {
     return DashboardState(
@@ -77,9 +64,7 @@ class DashboardState {
       period: period ?? this.period,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      customerFilter: customerFilter ?? this.customerFilter,
-      vehicleFilter: vehicleFilter ?? this.vehicleFilter,
-      partNumberFilter: partNumberFilter ?? this.partNumberFilter,
+      dynamicFilters: dynamicFilters ?? this.dynamicFilters,
       filtersExpanded: filtersExpanded ?? this.filtersExpanded,
     );
   }
@@ -107,26 +92,21 @@ class DashboardNotifier extends Notifier<DashboardState> {
     final dateFrom = _daysAgo(activePeriod.days);
 
     // Build optional filter args
-    final customer = state.customerFilter.isEmpty ? null : state.customerFilter;
-    final vehicle = state.vehicleFilter.isEmpty ? null : state.vehicleFilter;
-    final part = state.partNumberFilter.isEmpty ? null : state.partNumberFilter;
+    final filters = Map<String, String>.from(state.dynamicFilters)
+      ..removeWhere((key, value) => value.isEmpty);
 
     try {
       // Fetch all data concurrently — stockAlerts returns [] on error
       final responses = await Future.wait([
         _repository.getKPIs(
           dateFrom: dateFrom,
-          customerName: customer,
-          vehicleNumber: vehicle,
-          partNumber: part,
+          filters: filters,
         ),
         _repository.getStockSummary(),
         _repository.getStockLevels(),
         _repository.getDailySalesVolume(
           dateFrom: dateFrom,
-          customerName: customer,
-          vehicleNumber: vehicle,
-          partNumber: part,
+          filters: filters,
         ),
         _repository.getStockAlerts(limit: 10),
         _repository.getRevenueSummary(dateFrom: dateFrom),
@@ -159,16 +139,10 @@ class DashboardNotifier extends Notifier<DashboardState> {
     state = state.copyWith(filtersExpanded: !state.filtersExpanded);
   }
 
-  void setCustomerFilter(String value) {
-    state = state.copyWith(customerFilter: value);
-  }
-
-  void setVehicleFilter(String value) {
-    state = state.copyWith(vehicleFilter: value);
-  }
-
-  void setPartNumberFilter(String value) {
-    state = state.copyWith(partNumberFilter: value);
+  void setDynamicFilter(String key, String value) {
+    final newFilters = Map<String, String>.from(state.dynamicFilters);
+    newFilters[key] = value;
+    state = state.copyWith(dynamicFilters: newFilters);
   }
 
   Future<void> applyFilters() async {
@@ -177,9 +151,7 @@ class DashboardNotifier extends Notifier<DashboardState> {
 
   Future<void> clearFilters() async {
     state = state.copyWith(
-      customerFilter: '',
-      vehicleFilter: '',
-      partNumberFilter: '',
+      dynamicFilters: const {},
       filtersExpanded: false,
     );
     await refreshDashboard();

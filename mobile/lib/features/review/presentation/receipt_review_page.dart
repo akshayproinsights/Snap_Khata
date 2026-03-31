@@ -14,6 +14,8 @@ import 'package:mobile/features/shared/presentation/widgets/payment_summary_card
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/config/presentation/providers/config_provider.dart';
+
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
@@ -237,6 +239,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         orElse: () => widget.group);
 
     final header = group.header;
+    final invoiceColumns = ref.watch(tableColumnsProvider('invoice_all'));
 
     // Line Item Hoisting: Red items (hasError) at the top!
     final sortedLineItems = List<ReviewRecord>.from(group.lineItems);
@@ -358,6 +361,18 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 }
               }
 
+              final Map<String, String> resolvedExtraFields = {};
+
+              if (header?.extraFields != null) {
+                header!.extraFields.forEach((key, value) {
+                  if (value != null && value.toString().isNotEmpty) {
+                    // Try to extract readable label from config if possible, or titlecase the key
+                    final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'];
+                    resolvedExtraFields[configLabel] = value.toString();
+                  }
+                });
+              }
+
               final caption = WhatsAppUtils.getWhatsAppCaption(
                 status: status,
                 customerName: header?.customerName?.isNotEmpty == true
@@ -368,13 +383,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 totalAmount: totalAmount,
                 paidAmount: _receivedAmount,
                 pendingAmount: balanceDue,
+                extraFields: resolvedExtraFields,
               );
               final message =
                   '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
 
               // Open custom input dialog for phone number (pre-filled if available from DB)
               final phoneController =
-                  TextEditingController(text: header?.mobileNumber ?? '');
+                  TextEditingController(text: header?.extraFields['mobile_number']?.toString() ?? '');
 
               if (!context.mounted) return;
 
@@ -492,7 +508,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                if (header != null) _buildHeaderCard(header),
+                if (header != null) _buildHeaderCard(header, invoiceColumns),
                 const SizedBox(height: 16),
                 const Text('Line Items',
                     style: TextStyle(
@@ -793,7 +809,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildHeaderCard(ReviewRecord header) {
+  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns) {
     final isError = header.hasError;
     final isDone = header.verificationStatus == 'Done';
 
@@ -806,6 +822,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       borderColor = Colors.green.shade400;
       bgColor = Colors.green.shade50;
     }
+
+    final dynamicColumns = columns.where((c) {
+      final dbCol = c['db_column'] as String?;
+      final isEditable = c['editable'] == true || c['editable'] == 'true';
+      final isStandardLineItem = ['description', 'quantity', 'rate', 'amount', 'amount_mismatch', 'verification_status', 'audit_findings', 'receipt_link'].contains(dbCol);
+      final isStandardHeader = ['receipt_number', 'date'].contains(dbCol);
+      return isEditable && dbCol != null && !isStandardLineItem && !isStandardHeader;
+    }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -944,73 +968,52 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             ],
           ),
           const SizedBox(height: 12),
-          DebouncedReviewField(
-            initialValue: header.customerName ?? '',
-            decoration: _inputDecoration('Customer Name').copyWith(
-              prefixIcon: const Icon(LucideIcons.user, size: 16),
-              prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
-            ),
-            onSaved: (val) {
-              if (val != header.customerName) {
-                final newRecord = header.copyWith(customerName: val);
-                ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+          // Dynamic fields
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: dynamicColumns.map((c) {
+              final dbCol = c['db_column'] as String;
+              final label = c['label'] as String;
+              
+              String value = '';
+              if (dbCol == 'customer_name') {
+                value = header.customerName ?? '';
+              } else {
+                value = header.extraFields[dbCol]?.toString() ?? '';
               }
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
+
+              return FractionallySizedBox(
+                widthFactor: ['customer_name'].contains(dbCol) ? 1.0 : 0.48,
                 child: DebouncedReviewField(
-                  initialValue: header.vehicleNumber ?? '',
-                  decoration: _inputDecoration('Vehicle Number').copyWith(
-                    prefixIcon: const Icon(LucideIcons.car, size: 16),
+                  initialValue: value,
+                  keyboardType: (dbCol.contains('mobile') || dbCol.contains('phone')) ? TextInputType.phone : TextInputType.text,
+                  decoration: _inputDecoration(label).copyWith(
+                    prefixIcon: dbCol == 'customer_name' 
+                      ? const Icon(LucideIcons.user, size: 16) 
+                      : (dbCol.contains('vehicle') || dbCol.contains('car')) 
+                        ? const Icon(LucideIcons.car, size: 16)
+                        : (dbCol.contains('mobile') || dbCol.contains('phone'))
+                          ? const Icon(LucideIcons.phone, size: 16)
+                          : const Icon(LucideIcons.edit2, size: 16),
                     prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
                   ),
                   onSaved: (val) {
-                    if (val != header.vehicleNumber) {
-                      final newRecord = header.copyWith(vehicleNumber: val);
+                    if (val != value) {
+                      ReviewRecord newRecord;
+                      if (dbCol == 'customer_name') {
+                        newRecord = header.copyWith(customerName: val);
+                      } else {
+                        final newExtra = Map<String, dynamic>.from(header.extraFields);
+                        newExtra[dbCol] = val;
+                        newRecord = header.copyWith(extraFields: newExtra);
+                      }
                       ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
                     }
                   },
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DebouncedReviewField(
-                  initialValue: header.mobileNumber ?? '',
-                  keyboardType: TextInputType.phone,
-                  decoration: _inputDecoration('Mobile Number').copyWith(
-                    prefixIcon: const Icon(LucideIcons.phone, size: 16),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
-                    errorText: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10) ? 'Must be 10 digits' : null,
-                    enabledBorder: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: Colors.red.shade400, width: 1.5),
-                          )
-                        : null,
-                    focusedBorder: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: Colors.red.shade400, width: 2),
-                          )
-                        : null,
-                    fillColor: (header.mobileNumber != null && header.mobileNumber!.trim().isNotEmpty && header.mobileNumber!.trim().length != 10)
-                        ? Colors.red.shade50
-                        : Colors.white,
-                  ),
-                  onSaved: (val) {
-                    if (val != header.mobileNumber) {
-                      final newRecord = header.copyWith(mobileNumber: val);
-                      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-                    }
-                  },
-                ),
-              ),
-            ],
+              );
+            }).toList(),
           ),
           if (header.verificationStatus == 'Duplicate Receipt Number')
             Padding(

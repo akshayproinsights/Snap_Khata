@@ -37,13 +37,14 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
     // (all records for that vehicle, regardless of customer name)
     // Otherwise fall back to matching by customer name.
     final List<VerifiedInvoice> partyRecords = state.records.where((record) {
+      final vNum = record.extraFields['vehicle_number']?.toString() ?? '';
       if (widget.vehicleNumber.isNotEmpty) {
-        return record.vehicleNumber == widget.vehicleNumber;
+        return vNum == widget.vehicleNumber;
       }
       final effectiveName = record.customerName.isNotEmpty
           ? record.customerName
-          : (record.vehicleNumber.isNotEmpty
-              ? record.vehicleNumber
+          : (vNum.isNotEmpty
+              ? vNum
               : 'Unknown');
       return effectiveName == widget.customerName;
     }).toList();
@@ -63,8 +64,8 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
           date: record.date.isNotEmpty ? record.date : record.uploadDate,
           receiptLink: record.receiptLink,
           customerName: record.customerName,
-          vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
+          extraFields: record.extraFields,
           uploadDate: record.uploadDate,
           paymentMode: record.paymentMode,
           receivedAmount: record.receivedAmount,

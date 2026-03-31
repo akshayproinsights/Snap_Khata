@@ -45,4 +45,34 @@ class AuthRepository {
       // Ignore errors on logout as token will be cleared locally anyway
     }
   }
+
+  Future<List<String>> getIndustries() async {
+    try {
+      final response = await _dio.get('/api/auth/industries');
+      return (response.data as List).map((e) => e.toString()).toList();
+    } catch (e) {
+      throw Exception('Failed to fetch industries');
+    }
+  }
+
+  Future<Map<String, dynamic>> register(
+      String username, String password, String shopName, String selectedIndustry) async {
+    try {
+      final response = await _dio.post('/api/auth/register', data: {
+        'username': username,
+        'password': password,
+        'shop_name': shopName,
+        'industry': selectedIndustry,
+      });
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response != null && e.response?.data != null) {
+        final data = e.response!.data;
+        if (data is Map<String, dynamic> && data['detail'] != null) {
+          throw Exception(data['detail']);
+        }
+      }
+      throw Exception('Registration failed. Please try again.');
+    }
+  }
 }

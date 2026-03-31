@@ -286,8 +286,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         date: first.date.isNotEmpty ? first.date : first.uploadDate,
         receiptLink: first.receiptLink,
         customerName: first.customerName,
-        vehicleNumber: first.vehicleNumber,
         mobileNumber: first.mobileNumber,
+        extraFields: first.extraFields,
         uploadDate: first.uploadDate,
       );
       group.items = records;

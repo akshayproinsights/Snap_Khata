@@ -3,7 +3,6 @@ class VerifiedInvoice {
   final String receiptNumber;
   final String date;
   final String customerName;
-  final String vehicleNumber;
   final String mobileNumber;
   final String description;
   final String type;
@@ -18,13 +17,13 @@ class VerifiedInvoice {
   final double? receivedAmount;
   final double? balanceDue;
   final String? customerDetails;
+  final Map<String, dynamic> extraFields;
 
   VerifiedInvoice({
     required this.rowId,
     required this.receiptNumber,
     required this.date,
     required this.customerName,
-    required this.vehicleNumber,
     required this.mobileNumber,
     required this.description,
     required this.type,
@@ -39,10 +38,21 @@ class VerifiedInvoice {
     this.receivedAmount,
     this.balanceDue,
     this.customerDetails,
+    this.extraFields = const {},
   });
 
   factory VerifiedInvoice.fromJson(Map<String, dynamic> json) {
     // API returns snake_case keys from Supabase; fall back to Title Case for legacy compatibility
+    final extra = json['extra_fields'] is Map ? Map<String, dynamic>.from(json['extra_fields']) : <String, dynamic>{};
+    
+    // MIGRATION: Scoop up legacy top-level vehicle fields into extra_fields
+    final vehicleFields = ['car_number', 'vehicle_number', 'odometer', 'odometer_reading'];
+    for (final field in vehicleFields) {
+      if (json.containsKey(field) && json[field] != null && !extra.containsKey(field)) {
+        extra[field] = json[field];
+      }
+    }
+    
     return VerifiedInvoice(
       rowId: json['row_id']?.toString() ?? json['Row_Id']?.toString() ?? '',
       receiptNumber: json['receipt_number']?.toString() ??
@@ -52,14 +62,10 @@ class VerifiedInvoice {
       customerName: json['customer_name']?.toString() ??
           json['Customer Name']?.toString() ??
           '',
-      vehicleNumber: json['car_number']?.toString() ??
-          json['vehicle_number']?.toString() ??
-          json['Vehicle Number']?.toString() ??
-          json['Car Number']?.toString() ??
-          '',
       mobileNumber: json['mobile_number']?.toString() ??
           json['Mobile Number']?.toString() ??
           json['mobile']?.toString() ??
+          extra['mobile_number']?.toString() ??
           '',
       description: json['description']?.toString() ??
           json['Description']?.toString() ??
@@ -86,6 +92,7 @@ class VerifiedInvoice {
       receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'])?.toString() ?? ''),
       balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'])?.toString() ?? ''),
       customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
+      extraFields: extra,
     );
   }
 
@@ -95,8 +102,6 @@ class VerifiedInvoice {
       'receipt_number': receiptNumber,
       'date': date,
       'customer_name': customerName,
-      'car_number':
-          vehicleNumber, // Backend handles either car_number or vehicle_number, but update requires actual DB col
       'mobile_number': mobileNumber,
       'description': description,
       'type': type,
@@ -111,6 +116,7 @@ class VerifiedInvoice {
       if (receivedAmount != null) 'received_amount': receivedAmount,
       if (balanceDue != null) 'balance_due': balanceDue,
       if (customerDetails != null) 'customer_details': customerDetails,
+      'extra_fields': extraFields,
     };
   }
 
@@ -119,7 +125,6 @@ class VerifiedInvoice {
     String? receiptNumber,
     String? date,
     String? customerName,
-    String? vehicleNumber,
     String? mobileNumber,
     String? description,
     String? type,
@@ -134,13 +139,13 @@ class VerifiedInvoice {
     double? receivedAmount,
     double? balanceDue,
     String? customerDetails,
+    Map<String, dynamic>? extraFields,
   }) {
     return VerifiedInvoice(
       rowId: rowId ?? this.rowId,
       receiptNumber: receiptNumber ?? this.receiptNumber,
       date: date ?? this.date,
       customerName: customerName ?? this.customerName,
-      vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       mobileNumber: mobileNumber ?? this.mobileNumber,
       description: description ?? this.description,
       type: type ?? this.type,
@@ -155,6 +160,7 @@ class VerifiedInvoice {
       receivedAmount: receivedAmount ?? this.receivedAmount,
       balanceDue: balanceDue ?? this.balanceDue,
       customerDetails: customerDetails ?? this.customerDetails,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
 }

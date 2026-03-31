@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
+import 'package:mobile/features/auth/presentation/registration_page.dart';
 import 'package:mobile/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mobile/features/udhar/presentation/udhar_dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
@@ -48,6 +49,11 @@ class AppRouter {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegistrationPage(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

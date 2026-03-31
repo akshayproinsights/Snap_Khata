@@ -229,6 +229,115 @@ def list_available_users() -> list:
     return users
 
 
+# ── Industry/Registration helpers ────────────────────────────────────────────
+
+# Human-readable metadata for each template
+_INDUSTRY_META: Dict[str, Dict[str, str]] = {
+    "automobile": {"display": "Automobile / Garage",         "icon": "🚗"},
+    "medical":    {"display": "Medical / Pharmacy",          "icon": "💊"},
+    "grocery":    {"display": "Grocery / Kirana Store",      "icon": "🛒"},
+    "hardware":   {"display": "Hardware / Building Materials","icon": "🔧"},
+    "restaurant": {"display": "Restaurant / Food",           "icon": "🍽️"},
+    "clothing":   {"display": "Clothing / Textile",          "icon": "👗"},
+    "electronics":{"display": "Electronics",                 "icon": "📱"},
+    "general":    {"display": "General / Other",             "icon": "🏪"},
+}
+
+
+def list_available_industries() -> list:
+    """
+    List all industry template IDs that have a JSON file in templates/.
+
+    Returns:
+        List of dicts: [{"id": "automobile", "display": "...", "icon": "..."}]
+    """
+    if not TEMPLATES_DIR.exists():
+        return []
+
+    industries = []
+    for f in sorted(TEMPLATES_DIR.glob("*.json")):
+        industry_id = f.stem
+        meta = _INDUSTRY_META.get(industry_id, {"display": industry_id.title(), "icon": "🏪"})
+        industries.append({
+            "id": industry_id,
+            "display": meta["display"],
+            "icon": meta["icon"],
+        })
+    return industries
+
+
+def create_user_config_from_template(
+    username: str,
+    industry: str,
+    r2_bucket: str,
+    display_name: str = "",
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Generate and persist a user config JSON from an industry template.
+
+    This is called at registration time so the new user immediately has a
+    valid config that the rest of the system (config_loader, inventory_processor,
+    etc.) can consume.
+
+    Args:
+        username:     The new user's username (used as filename).
+        industry:     Industry template ID (e.g. 'grocery').  Falls back to
+                      'general' if the template does not exist.
+        r2_bucket:    Cloudflare R2 bucket name for the user.
+        display_name: Optional human-readable shop name.
+        extra:        Any additional key/value overrides to merge into the config.
+
+    Returns:
+        The final config dict that was persisted to disk.
+
+    Raises:
+        ValueError: If both the requested template AND 'general' are missing.
+    """
+    # Load requested template (fall back to 'general')
+    template = load_template(industry)
+    fallback_used = False
+    if template is None:
+        logger.warning(f"Template '{industry}' not found — falling back to 'general'")
+        template = load_template("general")
+        fallback_used = True
+
+    if template is None:
+        raise ValueError(
+            f"Neither '{industry}' nor 'general' template found. "
+            "Create backend/user_configs/templates/general.json first."
+        )
+
+    import copy
+    config: Dict[str, Any] = copy.deepcopy(template)
+
+    # Stamp identity fields
+    config["username"]     = username
+    config["industry"]     = industry if not fallback_used else "general"
+    config["r2_bucket"]    = r2_bucket
+    if display_name:
+        config["display_name"] = display_name
+
+    # Merge any caller-supplied extras
+    if extra:
+        config.update(extra)
+
+    # Persist to disk
+    USER_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+    config_path = USER_CONFIGS_DIR / f"{username}.json"
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        import json
+        json.dump(config, f, indent=4, ensure_ascii=False)
+
+    # Invalidate cache so the new file is picked up immediately
+    global _config_cache
+    _config_cache.pop(username, None)
+
+    logger.info(f"✓ User config created for '{username}' (industry='{config['industry']}') → {config_path}")
+    return config
+
+
 # For testing
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

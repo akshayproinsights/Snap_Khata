@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/core/network/api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/domain/models/user_model.dart';
@@ -103,6 +104,21 @@ class AuthNotifier extends Notifier<AuthState> {
         isLoading: false,
         error: e.toString().replaceAll('Exception: ', ''),
       );
+    }
+  }
+
+  Future<void> register(String username, String password, String shopName, String industry) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.register(username, password, shopName, industry);
+      // After successful registration, immediately log them in
+      await login(username, password);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 

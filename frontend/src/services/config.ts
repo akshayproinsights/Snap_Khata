@@ -17,6 +17,19 @@ export interface UserConfig {
         verify_amounts?: any[];
         verified?: any[];
     };
+    dashboard_visuals?: {
+        revenue_metrics?: {
+            search_filters?: Array<{
+                key: string;
+                db_column: string;
+                label: string;
+                placeholder?: string;
+                type?: string;
+            }>;
+            [key: string]: any;
+        };
+        [key: string]: any;
+    };
     gemini_config_loaded?: boolean;
 }
 

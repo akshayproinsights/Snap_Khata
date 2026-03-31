@@ -1,6 +1,10 @@
 """
 Authentication module using JWT tokens.
 Handles user login, token generation, and authentication middleware.
+
+Auth lookup order:
+  1. Supabase `users` table  (self-registered users)
+  2. secrets.toml / USERS_CONFIG_JSON  (legacy admin accounts)
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -56,40 +60,80 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _authenticate_from_db(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """
+    Check Supabase `users` table for self-registered users.
+    Returns a minimal user_data dict on success, None if not found or wrong password.
+    """
+    try:
+        from database import get_database_client
+        db = get_database_client()
+        resp = (
+            db.client.table("users")
+            .select("username, password_hash, r2_bucket, industry")
+            .eq("username", username)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            return None
+
+        row = rows[0]
+        password_hash = row.get("password_hash", "")
+
+        if not verify_password(password, password_hash):
+            logger.warning(f"Invalid password for DB user: {username}")
+            return None
+
+        # Build a user_data dict compatible with the rest of the system
+        logger.info(f"User authenticated via DB: {username}")
+        return {
+            "username": row["username"],
+            "r2_bucket": row.get("r2_bucket", ""),
+            "industry": row.get("industry", "general"),
+            "_auth_source": "db",
+        }
+    except Exception as e:
+        logger.error(f"DB auth lookup failed for {username}: {e}")
+        return None
+
+
 def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     """
-    Authenticate a user against the users database.
-    Returns user config if successful, None otherwise.
-    
-    Note: Currently passwords are stored in plain text in secrets.toml.
-    For production, they should be hashed.
+    Authenticate a user. Checks Supabase DB first, then falls back to secrets.toml.
+    Returns user config dict on success, None otherwise.
     """
-    # Keep username case as-is (case-sensitive matching)
+    # ── 1. Try Supabase DB (self-registered users) ────────────────────────────
+    db_result = _authenticate_from_db(username, password)
+    if db_result is not None:
+        return db_result
+
+    # ── 2. Fall back to secrets.toml / USERS_CONFIG_JSON (legacy users) ───────
     user_config = get_user_config(username)
-    
+
     if not user_config:
-        logger.warning(f"User not found: {username}")
+        logger.warning(f"User not found in DB or secrets: {username}")
         return None
-    
+
     stored_password = user_config.get("password")
-    
+
     if not stored_password:
-        logger.warning(f"No password configured for user: {username}")
+        logger.warning(f"No password configured for legacy user: {username}")
         return None
-    
-    # Check if password is hashed (starts with known hash prefixes)
+
+    # Secrets.toml supports both bcrypt hashes and plain text passwords
     if stored_password.startswith("$2b$") or stored_password.startswith("$2a$"):
-        # Hashed password
         if not verify_password(password, stored_password):
-            logger.warning(f"Invalid password for user: {username}")
+            logger.warning(f"Invalid password for legacy user: {username}")
             return None
     else:
-        # Plain text password (current implementation)
         if password != stored_password:
-            logger.warning(f"Invalid password for user: {username}")
+            logger.warning(f"Invalid password for legacy user: {username}")
             return None
-    
-    logger.info(f"User authenticated: {username}")
+
+    logger.info(f"User authenticated via secrets.toml: {username}")
+    user_config["_auth_source"] = "secrets"
     return user_config
 
 
@@ -119,22 +163,49 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 raise credentials_exception
             
             # Keep username case as-is (case-sensitive matching)
-            
-            # Get user config
-            try:
-                user_config = get_user_config(username)
-            except Exception as e:
-                logger.error(f"Error loading user config for {username}: {e}")
-                raise HTTPException(status_code=500, detail=f"Config error: {str(e)}")
 
-            if user_config is None:
-                logger.warning(f"User config not found for {username}")
+            # ── Resolve user_data from either DB or secrets.toml ─────────────
+            user_data: Optional[Dict[str, Any]] = None
+
+            # 1. Check Supabase users table (self-registered)
+            try:
+                from database import get_database_client
+                db = get_database_client()
+                resp = (
+                    db.client.table("users")
+                    .select("username, r2_bucket, industry")
+                    .eq("username", username)
+                    .limit(1)
+                    .execute()
+                )
+                rows = resp.data or []
+                if rows:
+                    row = rows[0]
+                    user_data = {
+                        "username": row["username"],
+                        "r2_bucket": row.get("r2_bucket", ""),
+                        "industry": row.get("industry", "general"),
+                        "_auth_source": "db",
+                    }
+            except Exception as db_err:
+                logger.warning(f"DB user lookup failed for token validation ({username}): {db_err}")
+
+            # 2. Fall back to secrets.toml for legacy users
+            if user_data is None:
+                try:
+                    legacy_config = get_user_config(username)
+                    if legacy_config:
+                        user_data = legacy_config.copy()
+                        user_data["username"] = username
+                        user_data["_auth_source"] = "secrets"
+                except Exception as e:
+                    logger.error(f"Error loading legacy user config for {username}: {e}")
+                    raise HTTPException(status_code=500, detail=f"Config error: {str(e)}")
+
+            if user_data is None:
+                logger.warning(f"User not found in DB or secrets for token: {username}")
                 raise credentials_exception
-            
-            # Add username to user_config for convenience
-            user_data = user_config.copy()
-            user_data["username"] = username
-            
+
             return user_data
         except HTTPException:
             raise

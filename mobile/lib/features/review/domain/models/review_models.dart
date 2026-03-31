@@ -16,7 +16,6 @@ class ReviewRecord {
   final bool isHeader; // Derived
   final String? customerName;
   final String? mobileNumber;
-  final String? vehicleNumber;
   final String? auditFindings;
   final String? type;
   
@@ -29,6 +28,9 @@ class ReviewRecord {
   // Tax / Calculation state
   final String? gstMode;
   final String? taxableRowIds;
+  
+  // Dynamic fields mapping
+  final Map<String, dynamic> extraFields;
 
   // New helper getter for validation hoisting
   // New helper for stable sorting when BBox is missing
@@ -84,7 +86,6 @@ class ReviewRecord {
     required this.isHeader,
     this.customerName,
     this.mobileNumber,
-    this.vehicleNumber,
     this.auditFindings,
     this.type,
     this.paymentMode,
@@ -93,10 +94,13 @@ class ReviewRecord {
     this.customerDetails,
     this.gstMode,
     this.taxableRowIds,
+    this.extraFields = const {},
   });
 
   factory ReviewRecord.fromJson(Map<String, dynamic> json,
       {required bool isHeaderType}) {
+    final extra = json['extra_fields'] is Map ? Map<String, dynamic>.from(json['extra_fields']) : <String, dynamic>{};
+      
     return ReviewRecord(
       rowId: (json['row_id'] ?? json['Row_Id'])?.toString() ?? '',
       receiptNumber:
@@ -127,9 +131,8 @@ class ReviewRecord {
       customerName: json['customer_name']?.toString() ??
           json['Customer Name']?.toString(),
       mobileNumber: json['mobile_number']?.toString() ??
-          json['Mobile Number']?.toString(),
-      vehicleNumber: json['vehicle_number']?.toString() ??
-          json['Vehicle Number']?.toString(),
+          json['Mobile Number']?.toString() ??
+          extra['mobile_number']?.toString(),
       auditFindings: json['audit_findings']?.toString() ??
           json['Audit Findings']?.toString(),
       type: json['type']?.toString() ?? json['Type']?.toString(),
@@ -139,6 +142,7 @@ class ReviewRecord {
       customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
       gstMode: json['gst_mode']?.toString() ?? json['GST Mode']?.toString(),
       taxableRowIds: json['taxable_row_ids']?.toString() ?? json['Taxable Row Ids']?.toString(),
+      extraFields: extra,
     );
   }
 
@@ -193,7 +197,6 @@ class ReviewRecord {
     bool? isHeader,
     String? customerName,
     String? mobileNumber,
-    String? vehicleNumber,
     String? auditFindings,
     String? type,
     String? paymentMode,
@@ -202,6 +205,7 @@ class ReviewRecord {
     String? customerDetails,
     String? gstMode,
     String? taxableRowIds,
+    Map<String, dynamic>? extraFields,
   }) {
     return ReviewRecord(
       rowId: rowId ?? this.rowId,
@@ -221,7 +225,6 @@ class ReviewRecord {
       isHeader: isHeader ?? this.isHeader,
       customerName: customerName ?? this.customerName,
       mobileNumber: mobileNumber ?? this.mobileNumber,
-      vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       auditFindings: auditFindings ?? this.auditFindings,
       type: type ?? this.type,
       paymentMode: paymentMode ?? this.paymentMode,
@@ -230,6 +233,7 @@ class ReviewRecord {
       customerDetails: customerDetails ?? this.customerDetails,
       gstMode: gstMode ?? this.gstMode,
       taxableRowIds: taxableRowIds ?? this.taxableRowIds,
+      extraFields: extraFields ?? this.extraFields,
     );
   }
 
@@ -251,7 +255,6 @@ class ReviewRecord {
       'line_item_row_bbox': lineItemBbox,
       'customer_name': customerName,
       'mobile_number': mobileNumber,
-      'vehicle_number': vehicleNumber,
       'audit_findings': auditFindings,
       'type': type,
       if (paymentMode != null) 'payment_mode': paymentMode,
@@ -260,6 +263,7 @@ class ReviewRecord {
       if (customerDetails != null) 'customer_details': customerDetails,
       if (gstMode != null) 'gst_mode': gstMode,
       if (taxableRowIds != null) 'taxable_row_ids': taxableRowIds,
+      'extra_fields': extraFields,
     };
   }
 }

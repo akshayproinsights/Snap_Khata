@@ -145,16 +145,17 @@ export const dashboardAPI = {
     getKPIs: async (
         dateFrom?: string,
         dateTo?: string,
-        customerName?: string,
-        vehicleNumber?: string,
-        partNumber?: string
+        filters?: Record<string, string>
     ): Promise<DashboardKPIs> => {
         const params = new URLSearchParams();
         if (dateFrom) params.append('date_from', dateFrom);
         if (dateTo) params.append('date_to', dateTo);
-        if (customerName) params.append('customer_name', customerName);
-        if (vehicleNumber) params.append('vehicle_number', vehicleNumber);
-        if (partNumber) params.append('part_number', partNumber);
+        
+        if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value) params.append(key, value);
+            });
+        }
 
         const response = await apiClient.get(`/api/dashboard/kpis?${params.toString()}`);
         return response.data;
@@ -166,16 +167,17 @@ export const dashboardAPI = {
     getDailySalesVolume: async (
         dateFrom?: string,
         dateTo?: string,
-        customerName?: string,
-        vehicleNumber?: string,
-        partNumber?: string
+        filters?: Record<string, string>
     ): Promise<DailySalesVolume[]> => {
         const params = new URLSearchParams();
         if (dateFrom) params.append('date_from', dateFrom);
         if (dateTo) params.append('date_to', dateTo);
-        if (customerName) params.append('customer_name', customerName);
-        if (vehicleNumber) params.append('vehicle_number', vehicleNumber);
-        if (partNumber) params.append('part_number', partNumber);
+        
+        if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value) params.append(key, value);
+            });
+        }
 
         const response = await apiClient.get(`/api/dashboard/daily-sales-volume?${params.toString()}`);
         return response.data;
@@ -193,38 +195,14 @@ export const dashboardAPI = {
     },
 
     /**
-     * Get customer name suggestions for autocomplete
+     * Get generic dynamic suggestions for autocomplete
      */
-    getCustomerSuggestions: async (query: string): Promise<string[]> => {
+    getAutocompleteSuggestions: async (filterKey: string, query: string): Promise<string[]> => {
         const params = new URLSearchParams();
         params.append('q', query);
         params.append('limit', '10');
 
-        const response = await apiClient.get(`/api/dashboard/autocomplete/customers?${params.toString()}`);
-        return response.data;
-    },
-
-    /**
-     * Get vehicle number suggestions for autocomplete
-     */
-    getVehicleSuggestions: async (query: string): Promise<string[]> => {
-        const params = new URLSearchParams();
-        params.append('q', query);
-        params.append('limit', '10');
-
-        const response = await apiClient.get(`/api/dashboard/autocomplete/vehicles?${params.toString()}`);
-        return response.data;
-    },
-
-    /**
-     * Get part number suggestions for autocomplete
-     */
-    getPartSuggestions: async (query: string): Promise<string[]> => {
-        const params = new URLSearchParams();
-        params.append('q', query);
-        params.append('limit', '10');
-
-        const response = await apiClient.get(`/api/dashboard/autocomplete/parts?${params.toString()}`);
+        const response = await apiClient.get(`/api/dashboard/autocomplete/${filterKey}?${params.toString()}`);
         return response.data;
     },
 

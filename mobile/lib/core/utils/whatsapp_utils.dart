@@ -33,16 +33,23 @@ class WhatsAppUtils {
     double? paidAmount,
     double? pendingAmount,
     String? upiDeepLink,
+    Map<String, String>? extraFields,
   }) {
     final totalFmt = formatIndianCurrency(totalAmount);
     final paidFmt = paidAmount != null ? formatIndianCurrency(paidAmount) : '';
     final pendingFmt = pendingAmount != null ? formatIndianCurrency(pendingAmount) : '';
+    
+    String extraTexts = '';
+    if (extraFields != null && extraFields.isNotEmpty) {
+      final extraStr = extraFields.entries.map((e) => '🏷️ *${e.key}:* ${e.value}').join('\n');
+      extraTexts = '\n\n$extraStr';
+    }
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
         return 'Hi $customerName,\n'
             'Your order from *$businessName* is ready. 📝\n\n'
-            '⚠️ *Amount Due: $totalFmt*\n\n'
+            '⚠️ *Amount Due: $totalFmt*$extraTexts\n\n'
             'Thank you for choosing *$businessName*.';
 
       case OrderPaymentStatus.partiallyPaid:
@@ -51,12 +58,12 @@ class WhatsAppUtils {
             'Here is your payment summary:\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
-            '⏳ Pending Due: $pendingFmt';
+            '⏳ Pending Due: $pendingFmt$extraTexts';
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi $customerName,\n'
             'Your order with *$businessName* has been successfully generated. 📝\n\n'
-            '💳 Amount Paid: $totalFmt';
+            '💳 Amount Paid: $totalFmt$extraTexts';
     }
   }
 

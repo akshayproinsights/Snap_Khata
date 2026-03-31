@@ -12,7 +12,6 @@ class VerifiedRepository {
     String? dateFrom,
     String? dateTo,
     String? receiptNumber,
-    String? vehicleNumber,
     String? customerName,
     String? description,
   }) async {
@@ -24,9 +23,6 @@ class VerifiedRepository {
     if (dateTo != null && dateTo.isNotEmpty) queryParams['date_to'] = dateTo;
     if (receiptNumber != null && receiptNumber.isNotEmpty) {
       queryParams['receipt_number'] = receiptNumber;
-    }
-    if (vehicleNumber != null && vehicleNumber.isNotEmpty) {
-      queryParams['vehicle_number'] = vehicleNumber;
     }
     if (customerName != null && customerName.isNotEmpty) {
       queryParams['customer_name'] = customerName;

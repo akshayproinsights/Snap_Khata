@@ -7,6 +7,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/notifications/presentation/providers/notification_provider.dart';
 import 'package:mobile/shared/widgets/metric_card.dart';
@@ -454,25 +455,41 @@ class _ActiveFilterChips extends ConsumerWidget {
           ),
         );
 
+    final configAsync = ref.watch(configProvider);
+
+    final List<dynamic> searchFilters = configAsync.when(
+      data: (config) {
+        try {
+          return config['dashboard_visuals']?['revenue_metrics']?['search_filters'] ?? [];
+        } catch (_) {
+          return [];
+        }
+      },
+      loading: () => [],
+      error: (_, __) => [],
+    );
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          if (state.customerFilter.isNotEmpty)
-            chip('Customer: ${state.customerFilter}', () {
-              notifier.setCustomerFilter('');
+          ...state.dynamicFilters.entries
+              .where((e) => e.value.isNotEmpty)
+              .map((entry) {
+            String labelText = entry.key;
+            try {
+              final filterConfig = searchFilters.firstWhere(
+                  (filter) => filter['key'] == entry.key,
+                  orElse: () => null);
+              if (filterConfig != null && filterConfig['label'] != null) {
+                labelText = filterConfig['label'];
+              }
+            } catch (_) {}
+            return chip('$labelText: ${entry.value}', () {
+              notifier.setDynamicFilter(entry.key, '');
               notifier.applyFilters();
-            }),
-          if (state.vehicleFilter.isNotEmpty)
-            chip('Vehicle: ${state.vehicleFilter}', () {
-              notifier.setVehicleFilter('');
-              notifier.applyFilters();
-            }),
-          if (state.partNumberFilter.isNotEmpty)
-            chip('Item: ${state.partNumberFilter}', () {
-              notifier.setPartNumberFilter('');
-              notifier.applyFilters();
-            }),
+            });
+          }),
           GestureDetector(
             onTap: notifier.clearFilters,
             child: Container(
@@ -507,30 +524,30 @@ class _AdvancedFiltersPanel extends ConsumerStatefulWidget {
 }
 
 class _AdvancedFiltersPanelState extends ConsumerState<_AdvancedFiltersPanel> {
-  late final TextEditingController _customerCtrl;
-  late final TextEditingController _vehicleCtrl;
-  late final TextEditingController _partCtrl;
+  final Map<String, TextEditingController> _controllers = {};
 
   @override
   void initState() {
     super.initState();
     final s = ref.read(dashboardProvider);
-    _customerCtrl = TextEditingController(text: s.customerFilter);
-    _vehicleCtrl = TextEditingController(text: s.vehicleFilter);
-    _partCtrl = TextEditingController(text: s.partNumberFilter);
+    s.dynamicFilters.forEach((key, value) {
+      _controllers[key] = TextEditingController(text: value);
+    });
   }
 
   @override
   void dispose() {
-    _customerCtrl.dispose();
-    _vehicleCtrl.dispose();
-    _partCtrl.dispose();
+    for (final ctrl in _controllers.values) {
+      ctrl.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final notifier = ref.read(dashboardProvider.notifier);
+    final configAsync = ref.watch(configProvider);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -544,35 +561,62 @@ class _AdvancedFiltersPanelState extends ConsumerState<_AdvancedFiltersPanel> {
           const Text('Filter Dashboard Data',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
-          _FilterField(
-            controller: _customerCtrl,
-            hint: 'e.g. Ravi Motors',
-            icon: LucideIcons.user,
-            label: 'Customer',
+          
+          configAsync.when(
+            data: (config) {
+              List<dynamic> searchFilters = [];
+              try {
+                searchFilters = config['dashboard_visuals']?['revenue_metrics']?['search_filters'] ?? [];
+              } catch (_) {}
+              
+              if (searchFilters.isEmpty) {
+                 return const Padding(
+                   padding: EdgeInsets.symmetric(vertical: 8.0),
+                   child: Text('No filters configured for this industry.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                 );
+              }
+              
+              return Column(
+                children: searchFilters.map((filter) {
+                  final key = filter['key'] as String;
+                  final label = filter['label'] as String? ?? key;
+                  
+                  _controllers.putIfAbsent(key, () {
+                    final s = ref.read(dashboardProvider);
+                    return TextEditingController(text: s.dynamicFilters[key] ?? '');
+                  });
+                  
+                  IconData icon = LucideIcons.search;
+                  if (key == 'customer' || key == 'customer_name') icon = LucideIcons.user;
+                  if (key == 'vehicle' || key == 'car_number') icon = LucideIcons.car;
+                  if (key == 'part' || key == 'description') icon = LucideIcons.package;
+                  if (key == 'invoice') icon = LucideIcons.fileText;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: _FilterField(
+                      controller: _controllers[key]!,
+                      hint: 'Search by $label',
+                      icon: icon,
+                      label: label,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+            loading: () => const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary))),
+            error: (_, __) => const Text('Error loading filters.', style: TextStyle(color: AppTheme.error)),
           ),
-          const SizedBox(height: 8),
-          _FilterField(
-            controller: _vehicleCtrl,
-            hint: 'e.g. MH12AB1234',
-            icon: LucideIcons.car,
-            label: 'Vehicle',
-          ),
-          const SizedBox(height: 8),
-          _FilterField(
-            controller: _partCtrl,
-            hint: 'Item or part name',
-            icon: LucideIcons.package,
-            label: 'Part / Item',
-          ),
+          
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
-                    _customerCtrl.clear();
-                    _vehicleCtrl.clear();
-                    _partCtrl.clear();
+                    for (final ctrl in _controllers.values) {
+                      ctrl.clear();
+                    }
                     notifier.clearFilters();
                   },
                   style: OutlinedButton.styleFrom(
@@ -589,9 +633,13 @@ class _AdvancedFiltersPanelState extends ConsumerState<_AdvancedFiltersPanel> {
                 child: ElevatedButton(
                   onPressed: () {
                     HapticFeedback.mediumImpact();
-                    notifier.setCustomerFilter(_customerCtrl.text.trim());
-                    notifier.setVehicleFilter(_vehicleCtrl.text.trim());
-                    notifier.setPartNumberFilter(_partCtrl.text.trim());
+                    _controllers.forEach((key, ctrl) {
+                      if (ctrl.text.trim().isNotEmpty) {
+                        notifier.setDynamicFilter(key, ctrl.text.trim());
+                      } else {
+                        notifier.setDynamicFilter(key, '');
+                      }
+                    });
                     notifier.applyFilters();
                   },
                   style: ElevatedButton.styleFrom(

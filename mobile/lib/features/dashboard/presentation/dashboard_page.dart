@@ -183,8 +183,8 @@ class _RecentOrdersTab extends ConsumerWidget {
           date: record.date.isNotEmpty ? record.date : record.uploadDate,
           receiptLink: record.receiptLink,
           customerName: record.customerName,
-          vehicleNumber: record.vehicleNumber,
           mobileNumber: record.mobileNumber,
+          extraFields: record.extraFields,
           uploadDate: record.uploadDate,
           paymentMode: record.paymentMode,
           receivedAmount: record.receivedAmount,
@@ -271,14 +271,15 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
+    final String vehicleNum = group.extraFields['vehicle_number']?.toString() ?? '';
     final String displayName = group.customerName.isNotEmpty
         ? group.customerName
-        : (group.vehicleNumber.isNotEmpty
-            ? group.vehicleNumber
+        : (vehicleNum.isNotEmpty
+            ? vehicleNum
             : 'Unknown Customer');
     final String vehicleInfo =
-        (group.vehicleNumber.isNotEmpty && group.customerName.isNotEmpty)
-            ? ' (${group.vehicleNumber})'
+        (vehicleNum.isNotEmpty && group.customerName.isNotEmpty)
+            ? ' ($vehicleNum)'
             : '';
 
     final dt = DateTime.tryParse(group.date) ?? DateTime.now();
@@ -531,13 +532,14 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
         final matchesName = record.customerName.toLowerCase().contains(query);
+        final vehicle = record.extraFields['vehicle_number']?.toString() ?? '';
         final matchesVehicle =
-            record.vehicleNumber.toLowerCase().contains(query);
+            vehicle.toLowerCase().contains(query);
         final matchesMobile = record.mobileNumber.toLowerCase().contains(query);
         if (!matchesName && !matchesVehicle && !matchesMobile) continue;
       }
 
-      final String vehicle = record.vehicleNumber;
+      final String vehicle = record.extraFields['vehicle_number']?.toString() ?? '';
       final String custName = record.customerName;
 
       // Group purely by vehicle number when available; otherwise by customer name
@@ -547,7 +549,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
 
       if (!summaries.containsKey(key)) {
         summaries[key] = _PartySummary(
-          vehicleNumber: vehicle,
+          extraFields: record.extraFields,
           customerName: custName,
           latestReceipt: record.receiptNumber,
           totalAmount: 0,
@@ -639,14 +641,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final party = partyList[index];
-
-                      // Display: "CustomerName (VehicleNo)" or just "VehicleNo" or customer name
-                      final String displayTitle = party.vehicleNumber.isNotEmpty
-                          ? (party.customerName.isNotEmpty &&
-                                  party.customerName != party.vehicleNumber
-                              ? '${party.customerName} (${party.vehicleNumber})'
-                              : party.vehicleNumber)
-                          : party.customerName;
+                      final String displayTitle = party.name;
 
                       final initial = displayTitle.isNotEmpty
                           ? displayTitle[0].toUpperCase()
@@ -672,12 +667,11 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                             borderRadius: BorderRadius.circular(16),
                             onTap: () {
                               HapticFeedback.lightImpact();
-                              // Navigate using vehicleNumber as primary key when available
                               context.pushNamed(
                                 'party-ledger',
                                 extra: {
                                   'customerName': party.customerName,
-                                  'vehicleNumber': party.vehicleNumber,
+                                  'extraFields': party.extraFields,
                                 },
                               );
                             },
@@ -823,7 +817,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
 }
 
 class _PartySummary {
-  final String vehicleNumber;
+  final Map<String, dynamic> extraFields;
   String customerName; // Best customer name seen for this vehicle
   final String latestReceipt;
   double totalAmount;
@@ -831,16 +825,19 @@ class _PartySummary {
   final List<String> rowIds = []; // Track all row IDs for deletion
 
   /// Display name: "CustomerName (VehicleNo)" or just vehicle/customer
-  String get name => vehicleNumber.isNotEmpty
-      ? (customerName.isNotEmpty && customerName != vehicleNumber
-          ? customerName
-          : vehicleNumber)
+  String get name {
+    final vNum = extraFields['vehicle_number']?.toString() ?? '';
+    return vNum.isNotEmpty
+      ? (customerName.isNotEmpty && customerName != vNum
+          ? '$customerName ($vNum)'
+          : vNum)
       : customerName;
+  }
 
   int get orderCount => receipts.isNotEmpty ? receipts.length : 0;
 
   _PartySummary({
-    required this.vehicleNumber,
+    required this.extraFields,
     required this.customerName,
     required this.latestReceipt,
     required this.totalAmount,
@@ -1200,10 +1197,11 @@ class _TodaySaleSheet extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final group = groups[index];
+                      final vNum = group.extraFields['vehicle_number']?.toString() ?? '';
                       final String displayName = group.customerName.isNotEmpty
                           ? group.customerName
-                          : (group.vehicleNumber.isNotEmpty
-                              ? group.vehicleNumber
+                          : (vNum.isNotEmpty
+                              ? vNum
                               : 'Unknown Customer');
                       final String initial = displayName[0].toUpperCase();
                       final String receiptLabel = group.receiptNumber.isNotEmpty

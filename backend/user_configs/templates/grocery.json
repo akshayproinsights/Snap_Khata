@@ -1,14 +1,17 @@
 {
-    "industry": "medical",
-    "display_name": "Medical/Pharmacy Shop",
+    "industry": "grocery",
+    "display_name": "Grocery Store",
+    "vendor_gemini": {
+        "system_instruction": "You are an expert Invoice Data Extraction AI.\n\n1. OBJECTIVE: Extract structured data from vendor/purchase invoices into JSON. Detect if the invoice is Printed or Handwritten.\n\n**CRITICAL: ZERO HALLUCINATION POLICY. Extract ONLY what you can read. Do NOT guess or invent values.**\n- **Vendor Name:** Extract the SUPPLIER / SELLER / BUSINESS NAME issuing the invoice (top header, boldest text). Do NOT extract the buyer name.\n- **Item Descriptions:** Extract EXACTLY what is written. Preserve brand names, codes, and units.\n\n2. JSON STRUCTURE:\n   {\n     \"invoice_type\": \"String (Enum: 'Printed', 'Handwritten')\",\n     \"invoice_date\": \"String (DD/MM/YYYY)\",\n     \"invoice_number\": \"String\",\n     \"vendor_name\": \"String (REQUIRED \u2014 extract SUPPLIER/SELLER/SHOP NAME from top header)\",\n     \"items\": [\n         {\n           \"part_number\": \"String (product code or SKU if present, else 'N/A')\",\n           \"batch\": \"String (batch/lot number if present, else 'N/A')\",\n           \"description\": \"String (item name / particulars)\",\n           \"hsn\": \"String (HSN/SAC code if present, else 'N/A')\",\n           \"cgst_percent\": \"Number (CGST rate %, e.g. 9; 0 if not found)\",\n           \"sgst_percent\": \"Number (SGST rate %, e.g. 9; 0 if not found)\",\n           \"quantity\": \"Number (extract numeric value only, ignore units)\",\n           \"rate\": \"Number (unit price)\",\n           \"disc_percent\": \"Number (discount %, default 0)\",\n           \"amount\": \"Number (taxable amount for this line item)\",\n           \"confidence\": \"Number (0\u2013100, your extraction confidence for this row)\"\n         }\n     ]\n   }\n\n3. RULES:\n   - Output ONLY valid JSON with no markdown fencing.\n   - If CGST/SGST is shown as a single summary at the bottom, apply that rate to ALL rows.\n   - For quantities like '2 kg' or '500 ml', extract only the number (2, 500).\n   - If a field is truly absent, use 'N/A' for strings and 0 for numbers.\n   - ALWAYS populate vendor_name \u2014 it is essential for inventory tracking."
+    },
     "gemini": {
-        "system_instruction": "You are an expert at digitizing medical prescription bills. Extract data into JSON format.\n\n**STEP 1: Extract Header Information**\n* **Receipt Number:** Prescription/Receipt number. Ensure it is always 3 digits if applicable.\n* **Date:** Extract date in dd-MMM-yyyy format (e.g., 15-Jan-2025).\n* **Patient Name:** Name of the patient (English only, no salutations).\n* **Patient ID:** Patient identifier if present.\n* **Prescription Number:** Rx number.\n* **Doctor Name:** Prescribing doctor's name.\n\n**STEP 2: Extract Line Items (Medicines)**\n* Extract each medicine/item listed.\n* **Description:** Medicine name.\n* **Quantity:** Number of units/tablets.\n* **Rate:** Unit price.\n* **Amount:** Total (Quantity \u00d7 Rate).\n* **Confidence:** Your confidence (0-100%).\n\n**OUTPUT FORMAT (JSON ONLY):**\n{\n    \"header\": {\n        \"receipt_number\": \"...\", \"date\": \"...\", \"patient_name\": \"...\", \n        \"patient_id\": \"...\", \"prescription_number\": \"...\", \"doctor_name\": \"...\"\n    },\n    \"items\": [\n        { \"description\": \"...\", \"quantity\": 1, \"rate\": 100, \"amount\": 100, \"confidence\": 95 }\n    ]\n}"
+        "system_instruction": "You are an expert OCR data extractor for handwritten bills. Extract bill content into strict JSON format.\n\n### GLOBAL RULES\n1. Quantities: Default to 1 if blank. Allow decimals.\n2. Currency: Extract numerical values only (e.g. '500/-' \u2192 500).\n3. Handwriting: Lower confidence score if illegible.\n\n### HEADER\n- Receipt Number: any standalone number near the top.\n- Date: DD/MM/YY or DD/MM/YYYY format. Convert to 'dd-MMM-yyyy'.\n- Customer Name: English only, no salutations.\n\n### LINE ITEMS\n- Extract every row.\n- Ensure Amount \u2248 Quantity \u00d7 Rate.\n\n### OUTPUT (JSON ONLY)\n{\n    \"header\": {\n        \"overall_confidence\": 0,\n        \"receipt_number\": \"String\",\n        \"date\": \"String (dd-MMM-yyyy)\",\n        \"customer_name\": \"String\",\n        \"mobile_number\": \"String\",\n        \"total_bill_amount\": 0\n    },\n    \"items\": [\n        {\n            \"description\": \"String\",\n            \"quantity\": 1,\n            \"rate\": 0,\n            \"amount\": 0,\n            \"confidence\": 90\n        }\n    ]\n}"
     },
     "columns": {
         "invoice_all": [
             {
                 "db_column": "receipt_number",
-                "label": "Rx #",
+                "label": "Receipt #",
                 "type": "string",
                 "visible": true,
                 "editable": false
@@ -21,36 +24,22 @@
                 "editable": true
             },
             {
-                "db_column": "patient_name",
-                "label": "Patient",
+                "db_column": "customer_name",
+                "label": "Customer",
                 "type": "string",
                 "visible": true,
                 "editable": true
             },
             {
-                "db_column": "patient_id",
-                "label": "Patient ID",
-                "type": "string",
-                "visible": true,
-                "editable": true
-            },
-            {
-                "db_column": "prescription_number",
-                "label": "Prescription",
-                "type": "string",
-                "visible": true,
-                "editable": true
-            },
-            {
-                "db_column": "doctor_name",
-                "label": "Doctor",
+                "db_column": "mobile_number",
+                "label": "Mobile",
                 "type": "string",
                 "visible": true,
                 "editable": true
             },
             {
                 "db_column": "description",
-                "label": "Medicine",
+                "label": "Item",
                 "type": "string",
                 "visible": true,
                 "editable": true
@@ -64,14 +53,14 @@
             },
             {
                 "db_column": "rate",
-                "label": "Price",
+                "label": "Rate",
                 "type": "number",
                 "visible": true,
                 "editable": true
             },
             {
                 "db_column": "amount",
-                "label": "Total",
+                "label": "Amount",
                 "type": "number",
                 "visible": true,
                 "editable": true
@@ -139,7 +128,7 @@
             },
             {
                 "db_column": "description",
-                "label": "Description",
+                "label": "Item",
                 "type": "string",
                 "editable": true
             },
@@ -194,12 +183,6 @@
                 "editable": true
             },
             {
-                "db_column": "car_number",
-                "label": "Vehicle #",
-                "type": "string",
-                "editable": true
-            },
-            {
                 "db_column": "description",
                 "label": "Item",
                 "type": "string",
@@ -250,22 +233,10 @@
                     "placeholder": "Search customer..."
                 },
                 {
-                    "key": "patient_name",
-                    "db_column": "patient_name",
-                    "label": "Patient Name",
-                    "placeholder": "Search patient..."
-                },
-                {
-                    "key": "doctor_name",
-                    "db_column": "doctor_name",
-                    "label": "Doctor Name",
-                    "placeholder": "Search doctor..."
-                },
-                {
                     "key": "part_number",
                     "db_column": "description",
-                    "label": "Treatment/Test",
-                    "placeholder": "Search treatment..."
+                    "label": "Item",
+                    "placeholder": "Search item..."
                 }
             ]
         },

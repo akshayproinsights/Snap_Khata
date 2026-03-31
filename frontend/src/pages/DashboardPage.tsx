@@ -12,6 +12,7 @@ import {
 
 import { format, subDays, startOfMonth } from 'date-fns';
 import { dashboardAPI } from '../services/dashboardAPI';
+import { getCachedConfig } from '../services/config';
 import AutocompleteInput from '../components/dashboard/AutocompleteInput';
 import InventoryCommandCenter from '../components/dashboard/InventoryCommandCenter';
 import ActionCards from '../components/dashboard/ActionCards';
@@ -38,23 +39,23 @@ const DashboardPage: React.FC = () => {
 
     // Advanced filter state
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    const [customerFilter, setCustomerFilter] = useState('');
-    const [vehicleFilter, setVehicleFilter] = useState('');
+    
+    // Config-driven dynamic filters
+    const [dynamicFilters, setDynamicFilters] = useState<Record<string, string>>({});
+    const userConfig = getCachedConfig();
+    const searchConfigFilters = userConfig?.dashboard_visuals?.revenue_metrics?.search_filters || [];
 
     // Draft PO state
     const [draftPOItems, setDraftPOItems] = useState<Map<string, DraftPOItem>>(new Map());
-    const [partNumberFilter, setPartNumberFilter] = useState('');
 
     // Fetch KPIs
     const { data: kpis, refetch: refetchKPIs } = useQuery({
-        queryKey: ['dashboardKPIs', dateRange, customerFilter, vehicleFilter, partNumberFilter],
+        queryKey: ['dashboardKPIs', dateRange, dynamicFilters],
         queryFn: () =>
             dashboardAPI.getKPIs(
                 dateRange.start,
                 dateRange.end,
-                customerFilter || undefined,
-                vehicleFilter || undefined,
-                partNumberFilter || undefined
+                dynamicFilters
             ),
         staleTime: 30000,
     });
@@ -70,14 +71,12 @@ const DashboardPage: React.FC = () => {
 
     // Fetch daily sales volume
     const { data: dailySales, isLoading: salesLoading } = useQuery({
-        queryKey: ['dailySalesVolume', dateRange, customerFilter, vehicleFilter, partNumberFilter],
+        queryKey: ['dailySalesVolume', dateRange, dynamicFilters],
         queryFn: () =>
             dashboardAPI.getDailySalesVolume(
                 dateRange.start,
                 dateRange.end,
-                customerFilter || undefined,
-                vehicleFilter || undefined,
-                partNumberFilter || undefined
+                dynamicFilters
             ),
         staleTime: 30000,
     });
@@ -148,13 +147,16 @@ const DashboardPage: React.FC = () => {
     };
 
     // Check if any filters are active
-    const hasActiveFilters = customerFilter || vehicleFilter || partNumberFilter;
+    const hasActiveFilters = Object.values(dynamicFilters).some(v => v !== '');
 
     // Clear all advanced filters
     const clearAllFilters = () => {
-        setCustomerFilter('');
-        setVehicleFilter('');
-        setPartNumberFilter('');
+        setDynamicFilters({});
+    };
+
+    // Helper for filter update
+    const handleFilterChange = (key: string, value: string) => {
+        setDynamicFilters(prev => ({ ...prev, [key]: value }));
     };
 
     // Get date range label for sales card
@@ -266,39 +268,22 @@ const DashboardPage: React.FC = () => {
             {hasActiveFilters && (
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-gray-600">Active Filters:</span>
-                    {customerFilter && (
-                        <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded-full">
-                            Customer: {customerFilter}
-                            <button
-                                onClick={() => setCustomerFilter('')}
-                                className="hover:bg-indigo-200 rounded-full p-0.5"
-                            >
-                                <X size={14} />
-                            </button>
-                        </span>
-                    )}
-                    {vehicleFilter && (
-                        <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded-full">
-                            Vehicle: {vehicleFilter}
-                            <button
-                                onClick={() => setVehicleFilter('')}
-                                className="hover:bg-indigo-200 rounded-full p-0.5"
-                            >
-                                <X size={14} />
-                            </button>
-                        </span>
-                    )}
-                    {partNumberFilter && (
-                        <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded-full">
-                            Customer Item: {partNumberFilter}
-                            <button
-                                onClick={() => setPartNumberFilter('')}
-                                className="hover:bg-indigo-200 rounded-full p-0.5"
-                            >
-                                <X size={14} />
-                            </button>
-                        </span>
-                    )}
+                    {Object.entries(dynamicFilters).map(([key, value]) => {
+                        if (!value) return null;
+                        const filterConfig = searchConfigFilters.find(f => f.key === key);
+                        const label = filterConfig ? filterConfig.label : key;
+                        return (
+                            <span key={key} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded-full">
+                                {label}: {value}
+                                <button
+                                    onClick={() => handleFilterChange(key, '')}
+                                    className="hover:bg-indigo-200 rounded-full p-0.5"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </span>
+                        );
+                    })}
                 </div>
             )}
 
@@ -418,7 +403,7 @@ const DashboardPage: React.FC = () => {
                                     />
                                     {hasActiveFilters && (
                                         <span className="bg-indigo-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                                            {[customerFilter, vehicleFilter, partNumberFilter].filter(Boolean).length}
+                                            {Object.values(dynamicFilters).filter(Boolean).length}
                                         </span>
                                     )}
                                 </button>
@@ -459,29 +444,17 @@ const DashboardPage: React.FC = () => {
                         filterPanel={
                             showAdvancedFilters && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2">
-                                    <AutocompleteInput
-                                        value={customerFilter}
-                                        onChange={setCustomerFilter}
-                                        placeholder="Search customer..."
-                                        label="Customer Name"
-                                        getSuggestions={dashboardAPI.getCustomerSuggestions}
-                                    />
-                                    <AutocompleteInput
-                                        value={vehicleFilter}
-                                        onChange={setVehicleFilter}
-                                        placeholder="Search vehicle..."
-                                        label="Vehicle Number"
-                                        getSuggestions={dashboardAPI.getVehicleSuggestions}
-                                    />
-                                    <div className="md:col-span-2">
-                                        <AutocompleteInput
-                                            value={partNumberFilter}
-                                            onChange={setPartNumberFilter}
-                                            placeholder="Search item..."
-                                            label="Customer Item"
-                                            getSuggestions={dashboardAPI.getPartSuggestions}
-                                        />
-                                    </div>
+                                    {searchConfigFilters.map(filter => (
+                                        <div key={filter.key} className={searchConfigFilters.length > 2 && filter === searchConfigFilters[searchConfigFilters.length - 1] && searchConfigFilters.length % 2 !== 0 ? "md:col-span-2" : ""}>
+                                            <AutocompleteInput
+                                                value={dynamicFilters[filter.key] || ''}
+                                                onChange={(value) => handleFilterChange(filter.key, value)}
+                                                placeholder={filter.placeholder || `Search ${filter.label.toLowerCase()}...`}
+                                                label={filter.label}
+                                                getSuggestions={(query) => dashboardAPI.getAutocompleteSuggestions(filter.key, query)}
+                                            />
+                                        </div>
+                                    ))}
 
                                     {/* Clear Filters Button */}
                                     {hasActiveFilters && (

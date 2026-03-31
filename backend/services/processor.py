@@ -41,7 +41,7 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 MAX_RETRIES = 5
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
+# LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
 FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 ACCURACY_THRESHOLD = 70.0  # escalate to next tier if accuracy < 70%
@@ -307,11 +307,11 @@ def process_single_invoice(
         print(f"{'='*80}\n", flush=True)
         logger.info(f"Processing image: {filename}")
         
-        # 3-tier cascade: Lite → Flash → Pro
+        # 2-tier cascade: Flash → Pro (Lite removed)
         # Each tier gets its own full retry cycle.
         # A lower-tier result is stored as backup so if a higher tier fails
         # we can still return the best result we have.
-        model_name = LITE_MODEL
+        model_name = FLASH_MODEL
         fallback_attempted = False   # True once any escalation is triggered
         fallback_reason = ""
         best_result: Optional[Dict[str, Any]] = None           # Best result from any completed tier
@@ -321,7 +321,7 @@ def process_single_invoice(
         data: Dict[str, Any] = {}    # Initialize data dictionary to avoid uninitialized variable errors
 
         # Each model gets its own full retry cycle via the outer loop.
-        for model_attempt in [LITE_MODEL, FLASH_MODEL, PRO_MODEL]:
+        for model_attempt in [FLASH_MODEL, PRO_MODEL]:
             model_name = model_attempt
 
             # Skip Flash/Pro unless the previous tier triggered an escalation
@@ -330,10 +330,10 @@ def process_single_invoice(
             needs_escalation = False  # Reset for this tier
 
             # Log model being attempted
-            tier_label = {LITE_MODEL: "Lite", FLASH_MODEL: "Flash", PRO_MODEL: "Pro"}.get(model_name, model_name)
-            if model_name == LITE_MODEL:
-                print(f"[AI] Starting Lite model attempt", flush=True)
-                logger.info("Starting Lite model attempt")
+            tier_label = {FLASH_MODEL: "Flash", PRO_MODEL: "Pro"}.get(model_name, model_name)
+            if model_name == FLASH_MODEL:
+                print(f"[AI] Starting Flash model attempt", flush=True)
+                logger.info("Starting Flash model attempt")
             else:
                 print(f"[ESCALATE] Starting {tier_label} model attempt after escalation: {fallback_reason}", flush=True)
                 logger.info(f"Starting {tier_label} model attempt after escalation: {fallback_reason}")
@@ -825,20 +825,33 @@ def convert_to_dataframe_rows(
         row["receipt_number_confidence"] = float(header.get("receipt_number_confidence", 100))
         row["date_confidence"] = float(header.get("date_confidence", 100))
         
-        # Industry-specific columns (automobile) - with text normalization
-        # IMPORTANT: Use exact column names from invoices table schema
+        # Extracted standard text column
         row["customer"] = normalize_text_field(header.get("customer_name", ""), "general")
-        row["mobile_number"] = safe_int(header.get("mobile_number"))  # Handle N/A values
-        row["vehicle_number"] = normalize_text_field(header.get("car_number", ""), "car_number")
-        row["odometer"] = safe_int(header.get("odometer"))  # Handle N/A values
-        row["total_bill_amount"] = safe_float(header.get("total_bill_amount"), None)  # Handle N/A values
-        row["type"] = normalize_text_field(item.get("type", ""), "type")
         
-        # Medical-specific columns (will be NULL for non-medical users)
-        row["patient_name"] = header.get("patient_name")
-        row["patient_id"] = header.get("patient_id")
-        row["prescription_number"] = header.get("prescription_number")
-        row["doctor_name"] = header.get("doctor_name")
+        # Build extra_fields JSON blob for all non-schema fields
+        extra = {}
+        # Core header fields to exclude from extra
+        # Note: we explicitly don't put customer_name in extra since it's mapped to 'customer'
+        CORE_HEADER_FIELDS = {"receipt_number", "date", "customer_name", "receipt_number_confidence", "date_confidence", "overall_confidence"}
+        for k, v in header.items():
+            if k not in CORE_HEADER_FIELDS and not k.endswith("_bbox"):
+                extra[k] = v
+                
+        # Core item fields to exclude from extra
+        CORE_ITEM_FIELDS = {"description", "quantity", "rate", "amount", "confidence"}
+        for k, v in item.items():
+            if k not in CORE_ITEM_FIELDS and not k.endswith("_bbox"):
+                # Normalize type field if it exists
+                if k == "type":
+                    extra["type"] = normalize_text_field(v, "type")
+                else:
+                    extra[k] = v
+                
+        # Handle car_number normalization if present in extra
+        if "car_number" in extra:
+            extra["car_number"] = normalize_text_field(extra["car_number"], "car_number")
+            
+        row["extra_fields"] = extra
         
         # Username for RLS
         row["username"] = username
@@ -1102,14 +1115,6 @@ def process_invoices_batch(
                         'quantity_bbox',       # Not in invoices
                         'rate_bbox',           # Not in invoices
                         'amount_bbox',         # Not in invoices
-                        'mobile_number',       # Not in invoices
-                        'odometer',            # Not in invoices
-                        'total_bill_amount',   # Not in invoices
-                        'patient_name',        # Not in invoices
-                        'patient_id',          # Not in invoices
-                        'prescription_number', # Not in invoices
-                        'doctor_name',         # Not in invoices
-                        'lab_test_code',       # Not in invoices
                         'industry_type',       # Not in invoices
                         'model_used',          # Not in invoices
                         'model_accuracy',      # Not in invoices
@@ -1310,8 +1315,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     # 'date_bbox': row.get('date_bbox'),
                     # 'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                     'customer_name': row.get('customer'),
-                    'mobile_number': row.get('mobile_number'),
-                    'vehicle_number': row.get('vehicle_number')
+                    'extra_fields': row.get('extra_fields', {})
                 }
                 date_row = sanitize_for_supabase(date_row)
                 
@@ -1410,8 +1414,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                         # 'line_item_row_bbox': row.get('line_item_row_bbox'),  # Only use row-level bbox
                         # 'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                         'customer_name': row.get('customer'),
-                        'mobile_number': row.get('mobile_number'),
-                        'type': row.get('type')
+                        'extra_fields': row.get('extra_fields', {})
                     }
                     amount_row = sanitize_for_supabase(amount_row)
                     
@@ -1469,11 +1472,8 @@ def create_duplicate_records_supabase(duplicates: List[Dict[str, Any]], username
             if existing_invoice.get('customer'):
                 duplicate_record['customer_name'] = existing_invoice.get('customer')
             
-            if existing_invoice.get('mobile_number'):
-                duplicate_record['mobile_number'] = existing_invoice.get('mobile_number')
-            
-            if existing_invoice.get('vehicle_number'):
-                duplicate_record['vehicle_number'] = existing_invoice.get('vehicle_number')
+            if existing_invoice.get('extra_fields'):
+                duplicate_record['extra_fields'] = existing_invoice.get('extra_fields')
             
             # Insert into verification_dates
             db.insert('verification_dates', duplicate_record)

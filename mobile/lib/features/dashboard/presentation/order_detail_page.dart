@@ -56,7 +56,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   late TextEditingController receiptCtrl;
   late TextEditingController dateCtrl;
   late TextEditingController customerCtrl;
-  late TextEditingController vehicleCtrl;
+
+  // Dynamic controllers for industry-specific extra fields (e.g. vehicle_number, site_name)
+  // Keyed by the extra_fields JSON key. Empty if no industry is configured.
+  final Map<String, TextEditingController> _extraFieldCtrls = {};
 
   List<ItemDetailCtrl> itemCtrls = [];
 
@@ -129,11 +132,26 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     return combined;
   }
 
+  /// Converts a snake_case key to a display label in Title Case.
+  /// e.g. "vehicle_number" → "Vehicle Number", "site_name" → "Site Name"
+  String _formatFieldLabel(String key) {
+    return key
+        .split('_')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
   void _initControllers() {
     receiptCtrl = TextEditingController(text: widget.group.receiptNumber);
     dateCtrl = TextEditingController(text: widget.group.date);
     customerCtrl = TextEditingController(text: widget.group.customerName);
-    vehicleCtrl = TextEditingController(text: widget.group.vehicleNumber);
+
+    // Dynamically create controllers for each extra field provided by the backend.
+    // No forced fallback — if extra_fields is empty, the section simply won't render.
+    for (final entry in widget.group.extraFields.entries) {
+      _extraFieldCtrls[entry.key] =
+          TextEditingController(text: entry.value?.toString() ?? '');
+    }
 
     _paymentMode = widget.group.paymentMode ?? 'Cash';
     _receivedAmount = widget.group.receivedAmount ?? widget.group.totalAmount;
@@ -162,7 +180,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     receiptCtrl.dispose();
     dateCtrl.dispose();
     customerCtrl.dispose();
-    vehicleCtrl.dispose();
+    for (final ctrl in _extraFieldCtrls.values) {
+      ctrl.dispose();
+    }
     for (var ctrl in itemCtrls) {
       ctrl.dispose();
     }
@@ -202,6 +222,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     double newTotal = 0;
 
+    // Build updated extra_fields from dynamic controllers
+    final newGroupExtraFields = {
+      for (final e in _extraFieldCtrls.entries) e.key: e.value.text,
+    };
+
     for (int i = 0; i < widget.group.items.length; i++) {
       final item = widget.group.items[i];
       final ctrl = itemCtrls[i];
@@ -210,11 +235,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       final double rate = double.tryParse(ctrl.rateCtrl.text) ?? item.rate;
       final double amt = double.tryParse(ctrl.amtCtrl.text) ?? item.amount;
 
+      // Merge existing item extra fields with the dynamic group-level overrides
+      final newExtraFields = Map<String, dynamic>.from(item.extraFields)
+        ..addAll(newGroupExtraFields);
+
       final updatedItem = item.copyWith(
         receiptNumber: receiptCtrl.text,
         date: dateCtrl.text,
         customerName: customerCtrl.text,
-        vehicleNumber: vehicleCtrl.text,
         description: ctrl.descCtrl.text,
         type: ctrl.typeCtrl.text,
         quantity: qty,
@@ -224,6 +252,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
         balanceDue: calculatedBalanceDue,
         customerDetails: _creditDetailsController.text,
+        extraFields: newExtraFields,
       );
 
       await notifier.updateRecord(updatedItem);
@@ -235,7 +264,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     widget.group.receiptNumber = receiptCtrl.text;
     widget.group.date = dateCtrl.text;
     widget.group.customerName = customerCtrl.text;
-    widget.group.vehicleNumber = vehicleCtrl.text;
+    widget.group.extraFields
+      ..clear()
+      ..addAll(newGroupExtraFields);
     widget.group.totalAmount = newTotal;
     widget.group.paymentMode = _paymentMode;
     widget.group.receivedAmount = _paymentMode == 'Credit' ? _receivedAmount : grandTotal;
@@ -333,6 +364,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
                   final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
 
+                  // Build non-empty extra fields for WhatsApp message (dynamic, industry-agnostic)
+                  final extraFieldsForWa = <String, String>{
+                    for (final e in _extraFieldCtrls.entries)
+                      if (e.value.text.isNotEmpty)
+                        _formatFieldLabel(e.key): e.value.text,
+                  };
+
                   final link =
                       'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
 
@@ -361,6 +399,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     totalAmount: totalAmount,
                     paidAmount: _paymentMode == 'Credit' ? _receivedAmount : totalAmount,
                     pendingAmount: balanceDue,
+                    extraFields: extraFieldsForWa.isNotEmpty ? extraFieldsForWa : null,
                   );
                   final message =
                       '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *$shopName*';
@@ -510,6 +549,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // 2. Customer Card
   // ─────────────────────────────────────────────────────────────
   Widget _buildCustomerCard() {
+    final hasExtraFields = _extraFieldCtrls.isNotEmpty;
+
     return Container(
       color: Colors.white,
       width: double.infinity,
@@ -532,6 +573,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -549,64 +591,70 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Customer Name',
-                                style: TextStyle(
-                                    color: AppTheme.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.5)),
-                            const SizedBox(height: 4),
-                            if (isEditing)
-                              _buildTextField(customerCtrl, 'Name')
-                            else
-                              Text(
-                                  widget.group.customerName.isNotEmpty
-                                      ? widget.group.customerName
-                                      : 'Unknown',
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary),
-                                  overflow: TextOverflow.ellipsis),
-                          ],
+                      // ── Customer Name (always shown) ──
+                      const Text('Customer Name',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5)),
+                      const SizedBox(height: 4),
+                      if (isEditing)
+                        _buildTextField(customerCtrl, 'Name')
+                      else
+                        Text(
+                            widget.group.customerName.isNotEmpty
+                                ? widget.group.customerName
+                                : 'Unknown',
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary),
+                            overflow: TextOverflow.ellipsis),
+
+                      // ── Dynamic extra fields (only if industry provides them) ──
+                      if (hasExtraFields) ...[
+                        const SizedBox(height: 14),
+                        const Divider(height: 1),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 12,
+                          children: _extraFieldCtrls.entries.map((entry) {
+                            final label = _formatFieldLabel(entry.key);
+                            return SizedBox(
+                              width: 140,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(label,
+                                      style: const TextStyle(
+                                          color: AppTheme.textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5)),
+                                  const SizedBox(height: 4),
+                                  if (isEditing)
+                                    _buildTextField(entry.value, label)
+                                  else
+                                    Text(
+                                        entry.value.text.isNotEmpty
+                                            ? entry.value.text
+                                            : '—',
+                                        style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.textPrimary),
+                                        overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Vehicle No.',
-                                style: TextStyle(
-                                    color: AppTheme.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.5)),
-                            const SizedBox(height: 4),
-                            if (isEditing)
-                              _buildTextField(vehicleCtrl, 'Vehicle')
-                            else
-                              Text(
-                                  widget.group.vehicleNumber.isNotEmpty
-                                      ? widget.group.vehicleNumber
-                                      : '-',
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary),
-                                  overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

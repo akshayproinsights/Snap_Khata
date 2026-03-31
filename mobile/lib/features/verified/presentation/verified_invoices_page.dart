@@ -6,6 +6,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/verified/data/verified_repository.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/core/utils/whatsapp_helper.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,7 +14,7 @@ import 'package:share_plus/share_plus.dart';
 
 // ─── Group-by options ────────────────────────────────────────────────────────
 
-enum GroupByField { receipt, date, customer, vehicle }
+enum GroupByField { receipt, date, customer }
 
 extension GroupByFieldExt on GroupByField {
   String get label {
@@ -24,8 +25,6 @@ extension GroupByFieldExt on GroupByField {
         return 'Date';
       case GroupByField.customer:
         return 'Customer';
-      case GroupByField.vehicle:
-        return 'Vehicle';
     }
   }
 
@@ -37,8 +36,6 @@ extension GroupByFieldExt on GroupByField {
         return LucideIcons.calendar;
       case GroupByField.customer:
         return LucideIcons.user;
-      case GroupByField.vehicle:
-        return LucideIcons.truck;
     }
   }
 
@@ -50,8 +47,6 @@ extension GroupByFieldExt on GroupByField {
         return inv.date.isEmpty ? '—' : inv.date;
       case GroupByField.customer:
         return inv.customerName.isEmpty ? '—' : inv.customerName;
-      case GroupByField.vehicle:
-        return inv.vehicleNumber.isEmpty ? '—' : inv.vehicleNumber;
     }
   }
 }
@@ -74,7 +69,6 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   // Filters
   String _searchQuery = '';
   String _receiptNumber = '';
-  String _vehicleNumber = '';
   String _customerName = '';
   String _description = '';
 
@@ -95,7 +89,6 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       final filters = <String, dynamic>{};
       if (_searchQuery.isNotEmpty) filters['search'] = _searchQuery;
       if (_receiptNumber.isNotEmpty) filters['receipt_number'] = _receiptNumber;
-      if (_vehicleNumber.isNotEmpty) filters['vehicle_number'] = _vehicleNumber;
       if (_customerName.isNotEmpty) filters['customer_name'] = _customerName;
 
       final bytes = await repo.exportToExcel(filters);
@@ -122,7 +115,6 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     ref.read(verifiedProvider.notifier).fetchRecords(
           search: _searchQuery,
           receiptNumber: _receiptNumber,
-          vehicleNumber: _vehicleNumber,
           customerName: _customerName,
           description: _description,
         );
@@ -132,7 +124,6 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     setState(() {
       _searchQuery = '';
       _receiptNumber = '';
-      _vehicleNumber = '';
       _customerName = '';
       _description = '';
       _showFilters = false;
@@ -218,6 +209,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(verifiedProvider);
+    final columns = ref.watch(tableColumnsProvider('verified'));
+    
     final groups = _buildGroups(state.records);
     final isAllSelected =
         _selectedIds.length == state.records.length && state.records.isNotEmpty;
@@ -461,7 +454,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       final key = keys[index];
                       final orders = groups[key]!;
                       final isExpanded = _expandedGroups.contains(key);
-                      return _buildGroupSection(key, orders, isExpanded);
+                      return _buildGroupSection(key, orders, isExpanded, columns);
                     },
                     childCount: groups.keys.length,
                   ),
@@ -532,24 +525,16 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
               const SizedBox(width: 12),
               Expanded(
                   child: _buildSearchField(
-                      hint: 'Vehicle #',
-                      icon: LucideIcons.car,
-                      initialValue: _vehicleNumber,
+                      hint: 'Customer Name',
+                      icon: LucideIcons.user,
+                      initialValue: _customerName,
                       onChanged: (v) {
-                        _vehicleNumber = v;
+                        _customerName = v;
                         _applyFilters();
                       })),
             ],
           ),
-          const SizedBox(height: 12),
-          _buildSearchField(
-              hint: 'Customer Name',
-              icon: LucideIcons.user,
-              initialValue: _customerName,
-              onChanged: (v) {
-                _customerName = v;
-                _applyFilters();
-              }),
+
         ],
       ),
     );
@@ -749,7 +734,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   // ─── Grouped list section ────────────────────────────────────────────────────
 
   Widget _buildGroupSection(
-      String groupKey, List<VerifiedInvoice> orders, bool isExpanded) {
+      String groupKey, List<VerifiedInvoice> orders, bool isExpanded, List<dynamic> columns) {
     if (orders.isEmpty) return const SizedBox.shrink();
     
     // Group-level GST and Tax settings
@@ -894,7 +879,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       final order = entry.value;
                       return Column(
                         children: [
-                          _buildBillRow(order, taxableIds: taxableIds),
+                          _buildBillRow(order, taxableIds: taxableIds, columns: columns),
                           if (i < orders.length - 1)
                             Divider(
                                 height: 1,
@@ -989,7 +974,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
 
   // ─── Individual order row inside an expanded group ─────────────────────────
 
-  Widget _buildBillRow(VerifiedInvoice record, {required Set<String> taxableIds}) {
+  Widget _buildBillRow(VerifiedInvoice record, {required Set<String> taxableIds, required List<dynamic> columns}) {
     final isSelected = _selectedIds.contains(record.rowId);
     final bool hasGstApplied = taxableIds.contains(record.rowId);
 
@@ -1095,9 +1080,6 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
 
                   // Metadata properties - rich visuals
                   Wrap(spacing: 12, runSpacing: 8, children: [
-                    if (_groupBy != GroupByField.vehicle &&
-                        record.vehicleNumber.isNotEmpty)
-                      _buildMetaTag(LucideIcons.car, record.vehicleNumber),
                     if (_groupBy != GroupByField.customer &&
                         record.customerName.isNotEmpty)
                       _buildMetaTag(LucideIcons.user, record.customerName),
@@ -1106,6 +1088,10 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     if (_groupBy != GroupByField.receipt &&
                         record.receiptNumber.isNotEmpty)
                       _buildMetaTag(LucideIcons.hash, record.receiptNumber),
+                    ...record.extraFields.entries.map((entry) {
+                      if (entry.value == null || entry.value.toString().isEmpty) return const SizedBox.shrink();
+                      return _buildMetaTag(LucideIcons.tag, entry.value.toString());
+                    }),
                   ]),
 
                   const SizedBox(height: 14),
@@ -1146,11 +1132,18 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                 final msg = 'Invoice Verified:\n'
                                     'Receipt #: ${record.receiptNumber}\n'
                                     'Customer: ${record.customerName}\n'
-                                    'Vehicle: ${record.vehicleNumber}\n'
                                     'Description: ${record.description}\n'
-                                    'Amount: ₹${record.amount}\n'
-                                    'Link: ${record.receiptLink}';
-                                WhatsAppHelper.launchWhatsApp(context, msg);
+                                    'Amount: ₹${record.amount}\n';
+                                
+                                final extraMsg = record.extraFields.entries
+                                    .where((e) => e.value != null && e.value.toString().isNotEmpty)
+                                    .map((e) {
+                                      final configLabel = columns.firstWhere((c) => c['db_column'] == e.key, orElse: () => {'label': e.key})['label'];
+                                      return '$configLabel: ${e.value}';
+                                    }).join('\n');
+                                
+                                final finalMsg = '$msg${extraMsg.isNotEmpty ? '$extraMsg\n' : ''}Link: ${record.receiptLink}';
+                                WhatsAppHelper.launchWhatsApp(context, finalMsg);
                               },
                               child: Container(
                                   padding: const EdgeInsets.all(6),

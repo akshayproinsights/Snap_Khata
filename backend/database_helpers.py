@@ -17,11 +17,14 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     - Floats with decimals: convert to float
     - Remove .0 suffix from string representations
     """
-    integer_fields = ['quantity', 'odometer']  # Fields that should be integers
+    integer_fields = ['quantity']  # Industry-specific numeric fields are now in extra_fields
     float_fields = ['rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch']
     
     for key, value in row_dict.items():
-        if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        if isinstance(value, (dict, list)):
+            continue
+            
+        if value is None or pd.isna(value):
             row_dict[key] = None
             continue
             

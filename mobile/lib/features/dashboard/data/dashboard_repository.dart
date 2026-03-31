@@ -11,16 +11,15 @@ class DashboardRepository {
   Future<DashboardKPIs> getKPIs({
     String? dateFrom,
     String? dateTo,
-    String? customerName,
-    String? vehicleNumber,
-    String? partNumber,
+    Map<String, String>? filters,
   }) async {
     final Map<String, dynamic> queryParams = {};
     if (dateFrom != null) queryParams['date_from'] = dateFrom;
     if (dateTo != null) queryParams['date_to'] = dateTo;
-    if (customerName != null) queryParams['customer_name'] = customerName;
-    if (vehicleNumber != null) queryParams['vehicle_number'] = vehicleNumber;
-    if (partNumber != null) queryParams['part_number'] = partNumber;
+    
+    if (filters != null) {
+      queryParams.addAll(filters);
+    }
 
     try {
       final response = await _dio.get(
@@ -122,16 +121,15 @@ class DashboardRepository {
   Future<List<DailySalesVolume>> getDailySalesVolume({
     String? dateFrom,
     String? dateTo,
-    String? customerName,
-    String? vehicleNumber,
-    String? partNumber,
+    Map<String, String>? filters,
   }) async {
     final Map<String, dynamic> queryParams = {};
     if (dateFrom != null) queryParams['date_from'] = dateFrom;
     if (dateTo != null) queryParams['date_to'] = dateTo;
-    if (customerName != null) queryParams['customer_name'] = customerName;
-    if (vehicleNumber != null) queryParams['vehicle_number'] = vehicleNumber;
-    if (partNumber != null) queryParams['part_number'] = partNumber;
+    
+    if (filters != null) {
+      queryParams.addAll(filters);
+    }
 
     try {
       final response = await _dio.get(

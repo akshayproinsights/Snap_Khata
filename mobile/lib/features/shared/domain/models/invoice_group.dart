@@ -5,8 +5,8 @@ class InvoiceGroup {
   String date;
   String receiptLink;
   String customerName;
-  String vehicleNumber;
   String mobileNumber;
+  Map<String, dynamic> extraFields;
   String uploadDate;
   String? paymentMode;
   double? receivedAmount;
@@ -20,8 +20,8 @@ class InvoiceGroup {
     required this.date,
     required this.receiptLink,
     required this.customerName,
-    required this.vehicleNumber,
     required this.mobileNumber,
+    this.extraFields = const {},
     required this.uploadDate,
     this.paymentMode,
     this.receivedAmount,
