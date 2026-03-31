@@ -20,7 +20,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
   String _shopName = '';
   String _password = '';
   String? _selectedIndustry;
-  List<String> _industries = [];
+  List<Map<String, dynamic>> _industries = [];
   bool _isLoadingIndustries = true;
 
   @override
@@ -37,7 +37,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
         setState(() {
           _industries = industries;
           if (industries.isNotEmpty) {
-            _selectedIndustry = industries.first;
+            _selectedIndustry = industries.first['id'] as String;
           }
           _isLoadingIndustries = false;
         });
@@ -220,11 +220,14 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                               isExpanded: true,
                               icon: const Icon(LucideIcons.chevronDown),
                               hint: const Text('Select Industry'),
-                              items: _industries.map((String industry) {
+                              items: _industries.map((Map<String, dynamic> industry) {
                                 return DropdownMenuItem<String>(
-                                  value: industry,
-                                  child: Text(
-                                    industry.substring(0, 1).toUpperCase() + industry.substring(1),
+                                  value: industry['id'] as String,
+                                  child: Row(
+                                    children: [
+                                      Text('${industry['icon']} '),
+                                      Text(industry['display'] as String),
+                                    ],
                                   ),
                                 );
                               }).toList(),

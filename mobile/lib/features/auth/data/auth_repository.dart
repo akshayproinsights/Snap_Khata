@@ -46,12 +46,13 @@ class AuthRepository {
     }
   }
 
-  Future<List<String>> getIndustries() async {
+  Future<List<Map<String, dynamic>>> getIndustries() async {
     try {
       final response = await _dio.get('/api/auth/industries');
-      return (response.data as List).map((e) => e.toString()).toList();
+      final industriesList = response.data['industries'] as List;
+      return industriesList.map((e) => e as Map<String, dynamic>).toList();
     } catch (e) {
-      throw Exception('Failed to fetch industries');
+      throw Exception('Failed to fetch industries: $e');
     }
   }
 
