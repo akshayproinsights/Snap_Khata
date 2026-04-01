@@ -412,6 +412,73 @@ async def save_review_amounts(
         raise HTTPException(status_code=500, detail=f"Failed to save review data: {str(e)}")
 
 
+@router.put("/amounts/update-bulk")
+async def update_bulk_review_amount(
+    records: List[Dict[str, Any]],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Update multiple verification_amounts records in bulk
+    """
+    username = current_user.get("username")
+    
+    if not username:
+        raise HTTPException(status_code=400, detail="No username in token")
+        
+    try:
+        db = get_database_client()
+        from database_helpers import convert_numeric_types
+        
+        valid_cols = {
+            'username', 'receipt_number', 'description', 'quantity',
+            'rate', 'amount', 'amount_mismatch', 'verification_status',
+            'receipt_link', 'created_at', 'model_used',
+            'model_accuracy', 'input_tokens', 'output_tokens', 'total_tokens',
+            'cost_inr', 'fallback_attempted', 'fallback_reason',
+            'processing_errors', 'line_item_row_bbox', 'date_and_receipt_combined_bbox',
+            'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
+            'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
+            'payment_mode', 'received_amount', 'balance_due', 'customer_details',
+            'type'
+        }
+        
+        success_count = 0
+        error_count = 0
+        
+        for record in records:
+            row_id = record.get('row_id')
+            if not row_id:
+                error_count += 1
+                continue
+                
+            if str(row_id).startswith('_'):
+                logger.warning(f"Skipping amount bulk update for synthetic row_id '{row_id}'")
+                error_count += 1
+                continue
+                
+            try:
+                record['username'] = username
+                record = convert_numeric_types(record)
+                
+                update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
+                
+                db.update('verification_amounts', update_data, {'username': username, 'row_id': row_id})
+                success_count += 1
+            except Exception as item_e:
+                logger.error(f"Error processing record {row_id} in bulk amount update: {item_e}")
+                error_count += 1
+                
+        logger.info(f"Bulk updated {success_count} verification_amounts records for {username} with {error_count} errors")
+        
+        return {
+            "success": True,
+            "message": f"Updated {success_count} records successfully" + (f", {error_count} failed" if error_count > 0 else "")
+        }
+    except Exception as e:
+        logger.error(f"Error in bulk updating verification_amounts: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to bulk update records: {str(e)}")
+
+
 @router.put("/amounts/update")
 async def update_single_review_amount(
     record: Dict[str, Any],

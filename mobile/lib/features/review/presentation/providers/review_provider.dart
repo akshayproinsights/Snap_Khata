@@ -106,7 +106,15 @@ class ReviewNotifier extends Notifier<ReviewState> {
       );
     }
 
-    for (var amount in amounts) {
+    // Deduplicate amounts by rowId — if two concurrent tasks processed the same
+    // image, the same row_id may appear twice in verification_amounts.
+    // Keep the last occurrence (latest DB order = most up-to-date state).
+    final Map<String, ReviewRecord> deduplicatedAmounts = {};
+    for (final amount in amounts) {
+      deduplicatedAmounts[amount.rowId] = amount;
+    }
+
+    for (var amount in deduplicatedAmounts.values) {
       if (map.containsKey(amount.receiptNumber)) {
         final existing = map[amount.receiptNumber]!;
         map[amount.receiptNumber] = InvoiceReviewGroup(
@@ -169,6 +177,39 @@ class ReviewNotifier extends Notifier<ReviewState> {
     } catch (e) {
       state = state.copyWith(
           error: 'Could not update record. ${_friendlyError(e)}');
+    }
+  }
+
+  Future<void> updateAmountRecordsBulk(List<ReviewRecord> records) async {
+    try {
+      if (records.isEmpty) return;
+      
+      await _repository.updateAmountsBulk(records);
+      
+      // Optimistic update locally
+      final Map<String, ReviewRecord> updateMap = {
+        for (var r in records) r.rowId: r
+      };
+      
+      final String receiptNumber = records.first.receiptNumber; // Assume all records in bulk belong to same receipt currently
+      
+      final newGroups = state.groups.map((group) {
+        if (group.receiptNumber == receiptNumber) {
+          final updatedLines = group.lineItems.map((item) {
+            return updateMap.containsKey(item.rowId) ? updateMap[item.rowId]! : item;
+          }).toList();
+          return InvoiceReviewGroup(
+            receiptNumber: group.receiptNumber,
+            header: group.header,
+            lineItems: updatedLines,
+          );
+        }
+        return group;
+      }).toList();
+      state = state.copyWith(groups: newGroups);
+    } catch (e) {
+      state = state.copyWith(
+          error: 'Could not bulk update records. ${_friendlyError(e)}');
     }
   }
 

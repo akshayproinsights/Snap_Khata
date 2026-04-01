@@ -83,6 +83,28 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
     }
   }
 
+  Future<void> updateRecordsBulk(List<VerifiedInvoice> recordsToUpdate) async {
+    try {
+      // Optimistic update
+      final Map<String, VerifiedInvoice> updateMap = {
+        for (var r in recordsToUpdate) r.rowId: r
+      };
+      
+      final newRecords = state.records.map((r) {
+        if (updateMap.containsKey(r.rowId)) {
+          return updateMap[r.rowId]!;
+        }
+        return r;
+      }).toList();
+      state = state.copyWith(records: newRecords);
+
+      await _repository.updateVerifiedInvoicesBulk(recordsToUpdate);
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to update records in bulk: $e');
+      await fetchRecords(); // Revert
+    }
+  }
+
   Future<void> deleteBulk(List<String> ids) async {
     try {
       // Optimistic update

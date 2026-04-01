@@ -43,6 +43,10 @@ class VerifiedRepository {
     await _dio.put('/api/verified/update', data: record.toJson());
   }
 
+  Future<void> updateVerifiedInvoicesBulk(List<VerifiedInvoice> records) async {
+    await _dio.put('/api/verified/update-bulk', data: records.map((r) => r.toJson()).toList());
+  }
+
   Future<void> deleteBulk(List<String> rowIds) async {
     await _dio.post('/api/verified/delete-bulk', data: {
       'row_ids': rowIds,

@@ -35,10 +35,13 @@ logger = logging.getLogger(__name__)
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
 # LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
-PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+FLASH_MODEL   = "gemini-2.5-flash"  # set to 2.5 flash for now
+
+# Commented for now as per user request
+# FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+# PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+PRO_MODEL     = None # Keeping variable to prevent NameError
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
 
 # ── Gemini client singleton ───────────────────────────────────────────────────
@@ -194,20 +197,21 @@ def process_vendor_invoice(
             accuracy = 0.0
 
         # ── Tier 2: Pro (if Flash failed or accuracy < threshold) ────────────
-        if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
-            logger.warning(f"Flash finished with {accuracy}% accuracy. Escalating to Pro...")
-            try:
-                p_data, p_items, p_acc, p_in, p_out, p_cost = _run_model(PRO_MODEL, "Pro")
-                if p_data:
-                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-                        p_data, p_items, p_acc, p_in, p_out, p_cost
-                    model_used = "Pro"
-                    best_res_stored = {
-                        "data": p_data, "items": p_items, "acc": p_acc,
-                        "in": p_in, "out": p_out, "cost": p_cost, "model": "Pro"
-                    }
-            except Exception as e:
-                logger.error(f"Pro tier crash: {e}")
+        # Commented out for now as per user request to use only 2.5 Flash
+        # if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
+        #     logger.warning(f"Flash finished with {accuracy}% accuracy. Escalating to Pro...")
+        #     try:
+        #         p_data, p_items, p_acc, p_in, p_out, p_cost = _run_model(PRO_MODEL, "Pro")
+        #         if p_data:
+        #             extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+        #                 p_data, p_items, p_acc, p_in, p_out, p_cost
+        #             model_used = "Pro"
+        #             best_res_stored = {
+        #                 "data": p_data, "items": p_items, "acc": p_acc,
+        #                 "in": p_in, "out": p_out, "cost": p_cost, "model": "Pro"
+        #             }
+        #     except Exception as e:
+        #         logger.error(f"Pro tier crash: {e}")
 
         if not best_res_stored:
             logger.error("All models (Flash, Pro) failed to return a result.")

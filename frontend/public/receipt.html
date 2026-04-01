@@ -591,6 +591,7 @@
 
             const items = Array.isArray(data.items) ? data.items : [];
             const isPaid = data.status === 'PAID';
+            const isAutomobile = data.industry === 'automobile';
 
             const taxableItems = items.filter(i => {
                 const t = String(i.type || '').toLowerCase();
@@ -604,37 +605,57 @@
             const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
             const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
             const subtotal = partsSubtotal + laborSubtotal;
-            const grandTotal = Number(data.total_amount) || subtotal;
+            // Always dynamically calculate total from items if they exist to ensure mathematical consistency
+            const grandTotal = items.length > 0 ? subtotal : (Number(data.total_amount) || subtotal);
+
+            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
+            const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
 
             let itemsHtml = '';
             
-            if (taxableItems.length > 0) {
-                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                taxableItems.forEach((item, idx) => {
+            if (isAutomobile) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
+                    taxableItems.forEach((item, idx) => {
+                        const qty = Number(item.qty || 1);
+                        const rate = Number(item.rate || 0);
+                        const amount = Number(item.amount || 0);
+                        itemsHtml += `
+                        <tr>
+                            <td class="center">${idx + 1}</td>
+                            <td>${item.name || 'Spare Part'}</td>
+                            <td class="center">${qty}</td>
+                            <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                            <td class="right">${fmtMoney(amount)}</td>
+                        </tr>`;
+                    });
+                }
+
+                if (nonTaxableItems.length > 0) {
+                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
+                    nonTaxableItems.forEach((item, idx) => {
+                        const qty = Number(item.qty || 1);
+                        const rate = Number(item.rate || 0);
+                        const amount = Number(item.amount || 0);
+                        itemsHtml += `
+                        <tr>
+                            <td class="center">${taxableItems.length + idx + 1}</td>
+                            <td>${item.name || 'Servicing'}</td>
+                            <td class="center">${qty}</td>
+                            <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                            <td class="right">${fmtMoney(amount)}</td>
+                        </tr>`;
+                    });
+                }
+            } else {
+                items.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
-                        <td>${item.name || 'Spare Part'}</td>
-                        <td class="center">${qty}</td>
-                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">${fmtMoney(amount)}</td>
-                    </tr>`;
-                });
-            }
-
-            if (nonTaxableItems.length > 0) {
-                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                nonTaxableItems.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
-                    const rate = Number(item.rate || 0);
-                    const amount = Number(item.amount || 0);
-                    itemsHtml += `
-                    <tr>
-                        <td class="center">${taxableItems.length + idx + 1}</td>
-                        <td>${item.name || 'Servicing'}</td>
+                        <td>${item.name || 'Item'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                         <td class="right">${fmtMoney(amount)}</td>
@@ -704,8 +725,8 @@
                         <div class="inv-summary-grid">
                             <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
                                 <!-- split empty left side under totals -->
-                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
+                                ${isAutomobile && partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
@@ -723,16 +744,16 @@
                                             <div class="inv-amount-words">${wordsTotal} Rupees only</div>
                                         </td>
                                     </tr>
-                                    ${(data.received_amount !== undefined && data.received_amount !== null) ? `
+                                    ${receivedAmount !== null ? `
                                     <tr>
                                         <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(data.received_amount)}</td>
+                                        <td class="amount-col">${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
-                                    ${(data.balance_due !== undefined && data.balance_due !== null) ? `
+                                    ${balanceDue !== null ? `
                                     <tr>
                                         <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(data.balance_due)}</td>
+                                        <td class="amount-col">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
                                 </table>
@@ -772,6 +793,7 @@
 
             const items = Array.isArray(data.items) ? data.items : [];
             const isPaid = data.status === 'PAID';
+            const isAutomobile = data.industry === 'automobile';
 
             const taxableItems = items.filter(i => {
                 const t = String(i.type || '').toLowerCase();
@@ -790,57 +812,79 @@
             let gstAmt, grandTotal;
             if (gstMode === 'included') {
                 gstAmt = totalSubtotal * 18 / 118;
-                grandTotal = Number(data.total_amount) || totalSubtotal;
+                grandTotal = items.length > 0 ? totalSubtotal : (Number(data.total_amount) || totalSubtotal);
             } else { // excluded
                 gstAmt = totalSubtotal * 0.18;
-                grandTotal = Number(data.total_amount) || (totalSubtotal + gstAmt);
+                grandTotal = items.length > 0 ? (totalSubtotal + gstAmt) : (Number(data.total_amount) || (totalSubtotal + gstAmt));
             }
+
+            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
+            const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
 
             const taxableValue = gstMode === 'included' ? totalSubtotal - gstAmt : totalSubtotal;
 
             let itemsHtml = '';
 
-            if (taxableItems.length > 0) {
-                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                taxableItems.forEach((item, idx) => {
+            if (isAutomobile) {
+                if (taxableItems.length > 0) {
+                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
+                    taxableItems.forEach((item, idx) => {
+                        const qty = Number(item.qty || 1);
+                        const rate = Number(item.rate || 0);
+                        const amount = Number(item.amount || 0);
+                        const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
+                        const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
+                        const gstAmountForItem = baseAmt * 0.18;
+                        const totalForItem = baseAmt + gstAmountForItem;
+
+                        itemsHtml += `
+                        <tr>
+                            <td class="center">${idx + 1}</td>
+                            <td>${item.name || 'Spare Part'}</td>
+                            <td class="center">${qty}</td>
+                            <td class="right">${fmtMoney(baseRate)}</td>
+                            <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                            <td class="right">${fmtMoney(totalForItem)}</td>
+                        </tr>`;
+                    });
+                }
+
+                if (nonTaxableItems.length > 0) {
+                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
+                    nonTaxableItems.forEach((item, idx) => {
+                        const qty = Number(item.qty || 1);
+                        const rate = Number(item.rate || 0);
+                        const amount = Number(item.amount || 0);
+                        const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
+                        const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
+                        const gstAmountForItem = baseAmt * 0.18;
+                        const totalForItem = baseAmt + gstAmountForItem;
+                        
+                        itemsHtml += `
+                        <tr>
+                            <td class="center">${taxableItems.length + idx + 1}</td>
+                            <td>${item.name || 'Servicing'}</td>
+                            <td class="center">${qty}</td>
+                            <td class="right">${fmtMoney(baseRate)}</td>
+                            <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                            <td class="right">${fmtMoney(totalForItem)}</td>
+                        </tr>`;
+                    });
+                }
+            } else {
+                items.forEach((item, idx) => {
                     const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
-                    // Base amount is without GST. Total amount includes GST.
                     const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                    // Note: baseRate differs for included vs excluded
                     const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
                     const gstAmountForItem = baseAmt * 0.18;
                     const totalForItem = baseAmt + gstAmountForItem;
 
-                    // the image shows columns: Quantity | Price/ Unit (₹) | GST(₹) | Amount(₹)
                     itemsHtml += `
                     <tr>
                         <td class="center">${idx + 1}</td>
-                        <td>${item.name || 'Spare Part'}</td>
-                        <td class="center">${qty}</td>
-                        <td class="right">${fmtMoney(baseRate)}</td>
-                        <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
-                        <td class="right">${fmtMoney(totalForItem)}</td>
-                    </tr>`;
-                });
-            }
-
-            if (nonTaxableItems.length > 0) {
-                itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                nonTaxableItems.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
-                    const rate = Number(item.rate || 0);
-                    const amount = Number(item.amount || 0);
-                    const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                    const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
-                    const gstAmountForItem = baseAmt * 0.18;
-                    const totalForItem = baseAmt + gstAmountForItem;
-                    
-                    itemsHtml += `
-                    <tr>
-                        <td class="center">${taxableItems.length + idx + 1}</td>
-                        <td>${item.name || 'Servicing'}</td>
+                        <td>${item.name || 'Item'}</td>
                         <td class="center">${qty}</td>
                         <td class="right">${fmtMoney(baseRate)}</td>
                         <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
@@ -915,8 +959,8 @@
                         <div class="inv-summary-grid">
                             <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
                                 <!-- split empty left side under totals -->
-                                ${partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
+                                ${isAutomobile && partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
+                                ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
@@ -934,16 +978,16 @@
                                             <div class="inv-amount-words">${wordsTotal} Rupees only</div>
                                         </td>
                                     </tr>
-                                    ${(data.received_amount !== undefined && data.received_amount !== null) ? `
+                                    ${receivedAmount !== null ? `
                                     <tr>
                                         <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(data.received_amount)}</td>
+                                        <td class="amount-col">${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
-                                    ${(data.balance_due !== undefined && data.balance_due !== null) ? `
+                                    ${balanceDue !== null ? `
                                     <tr>
                                         <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(data.balance_due)}</td>
+                                        <td class="amount-col">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
                                 </table>

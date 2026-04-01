@@ -42,8 +42,12 @@ MAX_RETRIES = 5
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
 # LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
-PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+FLASH_MODEL   = "gemini-2.5-flash"  # default mid-tier
+
+# Commented as per user request
+# FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+# PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
+PRO_MODEL     = None # Keeping so we do not get NameError
 ACCURACY_THRESHOLD = 70.0  # escalate to next tier if accuracy < 70%
 
 # Pricing Configuration (USD per 1M tokens)

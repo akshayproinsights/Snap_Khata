@@ -17,8 +17,8 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     - Floats with decimals: convert to float
     - Remove .0 suffix from string representations
     """
-    integer_fields = ['quantity']  # Industry-specific numeric fields are now in extra_fields
-    float_fields = ['rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch']
+    integer_fields = ['mobile_number', 'input_tokens', 'output_tokens', 'total_tokens']  # Industry-specific numeric fields are now in extra_fields
+    float_fields = ['quantity', 'rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch', 'received_amount', 'balance_due', 'model_accuracy', 'cost_inr']
     
     for key, value in row_dict.items():
         if isinstance(value, (dict, list)):
@@ -260,17 +260,37 @@ def get_verification_amounts(username: str) -> List[Dict[str, Any]]:
         username: Username for RLS filtering
     
     Returns:
-        List of verification amount dictionaries
+        List of verification amount dictionaries (deduplicated by row_id)
     """
     try:
         db = get_database_client()
         # Sort by receipt_number and row_id to keep items together and in extraction order
         result = db.query('verification_amounts').eq('username', username).order('receipt_number').order('row_id').execute()
-        return result.data if result.data else []
+        records = result.data if result.data else []
+        
+        # Deduplicate by row_id — concurrent processing tasks can insert the same
+        # row_id twice if two uploads were kicked off for the same image.
+        # Keep the last occurrence (latest in DB order = most up-to-date).
+        seen_row_ids: dict = {}
+        for record in records:
+            row_id = record.get('row_id')
+            if row_id is not None:
+                seen_row_ids[row_id] = record
+        
+        deduplicated = list(seen_row_ids.values())
+        
+        if len(deduplicated) < len(records):
+            logger.warning(
+                f"⚠️ Deduplicated {len(records) - len(deduplicated)} duplicate "
+                f"verification_amounts rows for {username}"
+            )
+        
+        return deduplicated
     
     except Exception as e:
         logger.error(f"Error getting verification amounts for {username}: {e}")
         return []
+
 
 
 def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:

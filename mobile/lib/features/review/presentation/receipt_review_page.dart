@@ -216,11 +216,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       await ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
     }
 
+    final recordsToUpdate = <ReviewRecord>[];
     for (var item in group.lineItems) {
       if (item.verificationStatus != 'Done') {
-        final newRecord = item.copyWith(verificationStatus: 'Done');
-        await ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+        recordsToUpdate.add(item.copyWith(verificationStatus: 'Done'));
       }
+    }
+    
+    if (recordsToUpdate.isNotEmpty) {
+      await ref.read(reviewProvider.notifier).updateAmountRecordsBulk(recordsToUpdate);
     }
   }
 
@@ -234,6 +238,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     // Read fresh group from state to reflect updates immediately
     final state = ref.watch(reviewProvider);
     final shopProfile = ref.watch(shopProvider);
+    final configAsync = ref.watch(configProvider);
+    final config = configAsync.value ?? {};
+    final isAutomobile = config['industry'] == 'automobile';
+    
     final group = state.groups.firstWhere(
         (g) => g.receiptNumber == widget.group.receiptNumber,
         orElse: () => widget.group);
@@ -523,23 +531,29 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         child: Text('No line items found.',
                             style: TextStyle(color: AppTheme.textSecondary))),
                   ),
-                if (partsItems.isNotEmpty) ...[
-                  _buildCategoryHeader('Spare Parts', LucideIcons.package2, Colors.blue),
-                  ...partsItems.map((item) => _buildLineItemCard(item)),
-                  const SizedBox(height: 12),
-                ],
-                if (laborItems.isNotEmpty) ...[
-                  _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, Colors.orange),
-                  ...laborItems.map((item) => _buildLineItemCard(item)),
-                  const SizedBox(height: 12),
-                ],
-                if (otherItems.isNotEmpty) ...[
-                  _buildCategoryHeader('Other Items', LucideIcons.box, Colors.grey),
-                  ...otherItems.map((item) => _buildLineItemCard(item)),
+                if (isAutomobile) ...[
+                  if (partsItems.isNotEmpty) ...[
+                    _buildCategoryHeader('Spare Parts', LucideIcons.package2, Colors.blue),
+                    ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                    const SizedBox(height: 12),
+                  ],
+                  if (laborItems.isNotEmpty) ...[
+                    _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, Colors.orange),
+                    ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                    const SizedBox(height: 12),
+                  ],
+                  if (otherItems.isNotEmpty) ...[
+                    _buildCategoryHeader('Other Items', LucideIcons.box, Colors.grey),
+                    ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                    const SizedBox(height: 12),
+                  ],
+                ] else ...[
+                  ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
                   const SizedBox(height: 12),
                 ],
                 // ── Payment Summary ──────────────────────────────────────
                 PaymentSummaryCard(
+                  isAutomobile: isAutomobile,
                   gstMode: _gstMode,
                   partsSubtotal: _partsSubtotal(group),
                   laborSubtotal: _laborSubtotal(group),
@@ -1053,7 +1067,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildLineItemCard(ReviewRecord item) {
+  Widget _buildLineItemCard(ReviewRecord item, bool isAutomobile) {
     final isError = item.hasError;
     final isDone = item.verificationStatus == 'Done';
 
@@ -1264,32 +1278,34 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               ],
             ),
           ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _PartLaborToggle(
-                isPart: true,
-                selected: (item.type?.toLowerCase() ?? '') != 'labor' && 
-                          (item.type?.toLowerCase() ?? '') != 'labour' && 
-                          (item.type?.toLowerCase() ?? '') != 'service',
-                onTap: () {
-                  final newRecord = item.copyWith(type: 'Part');
-                  ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-                },
-              ),
-              const SizedBox(width: 8),
-              _PartLaborToggle(
-                isPart: false,
-                selected: (item.type?.toLowerCase() ?? '') == 'labor' || 
-                          (item.type?.toLowerCase() ?? '') == 'labour' || 
-                          (item.type?.toLowerCase() ?? '') == 'service',
-                onTap: () {
-                  final newRecord = item.copyWith(type: 'Labor');
-                  ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-                },
-              ),
-            ],
-          ),
+          if (isAutomobile) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _PartLaborToggle(
+                  isPart: true,
+                  selected: (item.type?.toLowerCase() ?? '') != 'labor' && 
+                            (item.type?.toLowerCase() ?? '') != 'labour' && 
+                            (item.type?.toLowerCase() ?? '') != 'service',
+                  onTap: () {
+                    final newRecord = item.copyWith(type: 'Part');
+                    ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+                  },
+                ),
+                const SizedBox(width: 8),
+                _PartLaborToggle(
+                  isPart: false,
+                  selected: (item.type?.toLowerCase() ?? '') == 'labor' || 
+                            (item.type?.toLowerCase() ?? '') == 'labour' || 
+                            (item.type?.toLowerCase() ?? '') == 'service',
+                  onTap: () {
+                    final newRecord = item.copyWith(type: 'Labor');
+                    ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
+                  },
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

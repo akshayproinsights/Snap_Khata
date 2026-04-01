@@ -209,6 +209,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(verifiedProvider);
+    final config = ref.watch(configProvider).value;
+    final isAutomobile = config?['industry'] == 'automobile';
     final columns = ref.watch(tableColumnsProvider('verified'));
     
     final groups = _buildGroups(state.records);
@@ -454,7 +456,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       final key = keys[index];
                       final orders = groups[key]!;
                       final isExpanded = _expandedGroups.contains(key);
-                      return _buildGroupSection(key, orders, isExpanded, columns);
+                      return _buildGroupSection(key, orders, isExpanded, columns, isAutomobile);
                     },
                     childCount: groups.keys.length,
                   ),
@@ -734,7 +736,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
   // ─── Grouped list section ────────────────────────────────────────────────────
 
   Widget _buildGroupSection(
-      String groupKey, List<VerifiedInvoice> orders, bool isExpanded, List<dynamic> columns) {
+      String groupKey, List<VerifiedInvoice> orders, bool isExpanded, List<dynamic> columns, bool isAutomobile) {
     if (orders.isEmpty) return const SizedBox.shrink();
     
     // Group-level GST and Tax settings
@@ -879,7 +881,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       final order = entry.value;
                       return Column(
                         children: [
-                          _buildBillRow(order, taxableIds: taxableIds, columns: columns),
+                          _buildBillRow(order, taxableIds: taxableIds, columns: columns, isAutomobile: isAutomobile),
                           if (i < orders.length - 1)
                             Divider(
                                 height: 1,
@@ -907,13 +909,15 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                     fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary)),
                             const SizedBox(height: 12),
                             _buildSummaryRow(
-                                'Taxable Amount (Parts)', '₹${partsBase.toStringAsFixed(2)}'),
+                                isAutomobile ? 'Taxable Amount (Parts)' : 'Subtotal', '₹${partsBase.toStringAsFixed(2)}'),
                             const SizedBox(height: 4),
                             _buildSummaryRow('GST (18%)', '₹${gstAmount.toStringAsFixed(2)}',
                                 isIncluded: gstModeStr == 'included'),
-                            const SizedBox(height: 4),
-                            _buildSummaryRow(
-                                'Non-Taxable (Labor)', '₹${laborBase.toStringAsFixed(2)}'),
+                            if (isAutomobile) ...[
+                              const SizedBox(height: 4),
+                              _buildSummaryRow(
+                                  'Non-Taxable (Labor)', '₹${laborBase.toStringAsFixed(2)}'),
+                            ],
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8),
                               child: Divider(height: 1),
@@ -974,7 +978,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
 
   // ─── Individual order row inside an expanded group ─────────────────────────
 
-  Widget _buildBillRow(VerifiedInvoice record, {required Set<String> taxableIds, required List<dynamic> columns}) {
+  Widget _buildBillRow(VerifiedInvoice record, {required Set<String> taxableIds, required List<dynamic> columns, required bool isAutomobile}) {
     final isSelected = _selectedIds.contains(record.rowId);
     final bool hasGstApplied = taxableIds.contains(record.rowId);
 
@@ -982,15 +986,17 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
     Color typeBg = Colors.grey.shade100;
     IconData? typeIcon = LucideIcons.fileText;
 
-    if (record.type.toUpperCase().contains('PART')) {
-      typeColor = Colors.blue.shade700;
-      typeBg = Colors.blue.shade50;
-      typeIcon = LucideIcons.package;
-    } else if (record.type.toUpperCase().contains('LABOUR') ||
-        record.type.toUpperCase().contains('SERVICE')) {
-      typeColor = Colors.orange.shade800;
-      typeBg = Colors.orange.shade50;
-      typeIcon = LucideIcons.wrench;
+    if (isAutomobile) {
+      if (record.type.toUpperCase().contains('PART')) {
+        typeColor = Colors.blue.shade700;
+        typeBg = Colors.blue.shade50;
+        typeIcon = LucideIcons.package;
+      } else if (record.type.toUpperCase().contains('LABOUR') ||
+          record.type.toUpperCase().contains('SERVICE')) {
+        typeColor = Colors.orange.shade800;
+        typeBg = Colors.orange.shade50;
+        typeIcon = LucideIcons.wrench;
+      }
     }
 
     return InkWell(

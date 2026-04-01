@@ -191,6 +191,115 @@ async def save_verified_invoices_route(
         raise HTTPException(status_code=500, detail=f"Failed to save verified invoices: {str(e)}")
 
 
+@router.put("/update-bulk")
+async def update_bulk_verified_invoices(
+    records: List[Dict[str, Any]],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Update multiple verified invoice records in bulk
+    """
+    username = current_user.get("username")
+    
+    if not username:
+        raise HTTPException(status_code=400, detail="No username in token")
+        
+    try:
+        db = get_database_client()
+        from database_helpers import convert_numeric_types
+        from routes.udhar import process_ledgers_for_verified_invoices
+        
+        success_count = 0
+        error_count = 0
+        
+        for record in records:
+            row_id = record.get('row_id')
+            if not row_id:
+                error_count += 1
+                continue
+                
+            try:
+                record['username'] = username
+                record = convert_numeric_types(record)
+                
+                # Get old record to check for amount differences
+                old_record_resp = db.client.table('verified_invoices').select('amount', 'receipt_number').eq('username', username).eq('row_id', row_id).execute()
+                old_amount = 0.0
+                receipt_number = record.get('receipt_number')
+                
+                if old_record_resp.data:
+                    old_amount = float(old_record_resp.data[0].get('amount', 0) or 0)
+                    if not receipt_number:
+                        receipt_number = old_record_resp.data[0].get('receipt_number')
+                
+                # Delete the old record
+                db.delete('verified_invoices', {'username': username, 'row_id': row_id})
+                
+                # Insert the updated record
+                db.insert('verified_invoices', record)
+                
+                # Adjust ledger transaction if payment state changed
+                try:
+                    if receipt_number:
+                        new_payment_mode = record.get('payment_mode', 'Cash')
+                        new_balance_due = float(record.get('balance_due', 0) or 0)
+                        customer_name = record.get('customer_name') or record.get('customer_details')
+                        customer_name_clean = str(customer_name).strip() if customer_name else ""
+                        
+                        tx_resp = db.client.table('ledger_transactions').select('id', 'ledger_id', 'amount').eq('username', username).eq('receipt_number', receipt_number).eq('transaction_type', 'INVOICE').execute()
+                        
+                        if new_payment_mode == 'Credit' and customer_name_clean and new_balance_due > 0:
+                            if tx_resp.data:
+                                tx = tx_resp.data[0]
+                                old_tx_amount = float(tx.get('amount', 0) or 0)
+                                diff = new_balance_due - old_tx_amount
+                                
+                                if diff != 0:
+                                    db.client.table('ledger_transactions').update({'amount': new_balance_due}).eq('id', tx['id']).execute()
+                                    
+                                    ledger_id = tx['ledger_id']
+                                    ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
+                                    if ledger_resp.data:
+                                        current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
+                                        db.client.table('customer_ledgers').update({
+                                            'balance_due': current_balance + diff
+                                        }).eq('id', ledger_id).execute()
+                            else:
+                                await process_ledgers_for_verified_invoices(username, [record])
+                        else:
+                            if tx_resp.data:
+                                tx = tx_resp.data[0]
+                                old_tx_amount = float(tx.get('amount', 0) or 0)
+                                ledger_id = tx['ledger_id']
+                                
+                                db.client.table('ledger_transactions').delete().eq('id', tx['id']).execute()
+                                
+                                ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
+                                if ledger_resp.data:
+                                    current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
+                                    db.client.table('customer_ledgers').update({
+                                        'balance_due': current_balance - old_tx_amount
+                                    }).eq('id', ledger_id).execute()
+                except Exception as inner_e:
+                    logger.error(f"Error syncing ledger transaction in bulk update: {inner_e}")
+                
+                success_count += 1
+            except Exception as item_e:
+                logger.error(f"Error processing record {row_id} in bulk update: {item_e}")
+                error_count += 1
+                
+        logger.info(f"Bulk updated {success_count} verified invoice records for {username} with {error_count} errors")
+        
+        return {
+            "success": True,
+            "message": f"Updated {success_count} records successfully" + (f", {error_count} failed" if error_count > 0 else "")
+        }
+    
+    except Exception as e:
+        logger.error(f"Error logging verified invoices in bulk: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to bulk update verified invoices: {str(e)}")
+
+
 @router.put("/update")
 async def update_single_verified_invoice(
     record: Dict[str, Any],

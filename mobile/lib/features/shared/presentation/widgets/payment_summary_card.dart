@@ -5,6 +5,7 @@ enum GstMode { included, excluded, none }
 
 
 class PaymentSummaryCard extends StatelessWidget {
+  final bool isAutomobile;
   final GstMode gstMode;
   final double partsSubtotal; // sum of taxable items
   final double laborSubtotal; // sum of non-taxable items
@@ -15,6 +16,7 @@ class PaymentSummaryCard extends StatelessWidget {
 
   const PaymentSummaryCard({
     super.key,
+    this.isAutomobile = true,
     required this.gstMode,
     required this.partsSubtotal,
     required this.laborSubtotal,
@@ -168,12 +170,12 @@ class PaymentSummaryCard extends StatelessWidget {
             child: Column(
               children: [
                 _AmountRow(
-                  label: 'Parts Subtotal',
-                  value: '₹${_fmt(partsSubtotal)}',
+                  label: isAutomobile ? 'Parts Subtotal' : 'Subtotal',
+                  value: '₹${_fmt(partsSubtotal + (isAutomobile ? 0 : laborSubtotal))}',
                   labelColor: Colors.white.withValues(alpha: 0.7),
                   valueColor: Colors.white.withValues(alpha: 0.9),
                 ),
-                if (hasLabor) ...[
+                if (isAutomobile && hasLabor) ...[
                   const SizedBox(height: 8),
                   _AmountRow(
                     label: 'Labor / Service (no GST)',

@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/shared/presentation/widgets/payment_summary_card.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -227,6 +228,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       for (final e in _extraFieldCtrls.entries) e.key: e.value.text,
     };
 
+    final List<VerifiedInvoice> updatedItems = [];
+
     for (int i = 0; i < widget.group.items.length; i++) {
       final item = widget.group.items[i];
       final ctrl = itemCtrls[i];
@@ -255,10 +258,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         extraFields: newExtraFields,
       );
 
-      await notifier.updateRecord(updatedItem);
+      updatedItems.add(updatedItem);
 
       widget.group.items[i] = updatedItem;
       newTotal += amt;
+    }
+
+    if (updatedItems.isNotEmpty) {
+      await notifier.updateRecordsBulk(updatedItems);
     }
 
     widget.group.receiptNumber = receiptCtrl.text;
@@ -282,6 +289,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   @override
   Widget build(BuildContext context) {
     final shopProfile = ref.watch(shopProvider);
+    final config = ref.watch(configProvider).value;
+    final isAutomobile = config?['industry'] == 'automobile';
     final hasLink = widget.group.receiptLink.isNotEmpty &&
         widget.group.receiptLink != 'null';
 
@@ -463,9 +472,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             const SizedBox(height: 12),
             _buildCustomerCard(),
             const SizedBox(height: 12),
-            _buildItemsSection(),
+            _buildItemsSection(isAutomobile),
             const SizedBox(height: 12),
-            _buildTotalsCard(),
+            _buildTotalsCard(isAutomobile),
           ],
         ),
       ),
@@ -694,7 +703,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // ─────────────────────────────────────────────────────────────
   // 3. Items Section
   // ─────────────────────────────────────────────────────────────
-  Widget _buildItemsSection() {
+  Widget _buildItemsSection(bool isAutomobile) {
     if (isEditing) {
       return Container(
         color: Colors.white,
@@ -737,15 +746,27 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildItemsHeader(),
-          if (parts.isNotEmpty)
-            _buildCategoryGroup(
-                'Spare Parts', parts, LucideIcons.package2, Colors.blue),
-          if (servicing.isNotEmpty)
-            _buildCategoryGroup(
-                'Servicing', servicing, LucideIcons.wrench, Colors.orange),
-          if (others.isNotEmpty)
-            _buildCategoryGroup(
-                'Other Items', others, LucideIcons.box, Colors.grey),
+          if (isAutomobile) ...[
+            if (parts.isNotEmpty)
+              _buildCategoryGroup(
+                  'Spare Parts', parts, LucideIcons.package2, Colors.blue),
+            if (servicing.isNotEmpty)
+              _buildCategoryGroup(
+                  'Servicing', servicing, LucideIcons.wrench, Colors.orange),
+            if (others.isNotEmpty)
+              _buildCategoryGroup(
+                  'Other Items', others, LucideIcons.box, Colors.grey),
+          ] else ...[
+            ...widget.group.items.asMap().entries.map((e) {
+              return _ItemRow(
+                index: e.key + 1,
+                item: e.value,
+                ctrl: itemCtrls[e.key],
+                isLast: e.key == widget.group.items.length - 1,
+                isEditing: false,
+              );
+            }),
+          ],
           if (widget.group.items.isEmpty)
             const Padding(
               padding: EdgeInsets.all(32),
@@ -836,13 +857,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // ─────────────────────────────────────────────────────────────
   // 4. Totals & Receipt
   // ─────────────────────────────────────────────────────────────
-  Widget _buildTotalsCard() {
+  Widget _buildTotalsCard(bool isAutomobile) {
     final grandTotal = _totalAfterGst(widget.group);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         children: [
           PaymentSummaryCard(
+            isAutomobile: isAutomobile,
             gstMode: _gstMode,
             partsSubtotal: _partsSubtotal(widget.group),
             laborSubtotal: _laborSubtotal(widget.group),

@@ -33,6 +33,10 @@ class ReviewRepository {
     await _dio.put('/api/review/amounts/update', data: record.toJson());
   }
 
+  Future<void> updateAmountsBulk(List<ReviewRecord> records) async {
+    await _dio.put('/api/review/amounts/update-bulk', data: records.map((r) => r.toJson()).toList());
+  }
+
   Future<void> deleteReceipt(String receiptNumber) async {
     await _dio.delete('/api/review/receipt/$receiptNumber');
   }

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 from database import get_database_client
+from config_loader import get_user_config
 
 router = APIRouter()
 
@@ -193,6 +194,7 @@ async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
             "shop_phone": shop_phone,
             "shop_gst": shop_gst,
             "gst_mode": header.get("gst_mode") or "none",
+            "industry": get_user_config(username).get("industry", "general") if username else "general",
             "items": items
         }
 
