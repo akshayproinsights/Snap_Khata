@@ -8,7 +8,7 @@ class ConfigRepository {
 
   Future<Map<String, dynamic>> getUserConfig() async {
     try {
-      final response = await _dio.get('/api/config/user-config');
+      final response = await _dio.get('/api/config');
       return response.data as Map<String, dynamic>;
     } catch (e) {
       throw Exception('Failed to load user config');

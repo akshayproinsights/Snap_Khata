@@ -132,6 +132,13 @@ async def update_single_review_date(
         logger.error(f"DEBUG: row_id is missing! Full record: {record}")
         raise HTTPException(status_code=400, detail="row_id is required for update")
     
+    # Synthetic row_ids (e.g. '_0', '_1') are assigned client-side to new records
+    # that have not yet been persisted to the database. Attempting to use them in
+    # a DB query causes a bigint parse error. Return early with a clear message.
+    if str(row_id).startswith('_'):
+        logger.warning(f"Skipping update for synthetic row_id '{row_id}' — record not yet in DB")
+        return {"success": False, "message": f"Record with id '{row_id}' is not yet saved to the database. Please save first.", "synthetic": True}
+    
     try:
         db = get_database_client()
         
@@ -421,6 +428,12 @@ async def update_single_review_amount(
     row_id = record.get('row_id')
     if not row_id:
         raise HTTPException(status_code=400, detail="row_id is required for update")
+    
+    # Synthetic row_ids (e.g. '_0', '_1') are assigned client-side to new records
+    # that have not yet been persisted to the database.
+    if str(row_id).startswith('_'):
+        logger.warning(f"Skipping amount update for synthetic row_id '{row_id}' — record not yet in DB")
+        return {"success": False, "message": f"Record with id '{row_id}' is not yet saved to the database.", "synthetic": True}
     
     try:
         db = get_database_client()

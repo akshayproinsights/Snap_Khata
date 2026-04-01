@@ -134,3 +134,21 @@ def get_database_client() -> DatabaseClient:
     if _db_client is None:
         _db_client = DatabaseClient()
     return _db_client
+
+
+def create_fresh_database_client() -> DatabaseClient:
+    """
+    Create a brand-new Supabase client instance (not cached).
+    
+    Use this in background threads / long-running tasks to avoid
+    the HTTP/2 'Server disconnected' error that occurs when the
+    shared global client's connection goes stale during AI processing.
+    """
+    config = get_supabase_config()
+    if not config:
+        raise ValueError("Supabase configuration not found")
+    from supabase import create_client
+    fresh_client = create_client(config["url"], config["service_role_key"])
+    db = DatabaseClient.__new__(DatabaseClient)
+    db.client = fresh_client
+    return db

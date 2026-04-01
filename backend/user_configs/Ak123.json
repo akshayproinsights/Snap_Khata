@@ -1,0 +1,257 @@
+{
+    "industry": "general",
+    "display_name": "Akshay",
+    "vendor_gemini": {
+        "system_instruction": "You are an expert Invoice Data Extraction AI.\n\n1. OBJECTIVE: Extract structured data from vendor/purchase invoices into JSON. Detect if the invoice is Printed or Handwritten.\n\n**CRITICAL: ZERO HALLUCINATION POLICY. Extract ONLY what you can read. Do NOT guess or invent values.**\n- **Vendor Name:** Extract the SUPPLIER / SELLER / BUSINESS NAME issuing the invoice (top header, boldest text). Do NOT extract the buyer name.\n- **Item Descriptions:** Extract EXACTLY what is written. Preserve brand names, codes, and units.\n\n2. JSON STRUCTURE:\n   {\n     \"invoice_type\": \"String (Enum: 'Printed', 'Handwritten')\",\n     \"invoice_date\": \"String (DD/MM/YYYY)\",\n     \"invoice_number\": \"String\",\n     \"vendor_name\": \"String (REQUIRED — extract SUPPLIER/SELLER/SHOP NAME from top header)\",\n     \"items\": [\n         {\n           \"part_number\": \"String (product code or SKU if present, else 'N/A')\",\n           \"batch\": \"String (batch/lot number if present, else 'N/A')\",\n           \"description\": \"String (item name / particulars)\",\n           \"hsn\": \"String (HSN/SAC code if present, else 'N/A')\",\n           \"cgst_percent\": \"Number (CGST rate %, e.g. 9; 0 if not found)\",\n           \"sgst_percent\": \"Number (SGST rate %, e.g. 9; 0 if not found)\",\n           \"quantity\": \"Number (extract numeric value only, ignore units)\",\n           \"rate\": \"Number (unit price)\",\n           \"disc_percent\": \"Number (discount %, default 0)\",\n           \"amount\": \"Number (taxable amount for this line item)\",\n           \"confidence\": \"Number (0–100, your extraction confidence for this row)\"\n         }\n     ]\n   }\n\n3. RULES:\n   - Output ONLY valid JSON with no markdown fencing.\n   - If CGST/SGST is shown as a single summary at the bottom, apply that rate to ALL rows.\n   - For quantities like '2 kg' or '500 ml', extract only the number (2, 500).\n   - If a field is truly absent, use 'N/A' for strings and 0 for numbers.\n   - ALWAYS populate vendor_name — it is essential for inventory tracking."
+    },
+    "gemini": {
+        "system_instruction": "You are an expert OCR data extractor for handwritten bills. Extract bill content into strict JSON format.\n\n### GLOBAL RULES\n1. Quantities: Default to 1 if blank. Allow decimals.\n2. Currency: Extract numerical values only (e.g. '500/-' → 500).\n3. Handwriting: Lower confidence score if illegible.\n\n### HEADER\n- Receipt Number: any standalone number near the top.\n- Date: DD-MM-YY or DD-MM-YYYY format. Convert to 'dd-MMM-yyyy'.\n- Customer Name: English only, no salutations.\n\n### LINE ITEMS\n- Extract every row.\n- Ensure Amount ≈ Quantity × Rate.\n\n### OUTPUT (JSON ONLY)\n{\n    \"header\": {\n        \"overall_confidence\": 0,\n        \"receipt_number\": \"String\",\n        \"date\": \"String (dd-MMM-yyyy)\",\n        \"customer_name\": \"String\",\n        \"mobile_number\": \"String\",\n        \"total_bill_amount\": 0\n    },\n    \"items\": [\n        {\n            \"description\": \"String\",\n            \"quantity\": 1,\n            \"rate\": 0,\n            \"amount\": 0,\n            \"confidence\": 90\n        }\n    ]\n}"
+    },
+    "columns": {
+        "invoice_all": [
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "visible": true,
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "customer_name",
+                "label": "Customer",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "mobile_number",
+                "label": "Mobile",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Link",
+                "type": "link",
+                "visible": true,
+                "editable": false
+            }
+        ],
+        "verify_dates": [
+            {
+                "db_column": "verification_status",
+                "label": "Status",
+                "type": "select",
+                "options": [
+                    "Pending",
+                    "Done"
+                ],
+                "editable": true
+            },
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "editable": true
+            },
+            {
+                "db_column": "audit_findings",
+                "label": "Issues",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "View",
+                "type": "link",
+                "editable": false
+            }
+        ],
+        "verify_amounts": [
+            {
+                "db_column": "verification_status",
+                "label": "Status",
+                "type": "select",
+                "options": [
+                    "Pending",
+                    "Done"
+                ],
+                "editable": true
+            },
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount_mismatch",
+                "label": "Mismatch",
+                "type": "number",
+                "editable": false
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Receipt",
+                "type": "link",
+                "editable": false
+            }
+        ],
+        "verified": [
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "editable": true
+            },
+            {
+                "db_column": "customer_name",
+                "label": "Customer",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Link",
+                "type": "link",
+                "editable": false
+            }
+        ]
+    },
+    "dashboard_visuals": {
+        "revenue_metrics": {
+            "enabled": true,
+            "data_source": "verified_invoices",
+            "date_column": "date",
+            "amount_column": "amount",
+            "type_column": "type",
+            "receipt_column": "receipt_number",
+            "filters": {
+                "default_days": 30
+            },
+            "search_filters": [
+                {
+                    "key": "customer_name",
+                    "db_column": "customer_name",
+                    "label": "Customer Name",
+                    "placeholder": "Search customer..."
+                },
+                {
+                    "key": "part_number",
+                    "db_column": "description",
+                    "label": "Item",
+                    "placeholder": "Search item..."
+                }
+            ]
+        },
+        "stock_metrics": {
+            "enabled": true,
+            "data_source": "inventory_items",
+            "date_column": "invoice_date",
+            "amount_column": "net_bill",
+            "stock_column": "qty",
+            "receipt_column": "invoice_number",
+            "filters": {
+                "default_days": 30
+            }
+        }
+    },
+    "username": "Ak123",
+    "r2_bucket": "snapkhata-prod"
+}

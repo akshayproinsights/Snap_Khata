@@ -22,6 +22,8 @@ const UploadPage: React.FC = () => {
     const [, setPollingInterval] = useState<number | null>(null);
     const intervalRef = React.useRef<number | null>(null); // Ref to track interval for cleanup
     const duplicateStatsRef = React.useRef<{ totalUploaded: number; replaced: number; skipped: number; newFiles: number } | null>(null);
+    // Ref that exposes the useEffect-scoped startPolling to handlers outside the effect
+    const startPollingRef = React.useRef<((taskId: string) => void) | null>(null);
 
     // Upload tracking for bulk uploads
     const [uploadedCount, setUploadedCount] = useState(0);
@@ -145,8 +147,27 @@ const UploadPage: React.FC = () => {
         };
 
         const startPolling = (taskId: string) => {
+            startPollingRef.current = startPolling; // expose to outer scope
+            // Track attempt count for the resumption poller (safety net)
+            // 300 × 1s = 5 min max. Status polls are free (Supabase reads only, no Gemini).
+            let resumePollAttempts = 0;
+            const RESUME_POLL_MAX_ATTEMPTS = 300;
             // Start continuous polling
             interval = setInterval(async () => {
+                // --- Safety net: hard-kill after 30 attempts ---
+                resumePollAttempts += 1;
+                if (resumePollAttempts > RESUME_POLL_MAX_ATTEMPTS) {
+                    console.warn('[UploadPage/Site1] ⛔ Max poll attempts reached. Stopping.');
+                    clearInterval(interval);
+                    intervalRef.current = null;
+                    setPollingInterval(null);
+                    localStorage.removeItem('activeSalesTaskId');
+                    setIsProcessing(false);
+                    setProcessingStatus(null);
+                    setSalesStatus({ processingCount: 0, reviewCount: 0, syncCount: 0 });
+                    setErrorMessage('Processing is taking too long. Please refresh the page to check your results.');
+                    return;
+                }
                 try {
                     const statusData = await salesAPI.getProcessStatus(taskId);
 
@@ -217,8 +238,10 @@ const UploadPage: React.FC = () => {
 
                     }
                 } catch (error: any) {
-                    console.error('Error polling status:', error);
-                    if (error?.response?.status === 403 || error?.response?.status === 404) {
+                    const statusCode = error?.response?.status;
+                    console.error('Error polling status (startPolling):', statusCode, error?.message);
+                    // Stop polling on fatal HTTP codes — do NOT keep hammering the server
+                    if (statusCode === 403 || statusCode === 404 || statusCode === 429 || statusCode >= 500) {
                         clearInterval(interval);
                         intervalRef.current = null;
                         setPollingInterval(null);
@@ -226,7 +249,13 @@ const UploadPage: React.FC = () => {
                         setIsProcessing(false);
                         setProcessingStatus(null);
                         setSalesStatus({ processingCount: 0, reviewCount: 0, syncCount: 0 });
+                        if (statusCode === 429) {
+                            setErrorMessage('Server is overloaded (rate limit hit). Please wait a moment, then refresh to check your results.');
+                        } else if (statusCode >= 500) {
+                            setErrorMessage('Server error while checking status. Please refresh the page to see your results.');
+                        }
                     }
+                    // For non-fatal errors (network blip etc.), the interval keeps retrying — that is intentional
                 }
             }, 1000);
 
@@ -519,84 +548,104 @@ const UploadPage: React.FC = () => {
             const taskId = processResponse.task_id;
             console.log(`💾 [DEBUG] Task ID saved: ${taskId}`);
             localStorage.setItem('activeSalesTaskId', taskId);
+            // Track attempt count for the main upload-flow poller (safety net)
+            // 300 × 1s = 5 min max. Status polls are free (Supabase reads only, no Gemini).
+            let uploadPollAttempts = 0;
+            const UPLOAD_POLL_MAX_ATTEMPTS = 300;
+
             const pollInterval = setInterval(async () => {
-                const status = await salesAPI.getProcessStatus(taskId);
-                setProcessingStatus(status);
-
-                const processed = status.progress?.processed || 0;
-                const total = status.progress?.total || 0;
-                const failed = status.progress?.failed || 0;
-                const remaining = Math.max(0, total - processed - failed);
-                setSalesStatus({ processingCount: remaining, totalProcessing: total, reviewCount: 0, syncCount: 0 });
-
-
-                // Handle duplicate detection - START SEQUENTIAL WORKFLOW
-                if (status.status === 'duplicate_detected' && (status as any).duplicates?.length > 0) {
+                // --- Safety net: hard-kill after 30 attempts ---
+                uploadPollAttempts += 1;
+                if (uploadPollAttempts > UPLOAD_POLL_MAX_ATTEMPTS) {
+                    console.warn('[UploadPage/Site2] ⛔ Max poll attempts reached. Stopping.');
                     clearInterval(pollInterval);
                     intervalRef.current = null;
                     setPollingInterval(null);
+                    localStorage.removeItem('activeSalesTaskId');
                     setIsProcessing(false);
-
-                    // Initialize duplicate queue
-                    const duplicates = (status as any).duplicates;
-
-
-                    setDuplicateQueue(duplicates);
-                    setCurrentDuplicateIndex(0);
-
-                    setSalesStatus({
-                        processingCount: 0,
-                        reviewCount: duplicates.length,
-                        syncCount: processed
-                    });
-
-                    const newFilesProcessed = status.progress?.processed || 0;
-                    setDuplicateStats(prev => ({ ...prev, newFiles: newFilesProcessed }));
-                    duplicateStatsRef.current = { ...(duplicateStatsRef.current || { totalUploaded: 0, replaced: 0, skipped: 0, newFiles: 0 }), newFiles: newFilesProcessed };
-
-
-                    // Set first duplicate info - check if it has existing_invoice
-                    const firstDup = duplicates[0];
-                    setDuplicateInfo(firstDup);
-                    setShowDuplicateModal(true);
-                    setFilesToSkip([]);
-                    setFilesToForceUpload([]);
-
-                    // CRITICAL FIX: Update uploadedFiles with R2 keys from the processing status
-                    // Before this point, uploadedFiles contains temp paths
-                    // Now we need to extract the actual R2 keys that were uploaded
-                    // The duplicates contain R2 file_keys
-                    // Since backend detected duplicates AFTER uploading ALL files to R2,
-                    // we need to get all R2 keys (duplicates are subset)
-                    // The backend should return all uploaded R2 keys in the status
-                    // For now, set uploadedFiles to the fileKeys that were sent for processing
-                    // These are R2 keys from the initial upload phase
-                    setUploadedFiles((status as any).uploaded_r2_keys || []); // Backend returns ALL R2 keys
-                    // Store in window for passing through call chain (avoids React state timing)
-                    (window as any).__temp_r2_keys = (status as any).uploaded_r2_keys || [];
-
-                    setUploadedFiles((status as any).uploaded_r2_keys || []); // Backend returns ALL R2 keys
-                    // Store in window for passing through call chain (avoids React state timing)
-                    (window as any).__temp_r2_keys = (status as any).uploaded_r2_keys || [];
-
+                    setErrorMessage('Processing is taking too long. Please refresh the page to check your results.');
                     return;
                 }
 
-                // Handle completion or failure
-                if (status.status === 'completed' || status.status === 'failed') {
-                    clearInterval(pollInterval);
-                    intervalRef.current = null;
-                    setPollingInterval(null);
+                try {
+                    const status = await salesAPI.getProcessStatus(taskId);
+                    setProcessingStatus(status);
 
-                    if (status.status === 'completed') {
-                        // Call finishProcessing to properly set completion state
-                        // This keeps files visible and shows Review & Sync button
-                        finishProcessing(status);
-                    } else {
+                    const processed = status.progress?.processed || 0;
+                    const total = status.progress?.total || 0;
+                    const failed = status.progress?.failed || 0;
+                    const remaining = Math.max(0, total - processed - failed);
+                    setSalesStatus({ processingCount: remaining, totalProcessing: total, reviewCount: 0, syncCount: 0 });
+
+                    // Handle duplicate detection - START SEQUENTIAL WORKFLOW
+                    if (status.status === 'duplicate_detected' && (status as any).duplicates?.length > 0) {
+                        clearInterval(pollInterval);
+                        intervalRef.current = null;
+                        setPollingInterval(null);
                         setIsProcessing(false);
-                        setSalesStatus({ processingCount: 0, reviewCount: 0, syncCount: 0 });
-                        setErrorMessage(status.message || 'Processing failed');
+
+                        // Initialize duplicate queue
+                        const duplicates = (status as any).duplicates;
+
+                        setDuplicateQueue(duplicates);
+                        setCurrentDuplicateIndex(0);
+
+                        setSalesStatus({
+                            processingCount: 0,
+                            reviewCount: duplicates.length,
+                            syncCount: processed
+                        });
+
+                        const newFilesProcessed = status.progress?.processed || 0;
+                        setDuplicateStats(prev => ({ ...prev, newFiles: newFilesProcessed }));
+                        duplicateStatsRef.current = { ...(duplicateStatsRef.current || { totalUploaded: 0, replaced: 0, skipped: 0, newFiles: 0 }), newFiles: newFilesProcessed };
+
+                        // Set first duplicate info - check if it has existing_invoice
+                        const firstDup = duplicates[0];
+                        setDuplicateInfo(firstDup);
+                        setShowDuplicateModal(true);
+                        setFilesToSkip([]);
+                        setFilesToForceUpload([]);
+
+                        // CRITICAL FIX: Update uploadedFiles with R2 keys from the processing status
+                        setUploadedFiles((status as any).uploaded_r2_keys || []); // Backend returns ALL R2 keys
+                        // Store in window for passing through call chain (avoids React state timing)
+                        (window as any).__temp_r2_keys = (status as any).uploaded_r2_keys || [];
+
+                        return;
                     }
+
+                    // Handle completion or failure
+                    if (status.status === 'completed' || status.status === 'failed') {
+                        clearInterval(pollInterval);
+                        intervalRef.current = null;
+                        setPollingInterval(null);
+
+                        if (status.status === 'completed') {
+                            finishProcessing(status);
+                        } else {
+                            setIsProcessing(false);
+                            setSalesStatus({ processingCount: 0, reviewCount: 0, syncCount: 0 });
+                            setErrorMessage(status.message || 'Processing failed');
+                        }
+                    }
+                } catch (error: any) {
+                    const statusCode = error?.response?.status;
+                    console.error('[UploadPage/Site2] Polling error:', statusCode, error?.message);
+                    // Stop immediately on fatal codes — never silently continue
+                    if (statusCode === 429 || statusCode === 403 || statusCode === 404 || statusCode >= 500) {
+                        clearInterval(pollInterval);
+                        intervalRef.current = null;
+                        setPollingInterval(null);
+                        localStorage.removeItem('activeSalesTaskId');
+                        setIsProcessing(false);
+                        if (statusCode === 429) {
+                            setErrorMessage('Server is overloaded (rate limit hit). Please wait a moment, then refresh to check your results.');
+                        } else {
+                            setErrorMessage('Server error during processing. Please refresh the page to check your results.');
+                        }
+                    }
+                    // Non-fatal network error — interval will retry on next tick
                 }
             }, 1000); // Poll every 1 second for responsive updates
 
@@ -604,10 +653,32 @@ const UploadPage: React.FC = () => {
             setPollingInterval(pollInterval);
         } catch (error: any) {
             console.error('❌ [DEBUG] Upload/Process ERROR:', error);
+
+            // ── 409 DUPLICATE SUBMISSION ──────────────────────────────────────────
+            // The backend detected that the same R2 keys are already being processed.
+            // Instead of showing an error, silently attach our poller to the existing
+            // task so the user sees the normal in-progress UI without any disruption.
+            const statusCode = error?.response?.status;
+            const detail = error?.response?.data?.detail;
+            if (statusCode === 409 && typeof detail === 'object' && detail?.code === 'DUPLICATE_SUBMISSION') {
+                const existingTaskId: string = detail.existing_task_id;
+                console.warn(
+                    `[UploadPage] 409 received — attaching poller to existing task: ${existingTaskId}`
+                );
+                setIsUploading(false);
+                setIsProcessing(true);
+                setSalesStatus({ isUploading: false, processingCount: 1, reviewCount: 0, syncCount: 0 });
+                localStorage.setItem('activeSalesTaskId', existingTaskId);
+                // startPolling lives inside the useEffect closure; access it through its ref
+                startPollingRef.current?.(existingTaskId);
+                return;
+            }
+            // ── END 409 HANDLER ───────────────────────────────────────────────────
+
             console.error('❌ [DEBUG] Error details:', {
                 message: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
-                response: (error as any)?.response?.data
+                response: error?.response?.data
             });
             setIsUploading(false);
             setIsProcessing(false);
@@ -739,34 +810,71 @@ const UploadPage: React.FC = () => {
                 }));
 
                 // Poll for completion
+                // Track attempt count for the post-duplicate-resolution poller (safety net)
+                // 300 × 1s = 5 min max. Status polls are free (Supabase reads only, no Gemini).
+                let remainingPollAttempts = 0;
+                const REMAINING_POLL_MAX_ATTEMPTS = 300;
+
                 const interval = setInterval(async () => {
-                    const status = await salesAPI.getProcessStatus(processResponse.task_id);
-
-                    // UPDATE GLOBAL STATUS to keep sidebar in sync
-                    const total = status.progress?.total || 0;
-                    const processed = status.progress?.processed || 0;
-                    const failed = status.progress?.failed || 0;
-                    const remaining = Math.max(0, total - processed - failed);
-
-                    setSalesStatus({
-                        processingCount: remaining,
-                        totalProcessing: total,
-                        reviewCount: 0,
-                        syncCount: 0
-                    });
-
-                    // Preserve duplicateStats across polling updates
-                    setProcessingStatus((prev: any) => ({
-                        ...status,
-                        duplicateStats: prev?.duplicateStats  // Keep our stored stats
-                    }));
-
-                    if (status.status === 'completed' || status.status === 'failed') {
+                    // --- Safety net: hard-kill after 30 attempts ---
+                    remainingPollAttempts += 1;
+                    if (remainingPollAttempts > REMAINING_POLL_MAX_ATTEMPTS) {
+                        console.warn('[UploadPage/Site3] ⛔ Max poll attempts reached. Stopping.');
                         clearInterval(interval);
                         intervalRef.current = null;
                         setPollingInterval(null);
-                        finishProcessing(status);  // Pass latest status directly
-                        localStorage.removeItem('activeSalesTaskId');  // Clear session
+                        localStorage.removeItem('activeSalesTaskId');
+                        setIsProcessing(false);
+                        setErrorMessage('Processing is taking too long. Please refresh the page to check your results.');
+                        return;
+                    }
+
+                    try {
+                        const status = await salesAPI.getProcessStatus(processResponse.task_id);
+
+                        // UPDATE GLOBAL STATUS to keep sidebar in sync
+                        const total = status.progress?.total || 0;
+                        const processed = status.progress?.processed || 0;
+                        const failed = status.progress?.failed || 0;
+                        const remaining = Math.max(0, total - processed - failed);
+
+                        setSalesStatus({
+                            processingCount: remaining,
+                            totalProcessing: total,
+                            reviewCount: 0,
+                            syncCount: 0
+                        });
+
+                        // Preserve duplicateStats across polling updates
+                        setProcessingStatus((prev: any) => ({
+                            ...status,
+                            duplicateStats: prev?.duplicateStats  // Keep our stored stats
+                        }));
+
+                        if (status.status === 'completed' || status.status === 'failed') {
+                            clearInterval(interval);
+                            intervalRef.current = null;
+                            setPollingInterval(null);
+                            finishProcessing(status);  // Pass latest status directly
+                            localStorage.removeItem('activeSalesTaskId');  // Clear session
+                        }
+                    } catch (error: any) {
+                        const statusCode = error?.response?.status;
+                        console.error('[UploadPage/Site3] Polling error:', statusCode, error?.message);
+                        // Stop immediately on fatal codes
+                        if (statusCode === 429 || statusCode === 403 || statusCode === 404 || statusCode >= 500) {
+                            clearInterval(interval);
+                            intervalRef.current = null;
+                            setPollingInterval(null);
+                            localStorage.removeItem('activeSalesTaskId');
+                            setIsProcessing(false);
+                            if (statusCode === 429) {
+                                setErrorMessage('Server is overloaded (rate limit hit). Please wait a moment, then refresh to check your results.');
+                            } else {
+                                setErrorMessage('Server error during processing. Please refresh the page to check your results.');
+                            }
+                        }
+                        // Non-fatal network error — interval will retry on next tick
                     }
                 }, 1000);
 

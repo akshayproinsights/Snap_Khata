@@ -13,7 +13,7 @@ from auth import get_current_user, get_current_user_r2_bucket
 from services.storage import get_storage_client
 from utils.image_optimizer import optimize_image_for_gemini, should_optimize_image, validate_image_quality
 from config import get_sales_folder
-from database import get_database_client
+from database import get_database_client, create_fresh_database_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -395,7 +395,56 @@ async def process_invoices_endpoint(
     logger.info(f"File keys: {request.file_keys}")
     logger.info(f"Force upload: {request.force_upload}")
     logger.info(f"R2 Bucket: {r2_bucket}")
-    
+
+    # ── REQUEST-LEVEL IDEMPOTENCY GUARD ──────────────────────────────────────
+    # Prevent the same R2 file keys from being submitted while a task is still
+    # active (queued / processing). This closes the race window where two rapid
+    # calls (e.g. from a polling retry) could both pass the image-hash DB check
+    # before either has written results, causing Gemini to run twice.
+    #
+    # Strategy: query the last 10 active tasks for this user and check whether
+    # any of them contain an overlapping set of uploaded_r2_keys.
+    # We deliberately skip this guard when force_upload=True (user explicitly
+    # wants to reprocess).
+    if not request.force_upload:
+        try:
+            _guard_db = get_database_client()
+            _active_tasks = _guard_db.client.table("upload_tasks") \
+                .select("task_id, status, uploaded_r2_keys, created_at") \
+                .eq("username", username) \
+                .eq("task_type", "sales") \
+                .in_("status", ["queued", "processing", "uploading"]) \
+                .order("created_at", desc=True) \
+                .limit(10) \
+                .execute()
+
+            incoming_keys = set(request.file_keys)
+            for active_task in (_active_tasks.data or []):
+                existing_keys = set(active_task.get("uploaded_r2_keys") or [])
+                overlap = incoming_keys & existing_keys
+                if overlap:
+                    existing_task_id = active_task.get("task_id")
+                    logger.warning(
+                        f"[IDEMPOTENCY GUARD] Duplicate submission blocked for {username}. "
+                        f"Overlapping keys: {overlap}. "
+                        f"Existing active task: {existing_task_id}"
+                    )
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_SUBMISSION",
+                            "message": "These files are already being processed. Please wait for the current task to complete.",
+                            "existing_task_id": existing_task_id,
+                        }
+                    )
+        except HTTPException:
+            raise  # Re-raise 409 as-is
+        except Exception as guard_err:
+            # Non-fatal: if the guard check fails, log and continue rather than
+            # blocking a legitimate upload.
+            logger.warning(f"[IDEMPOTENCY GUARD] Check failed (non-fatal), proceeding: {guard_err}")
+    # ── END IDEMPOTENCY GUARD ─────────────────────────────────────────────────
+
     # Initialize status in DATABASE
     initial_status = {
         "task_id": task_id,
@@ -658,12 +707,14 @@ def process_invoices_sync(
     import os
     import shutil
     
+    # Fresh DB client for this background task to avoid HTTP/2 stale connection errors
+    _task_db = create_fresh_database_client()
+
     # Helper to update DB status
     def update_db_status(status_update: Dict[str, Any]):
         try:
-            db = get_database_client()
             status_update["updated_at"] = datetime.utcnow().isoformat()
-            db.update("upload_tasks", status_update, {"task_id": task_id})
+            _task_db.update("upload_tasks", status_update, {"task_id": task_id})
         except Exception as e:
             logger.error(f"Failed to update task status in DB: {e}")
 
@@ -692,7 +743,7 @@ def process_invoices_sync(
     import os
     logger.info(f"Environment check:")
     logger.info(f"  - GOOGLE_API_KEY set: {bool(os.getenv('GOOGLE_API_KEY'))}")
-    logger.info(f"  - R2_ACCOUNT_ID set: {bool(os.getenv('R2_ACCOUNT_ID'))}")
+    logger.info(f"  - CLOUDFLARE_R2_ACCOUNT_ID set: {bool(os.getenv('CLOUDFLARE_R2_ACCOUNT_ID'))}")
     logger.info(f"  - SUPABASE_URL set: {bool(os.getenv('SUPABASE_URL'))}")
     
     r2_file_keys = []

@@ -299,7 +299,10 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
         
         # OPTIMIZED: Use batch upsert with row_id as conflict resolution
         # This allows updating existing records instead of throwing duplicate key errors
-        count = db.batch_upsert('verified_invoices', records, batch_size=500, on_conflict='row_id')
+        # CRITICAL: Use composite conflict key (username, row_id) — NOT just row_id.
+        # row_id values like '_1', '_2' are identical across all tenants.
+        # Upserting on row_id alone would overwrite another tenant's rows.
+        count = db.batch_upsert('verified_invoices', records, batch_size=500, on_conflict='username,row_id')
         logger.info(f"✅ Upserted {count} verified invoices for {username} (preserving existing data)")
         return True
     

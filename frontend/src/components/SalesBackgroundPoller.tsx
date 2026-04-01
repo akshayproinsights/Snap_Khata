@@ -1,16 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useGlobalStatus } from '../contexts/GlobalStatusContext';
 import { uploadAPI as salesAPI, reviewAPI } from '../services/api';
+import { usePolling } from '../hooks/usePolling';
 
 const SalesBackgroundPoller: React.FC = () => {
     const location = useLocation();
     const { setSalesStatus } = useGlobalStatus();
-    const pollIntervalRef = useRef<any>(null);
     const statsIntervalRef = useRef<any>(null);
 
     // Defined at component level to be reusable
-    const fetchGlobalStats = async () => {
+    const fetchGlobalStats = useCallback(async () => {
         // PREVENT FLUCTUATION:
         // If an upload is in progress, we paused stats updates to keep the number stable.
         // The number should only update once the COMPLETION event is processed.
@@ -60,10 +60,20 @@ const SalesBackgroundPoller: React.FC = () => {
                 reviewCount: pending + duplicates,
                 syncCount: completed
             });
-        } catch (error) {
+        } catch (error: any) {
+            const status = error?.response?.status;
+            // Stop spamming on rate limit or auth errors
+            if (status === 429 || status === 401 || status === 403) {
+                console.warn('[SalesPoller] Stats fetch stopped due to HTTP', status);
+                if (statsIntervalRef.current) {
+                    clearInterval(statsIntervalRef.current);
+                    statsIntervalRef.current = null;
+                }
+                return;
+            }
             console.error('Error fetching global sales stats:', error);
         }
-    };
+    }, [setSalesStatus]);
 
     // 1. Poll for global stats (Review Count) independent of upload tasks
     useEffect(() => {
@@ -79,123 +89,116 @@ const SalesBackgroundPoller: React.FC = () => {
                 statsIntervalRef.current = null;
             }
         };
+    }, [fetchGlobalStats]);
+
+    // Build the polling function for the task status poller
+    const taskPollFn = useCallback(async (): Promise<boolean> => {
+        const activeTaskId = localStorage.getItem('activeSalesTaskId');
+
+        // No task — signal done so the hook stops
+        if (!activeTaskId) return true;
+
+        const statusData = await salesAPI.getProcessStatus(activeTaskId);
+
+        const total = statusData.progress?.total || 0;
+        const processed = statusData.progress?.processed || 0;
+        const failed = statusData.progress?.failed || 0;
+        const remaining = Math.max(0, total - processed - failed);
+
+        if (statusData.status === 'completed') {
+            localStorage.removeItem('activeSalesTaskId');
+            setSalesStatus({
+                isUploading: false,
+                processingCount: 0,
+                totalProcessing: 0,
+                isComplete: true
+            });
+            await fetchGlobalStats();
+            return true; // Signal stop
+        }
+
+        if (statusData.status === 'failed') {
+            setSalesStatus({
+                isUploading: false,
+                processingCount: 0,
+                totalProcessing: 0,
+                reviewCount: 0,
+                syncCount: 0,
+                isComplete: false
+            });
+            localStorage.removeItem('activeSalesTaskId');
+            return true; // Signal stop
+        }
+
+        if (statusData.status === 'duplicate_detected') {
+            setSalesStatus({
+                isUploading: false,
+                processingCount: 0,
+                isComplete: false
+            });
+            // Don't stop — user needs to resolve duplicates, keep polling
+            return false;
+        }
+
+        // Still processing
+        setSalesStatus({
+            isUploading: false,
+            processingCount: remaining,
+            totalProcessing: total,
+            syncCount: processed,
+            isComplete: false
+        });
+        return false;
+    }, [setSalesStatus, fetchGlobalStats]);
+
+    const handleFatalError = useCallback((statusCode: number) => {
+        console.error(`[SalesPoller] ⛔ Fatal HTTP ${statusCode} — clearing task and resetting state.`);
+        localStorage.removeItem('activeSalesTaskId');
+        setSalesStatus({
+            isUploading: false,
+            processingCount: 0,
+            totalProcessing: 0,
+            isComplete: false
+        });
     }, [setSalesStatus]);
+
+    const handleMaxAttemptsReached = useCallback(() => {
+        console.warn('[SalesPoller] ⛔ Max attempts reached — stopping. Task may still be running on server.');
+        localStorage.removeItem('activeSalesTaskId');
+        setSalesStatus({
+            isUploading: false,
+            processingCount: 0,
+            totalProcessing: 0,
+            isComplete: false
+        });
+    }, [setSalesStatus]);
+
+    const { start: startTaskPoll, stop: stopTaskPoll } = usePolling({
+        fn: taskPollFn,
+        baseDelay: 2000,
+        maxDelay: 30000,
+        maxAttempts: 30,
+        onFatalError: handleFatalError,
+        onMaxAttemptsReached: handleMaxAttemptsReached,
+    });
 
     // 2. Poll for active upload processing tasks
     useEffect(() => {
         // Don't poll task status if we are ON the upload page (the page handles its own polling)
         if (location.pathname === '/sales/upload') {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-                pollIntervalRef.current = null;
-            }
+            stopTaskPoll();
             return;
         }
 
-        const checkStatus = async () => {
-            const activeTaskId = localStorage.getItem('activeSalesTaskId');
-
-            if (!activeTaskId) {
-                if (pollIntervalRef.current) {
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                return;
-            }
-
-            try {
-                const statusData = await salesAPI.getProcessStatus(activeTaskId);
-
-                // Update global status
-                const total = statusData.progress?.total || 0;
-                const processed = statusData.progress?.processed || 0;
-                const failed = statusData.progress?.failed || 0;
-                const remaining = Math.max(0, total - processed - failed);
-
-                // Check for completion
-                if (statusData.status === 'completed') {
-                    // Task completed!
-
-                    // Clear task ID FIRST so that fetchGlobalStats is allowed to run
-                    localStorage.removeItem('activeSalesTaskId');
-
-                    setSalesStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        totalProcessing: 0,
-                        isComplete: true // Show green tick
-                    });
-
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-
-                    // Immediately refresh stats to show new numbers now that processing is done
-                    await fetchGlobalStats();
-
-                } else if (statusData.status === 'failed') {
-                    // Failed
-                    setSalesStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        totalProcessing: 0,
-                        reviewCount: 0,
-                        syncCount: 0,
-                        isComplete: false
-                    });
-
-                    localStorage.removeItem('activeSalesTaskId');
-
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-                } else if (statusData.status === 'duplicate_detected') {
-                    // Duplicates detected - update status but keep task ID
-                    // The user needs to go to the upload page to resolve this
-                    setSalesStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        isComplete: false
-                    });
-                } else {
-                    // Still processing
-                    setSalesStatus({
-                        isUploading: false,
-                        processingCount: remaining,
-                        totalProcessing: total,
-                        syncCount: processed,
-                        isComplete: false
-                    });
-                }
-            } catch (error: any) {
-                console.error('Error polling background sales status:', error);
-                if (error?.response?.status === 404 || error?.response?.status === 403) {
-                    // Task gone
-                    localStorage.removeItem('activeSalesTaskId');
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-                }
-            }
-        };
-
-        // Start polling if task ID exists
         const activeTaskId = localStorage.getItem('activeSalesTaskId');
-        if (activeTaskId && !pollIntervalRef.current) {
-            checkStatus(); // Check immediately
-            pollIntervalRef.current = setInterval(checkStatus, 2000); // Poll every 2s
+        if (activeTaskId) {
+            startTaskPoll();
         }
 
         return () => {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-                pollIntervalRef.current = null;
-            }
+            stopTaskPoll();
         };
-    }, [location.pathname, setSalesStatus]);
+    }, [location.pathname, startTaskPoll, stopTaskPoll]);
 
     return null; // This component doesn't render anything
 };

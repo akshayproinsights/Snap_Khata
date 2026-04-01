@@ -96,9 +96,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             }
         )
     # For all other endpoints, return the standard 422 response
+    # Note: exc.errors() can contain non-serializable objects (e.g. ValueError in ctx)
+    # so we must sanitize them before passing to JSONResponse.
+    def _safe_errors(errors):
+        safe = []
+        for e in errors:
+            safe_e = {}
+            for k, v in e.items():
+                if k == "ctx" and isinstance(v, dict):
+                    safe_e[k] = {ck: str(cv) for ck, cv in v.items()}
+                else:
+                    try:
+                        import json
+                        json.dumps(v)
+                        safe_e[k] = v
+                    except (TypeError, ValueError):
+                        safe_e[k] = str(v)
+            safe.append(safe_e)
+        return safe
+
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": _safe_errors(exc.errors())}
     )
 
 # Startup Error Handling

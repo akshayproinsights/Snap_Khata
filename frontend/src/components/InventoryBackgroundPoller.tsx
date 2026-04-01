@@ -1,126 +1,120 @@
-
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useGlobalStatus } from '../contexts/GlobalStatusContext';
 import { inventoryAPI } from '../services/inventoryApi';
+import { usePolling } from '../hooks/usePolling';
 
 const InventoryBackgroundPoller: React.FC = () => {
     const location = useLocation();
     const { setInventoryStatus } = useGlobalStatus();
-    const pollIntervalRef = useRef<any>(null);
+
+    // Build the polling function
+    const taskPollFn = useCallback(async (): Promise<boolean> => {
+        const activeTaskId = localStorage.getItem('activeInventoryTaskId');
+
+        // No task — signal done so the hook stops
+        if (!activeTaskId) return true;
+
+        const statusData = await inventoryAPI.getProcessStatus(activeTaskId);
+
+        const total = statusData.progress?.total || 0;
+        const processed = statusData.progress?.processed || 0;
+        const remaining = Math.max(0, total - processed);
+
+        if (statusData.status === 'completed') {
+            setInventoryStatus({
+                isUploading: false,
+                processingCount: 0,
+                totalProcessing: 0,
+                syncCount: processed,
+                isComplete: true
+            });
+            localStorage.removeItem('activeInventoryTaskId');
+            return true; // Signal stop
+        }
+
+        if (statusData.status === 'failed') {
+            setInventoryStatus({
+                isUploading: false,
+                processingCount: 0,
+                totalProcessing: 0,
+                reviewCount: 0,
+                syncCount: 0,
+                isComplete: false
+            });
+            localStorage.removeItem('activeInventoryTaskId');
+            return true; // Signal stop
+        }
+
+        if (statusData.status === 'duplicate_detected') {
+            setInventoryStatus({
+                isUploading: false,
+                processingCount: 0,
+                isComplete: false
+            });
+            // Don't stop — user needs to resolve duplicates
+            return false;
+        }
+
+        // Still processing
+        setInventoryStatus({
+            isUploading: false,
+            processingCount: remaining,
+            totalProcessing: total,
+            syncCount: processed,
+            isComplete: false
+        });
+        return false;
+    }, [setInventoryStatus]);
+
+    const handleFatalError = useCallback((statusCode: number) => {
+        console.error(`[InventoryPoller] ⛔ Fatal HTTP ${statusCode} — clearing task and resetting state.`);
+        localStorage.removeItem('activeInventoryTaskId');
+        setInventoryStatus({
+            isUploading: false,
+            processingCount: 0,
+            totalProcessing: 0,
+            isComplete: false
+        });
+    }, [setInventoryStatus]);
+
+    const handleMaxAttemptsReached = useCallback(() => {
+        console.warn('[InventoryPoller] ⛔ Max attempts (30) reached — stopping. Task may still be running on server.');
+        localStorage.removeItem('activeInventoryTaskId');
+        setInventoryStatus({
+            isUploading: false,
+            processingCount: 0,
+            totalProcessing: 0,
+            isComplete: false
+        });
+    }, [setInventoryStatus]);
+
+    const { start: startTaskPoll, stop: stopTaskPoll } = usePolling({
+        fn: taskPollFn,
+        baseDelay: 2000,
+        maxDelay: 30000,
+        maxAttempts: 30,
+        onFatalError: handleFatalError,
+        onMaxAttemptsReached: handleMaxAttemptsReached,
+    });
 
     // Poll for active upload processing tasks
     useEffect(() => {
-        // Don't poll task status if we are ON the upload page (the page handles its own polling)
+        // Don't poll task status if we are ON the upload page (that page handles its own polling)
         if (location.pathname === '/inventory/upload') {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-                pollIntervalRef.current = null;
-            }
+            stopTaskPoll();
             return;
         }
 
-        const checkStatus = async () => {
-            const activeTaskId = localStorage.getItem('activeInventoryTaskId');
-
-            if (!activeTaskId) {
-                if (pollIntervalRef.current) {
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                return;
-            }
-
-            try {
-                const statusData = await inventoryAPI.getProcessStatus(activeTaskId);
-
-                // Update global status
-                const total = statusData.progress?.total || 0;
-                const processed = statusData.progress?.processed || 0;
-                const remaining = Math.max(0, total - processed);
-
-                // Check for completion
-                if (statusData.status === 'completed') {
-                    // Task completed!
-                    setInventoryStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        totalProcessing: 0,
-                        syncCount: processed,
-                        isComplete: true // Show green tick
-                    });
-
-                    // Clear task ID so we stop polling
-                    localStorage.removeItem('activeInventoryTaskId');
-
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-                } else if (statusData.status === 'failed') {
-                    // Failed
-                    setInventoryStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        totalProcessing: 0,
-                        reviewCount: 0,
-                        syncCount: 0,
-                        isComplete: false
-                    });
-
-                    localStorage.removeItem('activeInventoryTaskId');
-
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-                } else if (statusData.status === 'duplicate_detected') {
-                    // Duplicates detected - update status but keep task ID
-                    // The user needs to go to the upload page to resolve this
-                    setInventoryStatus({
-                        isUploading: false,
-                        processingCount: 0,
-                        // reviewCount for duplicates is tricky without fetching items
-                        // For now we just direct user to invalid/duplicate state
-                        isComplete: false
-                    });
-                } else {
-                    // Still processing
-                    setInventoryStatus({
-                        isUploading: false,
-                        processingCount: remaining,
-                        totalProcessing: total,
-                        syncCount: processed,
-                        isComplete: false
-                    });
-                }
-            } catch (error: any) {
-                console.error('Error polling background inventory status:', error);
-                if (error?.response?.status === 404 || error?.response?.status === 403) {
-                    // Task gone
-                    localStorage.removeItem('activeInventoryTaskId');
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-                }
-            }
-        };
-
-        // Start polling if task ID exists
         const activeTaskId = localStorage.getItem('activeInventoryTaskId');
-        if (activeTaskId && !pollIntervalRef.current) {
-            checkStatus(); // Check immediately
-            pollIntervalRef.current = setInterval(checkStatus, 2000); // Poll every 2s
+        if (activeTaskId) {
+            startTaskPoll();
         }
 
         return () => {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-                pollIntervalRef.current = null;
-            }
+            stopTaskPoll();
         };
-    }, [location.pathname, setInventoryStatus]);
+    }, [location.pathname, startTaskPoll, stopTaskPoll]);
 
     return null; // This component doesn't render anything
 };

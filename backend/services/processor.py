@@ -18,7 +18,7 @@ from PIL import Image
 
 from config import get_google_api_key
 from config_loader import get_user_config, get_gemini_prompt
-from database import get_database_client
+from database import get_database_client, create_fresh_database_client
 from services.storage import get_storage_client
 from utils.date_helpers import normalize_date, format_to_db, get_ist_now_str
 from utils.hash_utils import calculate_image_hash
@@ -321,11 +321,13 @@ def process_single_invoice(
         data: Dict[str, Any] = {}    # Initialize data dictionary to avoid uninitialized variable errors
 
         # Each model gets its own full retry cycle via the outer loop.
-        for model_attempt in [FLASH_MODEL, PRO_MODEL]:
+        # Usual flow: for model_attempt in [FLASH_MODEL, PRO_MODEL]:
+        for model_attempt in [FLASH_MODEL]:
             model_name = model_attempt
 
-            # Skip Flash/Pro unless the previous tier triggered an escalation
-            if model_name in (FLASH_MODEL, PRO_MODEL) and not needs_escalation:
+            # Flash always runs first (no escalation needed to start it).
+            # Pro only runs if Flash triggered an escalation.
+            if model_name == PRO_MODEL and not needs_escalation:
                 continue
             needs_escalation = False  # Reset for this tier
 
@@ -763,7 +765,10 @@ def convert_to_dataframe_rows(
         row: Dict[str, Any] = {}
         
         # System columns (always present)
-        row["row_id"] = f"{header.get('receipt_number', '')}_{idx}"
+        receipt_num_val = header.get('receipt_number', '')
+        if not receipt_num_val or str(receipt_num_val).lower() == 'none':
+            receipt_num_val = f"UNKNOWN-{image_hash[:8]}"
+        row["row_id"] = f"{receipt_num_val}_{idx}"
         row["image_hash"] = image_hash  # CRITICAL
         row["receipt_link"] = receipt_link
         row["upload_date"] = upload_date
@@ -1179,7 +1184,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
     import pandas as pd
     import numpy as np
     
-    db = get_database_client()
+    db = create_fresh_database_client()  # Fresh client to avoid stale HTTP/2 connection
     
     try:
         # Convert rows to DataFrame for easier processing
@@ -1209,8 +1214,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
         # VERIFY DATES - With Audit Findings Logic
         # =============================================
         
-        # Group by receipt_number for date verification (one row per receipt)
-        date_records = df_new.groupby('receipt_number').first().reset_index()
+        # Group by image_hash to reliably get one header per image (handles missing receipt numbers)
+        date_records = df_new.groupby('image_hash').first().reset_index()
         date_records['verification_status'] = 'Pending'
         
         # Parse dates for comparison - dates are stored in YYYY-MM-DD format in database
@@ -1250,7 +1255,7 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
             
             # 3. Duplicate Receipt Number (if same receipt number appears more than once)
             receipt_num = row.get('receipt_number', '')
-            if receipt_num:
+            if receipt_num and str(receipt_num).lower() != 'none':
                 count = (all_records['receipt_number'] == receipt_num).sum()
                 if count > 1:
                     findings.append("Duplicate Receipt Number")
@@ -1315,7 +1320,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     # 'date_bbox': row.get('date_bbox'),
                     # 'date_and_receipt_combined_bbox': row.get('date_and_receipt_combined_bbox'),
                     'customer_name': row.get('customer'),
-                    'extra_fields': row.get('extra_fields', {})
+                    'extra_fields': row.get('extra_fields', {}),
+                    'image_hash': row.get('image_hash')
                 }
                 date_row = sanitize_for_supabase(date_row)
                 
@@ -1327,23 +1333,23 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
         logger.info(f"Created {date_insert_count} date verification records in Supabase")
         
         # NEW: Fetch the inserted headers to get their IDs for linking
-        header_ids_map = {}  # receipt_number -> header_id
+        header_ids_map = {}  # image_hash -> header_id
         try:
             for _, date_row in date_records.iterrows():
-                receipt_num = date_row.get('receipt_number')
-                if receipt_num:
+                img_hash = date_row.get('image_hash')
+                if img_hash:
                     # Query to get the header ID we just created
                     header_data = db.query('verification_dates') \
                         .eq('username', username) \
-                        .eq('receipt_number', receipt_num) \
+                        .eq('image_hash', img_hash) \
                         .execute().data
                     
                     if header_data and len(header_data) > 0:
                         # Take the most recent one (should be what we just inserted)
                         header_id = header_data[0].get('id')
                         if header_id:
-                            header_ids_map[receipt_num] = header_id
-                            logger.debug(f"Header ID for receipt {receipt_num}: {header_id}")
+                            header_ids_map[img_hash] = header_id
+                            logger.debug(f"Header ID for image {img_hash[:8]}: {header_id}")
         except Exception as e:
             logger.warning(f"Could not fetch header IDs: {e}")
         
@@ -1396,8 +1402,9 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     else:
                         receipt_num = None
                     
-                    # NEW: Get header_id from our map
-                    header_id = header_ids_map.get(receipt_num) if header_ids_map else None
+                    # NEW: Get header_id from our map using image_hash
+                    img_hash = row.get('image_hash')
+                    header_id = header_ids_map.get(img_hash) if header_ids_map else None
                     
                     amount_row: Dict[str, Any] = {
                         'username': username,
@@ -1418,8 +1425,8 @@ def create_verification_records_supabase(all_rows: List[Dict[str, Any]], usernam
                     }
                     amount_row = sanitize_for_supabase(amount_row)
                     
-                    # Log if we're missing header_id (for debugging)
-                    if not header_id:
+                    # Log if we're missing header_id for a known receipt number (not expected for None)
+                    if not header_id and receipt_num and str(receipt_num).lower() != 'none':
                         logger.warning(f"No header_id found for receipt {receipt_num} when creating line item")
                     
                     db.insert('verification_amounts', amount_row)
@@ -1446,7 +1453,7 @@ def create_duplicate_records_supabase(duplicates: List[Dict[str, Any]], username
         username: Username for RLS
     """
     try:
-        db = get_database_client()
+        db = create_fresh_database_client()  # Fresh client to avoid stale HTTP/2 connection
         
         for dup in duplicates:
             existing_invoice = dup.get('existing_invoice', {})

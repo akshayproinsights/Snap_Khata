@@ -808,3 +808,123 @@ Files to process: 1
 Force upload: False
 Username: Adnak
 
+
+================================================================================
+2026-03-31 10:40:55.252744: RECEIVED PROCESS REQUEST
+Task ID: 70e1c83f-e782-4a2c-9ae4-0d3c92d1c446
+Files: ['Ak123/sales/20260331_104052_ffdfad_scaled_1000049776_1774953650252_450318859_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:40:55.255196: Task ID: 70e1c83f-e782-4a2c-9ae4-0d3c92d1c446
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 10:44:13.325641: RECEIVED PROCESS REQUEST
+Task ID: 5af6ef47-7fed-497d-bd70-b4fb95af168f
+Files: ['Ak123/sales/20260331_104410_759528_scaled_1000049776_1774953847006_1050064439_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:44:13.327886: Task ID: 5af6ef47-7fed-497d-bd70-b4fb95af168f
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 10:44:17.420329: RECEIVED PROCESS REQUEST
+Task ID: c529235d-b3dd-4836-b16b-09aca8e35cce
+Files: ['Ak123/sales/20260331_104415_b4284a_scaled_1000049776_1774953852906_1060654185_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:44:17.421565: Task ID: c529235d-b3dd-4836-b16b-09aca8e35cce
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 10:56:35.730325: RECEIVED PROCESS REQUEST
+Task ID: 6f1254d2-c26b-447e-9a4d-494585ac1f44
+Files: ['Ak123/sales/20260331_105633_1b7e3f_scaled_1000052557_1774954590471_120193347_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:56:35.769382: Task ID: 6f1254d2-c26b-447e-9a4d-494585ac1f44
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 10:58:52.383724: RECEIVED PROCESS REQUEST
+Task ID: c5a5d36e-60c9-4d61-b28b-55e13fb71282
+Files: ['Ak123/sales/20260331_105850_7bda05_scaled_1000049776_1774954726802_88095424_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:58:52.411509: Task ID: c5a5d36e-60c9-4d61-b28b-55e13fb71282
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 10:58:55.911335: RECEIVED PROCESS REQUEST
+Task ID: 9b726c66-0fe8-4958-8538-45bb6006ab95
+Files: ['Ak123/sales/20260331_105853_459fa0_scaled_1000052549_1774954731884_261086936_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 10:58:55.972459: Task ID: 9b726c66-0fe8-4958-8538-45bb6006ab95
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 11:16:09.330580: RECEIVED PROCESS REQUEST
+Task ID: e881c252-7edb-4c31-8e19-7acb75efd650
+Files: ['Ak123/sales/20260331_111606_bd0e8c_scaled_1000052556_1774955763437_253386338_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 11:16:09.372019: Task ID: e881c252-7edb-4c31-8e19-7acb75efd650
+Files to process: 1
+Force upload: False
+Username: Ak123
+
+
+================================================================================
+2026-03-31 11:20:26.149251: RECEIVED PROCESS REQUEST
+Task ID: b26ecc6e-b9f3-4697-82a6-4e3ac3a58d41
+Files: ['Ak123/sales/20260331_112023_ff88f3_scaled_1000049776_1774956020421_653000939_compressed.jpg']
+Force upload: False
+================================================================================
+
+
+BACKGROUND TASK STARTED
+2026-03-31 11:20:26.177988: Task ID: b26ecc6e-b9f3-4697-82a6-4e3ac3a58d41
+Files to process: 1
+Force upload: False
+Username: Ak123
+

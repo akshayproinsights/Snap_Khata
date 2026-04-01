@@ -516,7 +516,8 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # Map snake_case columns to Title Case for compatibility with build_verified()
         # build_verified() expects Title Case columns from Google Sheets
         column_map = {
-            'id': 'Row_Id',                     # invoices.id -> verified_invoices.row_id
+            'id': 'Database_Id',                # Preserve integer PK for verified_invoices
+            'row_id': 'Row_Id',                 # Map text row_id for matching with verification tables
             'receipt_number': 'Receipt Number',
             'r2_file_path': 'Receipt Link',     # invoices.r2_file_path -> Receipt Link (CRITICAL FIX)
             'receipt_link': 'Receipt Link_Orig', # Keep original link if needed, but primary is r2_file_path
@@ -853,9 +854,15 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # invoice_reverse_map already maps 'Receipt Link' -> 'receipt_link'
         final_df_snake = final_df.rename(columns=invoice_reverse_map)
         
-        # CRITICAL: 'Row_Id' was reverse-mapped to 'id', but we need it as 'row_id' for verified_invoices
-        # Rename 'id' to 'row_id' to preserve the invoices.id integer value
-        if 'id' in final_df_snake.columns:
+        # We don't need the string row_id anymore for verified_invoices
+        if 'row_id' in final_df_snake.columns:
+            final_df_snake = final_df_snake.drop(columns=['row_id'])
+
+        # CRITICAL: 'Database_Id' (integer PK) needs to be mapped to 'row_id' for verified_invoices
+        if 'Database_Id' in final_df_snake.columns:
+            final_df_snake = final_df_snake.rename(columns={'Database_Id': 'row_id'})
+            logger.info(f"✅ Mapped Database_Id to verified_invoices.row_id for {len(final_df_snake)} records")
+        elif 'id' in final_df_snake.columns: # Fallback just in case
             final_df_snake = final_df_snake.rename(columns={'id': 'row_id'})
             logger.info(f"✅ Mapped invoices.id to verified_invoices.row_id for {len(final_df_snake)} records")
         
@@ -876,7 +883,14 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         columns_to_exclude = [
             'updated_at',           # Only in invoices table
             'Review Status',         # Only used internally, not in verified_invoices table
-            'Receipt Link_Orig'     # Intermediate column
+            'Receipt Link_Orig',    # Intermediate column
+            # NOTE: 'extra_fields' was excluded here because verified_invoices lacked the column.
+            # The migration SQL (add_extra_fields.sql) now includes verified_invoices too.
+            # Once you run that migration in Supabase, remove this exclusion to start storing
+            # industry-specific data (vehicle numbers, etc.) in verified_invoices as well.
+            'extra_fields',         # JSONB column — remove after running migration in Supabase:
+                                    # ALTER TABLE verified_invoices
+                                    #   ADD COLUMN IF NOT EXISTS extra_fields JSONB DEFAULT '{}'::jsonb;
         ]
         
         for col in columns_to_exclude:
@@ -900,6 +914,29 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             removed = initial_count - len(final_df_snake)
             if removed > 0:
                 logger.warning(f"⚠️ Removed {removed} duplicate row_id values to prevent database conflict")
+            
+            # CRITICAL FIX: Drop records with null or non-integer row_id.
+            # Orphaned verification records can have synthetic string IDs like '_0', '_1'
+            # (created client-side for records not yet in the DB). These fail the
+            # verified_invoices BIGINT constraint with a PGRST204 / type cast error.
+            def _is_valid_row_id(val):
+                if val is None:
+                    return False
+                try:
+                    int(val)  # Must be castable to a valid integer
+                    return True
+                except (ValueError, TypeError):
+                    return False
+            
+            pre_filter_count = len(final_df_snake)
+            valid_mask = final_df_snake['row_id'].apply(_is_valid_row_id)
+            invalid_df = final_df_snake[~valid_mask]
+            if not invalid_df.empty:
+                bad_ids = invalid_df['row_id'].tolist()
+                logger.warning(f"⚠️ Dropping {len(invalid_df)} records with invalid row_id (null/non-integer): {bad_ids[:10]}")
+            final_df_snake = final_df_snake[valid_mask].copy()
+            if len(final_df_snake) < pre_filter_count:
+                logger.info(f"✓ Kept {len(final_df_snake)} records with valid integer row_id (dropped {pre_filter_count - len(final_df_snake)})")
         
         final_records = final_df_snake.to_dict('records')
         

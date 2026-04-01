@@ -439,13 +439,54 @@ async def process_inventory(
     """
     logger.info(f"Received inventory process request for {len(request.file_keys)} files")
     task_id = str(uuid.uuid4())
-    
+    username = current_user.get("username", "user")
+
     # Get r2_bucket from user config
     r2_bucket = current_user.get("r2_bucket")
     if not r2_bucket:
         raise HTTPException(status_code=400, detail="No r2_bucket configured for user")
-    
-    
+
+    # ── REQUEST-LEVEL IDEMPOTENCY GUARD ──────────────────────────────────────
+    # Same guard as the sales /process-files endpoint. Prevents the same R2 keys
+    # being sent to Gemini twice if the frontend retries before the first task
+    # has written its results to the DB.
+    if not request.force_upload:
+        try:
+            from database import get_database_client as _get_db
+            _guard_db = _get_db()
+            _active = _guard_db.client.table("upload_tasks") \
+                .select("task_id, status, uploaded_r2_keys, created_at") \
+                .eq("username", username) \
+                .in_("status", ["queued", "processing", "uploading"]) \
+                .eq("task_type", "inventory") \
+                .order("created_at", desc=True) \
+                .limit(10) \
+                .execute()
+
+            incoming_keys = set(request.file_keys)
+            for active_task in (_active.data or []):
+                existing_keys = set(active_task.get("uploaded_r2_keys") or [])
+                overlap = incoming_keys & existing_keys
+                if overlap:
+                    existing_task_id = active_task.get("task_id")
+                    logger.warning(
+                        f"[IDEMPOTENCY GUARD] Inventory duplicate submission blocked for {username}. "
+                        f"Overlapping keys: {overlap}. Existing active task: {existing_task_id}"
+                    )
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_SUBMISSION",
+                            "message": "These files are already being processed. Please wait for the current task to complete.",
+                            "existing_task_id": existing_task_id,
+                        }
+                    )
+        except HTTPException:
+            raise
+        except Exception as guard_err:
+            logger.warning(f"[IDEMPOTENCY GUARD] Inventory check failed (non-fatal), proceeding: {guard_err}")
+    # ── END IDEMPOTENCY GUARD ─────────────────────────────────────────────────
+
     # Initialize status in DATABASE
     initial_status = {
         "task_id": task_id,

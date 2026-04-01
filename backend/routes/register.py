@@ -113,27 +113,25 @@ def _username_exists_in_db(username: str) -> bool:
 
 def _derive_r2_bucket(username: str) -> str:
     """
-    Derive a Cloudflare R2 bucket name from the username.
+    Return the shared Cloudflare R2 bucket for all new self-registered users.
 
-    Convention: all lowercase, hyphens instead of underscores.
-    The bucket name is virtual — R2 uses a flat key namespace, so we just
-    prefix every file key with the username.  No actual bucket creation is
-    needed; the single shared bucket defined in R2 config is re-used.
-
-    We store the SHARED bucket name from the environment so that all users
-    go into the same R2 bucket (files are scoped by '{username}/' prefix).
+    All tenants share one bucket.  Files are scoped by '{username}/' prefix,
+    so there is no collision.  The bucket MUST be set via the environment
+    variable CLOUDFLARE_R2_DEFAULT_BUCKET (pointing to a bucket that already
+    exists in your R2 account).
     """
-    from services.storage import get_storage_client
-    try:
-        storage = get_storage_client()
-        # Use the global bucket configured in the environment
-        return storage.bucket_name  # type: ignore[attr-defined]
-    except Exception:
-        pass
+    import os
+    # Primary: explicit shared-bucket env var
+    bucket = os.getenv("CLOUDFLARE_R2_DEFAULT_BUCKET") or os.getenv("R2_DEFAULT_BUCKET")
+    if bucket:
+        return bucket.strip()
 
-    # Fallback: derive a bucket-name-style slug (used as a label only)
-    slug = re.sub(r"[^a-z0-9-]", "-", username.lower()).strip("-")
-    return f"{slug}-invoices"
+    # Secondary: fall back to adnak-sir-invoices (production shared bucket)
+    logger.warning(
+        "CLOUDFLARE_R2_DEFAULT_BUCKET not set — defaulting to 'snapkhata-prod'. "
+        "Set this env var to avoid this warning."
+    )
+    return "snapkhata-prod"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

@@ -14,12 +14,18 @@ logger = logging.getLogger(__name__)
 def repair_ledgers():
     """
     Recalculates all customer and vendor ledger balances based on the sum of their transactions.
+
+    WARNING: This is an ADMIN-ONLY maintenance script that operates across ALL tenants.
+    It must NEVER be called from a user-facing API endpoint or from any user context.
+    Run only manually from the server console.
     """
     db = get_database_client()
     
     # 1. Repair Customer Ledgers
     logger.info("Starting repair of Customer Ledgers...")
     try:
+        # NOTE: Intentional full-table scan (admin script). Each ledger is still
+        # identified by its own `id` and `username` is logged for traceability.
         ledgers_resp = db.client.table('customer_ledgers').select('*').execute()
         customer_ledgers = ledgers_resp.data
         
