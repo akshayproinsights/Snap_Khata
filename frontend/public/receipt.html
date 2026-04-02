@@ -664,14 +664,24 @@
             }
             
             let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
-            itemsHtml += `
-            <tr>
-               <td></td>
-               <td style="font-weight:700;">Total</td>
-               <td class="center" style="font-weight:700;">${totalQty}</td>
-               <td></td>
-               <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
-            </tr>`;
+            if (isAutomobile) {
+                itemsHtml += `
+                <tr>
+                   <td></td>
+                   <td style="font-weight:700;">Total</td>
+                   <td class="center" style="font-weight:700;">${totalQty}</td>
+                   <td></td>
+                   <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
+                </tr>`;
+            } else {
+                // Add total items and total qty but do not repeat grand total
+                itemsHtml += `
+                <tr>
+                   <td colspan="2" class="right" style="font-weight:700; color:#1e293b;">Total Items: ${items.length} | Total Qty:</td>
+                   <td class="center" style="font-weight:700; color:#1e293b;">${totalQty}</td>
+                   <td colspan="2"></td>
+                </tr>`;
+            }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
 
@@ -730,10 +740,12 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
+                                    ${isAutomobile ? `
                                     <tr>
                                         <td class="label-col">Sub Total</td>
                                         <td class="amount-col">${fmtMoney(subtotal)}</td>
                                     </tr>
+                                    ` : ''}
                                     <tr>
                                         <td class="label-col">Total</td>
                                         <td class="amount-col">${fmtMoney(grandTotal)}</td>
@@ -895,15 +907,27 @@
             
             let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
             let totalGstAmt = gstAmt;
-            itemsHtml += `
-            <tr>
-               <td></td>
-               <td style="font-weight:700;">Total</td>
-               <td class="center" style="font-weight:700;">${totalQty}</td>
-               <td></td>
-               <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
-               <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
-            </tr>`;
+            if (isAutomobile) {
+                itemsHtml += `
+                <tr>
+                   <td></td>
+                   <td style="font-weight:700;">Total</td>
+                   <td class="center" style="font-weight:700;">${totalQty}</td>
+                   <td></td>
+                   <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
+                   <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
+                </tr>`;
+            } else {
+                // Non-automobile SMB view without total duplication
+                itemsHtml += `
+                <tr>
+                   <td colspan="2" class="right" style="font-weight:700; color:#1e293b;">Total Items: ${items.length} | Total Qty:</td>
+                   <td class="center" style="font-weight:700; color:#1e293b;">${totalQty}</td>
+                   <td></td>
+                   <td class="right" style="font-weight:700; color:#1e293b;">${fmtMoney(gstAmt)}</td>
+                   <td></td>
+                </tr>`;
+            }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
 
@@ -964,10 +988,12 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
+                                    ${isAutomobile ? `
                                     <tr>
                                         <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
+                                        <td class="amount-col">${fmtMoney(totalSubtotal)}</td>
                                     </tr>
+                                    ` : ''}
                                     <tr>
                                         <td class="label-col">Total</td>
                                         <td class="amount-col">${fmtMoney(grandTotal)}</td>

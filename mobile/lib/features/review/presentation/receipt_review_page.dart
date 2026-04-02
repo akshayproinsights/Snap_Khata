@@ -369,11 +369,26 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 }
               }
 
+              final Set<String> ignoredExtraFields = {
+                'total_bill_amount',
+                'amount',
+                'calculated_amount',
+                'amount_mismatch',
+                'receipt_number',
+                'date',
+                'customer_name',
+                'mobile_number',
+                'receipt_link',
+                'audit_findings',
+                'taxable_row_ids',
+                'gst_mode',
+              };
+
               final Map<String, String> resolvedExtraFields = {};
 
               if (header?.extraFields != null) {
                 header!.extraFields.forEach((key, value) {
-                  if (value != null && value.toString().isNotEmpty) {
+                  if (value != null && value.toString().isNotEmpty && !ignoredExtraFields.contains(key)) {
                     // Try to extract readable label from config if possible, or titlecase the key
                     final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'];
                     resolvedExtraFields[configLabel] = value.toString();
