@@ -63,3 +63,11 @@ cloud_run_env.json
 .stitch/
 firebase-debug.log
 .firebase/
+
+# Log files
+*.log
+logs/
+
+# Python cache
+__pycache__/
+*.pyc

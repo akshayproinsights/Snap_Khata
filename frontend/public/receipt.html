@@ -673,14 +673,6 @@
                    <td></td>
                    <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
                 </tr>`;
-            } else {
-                // Add total items and total qty but do not repeat grand total
-                itemsHtml += `
-                <tr>
-                   <td colspan="2" class="right" style="font-weight:700; color:#1e293b;">Total Items: ${items.length} | Total Qty:</td>
-                   <td class="center" style="font-weight:700; color:#1e293b;">${totalQty}</td>
-                   <td colspan="2"></td>
-                </tr>`;
             }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
@@ -740,34 +732,34 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
-                                    ${isAutomobile ? `
+                                    ${isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) ? `
                                     <tr>
                                         <td class="label-col">Sub Total</td>
                                         <td class="amount-col">${fmtMoney(subtotal)}</td>
                                     </tr>
                                     ` : ''}
                                     <tr>
-                                        <td class="label-col">Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2" style="border-bottom: 1px solid var(--border-strong);">
-                                            <div class="inv-amount-words-title">Order Amount In Words :</div>
-                                            <div class="inv-amount-words">${wordsTotal} Rupees only</div>
-                                        </td>
+                                        <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
+                                        <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
                                     </tr>
                                     ${receivedAmount !== null ? `
                                     <tr>
-                                        <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(receivedAmount)}</td>
+                                        <td class="label-col">Payment Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
                                     ${balanceDue !== null ? `
-                                    <tr>
-                                        <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(balanceDue)}</td>
+                                    <tr style="background-color: ${balanceDue > 0 ? '#fcedec' : '#ecfdf5'};">
+                                        <td class="label-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">Balance Due</td>
+                                        <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
+                                    <tr>
+                                        <td colspan="2" style="text-align: center; padding: 12px; border-bottom: none;">
+                                            <div class="inv-amount-words-title" style="font-size: 13px; color: #1e293b;">Amount in Words:</div>
+                                            <div class="inv-amount-words" style="margin-top: 4px; color: #1e293b;">${wordsTotal} Rupees only</div>
+                                        </td>
+                                    </tr>
                                 </table>
                             </div>
                         </div>
@@ -917,16 +909,6 @@
                    <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
                    <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
                 </tr>`;
-            } else {
-                // Non-automobile SMB view without total duplication
-                itemsHtml += `
-                <tr>
-                   <td colspan="2" class="right" style="font-weight:700; color:#1e293b;">Total Items: ${items.length} | Total Qty:</td>
-                   <td class="center" style="font-weight:700; color:#1e293b;">${totalQty}</td>
-                   <td></td>
-                   <td class="right" style="font-weight:700; color:#1e293b;">${fmtMoney(gstAmt)}</td>
-                   <td></td>
-                </tr>`;
             }
 
             const wordsTotal = numberToWords(Math.round(grandTotal));
@@ -988,34 +970,34 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
-                                    ${isAutomobile ? `
+                                    ${isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) ? `
                                     <tr>
                                         <td class="label-col">Sub Total</td>
                                         <td class="amount-col">${fmtMoney(totalSubtotal)}</td>
                                     </tr>
                                     ` : ''}
                                     <tr>
-                                        <td class="label-col">Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td colspan="2" style="border-bottom: 1px solid var(--border-strong);">
-                                            <div class="inv-amount-words-title">Invoice Amount In Words :</div>
-                                            <div class="inv-amount-words">${wordsTotal} Rupees only</div>
-                                        </td>
+                                        <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
+                                        <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
                                     </tr>
                                     ${receivedAmount !== null ? `
                                     <tr>
-                                        <td class="label-col">Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
-                                        <td class="amount-col">${fmtMoney(receivedAmount)}</td>
+                                        <td class="label-col">Payment Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
                                     ${balanceDue !== null ? `
-                                    <tr>
-                                        <td class="label-col">Balance</td>
-                                        <td class="amount-col">${fmtMoney(balanceDue)}</td>
+                                    <tr style="background-color: ${balanceDue > 0 ? '#fcedec' : '#ecfdf5'};">
+                                        <td class="label-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">Balance Due</td>
+                                        <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
+                                    <tr>
+                                        <td colspan="2" style="text-align: center; padding: 12px; border-bottom: none;">
+                                            <div class="inv-amount-words-title" style="font-size: 13px; color: #1e293b;">Amount in Words:</div>
+                                            <div class="inv-amount-words" style="margin-top: 4px; color: #1e293b;">${wordsTotal} Rupees only</div>
+                                        </td>
+                                    </tr>
                                 </table>
                             </div>
                         </div>

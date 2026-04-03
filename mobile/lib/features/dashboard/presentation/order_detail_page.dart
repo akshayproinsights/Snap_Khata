@@ -373,10 +373,30 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
                   final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
 
+                  final Set<String> ignoredExtraFields = {
+                    'total_bill_amount',
+                    'total bill amount',
+                    'amount',
+                    'calculated_amount',
+                    'amount_mismatch',
+                    'receipt_number',
+                    'date',
+                    'customer_name',
+                    'mobile_number',
+                    'mobile number',
+                    'mobile',
+                    'receipt_link',
+                    'audit_findings',
+                    'taxable_row_ids',
+                    'gst_mode',
+                  };
+
                   // Build non-empty extra fields for WhatsApp message (dynamic, industry-agnostic)
                   final extraFieldsForWa = <String, String>{
                     for (final e in _extraFieldCtrls.entries)
-                      if (e.value.text.isNotEmpty)
+                      if (e.value.text.isNotEmpty &&
+                          !ignoredExtraFields.contains(e.key.toLowerCase()) &&
+                          !ignoredExtraFields.contains(_formatFieldLabel(e.key).toLowerCase()))
                         _formatFieldLabel(e.key): e.value.text,
                   };
 

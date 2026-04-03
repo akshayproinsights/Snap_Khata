@@ -371,6 +371,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
               final Set<String> ignoredExtraFields = {
                 'total_bill_amount',
+                'total bill amount',
                 'amount',
                 'calculated_amount',
                 'amount_mismatch',
@@ -378,6 +379,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 'date',
                 'customer_name',
                 'mobile_number',
+                'mobile number',
+                'mobile',
                 'receipt_link',
                 'audit_findings',
                 'taxable_row_ids',
@@ -388,9 +391,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
               if (header?.extraFields != null) {
                 header!.extraFields.forEach((key, value) {
-                  if (value != null && value.toString().isNotEmpty && !ignoredExtraFields.contains(key)) {
-                    // Try to extract readable label from config if possible, or titlecase the key
-                    final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'];
+                  final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'].toString();
+                  final lowerKey = key.toString().toLowerCase();
+                  final lowerLabel = configLabel.toLowerCase();
+                  
+                  if (value != null && value.toString().isNotEmpty && 
+                      !ignoredExtraFields.contains(lowerKey) && 
+                      !ignoredExtraFields.contains(lowerLabel)) {
                     resolvedExtraFields[configLabel] = value.toString();
                   }
                 });
