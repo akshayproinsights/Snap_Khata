@@ -44,6 +44,167 @@ FLASH_MODEL   = "gemini-2.5-flash"  # set to 2.5 flash for now
 PRO_MODEL     = None # Keeping variable to prevent NameError
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
 
+# ── v2.1 Mathematical Processing Engine ──────────────────────────────────────
+from decimal import Decimal, ROUND_HALF_UP
+
+TOLERANCE_LIMIT = Decimal('2.00')  # Rs. tolerance for line-total mismatch
+
+
+def clean_numeric(value) -> Decimal:
+    """Convert any currency/numeric string to Decimal. Strips Rs, commas, spaces."""
+    if value is None or value == 'N/A' or value == '':
+        return Decimal('0')
+    if isinstance(value, (int, float, Decimal)):
+        return Decimal(str(value))
+    cleaned = (
+        str(value)
+        .replace('\u20b9', '')  # ₹
+        .replace('Rs', '').replace('rs', '')
+        .replace(',', '').replace(' ', '')
+        .strip()
+    )
+    try:
+        return Decimal(cleaned) if cleaned else Decimal('0')
+    except Exception:
+        return Decimal('0')
+
+
+def route_combined_gst(item_data: Dict) -> Dict:
+    """
+    Route COMBINED_GST to CGST+SGST split (always 50/50, intra-state default).
+    Phase 1: No inter-state detection — COMBINED_GST always treated as intra-state.
+    """
+    item = dict(item_data)  # work on a copy, never mutate caller's dict
+    if item.get('tax_type') != 'COMBINED_GST':
+        return item
+    rate = float(item.get('combined_gst_percent', 0) or 0)
+    item['tax_type'] = 'CGST_SGST'
+    item['cgst_percent'] = rate / 2
+    item['sgst_percent'] = rate / 2
+    item['igst_percent'] = 0
+    return item
+
+
+def calculate_discounts(
+    gross: Decimal, disc_pct: Decimal, disc_amt: Decimal
+) -> tuple:
+    """
+    Resolve discount — always from GROSS amount (not taxable).
+
+    Scenarios:
+      - pct only  → compute amount from gross
+      - amt only  → back-calculate pct from gross
+      - both      → validate; trust extracted amount if mismatch > Rs.1
+      - neither   → taxable = gross
+
+    Returns (disc_pct, disc_amt, taxable_amount).
+    """
+    if disc_pct > 0 and disc_amt == 0:
+        disc_amt = (gross * disc_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    elif disc_amt > 0 and disc_pct == 0:
+        disc_pct = (
+            (disc_amt / gross * 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if gross > 0 else Decimal('0')
+        )
+    elif disc_pct > 0 and disc_amt > 0:
+        # Both provided — validate and trust amount if there's a discrepancy
+        calculated_amt = (gross * disc_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if abs(calculated_amt - disc_amt) > Decimal('1'):
+            disc_pct = (
+                (disc_amt / gross * 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if gross > 0 else Decimal('0')
+            )
+
+    taxable = (gross - disc_amt).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return disc_pct, disc_amt, taxable
+
+
+def process_invoice_item(item_data: Dict) -> Dict:
+    """
+    Full per-line v2.1 calculation pipeline.
+
+    Handles:
+      - COMBINED_GST routing (50/50 CGST/SGST split)
+      - Discount from GROSS (not taxable amount)
+      - IGST / CGST+SGST / NONE tax paths
+      - Missing printed line total (needs_review = False if not printed)
+
+    Returns a dict with v2_ prefixed computed fields and _compat_ fields
+    for backward-compatible DB columns.
+    """
+    # Route combined GST first
+    item = route_combined_gst(item_data)
+
+    qty   = clean_numeric(item.get('quantity', 0))
+    rate  = clean_numeric(item.get('rate', 0))
+    gross = (qty * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # Classify disc_type from ORIGINAL extracted values (before math derives new ones)
+    orig_disc_pct = clean_numeric(item.get('disc_percent', 0))
+    orig_disc_amt = clean_numeric(item.get('disc_amount', 0))
+
+    if orig_disc_pct > 0 and orig_disc_amt > 0:
+        disc_type = 'BOTH'
+    elif orig_disc_pct > 0:
+        disc_type = 'PERCENT'
+    elif orig_disc_amt > 0:
+        disc_type = 'AMOUNT'
+    else:
+        disc_type = 'NONE'
+
+    # Discounts — always from GROSS
+    disc_pct, disc_amt, taxable = calculate_discounts(gross, orig_disc_pct, orig_disc_amt)
+
+    # Tax rates
+    cgst_pct = clean_numeric(item.get('cgst_percent', 0))
+    sgst_pct = clean_numeric(item.get('sgst_percent', 0))
+    igst_pct = clean_numeric(item.get('igst_percent', 0))
+
+    cgst_amt = (taxable * cgst_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    sgst_amt = (taxable * sgst_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    igst_amt = (taxable * igst_pct / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    tax_total  = cgst_amt + sgst_amt + igst_amt
+    net_amount = (taxable + tax_total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    # Mismatch vs printed line total (0 means vendor didn't print one)
+    printed_total = clean_numeric(item.get('printed_total_amount', 0))
+    if printed_total > 0:
+        mismatch     = abs(net_amount - printed_total)
+        needs_review = mismatch > TOLERANCE_LIMIT
+    else:
+        mismatch     = Decimal('0')
+        needs_review = False
+
+    # Discount type label is already set from original extracted values above
+
+    return {
+        # v2 computed fields — stored in extra_fields (Phase 2 will add proper columns)
+        'v2_gross_amount':   float(gross),
+        'v2_disc_type':      disc_type,
+        'v2_disc_percent':   float(disc_pct),
+        'v2_disc_amount':    float(disc_amt),
+        'v2_taxable_amount': float(taxable),
+        'v2_cgst_percent':   float(cgst_pct),
+        'v2_cgst_amount':    float(cgst_amt),
+        'v2_sgst_percent':   float(sgst_pct),
+        'v2_sgst_amount':    float(sgst_amt),
+        'v2_igst_percent':   float(igst_pct),
+        'v2_igst_amount':    float(igst_amt),
+        'v2_net_amount':     float(net_amount),
+        'v2_printed_total':  float(printed_total),
+        'v2_mismatch_amount':float(mismatch),
+        'v2_needs_review':   needs_review,
+        'v2_tax_type':       item.get('tax_type', 'UNKNOWN'),
+        # Legacy compat values (map to existing DB columns)
+        '_compat_disc_percent':   float(disc_pct),
+        '_compat_cgst_percent':   float(cgst_pct),
+        '_compat_sgst_percent':   float(sgst_pct),
+        '_compat_taxable_amount': float(taxable),
+        '_compat_net_bill':       float(net_amount),
+    }
+
+
 # ── Gemini client singleton ───────────────────────────────────────────────────
 # Thread-safe: genai.Client is stateless and safe to share across threads.
 _gemini_client: Optional["genai.Client"] = None
@@ -235,6 +396,11 @@ def process_vendor_invoice(
                 "invoice_number": extracted_data.get("invoice_number", ""),
                 "date": extracted_data.get("invoice_date", ""),
                 "vendor_name": extracted_data.get("vendor_name", ""),
+                # v2.1 new header fields
+                "vendor_gstin": extracted_data.get("vendor_gstin"),
+                "place_of_supply": extracted_data.get("place_of_supply"),
+                "tax_type": extracted_data.get("tax_type", "UNKNOWN"),
+                "header_adjustments": extracted_data.get("header_adjustments", []),
                 "source_file": filename
             },
             "items": items,
@@ -323,138 +489,259 @@ def convert_to_inventory_rows(
     #         return bbox
     #     return None
 
+    # Invoice-level v2 fields from header
+    vendor_gstin      = header.get('vendor_gstin')
+    place_of_supply   = header.get('place_of_supply')
+    invoice_tax_type  = header.get('tax_type', 'UNKNOWN')
+    header_adjustments = header.get('header_adjustments', [])
+
     rows = []
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             continue
-        qty = safe_float(item.get("quantity"), 1.0)
-        rate = safe_float(item.get("rate"), 0.0)
-        taxable_amount = safe_float(item.get("amount"), 0.0)
-        
-        # Calculate derived fields
-        disc_percent = safe_float(item.get("disc_percent"), 0.0)
-        cgst_percent = safe_float(item.get("cgst_percent"), 0.0)
-        sgst_percent = safe_float(item.get("sgst_percent"), 0.0)
-        
-        discounted_price = ((100 - disc_percent) * taxable_amount) / 100
-        taxed_amount = (cgst_percent + sgst_percent) * discounted_price / 100
-        net_bill = discounted_price + taxed_amount
-        
-        # Calculate amount mismatch (for printed invoices)
-        invoice_type = str(header.get("invoice_type", "Printed"))
-        amount_mismatch: float = 0.0
-        if invoice_type.lower() == "printed":
-            calc_amount = qty * rate
-            amount_mismatch = float(abs(calc_amount - taxable_amount))
-        
+
+        # ── v2.1 Math Engine ─────────────────────────────────────────────────
+        # Stamp each item with invoice-level tax_type if item doesn't have one
+        if 'tax_type' not in item or not item.get('tax_type'):
+            item = dict(item)  # copy before mutating
+            item['tax_type'] = invoice_tax_type
+
+        v2 = process_invoice_item(item)
+
+        # ── Compat values for existing DB columns ─────────────────────────────
+        qty              = safe_float(item.get('quantity'), 1.0)
+        rate             = safe_float(item.get('rate'), 0.0)
+        disc_percent     = v2['_compat_disc_percent']
+        cgst_percent     = v2['_compat_cgst_percent']
+        sgst_percent     = v2['_compat_sgst_percent']
+        taxable_amount   = v2['_compat_taxable_amount']
+        net_bill         = v2['_compat_net_bill']
+
+        # Legacy mismatch column: reuse v2 value
+        amount_mismatch  = v2['v2_mismatch_amount']
+
+        # discounted_price / taxed_amount for legacy schema columns
+        discounted_price = taxable_amount  # after disc, pre-tax
+        taxed_amount_col = (cgst_percent + sgst_percent) * discounted_price / 100
+
+        invoice_type = str(header.get('invoice_type', 'Printed'))
+
         # Build inventory row
-        # Generate unique row_id: use UUID to prevent any collisions
-        # Format: first 8 chars of image_hash + UUID + index for traceability
         unique_id = str(uuid.uuid4()).split('-')[0]
         row_id = f"{str(image_hash):.8}_{unique_id}_{idx}"
-        
+
         row = {
             # System columns
-            "row_id": row_id,
-            "username": username,
-            "industry_type": user_config.get("industry", ""),
-            "image_hash": image_hash,  # Add image hash for duplicate detection
-            
+            'row_id':        row_id,
+            'username':      username,
+            'industry_type': user_config.get('industry', ''),
+            'image_hash':    image_hash,
+
             # File information
-            "source_file": header.get("source_file", ""),
-            "receipt_link": receipt_link,
-            
+            'source_file':  header.get('source_file', ''),
+            'receipt_link': receipt_link,
+
             # Invoice header
-            "invoice_type": invoice_type,
-            "invoice_date": date_to_store,
-            "invoice_number": header.get("invoice_number", ""),
-            "vendor_name": header.get("vendor_name", ""),
-            
+            'invoice_type':   invoice_type,
+            'invoice_date':   date_to_store,
+            'invoice_number': header.get('invoice_number', ''),
+            'vendor_name':    header.get('vendor_name', ''),
+
             # Line item details
-            "part_number": item.get("part_number", "N/A"),
-            "batch": item.get("batch", "N/A"),
-            "description": item.get("description", ""),
-            "hsn": item.get("hsn", "N/A"),
-            
-            # Quantities and pricing
-            "qty": qty,
-            "rate": rate,
-            "disc_percent": disc_percent,
-            "taxable_amount": taxable_amount,
-            
-            # Tax information
-            "cgst_percent": cgst_percent,
-            "sgst_percent": sgst_percent,
-            
-            # Calculated fields
-            "discounted_price": float(f"{discounted_price:.2f}"),
-            "taxed_amount": float(f"{taxed_amount:.2f}"),
-            "net_bill": float(f"{net_bill:.2f}"),
-            "amount_mismatch": float(f"{amount_mismatch:.2f}"),
-            
+            'part_number': item.get('part_number', 'N/A'),
+            'batch':       item.get('batch', 'N/A'),
+            'description': item.get('description', ''),
+            # v2 prompts output 'hsn_code'; fall back to 'hsn' for old rows
+            'hsn': item.get('hsn_code') or item.get('hsn', 'N/A'),
+
+            # Quantities and pricing (compat columns)
+            'qty':             qty,
+            'rate':            rate,
+            'disc_percent':    disc_percent,
+            'taxable_amount':  taxable_amount,
+
+            # Tax (compat columns)
+            'cgst_percent': cgst_percent,
+            'sgst_percent': sgst_percent,
+
+            # Calculated compat columns
+            'discounted_price': round(discounted_price, 2),
+            'taxed_amount':     round(taxed_amount_col, 2),
+            'net_bill':         round(net_bill, 2),
+            'amount_mismatch':  round(amount_mismatch, 2),
+
             # AI model tracking
-            "model_used": model_used,
-            "model_accuracy": model_accuracy,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "cost_inr": cost_inr,
-            "accuracy_score": item.get("confidence", 0),
-            "row_accuracy": item.get("confidence", 0),
-            
-        # BBOX DISABLED: all set to None (NULL in DB), columns preserved for future re-enable
-            "part_number_bbox": None,
-            "batch_bbox": None,
-            "description_bbox": None,
-            "hsn_bbox": None,
-            "qty_bbox": None,
-            "rate_bbox": None,
-            "disc_percent_bbox": None,
-            "taxable_amount_bbox": None,
-            "cgst_percent_bbox": None,
-            "sgst_percent_bbox": None,
-            "line_item_row_bbox": None,
+            'model_used':     model_used,
+            'model_accuracy': model_accuracy,
+            'input_tokens':   input_tokens,
+            'output_tokens':  output_tokens,
+            'total_tokens':   total_tokens,
+            'cost_inr':       cost_inr,
+            'accuracy_score': item.get('confidence', 0),
+            'row_accuracy':   item.get('confidence', 0),
+
+            # BBOX DISABLED: preserved as NULL for future re-enable
+            'part_number_bbox':    None,
+            'batch_bbox':          None,
+            'description_bbox':    None,
+            'hsn_bbox':            None,
+            'qty_bbox':            None,
+            'rate_bbox':           None,
+            'disc_percent_bbox':   None,
+            'taxable_amount_bbox': None,
+            'cgst_percent_bbox':   None,
+            'sgst_percent_bbox':   None,
+            'line_item_row_bbox':  None,
+
+            # ── v2.1 dedicated columns (migration 043 applied) ───────────────
+            'gross_amount':    v2['v2_gross_amount'],
+            'disc_type':       v2['v2_disc_type'],
+            'disc_amount':     v2['v2_disc_amount'],
+            'igst_percent':    v2['v2_igst_percent'],
+            'igst_amount':     v2['v2_igst_amount'],
+            'cgst_amount':     v2['v2_cgst_amount'],
+            'sgst_amount':     v2['v2_sgst_amount'],
+            'net_amount':      v2['v2_net_amount'],
+            'printed_total':   v2['v2_printed_total'],
+            'mismatch_amount': v2['v2_mismatch_amount'],
+            'needs_review':    v2['v2_needs_review'],
+            'tax_type':        v2['v2_tax_type'],
+            'vendor_gstin':    vendor_gstin,
+            'place_of_supply': place_of_supply,
+            'header_adjustments': header_adjustments,
+
+            # ── v2.1 dedicated columns (migration 044 added) ─────────────────
+            # Canonical HSN column (v2 prompt uses 'hsn_code'; legacy stored as 'hsn')
+            'hsn_code':        item.get('hsn_code') or item.get('hsn') or None,
+            # Explicit taxable base (gross − discount), used for tax calculation
+            'taxable_amount':  v2['v2_taxable_amount'],
+            # AI confidence per line item (0–100)
+            'confidence_score': int(item.get('confidence', 0) or 0),
         }
-        
-        # Extract extra fields
+
+        # ── extra_fields: v2 data + any unrecognised Gemini fields ───────────
         standard_item_keys = {
-            "part_number", "batch", "description", "hsn", "quantity", "rate", 
-            "amount", "disc_percent", "cgst_percent", "sgst_percent", "confidence"
+            'part_number', 'batch', 'description', 'hsn', 'hsn_code',
+            'quantity', 'rate', 'amount',
+            'disc_percent', 'disc_amount',
+            'cgst_percent', 'sgst_percent', 'igst_percent',
+            'combined_gst_percent', 'printed_total_amount',
+            'tax_type', 'unit', 'confidence',
         }
         standard_header_keys = {
-            "invoice_type", "invoice_date", "invoice_number", "vendor_name", "source_file"
+            'invoice_type', 'invoice_date', 'invoice_number',
+            'vendor_name', 'vendor_gstin', 'place_of_supply',
+            'tax_type', 'header_adjustments', 'source_file',
         }
-        
-        item_extra = {k: v for k, v in item.items() if k not in standard_item_keys and not k.endswith("_bbox")}
-        header_extra = {k: v for k, v in header.items() if k not in standard_header_keys and not k.endswith("_bbox")}
-        extra_fields = {**header_extra, **item_extra}
-        row["extra_fields"] = extra_fields
-        
+
+        item_extra   = {k: v for k, v in item.items() if k not in standard_item_keys and not k.endswith('_bbox')}
+        header_extra = {k: v for k, v in header.items() if k not in standard_header_keys and not k.endswith('_bbox')}
+
+        # v2 computed fields — prefixed with v2_ to avoid collision
+        v2_fields = {k: v for k, v in v2.items() if k.startswith('v2_')}
+
+        # Invoice-level v2 fields
+        invoice_v2 = {
+            'v2_vendor_gstin':      vendor_gstin,
+            'v2_place_of_supply':   place_of_supply,
+            'v2_header_adjustments': header_adjustments,
+        }
+
+        row['extra_fields'] = {**header_extra, **item_extra, **v2_fields, **invoice_v2}
         rows.append(row)
-    
+
     return rows
+
+
+def _build_adjustment_rows(
+    rows: List[Dict[str, Any]], username: str
+) -> List[Dict[str, Any]]:
+    """
+    Derive invoice_adjustments table rows from inventory item rows.
+
+    Each item row carries header_adjustments (list of dicts) that came from the
+    Gemini-extracted HeaderAdjustment objects.  We de-duplicate by (username,
+    invoice_number, adjustment_type, amount) so that multi-line invoices don't
+    produce repeated adjustment rows. 
+    """
+    seen: set = set()
+    adj_rows: List[Dict[str, Any]] = []
+
+    for row in rows:
+        adjustments = row.get('header_adjustments') or []
+        if not adjustments or not isinstance(adjustments, list):
+            continue
+
+        invoice_number = row.get('invoice_number') or ''
+        invoice_date   = row.get('invoice_date')  # may be None
+        image_hash     = row.get('image_hash', '')
+
+        for adj in adjustments:
+            if not isinstance(adj, dict):
+                continue
+            adj_type = str(adj.get('adjustment_type', '')).strip().upper()
+            if adj_type not in ('HEADER_DISCOUNT', 'ROUND_OFF', 'SCHEME', 'OTHER'):
+                continue
+            try:
+                amount = float(adj.get('amount', 0) or 0)
+            except (ValueError, TypeError):
+                continue
+
+            dedup_key = (username, invoice_number, adj_type, amount)
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            adj_rows.append({
+                'username':        username,
+                'invoice_number':  invoice_number,
+                'invoice_date':    invoice_date,
+                'image_hash':      image_hash,
+                'adjustment_type': adj_type,
+                'amount':          amount,
+                'description':     str(adj.get('description', '') or ''),
+            })
+
+    return adj_rows
 
 
 def save_to_inventory_table(rows: List[Dict[str, Any]], username: str):
     """
-    Save inventory rows to Supabase inventory_items table.
-    
+    Save inventory rows to Supabase inventory_items table, and persist any
+    header-level adjustments to the invoice_adjustments table.
+
     Args:
-        rows: List of inventory item dictionaries
+        rows: List of inventory item dictionaries (output of convert_to_inventory_rows)
         username: Username for RLS
     """
     if not rows:
         logger.warning("No rows to save to inventory_items")
         return
-    
+
     try:
         db = get_database_client()
-        
-        # Insert all rows
-        response = db.client.table("inventory_items").insert(rows).execute()
-        
+
+        # ── 1. Insert line items ─────────────────────────────────────────────
+        db.client.table("inventory_items").insert(rows).execute()
         logger.info(f"✓ Saved {len(rows)} rows to inventory_items table")
-        
+
+        # ── 2. Persist header adjustments (invoice_adjustments table) ────────
+        adj_rows = _build_adjustment_rows(rows, username)
+        if adj_rows:
+            try:
+                db.client.table("invoice_adjustments").insert(adj_rows).execute()
+                logger.info(
+                    f"✓ Saved {len(adj_rows)} header adjustment(s) "
+                    f"to invoice_adjustments table"
+                )
+            except Exception as adj_err:
+                # Non-fatal: log and continue — line items are already saved.
+                # invoice_adjustments can be backfilled later via migration 044.
+                logger.warning(
+                    f"Could not save invoice_adjustments (table may not exist yet): "
+                    f"{adj_err}"
+                )
+
     except Exception as e:
         logger.error(f"Error saving to inventory_items: {e}")
         raise

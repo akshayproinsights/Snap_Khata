@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/inventory/domain/models/invoice_item_v2_model.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_upload_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
@@ -21,6 +22,7 @@ class InventoryInvoiceBundle {
   bool hasMismatch;
   bool isVerified;
   String createdAt;
+  List<HeaderAdjustment> headerAdjustments;
 
   InventoryInvoiceBundle({
     required this.invoiceNumber,
@@ -32,6 +34,7 @@ class InventoryInvoiceBundle {
     required this.hasMismatch,
     required this.isVerified,
     required this.createdAt,
+    this.headerAdjustments = const [],
   });
 }
 
@@ -66,6 +69,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
           hasMismatch: false,
           isVerified: true, // assume verified until we find otherwise
           createdAt: item.createdAt ?? '',
+          headerAdjustments:
+              item.headerAdjustments ?? [], // Take from the first item
         );
       }
       final bundle = groups[safeKey]!;
@@ -75,7 +80,9 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       // If any item is NOT verified, the whole bundle is not verified
       if (item.verificationStatus != 'Done') bundle.isVerified = false;
       // Track most recent upload date
-      if (item.createdAt != null && (bundle.createdAt.isEmpty || item.createdAt!.compareTo(bundle.createdAt) > 0)) {
+      if (item.createdAt != null &&
+          (bundle.createdAt.isEmpty ||
+              item.createdAt!.compareTo(bundle.createdAt) > 0)) {
         bundle.createdAt = item.createdAt!;
       }
     }
@@ -87,7 +94,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       ..sort((a, b) {
         if (a.hasMismatch && !b.hasMismatch) return -1;
         if (!a.hasMismatch && b.hasMismatch) return 1;
-        
+
         // Use createdAt for precise newest-first sorting, fallback to invoice date
         if (a.createdAt.isNotEmpty && b.createdAt.isNotEmpty) {
           final cA = DateTime.tryParse(a.createdAt) ?? DateTime(0);
@@ -128,7 +135,9 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
   }
 
   Widget _buildProgressHeader(int total, int done, int pending, int error) {
-    if (total == 0 || (pending == 0 && error == 0 && done == 0)) return const SizedBox.shrink();
+    if (total == 0 || (pending == 0 && error == 0 && done == 0)) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -210,7 +219,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
 
     final total = allBundles.length;
     final done = allBundles.where((b) => b.isVerified && !b.hasMismatch).length;
-    final pending = allBundles.where((b) => !b.isVerified && !b.hasMismatch).length;
+    final pending =
+        allBundles.where((b) => !b.isVerified && !b.hasMismatch).length;
     final error = allBundles.where((b) => b.hasMismatch).length;
     final allDone = total > 0 && done == total;
 
@@ -312,7 +322,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(LucideIcons.info, color: Colors.orange.shade700, size: 20),
+                    Icon(LucideIcons.info,
+                        color: Colors.orange.shade700, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -531,7 +542,8 @@ class _BundleReviewTile extends ConsumerWidget {
                         color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                            color:
+                                const Color(0xFFEF4444).withValues(alpha: 0.3)),
                       ),
                       child: const Text('⚠ Review',
                           style: TextStyle(
@@ -597,8 +609,8 @@ class _BundleReviewTile extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, InventoryInvoiceBundle bundle) async {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref,
+      InventoryInvoiceBundle bundle) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

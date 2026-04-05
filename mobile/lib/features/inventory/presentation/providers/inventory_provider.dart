@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/inventory/data/inventory_repository.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/inventory/domain/utils/invoice_math_logic.dart';
 
 final inventoryRepositoryProvider =
     Provider<InventoryRepository>((ref) => InventoryRepository());
@@ -65,7 +66,37 @@ class InventoryNotifier extends Notifier<InventoryState> {
       // Optimistic update
       final newItems = state.items.map((item) {
         if (item.id == id) {
-          return InventoryItem.fromJson({...item.toJson(), ...updates});
+          final updatedJson = {...item.toJson(), ...updates};
+          
+          // Recompute math logic locally using InvoiceMathLogic
+          final mathRes = InvoiceMathLogic.processItem(
+            qty: (updatedJson['quantity'] as num?)?.toDouble() ?? 0.0,
+            rate: (updatedJson['rate'] as num?)?.toDouble() ?? 0.0,
+            origDiscPct: (updatedJson['disc_percent'] as num?)?.toDouble() ?? 0.0,
+            origDiscAmt: (updatedJson['disc_amount'] as num?)?.toDouble() ?? 0.0,
+            cgstPct: (updatedJson['cgst_percent'] as num?)?.toDouble() ?? 0.0,
+            sgstPct: (updatedJson['sgst_percent'] as num?)?.toDouble() ?? 0.0,
+            igstPct: (updatedJson['igst_percent'] as num?)?.toDouble() ?? 0.0,
+            printedTotal: (updatedJson['printed_total'] as num?)?.toDouble() ?? 0.0,
+            taxType: updatedJson['tax_type'] as String? ?? 'UNKNOWN',
+          );
+          
+          updatedJson['gross_amount'] = mathRes['grossAmount'];
+          updatedJson['disc_type'] = mathRes['discType'];
+          updatedJson['disc_percent'] = mathRes['discPercent'];
+          updatedJson['disc_amount'] = mathRes['discAmount'];
+          updatedJson['taxable_amount'] = mathRes['taxableAmount'];
+          updatedJson['cgst_percent'] = mathRes['cgstPercent'];
+          updatedJson['cgst_amount'] = mathRes['cgstAmount'];
+          updatedJson['sgst_percent'] = mathRes['sgstPercent'];
+          updatedJson['sgst_amount'] = mathRes['sgstAmount'];
+          updatedJson['igst_percent'] = mathRes['igstPercent'];
+          updatedJson['igst_amount'] = mathRes['igstAmount'];
+          updatedJson['net_bill'] = mathRes['netAmount'];
+          updatedJson['mismatch_amount'] = mathRes['mismatchAmount'];
+          updatedJson['needs_review'] = mathRes['needsReview'];
+
+          return InventoryItem.fromJson(updatedJson);
         }
         return item;
       }).toList();
@@ -148,7 +179,8 @@ class InventoryNotifier extends Notifier<InventoryState> {
         if (groupItems.isEmpty) continue;
         final firstItem = groupItems.first;
         
-        final totalAmount = groupItems.fold(0.0, (sum, item) => sum + item.netBill);
+        final adjustmentTotal = (firstItem.headerAdjustments ?? []).fold<double>(0.0, (sum, adj) => sum + adj.amount);
+        final totalAmount = groupItems.fold(0.0, (sum, item) => sum + item.netBill) + adjustmentTotal;
         final data = {
           'invoice_number': firstItem.invoiceNumber.isNotEmpty ? firstItem.invoiceNumber : 'Auto-Gen-${DateTime.now().millisecondsSinceEpoch}',
           'vendor_name': firstItem.vendorName ?? 'Unknown Vendor',
@@ -157,6 +189,8 @@ class InventoryNotifier extends Notifier<InventoryState> {
           'balance_owed': totalAmount,
           'amount_paid': 0.0,
           'item_ids': groupItems.map((i) => i.id).toList(),
+          'final_total': totalAmount,
+          'adjustments': (firstItem.headerAdjustments ?? []).map((a) => a.toJson()).toList(),
         };
         
         futures.add(_repository.verifyInvoice(data));

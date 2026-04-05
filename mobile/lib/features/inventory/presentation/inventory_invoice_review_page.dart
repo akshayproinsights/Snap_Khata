@@ -8,7 +8,10 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:mobile/features/review/presentation/receipt_review_page.dart';
+import 'package:mobile/features/inventory/presentation/widgets/edit_item_modal.dart';
+import 'package:mobile/features/inventory/presentation/widgets/header_adjustments_section.dart';
+import 'package:mobile/features/inventory/presentation/widgets/invoice_item_card.dart';
+import 'package:mobile/features/inventory/presentation/widgets/validation_save_button.dart';
 import 'package:intl/intl.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
@@ -180,12 +183,6 @@ class _InventoryInvoiceReviewPageState
     );
   }
 
-  String _fmt(double? v) {
-    if (v == null) return '';
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
-  }
-
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
@@ -263,6 +260,8 @@ class _InventoryInvoiceReviewPageState
         'payment_date': backendDate,
         'balance_owed': _paymentMode == 'Credit' ? totalAmount : 0.0,
         'amount_paid': _paymentMode == 'Cash' ? totalAmount : 0.0,
+        'final_total': totalAmount,
+        'adjustments': widget.bundle.headerAdjustments.map((a) => a.toJson()).toList(),
       };
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
@@ -427,8 +426,9 @@ class _InventoryInvoiceReviewPageState
       return a.id.compareTo(b.id);
     });
 
-    final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0);
-    final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + item.netBill);
+    final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0 || (i.needsReview ?? false));
+    final adjustmentTotal = widget.bundle.headerAdjustments.fold<double>(0.0, (sum, adj) => sum + adj.amount);
+    final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill)) + adjustmentTotal;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -562,7 +562,34 @@ class _InventoryInvoiceReviewPageState
                         child: Text('No items found.',
                             style: TextStyle(color: AppTheme.textSecondary))),
                   ),
-                ...sortedItems.map((item) => _buildItemCard(item)),
+                ...sortedItems.map((item) => InvoiceItemCard(
+                  item: item,
+                  onEdit: () {
+                    EditItemModal.show(context, item, (updatedItem) {
+                      ref.read(inventoryProvider.notifier).updateItem(updatedItem.id, {
+                        'description': updatedItem.description,
+                        'qty': updatedItem.qty,
+                        'rate': updatedItem.rate,
+                        'gross_amount': updatedItem.grossAmount,
+                        'disc_type': updatedItem.discType,
+                        'disc_amount': updatedItem.discAmount,
+                        'taxable_amount': updatedItem.taxableAmount,
+                        'tax_type': updatedItem.taxType,
+                        'cgst_amount': updatedItem.cgstAmount,
+                        'sgst_amount': updatedItem.sgstAmount,
+                        'igst_percent': updatedItem.igstPercent,
+                        'igst_amount': updatedItem.igstAmount,
+                        'net_amount': updatedItem.netAmount,
+                        'net_bill': updatedItem.netBill,
+                        'printed_total': updatedItem.printedTotal,
+                        'amount_mismatch': updatedItem.amountMismatch,
+                        'needs_review': updatedItem.needsReview,
+                      });
+                    });
+                  },
+                  onDelete: () => _deleteItem(item),
+                )),
+                HeaderAdjustmentsSection(adjustments: widget.bundle.headerAdjustments),
                 const SizedBox(height: 16),
                 
                 // Add lots of padding at the bottom so we can easily scroll past the FAB area
@@ -572,301 +599,14 @@ class _InventoryInvoiceReviewPageState
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Grand Total',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '₹${_fmt(totalAmount)}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: SizedBox(
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : () => _saveInvoice(sortedItems, totalAmount),
-                  icon: _isLoading 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Icon(hasAnyMismatch ? LucideIcons.alertTriangle : LucideIcons.checkCircle),
-                  label: Text(
-                    hasAnyMismatch ? 'Save with Errors' : 'Confirm & Save ✨',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: hasAnyMismatch ? Colors.orange : AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemCard(InventoryItem item) {
-    final hasMismatch = item.amountMismatch.abs() > 1.0;
-
-    Color borderColor = AppTheme.border;
-    Color bgColor = Colors.white;
-    if (hasMismatch) {
-      borderColor = Colors.red.shade200;
-      bgColor = Colors.red.shade50;
-    } 
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: hasMismatch ? 1.5 : 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Part number + status icon row
-          Row(
-             children: [
-               Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                 decoration: BoxDecoration(
-                   color: AppTheme.primary.withValues(alpha: 0.1),
-                   borderRadius: BorderRadius.circular(4),
-                 ),
-                 child: Text(
-                   item.partNumber.isNotEmpty ? 'Part: ${item.partNumber}' : 'Item #${item.id}',
-                   style: const TextStyle(
-                     fontSize: 11,
-                     fontWeight: FontWeight.w700,
-                     color: AppTheme.primary,
-                   ),
-                 ),
-               ),
-               const Spacer(),
-               if (hasMismatch)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.alertTriangle, size: 10, color: Colors.red.shade700),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Mismatch',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-               const SizedBox(width: 8),
-               GestureDetector(
-                 onTap: () => _deleteItem(item),
-                 child: Container(
-                   padding: const EdgeInsets.all(4),
-                   decoration: BoxDecoration(
-                     color: Colors.red.shade50,
-                     borderRadius: BorderRadius.circular(4),
-                   ),
-                   child: Icon(LucideIcons.trash2, size: 14, color: Colors.red.shade600),
-                 ),
-               ),
-             ],
-          ),
-          const SizedBox(height: 12),
-
-          // Description + Amount row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: DebouncedReviewField(
-                  key: ValueKey('desc_${item.id}'),
-                  initialValue: item.description,
-                  decoration: _inputDecoration('Description').copyWith(
-                    errorText:
-                        item.description.trim().isEmpty ? 'Required' : null,
-                  ),
-                  maxLines: null,
-                  onSaved: (val) {
-                    if (val != item.description) {
-                      ref.read(inventoryProvider.notifier).updateItem(
-                        item.id,
-                        {'description': val},
-                      );
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: DebouncedReviewField(
-                  key: ValueKey('amount_${item.id}'),
-                  initialValue: _fmt(item.netBill),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: AppTheme.primary),
-                  decoration: _inputDecoration('Amount (₹)'),
-                  onSaved: (val) {
-                    final newAmount = double.tryParse(val);
-                    if (newAmount != null && newAmount != item.netBill) {
-                      ref.read(inventoryProvider.notifier).updateItem(
-                        item.id,
-                        {'net_bill': newAmount, 'amount_mismatch': 0},
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-
-          // Qty × Rate row
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: DebouncedReviewField(
-                  key: ValueKey('qty_${item.id}'),
-                  initialValue: _fmt(item.qty),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _inputDecoration('Qty'),
-                  onSaved: (val) {
-                    final newQty = double.tryParse(val);
-                    if (newQty != null && newQty != item.qty) {
-                      final newMismatch =
-                          ((newQty * item.rate) - item.netBill).abs();
-                      ref.read(inventoryProvider.notifier).updateItem(
-                        item.id,
-                        {'qty': newQty, 'amount_mismatch': newMismatch},
-                      );
-                    }
-                  },
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12.0),
-                child:
-                    Text('×', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold)),
-              ),
-              Expanded(
-                child: DebouncedReviewField(
-                  key: ValueKey('rate_${item.id}'),
-                  initialValue: _fmt(item.rate),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _inputDecoration('Rate (₹)'),
-                  onSaved: (val) {
-                    final newRate = double.tryParse(val);
-                    if (newRate != null && newRate != item.rate) {
-                      final newMismatch =
-                          ((item.qty * newRate) - item.netBill).abs();
-                      ref.read(inventoryProvider.notifier).updateItem(
-                        item.id,
-                        {'rate': newRate, 'amount_mismatch': newMismatch},
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-
-          // Mismatch hint (Incl. Taxes)
-          if (hasMismatch) ...[
-            const SizedBox(height: 12),
-            Container(
-               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-               decoration: BoxDecoration(
-                 color: Colors.grey.shade100,
-                 borderRadius: BorderRadius.circular(6),
-                 border: Border.all(color: Colors.grey.shade300),
-               ),
-               child: Row(
-               children: [
-                  Icon(LucideIcons.info,
-                      size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Amount includes Taxes/Discounts  (diff ₹${item.amountMismatch.abs().toStringAsFixed(2)})',
-                      style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+      bottomNavigationBar: ValidationSaveButton(
+        totalAmount: totalAmount,
+        hasMismatch: hasAnyMismatch,
+        isLoading: _isLoading,
+        onSave: () => _saveInvoice(sortedItems, totalAmount),
       ),
     );
   }
 }
+
+

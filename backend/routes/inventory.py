@@ -69,6 +69,8 @@ class InventoryInvoiceVerifyRequest(BaseModel):
     balance_owed: Optional[float] = 0.0
     vendor_notes: Optional[str] = None
     item_ids: List[int]
+    final_total: Optional[float] = None
+    adjustments: Optional[List[Dict[str, Any]]] = None
 
 
 class InventoryUploadHistoryItem(BaseModel):
@@ -850,7 +852,7 @@ async def verify_inventory_invoice(
             
         # 1. Fetch items to get total amount and receipt link
         item_response = db.client.table("inventory_items") \
-            .select("id, net_bill, receipt_link") \
+            .select("id, net_bill, receipt_link, image_hash") \
             .in_("id", request.item_ids) \
             .eq("username", username) \
             .execute()
@@ -858,8 +860,17 @@ async def verify_inventory_invoice(
         if not item_response.data:
             raise HTTPException(status_code=404, detail="No valid items found")
             
-        total_amount = sum(float(item.get("net_bill", 0)) for item in item_response.data)
+        sum_net_bill = sum(float(item.get("net_bill", 0)) for item in item_response.data)
         receipt_link = item_response.data[0].get("receipt_link", "")
+        image_hash = item_response.data[0].get("image_hash", "")
+
+        if request.final_total is not None:
+            total_amount = request.final_total
+        elif request.adjustments is not None:
+            adj_sum = sum(float(adj.get("amount", 0)) for adj in request.adjustments)
+            total_amount = sum_net_bill + adj_sum
+        else:
+            total_amount = sum_net_bill
 
         # 2. Insert into inventory_invoices
         invoice_data = {
@@ -894,6 +905,28 @@ async def verify_inventory_invoice(
             .in_("id", request.item_ids) \
             .eq("username", username) \
             .execute()
+            
+        # 3.5 Handle Header Adjustments
+        db.client.table("invoice_adjustments") \
+            .delete() \
+            .eq("invoice_number", request.invoice_number) \
+            .eq("username", username) \
+            .execute()
+            
+        if request.adjustments:
+            adj_inserts = []
+            for adj in request.adjustments:
+                adj_inserts.append({
+                    "username": username,
+                    "invoice_number": request.invoice_number,
+                    "invoice_date": request.invoice_date,
+                    "image_hash": image_hash,
+                    "adjustment_type": adj.get("adjustment_type") or adj.get("adjustmentType", "OTHER"),
+                    "amount": float(adj.get("amount", 0)),
+                    "description": adj.get("description")
+                })
+            if adj_inserts:
+                db.client.table("invoice_adjustments").insert(adj_inserts).execute()
             
         # 4. Handle Vendor Ledger if Credit
         balance_owed_val = request.balance_owed if request.balance_owed is not None else 0.0
