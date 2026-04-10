@@ -95,13 +95,37 @@ class InvoiceMathLogic {
     double taxTotal = cgstAmt + sgstAmt + igstAmt;
     double netAmount = roundToPaise(taxable + taxTotal);
 
-    // 6. Mismatch calculation
+    // 6. Smart mismatch calculation — mirrors backend classify_and_validate_printed_total
+    //    Try gross → taxable → net in order. A genuine mismatch only fires when the
+    //    printed value does NOT match ANY of the three candidates within tolerance.
     double mismatch = 0.0;
     bool needsReview = false;
+    String printedTotalType = 'NOT_PRINTED';
 
     if (printedTotal > 0) {
-      mismatch = (netAmount - printedTotal).abs();
-      needsReview = mismatch > toleranceLimit;
+      if ((gross - printedTotal).abs() <= toleranceLimit) {
+        // Invoice prints GROSS (pre-disc, pre-tax) as the line total.
+        // Common on invoices where discount is a header-level adjustment.
+        printedTotalType = 'GROSS';
+        mismatch = (gross - printedTotal).abs();
+        needsReview = false;
+      } else if ((taxable - printedTotal).abs() <= toleranceLimit) {
+        // Invoice prints TAXABLE (post-disc, pre-tax) as the line total.
+        // Common when GST is aggregated in a footer row.
+        printedTotalType = 'TAXABLE';
+        mismatch = (taxable - printedTotal).abs();
+        needsReview = false;
+      } else if ((netAmount - printedTotal).abs() <= toleranceLimit) {
+        // Standard invoice — line total is the full NET (post-disc, post-tax).
+        printedTotalType = 'NET';
+        mismatch = (netAmount - printedTotal).abs();
+        needsReview = false;
+      } else {
+        // Genuine mismatch — printed total doesn't align with any candidate.
+        printedTotalType = 'MISMATCH';
+        mismatch = (netAmount - printedTotal).abs();
+        needsReview = mismatch > toleranceLimit;
+      }
     }
 
     return {
@@ -120,6 +144,7 @@ class InvoiceMathLogic {
       'printedTotal': printedTotal,
       'mismatchAmount': mismatch,
       'needsReview': needsReview,
+      'printedTotalType': printedTotalType,
       'taxType': taxType,
     };
   }

@@ -19,8 +19,17 @@ import 'package:mobile/features/config/presentation/providers/config_provider.da
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
+  /// All groups from the pending list, used to navigate to the next receipt.
+  final List<InvoiceReviewGroup> allGroups;
+  /// Index of [group] inside [allGroups]. -1 when not launched from the list.
+  final int currentIndex;
 
-  const ReceiptReviewPage({super.key, required this.group});
+  const ReceiptReviewPage({
+    super.key,
+    required this.group,
+    this.allGroups = const [],
+    this.currentIndex = -1,
+  });
 
   @override
   ConsumerState<ReceiptReviewPage> createState() => _ReceiptReviewPageState();
@@ -197,7 +206,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   Future<void> _saveCurrentState() async {
-    final group = widget.group;
+    // Read the LIVE group from provider state (not widget.group which is the
+    // original navigation argument and may be stale after user edits).
+    final liveState = ref.read(reviewProvider);
+    final group = liveState.groups.firstWhere(
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => widget.group,
+    );
     final header = group.header;
 
     // Always save the record, even with errors
@@ -231,6 +246,23 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   void _markAllDone() async {
     await _saveCurrentState();
     if (mounted) context.pop();
+  }
+
+  /// Navigate to the next receipt in the list WITHOUT saving this one.
+  void _goToNextReceipt() {
+    final nextIndex = widget.currentIndex + 1;
+    if (nextIndex >= widget.allGroups.length) return;
+    final nextGroup = widget.allGroups[nextIndex];
+    // Use pushReplacement so the back button goes back to the list, not the
+    // previous receipt — this keeps the nav stack clean.
+    context.pushReplacement(
+      '/receipt-review',
+      extra: {
+        'group': nextGroup,
+        'allGroups': widget.allGroups,
+        'currentIndex': nextIndex,
+      },
+    );
   }
 
   @override
@@ -594,10 +626,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       ),
       bottomNavigationBar: Container(
         padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 16),
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(context).padding.bottom + 12),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
@@ -608,45 +640,81 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Amount:',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                  Text('₹${_formatAmount(_totalAfterGst(group))}',
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5)),
-                ],
-              ),
+            // ── Total amount label ──────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total Amount',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+                Text(
+                  '₹${_formatAmount(_totalAfterGst(group))}',
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5),
+                ),
+              ],
             ),
-            ElevatedButton.icon(
-              onPressed: _markAllDone,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: hasAnyError
-                    ? Colors.orange
-                    : const Color(0xFF2A7678), // Deep teal
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: hasAnyError
-                  ? const Icon(LucideIcons.alertTriangle, size: 18)
-                  : const SizedBox.shrink(),
-              label: Text(
-                hasAnyError ? 'Save with Errors' : 'Confirm & Save ✨',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+            const SizedBox(height: 10),
+            // ── Action buttons row ──────────────────────────────────
+            Row(
+              children: [
+                // "Next Receipt →" — only shown when there is a next receipt
+                if (widget.currentIndex >= 0 &&
+                    widget.currentIndex < widget.allGroups.length - 1) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _goToNextReceipt,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.textSecondary,
+                        side: BorderSide(color: Colors.grey.shade300),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(LucideIcons.chevronsRight, size: 16),
+                      label: const Text(
+                        'Next Receipt',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                // "Confirm & Save" — always shown
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _markAllDone,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hasAnyError
+                          ? Colors.orange
+                          : const Color(0xFF2A7678),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: hasAnyError
+                        ? const Icon(LucideIcons.alertTriangle, size: 18)
+                        : const Icon(LucideIcons.checkCircle, size: 18),
+                    label: Text(
+                      hasAnyError ? 'Save with Errors' : 'Confirm & Save ✨',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1405,6 +1473,11 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
 
   @override
   void dispose() {
+    // Flush any pending edit before the widget is removed from the tree.
+    // This covers the case where the debounce timer hasn't fired yet and the
+    // user navigates away or the list rebuilds, which would otherwise silently
+    // discard the last keystroke(s).
+    _saveCurrentValue();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _controller.dispose();

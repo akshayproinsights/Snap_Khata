@@ -36,10 +36,10 @@ limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
 # LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-FLASH_MODEL   = "gemini-2.5-flash"  # set to 2.5 flash for now
+# FLASH_MODEL   = "gemini-2.5-flash"  # set to 2.5 flash for now
 
 # Commented for now as per user request
-# FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping variable to prevent NameError
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
@@ -119,6 +119,47 @@ def calculate_discounts(
     return disc_pct, disc_amt, taxable
 
 
+def classify_printed_total(
+    gross: Decimal,
+    taxable: Decimal,
+    net: Decimal,
+    printed_total: Decimal,
+) -> tuple:
+    """
+    Determine whether the printed line total matches GROSS, TAXABLE, or NET.
+
+    Indian B2B invoices print different values as the per-line "total":
+      GROSS    – Qty × Rate (pre-discount, pre-tax). Common in dealer invoices
+                 where the discount is a header-level "Part Discount".
+      TAXABLE  – After discount, before GST. Seen when GST is shown only in footer.
+      NET      – After discount AND after GST. Standard retail/B2C invoices.
+      NOT_PRINTED – Vendor did not print a per-line total (printed_total = 0).
+                    Backend math is source-of-truth; never flag as mismatch.
+      MISMATCH – Printed value doesn't match any candidate within tolerance.
+                 Genuine data-entry or OCR error; must be reviewed.
+
+    Returns:
+        (mismatch_amount: Decimal, needs_review: bool, match_type: str)
+    """
+    if printed_total <= 0:
+        # Column not visible in image or vendor omitted it — trust our math
+        return Decimal('0'), False, 'NOT_PRINTED'
+
+    candidates = [
+        (gross,   'GROSS'),
+        (taxable, 'TAXABLE'),
+        (net,     'NET'),
+    ]
+    for candidate, label in candidates:
+        diff = abs(printed_total - candidate)
+        if diff <= TOLERANCE_LIMIT:
+            return diff, False, label
+
+    # None of the three candidates match — genuine mismatch
+    # Use |net - printed| as the mismatch amount shown in the UI
+    return abs(net - printed_total), True, 'MISMATCH'
+
+
 def process_invoice_item(item_data: Dict) -> Dict:
     """
     Full per-line v2.1 calculation pipeline.
@@ -167,14 +208,16 @@ def process_invoice_item(item_data: Dict) -> Dict:
     tax_total  = cgst_amt + sgst_amt + igst_amt
     net_amount = (taxable + tax_total).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-    # Mismatch vs printed line total (0 means vendor didn't print one)
+    # ── Smart printed-total comparison ──────────────────────────────────────
+    # Indian invoices print GROSS, TAXABLE, or NET as the per-line total.
+    # Blindly comparing net vs printed causes false positives.
+    # classify_printed_total() checks all three candidates and only flags a
+    # genuine mismatch when the printed value matches none of them.
+    # printed_total = 0 → vendor didn't print a line total → NOT_PRINTED, no review.
     printed_total = clean_numeric(item.get('printed_total_amount', 0))
-    if printed_total > 0:
-        mismatch     = abs(net_amount - printed_total)
-        needs_review = mismatch > TOLERANCE_LIMIT
-    else:
-        mismatch     = Decimal('0')
-        needs_review = False
+    mismatch, needs_review, printed_total_type = classify_printed_total(
+        gross, taxable, net_amount, printed_total
+    )
 
     # Discount type label is already set from original extracted values above
 
@@ -191,11 +234,13 @@ def process_invoice_item(item_data: Dict) -> Dict:
         'v2_sgst_amount':    float(sgst_amt),
         'v2_igst_percent':   float(igst_pct),
         'v2_igst_amount':    float(igst_amt),
-        'v2_net_amount':     float(net_amount),
-        'v2_printed_total':  float(printed_total),
-        'v2_mismatch_amount':float(mismatch),
-        'v2_needs_review':   needs_review,
-        'v2_tax_type':       item.get('tax_type', 'UNKNOWN'),
+        'v2_net_amount':          float(net_amount),
+        'v2_printed_total':       float(printed_total),
+        'v2_mismatch_amount':     float(mismatch),
+        'v2_needs_review':        needs_review,
+        'v2_printed_total_type':  printed_total_type,   # GROSS|TAXABLE|NET|NOT_PRINTED|MISMATCH
+        'v2_printed_total_col_header': item_data.get('printed_total_col_header', 'N/A'),  # Fix 3
+        'v2_tax_type':            item.get('tax_type', 'UNKNOWN'),
         # Legacy compat values (map to existing DB columns)
         '_compat_disc_percent':   float(disc_pct),
         '_compat_cgst_percent':   float(cgst_pct),
@@ -625,7 +670,7 @@ def convert_to_inventory_rows(
             'quantity', 'rate', 'amount',
             'disc_percent', 'disc_amount',
             'cgst_percent', 'sgst_percent', 'igst_percent',
-            'combined_gst_percent', 'printed_total_amount',
+            'combined_gst_percent', 'printed_total_amount', 'printed_total_col_header',
             'tax_type', 'unit', 'confidence',
         }
         standard_header_keys = {

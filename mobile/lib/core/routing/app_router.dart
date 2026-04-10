@@ -119,8 +119,17 @@ class AppRouter {
         name: 'receipt-review',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final group = state.extra as InvoiceReviewGroup;
-          return ReceiptReviewPage(group: group);
+          final extra = state.extra;
+          // New format: Map with group, allGroups, currentIndex
+          if (extra is Map<String, dynamic>) {
+            return ReceiptReviewPage(
+              group: extra['group'] as InvoiceReviewGroup,
+              allGroups: (extra['allGroups'] as List?)?.cast<InvoiceReviewGroup>() ?? const [],
+              currentIndex: extra['currentIndex'] as int? ?? -1,
+            );
+          }
+          // Legacy format: bare InvoiceReviewGroup (fallback)
+          return ReceiptReviewPage(group: extra as InvoiceReviewGroup);
         },
       ),
       GoRoute(

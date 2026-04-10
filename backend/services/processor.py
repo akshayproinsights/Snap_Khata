@@ -42,10 +42,10 @@ MAX_RETRIES = 5
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
 # LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-FLASH_MODEL   = "gemini-2.5-flash"  # default mid-tier
+# FLASH_MODEL   = "gemini-2.5-flash"  # default mid-tier
 
 # Commented as per user request
-# FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping so we do not get NameError
 ACCURACY_THRESHOLD = 70.0  # escalate to next tier if accuracy < 70%
@@ -575,12 +575,28 @@ def process_single_invoice(
                 logger.info(f"✓ Using {best_result['model_used']} result: {filename} | Accuracy: {best_result['model_accuracy']}%")
                 logger.info(f"  ⚠️ {tier_label} attempted but failed: {processing_errors[-1] if processing_errors else 'Unknown error'}")
                 return data
+    # After all model attempts (outer loop finished)
+        if best_result:
+            logger.warning(f"⚠️ Exhausted fallback tiers but keeping best result with accuracy {best_result['model_accuracy']}%")
+            data = best_result["data"]
+            data["receipt_link"] = receipt_link
+            data["upload_date"] = get_ist_now_str()
+            data["model_used"] = best_result["model_used"]
+            data["model_accuracy"] = best_result["model_accuracy"]
+            data["input_tokens"] = best_result["input_tokens"]
+            data["output_tokens"] = best_result["output_tokens"]
+            data["total_tokens"] = best_result["total_tokens"]
+            data["cost_inr"] = best_result["cost_inr"]
+            data["fallback_attempted"] = True
+            data["fallback_reason"] = fallback_reason
+            data["processing_errors"] = " | ".join(processing_errors) if processing_errors else None
+            return data
         
     except Exception as outer_err:
         print(f"\n[ERROR] Processing failed for {filename}: {outer_err}\n", flush=True)
         logger.error(f"Unhandled exception processing {filename}: {outer_err}")
     
-    # If we got here, all three tiers failed completely
+    # If we got here, all three tiers failed completely and no best_result was saved
     print(f"\n[ERROR] Processing failed for {filename}\n", flush=True)
     logger.error(f"Complete failure: Lite, Flash, and Pro models all failed for {filename}")
     logger.error(f"   Errors: {' | '.join(processing_errors)}")

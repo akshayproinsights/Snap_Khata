@@ -43,6 +43,9 @@ class ExtractedItem(BaseModel):
 
     # Printed total — 0 means vendor did NOT print a line total (trust our math)
     printed_total_amount: float = Field(default=0, ge=0)
+    # Exact column header label for the total column (e.g. 'Amount', 'Net Amount', 'Total')
+    # Helps classify_printed_total infer GROSS/TAXABLE/NET context from vendor's label
+    printed_total_col_header: Optional[str] = "N/A"
 
     @validator('tax_type')
     def validate_tax_consistency(cls, v, values):

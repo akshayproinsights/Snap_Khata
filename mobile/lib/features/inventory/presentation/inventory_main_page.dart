@@ -781,6 +781,16 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        IconButton(
+                          icon: Icon(LucideIcons.trash2,
+                              size: 18,
+                              color: AppTheme.error.withValues(alpha: 0.7)),
+                          onPressed: () => _confirmDelete(context, ref, bundle),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          splashRadius: 20,
+                        ),
+                        const SizedBox(height: 12),
                         if (hasMismatch)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -849,15 +859,6 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                               ),
                             ),
                           ),
-                        IconButton(
-                          icon: Icon(LucideIcons.trash2,
-                              size: 18,
-                              color: AppTheme.error.withValues(alpha: 0.7)),
-                          onPressed: () => _confirmDelete(context, ref, bundle),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          splashRadius: 20,
-                        ),
                         const SizedBox(height: 6),
                         AnimatedRotation(
                           turns: _isExpanded ? 0.5 : 0,

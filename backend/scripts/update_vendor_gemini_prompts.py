@@ -57,6 +57,7 @@ For each row in the items table extract:
 - combined_gst_percent: GST % ONLY if tax_type is COMBINED_GST, else 0.
   GLOBAL TAX RULE: If GST rate appears ONLY in a bottom summary (not per row), apply that rate to ALL rows.
 - printed_total_amount: The line total as printed on the bill. Return 0 if vendor did NOT print a line total for this row.
+- printed_total_col_header: The exact column header label for the line-total column (e.g. 'Amount', 'Net Amount', 'Total', 'Value', 'Net Amt', 'Taxable Amt'). Use 'N/A' if no such column exists or if printed_total_amount is 0.
 - confidence: 0-100 accuracy score for this specific row.
 
 ### STEP 4: HEADER-LEVEL ADJUSTMENTS
@@ -94,6 +95,7 @@ Return ONLY valid JSON. No markdown. No explanation. No extra text.
       "igst_percent": "Number",
       "combined_gst_percent": "Number",
       "printed_total_amount": "Number",
+      "printed_total_col_header": "String (exact column header label, or 'N/A')",
       "confidence": "Number (0-100)"
     }
   ],
