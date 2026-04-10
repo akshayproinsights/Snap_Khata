@@ -112,18 +112,21 @@ class UdharDashboardPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (context) => const AddUdharEntrySheet(),
-            );
-          },
-          label: const Text('New Credit Entry'),
-          icon: const Icon(Icons.add),
-          backgroundColor: AppTheme.primary,
-          foregroundColor: Colors.white,
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => const AddUdharEntrySheet(),
+              );
+            },
+            label: const Text('New Credit Entry'),
+            icon: const Icon(Icons.add),
+            backgroundColor: AppTheme.primary,
+            foregroundColor: Colors.white,
+          ),
         ),
       ),
     );

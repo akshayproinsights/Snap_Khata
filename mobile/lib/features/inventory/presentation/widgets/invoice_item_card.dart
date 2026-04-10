@@ -98,18 +98,6 @@ class InvoiceItemCard extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: onEdit,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Icon(LucideIcons.edit2, size: 14, color: Colors.blue.shade600),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
                 onTap: onDelete,
                 child: Container(
                   padding: const EdgeInsets.all(4),
@@ -118,6 +106,18 @@ class InvoiceItemCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Icon(LucideIcons.trash2, size: 14, color: Colors.red.shade600),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onEdit,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(LucideIcons.edit2, size: 18, color: Colors.blue.shade600),
                 ),
               ),
             ],

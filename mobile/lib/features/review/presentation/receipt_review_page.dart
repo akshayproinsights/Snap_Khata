@@ -289,7 +289,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       // Sort in image order (top-to-bottom) using the lineItemBbox y-coordinate (index 1)
       final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
       final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
-      return yA.compareTo(yB);
+      
+      if (yA != double.infinity && yB != double.infinity && (yA - yB).abs() > 0.001) {
+        return yA.compareTo(yB);
+      }
+      return a.sortIndex.compareTo(b.sortIndex);
     });
 
     final laborItems = sortedLineItems.where((i) {
@@ -353,156 +357,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               }
             },
           ),
-          IconButton(
-            icon: const FaIcon(FontAwesomeIcons.whatsapp,
-                color: AppTheme.primary),
-            onPressed: () async {
-              // Start saving changes in the background without blocking the UI dialog
-              final saveFuture = _saveCurrentState();
 
-              // Calculate total amount from line items, fallback to header amount if line items total is zero
-              double totalAmount = _totalAfterGst(group);
-              if (totalAmount == 0.0 && group.header != null) {
-                totalAmount = group.header!.amount;
-              }
-
-              final authState = ref.read(authProvider);
-              final usernameParam = authState.user?.username != null
-                  ? '&u=${authState.user!.username}'
-                  : '';
-
-              final double balanceDue =
-                  _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
-
-              final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
-              
-              final shareUrl =
-                  'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
-
-              final shopName = shopProfile.name.isNotEmpty
-                  ? shopProfile.name
-                  : 'Our Shop';
-
-              // Log shop name for debugging
-              debugPrint('Receipt review WhatsApp message - Shop name: "$shopName" (from shopProfile.name: "${shopProfile.name}")');
-              debugPrint('Receipt review WhatsApp message - Payment mode: $_paymentMode');
-              debugPrint('Receipt review WhatsApp message - GST mode: $_gstMode');
-
-              OrderPaymentStatus status;
-              if (_paymentMode == 'Cash') {
-                status = OrderPaymentStatus.fullyPaid;
-              } else {
-                if (_receivedAmount >= totalAmount) {
-                  status = OrderPaymentStatus.fullyPaid;
-                } else if (_receivedAmount > 0) {
-                  status = OrderPaymentStatus.partiallyPaid;
-                } else {
-                  status = OrderPaymentStatus.unpaid;
-                }
-              }
-
-              final Set<String> ignoredExtraFields = {
-                'total_bill_amount',
-                'total bill amount',
-                'amount',
-                'calculated_amount',
-                'amount_mismatch',
-                'receipt_number',
-                'date',
-                'customer_name',
-                'mobile_number',
-                'mobile number',
-                'mobile',
-                'receipt_link',
-                'audit_findings',
-                'taxable_row_ids',
-                'gst_mode',
-              };
-
-              final Map<String, String> resolvedExtraFields = {};
-
-              if (header?.extraFields != null) {
-                header!.extraFields.forEach((key, value) {
-                  final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'].toString();
-                  final lowerKey = key.toString().toLowerCase();
-                  final lowerLabel = configLabel.toLowerCase();
-                  
-                  if (value != null && value.toString().isNotEmpty && 
-                      !ignoredExtraFields.contains(lowerKey) && 
-                      !ignoredExtraFields.contains(lowerLabel)) {
-                    resolvedExtraFields[configLabel] = value.toString();
-                  }
-                });
-              }
-
-              final caption = WhatsAppUtils.getWhatsAppCaption(
-                status: status,
-                customerName: header?.customerName?.isNotEmpty == true
-                    ? header!.customerName!
-                    : 'Customer',
-                businessName: shopName,
-                orderNumber: group.receiptNumber,
-                totalAmount: totalAmount,
-                paidAmount: _receivedAmount,
-                pendingAmount: balanceDue,
-                extraFields: resolvedExtraFields,
-              );
-              final message =
-                  '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
-
-              // Open custom input dialog for phone number (pre-filled if available from DB)
-              final phoneController =
-                  TextEditingController(text: header?.extraFields['mobile_number']?.toString() ?? '');
-
-              if (!context.mounted) return;
-
-              final result = await showDialog<String>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Share Receipt'),
-                  content: TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Customer Phone Number',
-                      prefixText: '+91 ',
-                      hintText: 'e.g. 9876543210',
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => context.pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () => context.pop(phoneController.text),
-                      child: const Text('Share to WhatsApp'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (result != null && result.isNotEmpty && context.mounted) {
-                // Ensure the background save completed before sharing the link,
-                // so the user sees the updated information when they open it.
-                await saveFuture;
-
-                final opened = await WhatsAppUtils.openWhatsAppChat(
-                  phone: result,
-                  message: message,
-                );
-
-                if (!opened && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Could not open WhatsApp. Please ensure it is installed.')),
-                  );
-                }
-              }
-            },
-            tooltip: 'Share via WhatsApp',
-          ),
         ],
       ),
       body: Column(
@@ -715,6 +570,154 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
+                label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  // Start saving changes in the background without blocking the UI dialog
+                  final saveFuture = _saveCurrentState();
+
+                  // Calculate total amount from line items, fallback to header amount if line items total is zero
+                  double totalAmount = _totalAfterGst(group);
+                  if (totalAmount == 0.0 && group.header != null) {
+                    totalAmount = group.header!.amount;
+                  }
+
+                  final authState = ref.read(authProvider);
+                  final usernameParam = authState.user?.username != null
+                      ? '&u=${authState.user!.username}'
+                      : '';
+
+                  final double balanceDue =
+                      _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
+
+                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
+                  
+                  final shareUrl =
+                      'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
+
+                  final shopName = shopProfile.name.isNotEmpty
+                      ? shopProfile.name
+                      : 'Our Shop';
+
+                  OrderPaymentStatus status;
+                  if (_paymentMode == 'Cash') {
+                    status = OrderPaymentStatus.fullyPaid;
+                  } else {
+                    if (_receivedAmount >= totalAmount) {
+                      status = OrderPaymentStatus.fullyPaid;
+                    } else if (_receivedAmount > 0) {
+                      status = OrderPaymentStatus.partiallyPaid;
+                    } else {
+                      status = OrderPaymentStatus.unpaid;
+                    }
+                  }
+
+                  final Set<String> ignoredExtraFields = {
+                    'total_bill_amount',
+                    'total bill amount',
+                    'amount',
+                    'calculated_amount',
+                    'amount_mismatch',
+                    'receipt_number',
+                    'date',
+                    'customer_name',
+                    'mobile_number',
+                    'mobile number',
+                    'mobile',
+                    'receipt_link',
+                    'audit_findings',
+                    'taxable_row_ids',
+                    'gst_mode',
+                  };
+
+                  final Map<String, String> resolvedExtraFields = {};
+
+                  if (header?.extraFields != null) {
+                    header!.extraFields.forEach((key, value) {
+                      final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'].toString();
+                      final lowerKey = key.toString().toLowerCase();
+                      final lowerLabel = configLabel.toLowerCase();
+                      
+                      if (value != null && value.toString().isNotEmpty && 
+                          !ignoredExtraFields.contains(lowerKey) && 
+                          !ignoredExtraFields.contains(lowerLabel)) {
+                        resolvedExtraFields[configLabel] = value.toString();
+                      }
+                    });
+                  }
+
+                  final caption = WhatsAppUtils.getWhatsAppCaption(
+                    status: status,
+                    customerName: header?.customerName?.isNotEmpty == true
+                        ? header!.customerName!
+                        : 'Customer',
+                    businessName: shopName,
+                    orderNumber: group.receiptNumber,
+                    totalAmount: totalAmount,
+                    paidAmount: _receivedAmount,
+                    pendingAmount: balanceDue,
+                    extraFields: resolvedExtraFields,
+                  );
+                  final message =
+                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
+
+                  final phoneController =
+                      TextEditingController(text: header?.extraFields['mobile_number']?.toString() ?? '');
+
+                  if (!context.mounted) return;
+
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Share Receipt'),
+                      content: TextField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer Phone Number',
+                          prefixText: '+91 ',
+                          hintText: 'e.g. 9876543210',
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => context.pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => context.pop(phoneController.text),
+                          child: const Text('Share to WhatsApp'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (result != null && result.isNotEmpty && context.mounted) {
+                    await saveFuture;
+                    final opened = await WhatsAppUtils.openWhatsAppChat(
+                      phone: result,
+                      message: message,
+                    );
+                    if (!opened && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Could not open WhatsApp. Please ensure it is installed.')),
+                      );
+                    }
+                  }
+                },
+              ),
             ),
           ],
         ),

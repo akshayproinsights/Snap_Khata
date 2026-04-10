@@ -35,10 +35,7 @@ logger = logging.getLogger(__name__)
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-# LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-# FLASH_MODEL   = "gemini-2.5-flash"  # set to 2.5 flash for now
-
-# Commented for now as per user request
+LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
 FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping variable to prevent NameError
@@ -386,41 +383,40 @@ def process_vendor_invoice(
         best_res_stored: Optional[Dict[str, Any]] = None
         accuracy = 0.0
         
-        # ── Tier 1: Flash (formerly Tier 2) ──────────────────────────────────
+        # ── Tier 1: Lite ──────────────────────────────────
         try:
-            f_data, f_items, f_acc, f_in, f_out, f_cost = _run_model(FLASH_MODEL, "Flash")
-            if f_data:
+            l_data, l_items, l_acc, l_in, l_out, l_cost = _run_model(LITE_MODEL, "Lite")
+            if l_data:
                 extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-                    f_data, f_items, f_acc, f_in, f_out, f_cost
-                model_used = "Flash"
+                    l_data, l_items, l_acc, l_in, l_out, l_cost
+                model_used = "Lite"
                 best_res_stored = {
-                    "data": f_data, "items": f_items, "acc": f_acc,
-                    "in": f_in, "out": f_out, "cost": f_cost, "model": "Flash"
+                    "data": l_data, "items": l_items, "acc": l_acc,
+                    "in": l_in, "out": l_out, "cost": l_cost, "model": "Lite"
                 }
         except Exception as e:
-            logger.error(f"Flash tier crash: {e}")
+            logger.error(f"Lite tier crash: {e}")
             # Ensure accuracy is initialized for the next tier check
             accuracy = 0.0
 
-        # ── Tier 2: Pro (if Flash failed or accuracy < threshold) ────────────
-        # Commented out for now as per user request to use only 2.5 Flash
-        # if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
-        #     logger.warning(f"Flash finished with {accuracy}% accuracy. Escalating to Pro...")
-        #     try:
-        #         p_data, p_items, p_acc, p_in, p_out, p_cost = _run_model(PRO_MODEL, "Pro")
-        #         if p_data:
-        #             extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-        #                 p_data, p_items, p_acc, p_in, p_out, p_cost
-        #             model_used = "Pro"
-        #             best_res_stored = {
-        #                 "data": p_data, "items": p_items, "acc": p_acc,
-        #                 "in": p_in, "out": p_out, "cost": p_cost, "model": "Pro"
-        #             }
-        #     except Exception as e:
-        #         logger.error(f"Pro tier crash: {e}")
+        # ── Tier 2: Flash (if Lite failed or accuracy < threshold) ────────────
+        if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
+            logger.warning(f"Lite finished with {accuracy}% accuracy. Escalating to Flash...")
+            try:
+                f_data, f_items, f_acc, f_in, f_out, f_cost = _run_model(FLASH_MODEL, "Flash")
+                if f_data:
+                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                        f_data, f_items, f_acc, f_in, f_out, f_cost
+                    model_used = "Flash"
+                    best_res_stored = {
+                        "data": f_data, "items": f_items, "acc": f_acc,
+                        "in": f_in, "out": f_out, "cost": f_cost, "model": "Flash"
+                    }
+            except Exception as e:
+                logger.error(f"Flash tier crash: {e}")
 
         if not best_res_stored:
-            logger.error("All models (Flash, Pro) failed to return a result.")
+            logger.error("All models (Lite, Flash) failed to return a result.")
             return None
 
         # Re-assign from best result for consistency

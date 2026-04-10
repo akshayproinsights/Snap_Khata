@@ -41,10 +41,7 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 MAX_RETRIES = 5
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-# LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest (COMMENTED OUT AS REQUESTED)
-# FLASH_MODEL   = "gemini-2.5-flash"  # default mid-tier
-
-# Commented as per user request
+LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
 FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping so we do not get NameError
@@ -264,6 +261,24 @@ def normalize_text_field(text: str, field_type: str = "general") -> str:
 #         'height': max_y - min_y
 #     }
 
+# ── Gemini client singleton ───────────────────────────────────────────────────
+# Thread-safe: genai.Client is stateless and safe to share across threads.
+_gemini_client = None
+_gemini_client_lock = threading.Lock()
+
+def _get_gemini_client():
+    """Return a cached module-level Gemini client (created once, reused everywhere)."""
+    global _gemini_client
+    if _gemini_client is None:
+        with _gemini_client_lock:
+            if _gemini_client is None:  # double-checked locking
+                api_key = get_google_api_key()
+                if not api_key:
+                    raise RuntimeError("Google API key not configured")
+                _gemini_client = genai.Client(api_key=api_key)
+                logger.info("Gemini client singleton created")
+    return _gemini_client
+
 
 def process_single_invoice(
     image_bytes: bytes,
@@ -285,13 +300,11 @@ def process_single_invoice(
     Returns:
         Dictionary with extracted invoice data including model metadata, or None if failed
     """
-    api_key = get_google_api_key()
-    if not api_key:
-        logger.error("Google API key not configured")
+    try:
+        client = _get_gemini_client()
+    except RuntimeError as e:
+        logger.error(str(e))
         return None
-
-    # Instantiate Client
-    client = genai.Client(api_key=api_key)
     
     # Load user-specific Gemini prompt
     system_instruction = get_gemini_prompt(username)
@@ -325,21 +338,20 @@ def process_single_invoice(
         data: Dict[str, Any] = {}    # Initialize data dictionary to avoid uninitialized variable errors
 
         # Each model gets its own full retry cycle via the outer loop.
-        # Usual flow: for model_attempt in [FLASH_MODEL, PRO_MODEL]:
-        for model_attempt in [FLASH_MODEL]:
+        for model_attempt in [LITE_MODEL, FLASH_MODEL]:
             model_name = model_attempt
 
-            # Flash always runs first (no escalation needed to start it).
-            # Pro only runs if Flash triggered an escalation.
-            if model_name == PRO_MODEL and not needs_escalation:
+            # Lite always runs first (no escalation needed to start it).
+            # Flash only runs if Lite triggered an escalation.
+            if model_name == FLASH_MODEL and not needs_escalation:
                 continue
             needs_escalation = False  # Reset for this tier
 
             # Log model being attempted
-            tier_label = {FLASH_MODEL: "Flash", PRO_MODEL: "Pro"}.get(model_name, model_name)
-            if model_name == FLASH_MODEL:
-                print(f"[AI] Starting Flash model attempt", flush=True)
-                logger.info("Starting Flash model attempt")
+            tier_label = {LITE_MODEL: "Lite", FLASH_MODEL: "Flash", PRO_MODEL: "Pro"}.get(model_name, model_name)
+            if model_name == LITE_MODEL:
+                print(f"[AI] Starting Lite model attempt", flush=True)
+                logger.info("Starting Lite model attempt")
             else:
                 print(f"[ESCALATE] Starting {tier_label} model attempt after escalation: {fallback_reason}", flush=True)
                 logger.info(f"Starting {tier_label} model attempt after escalation: {fallback_reason}")
@@ -355,7 +367,9 @@ def process_single_invoice(
                     
                     # Configure generation with system instruction
                     config = types.GenerateContentConfig(
-                        system_instruction=system_instruction
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json",
+                        temperature=0.1
                     )
                     
                     # Call API
@@ -460,7 +474,7 @@ def process_single_invoice(
                     
                     # Check if we need to escalate to the next tier
                     # (only relevant when we are NOT already on the final tier)
-                    if model_name != PRO_MODEL:
+                    if model_name != FLASH_MODEL:
                         escalation_reason_temp = ""
 
                         # Escalation triggers:
@@ -533,7 +547,7 @@ def process_single_invoice(
                         logger.error(f"❌ {model_name} failed to parse JSON after {MAX_RETRIES} attempts")
                         
                         # Trigger escalation if not already on the final tier
-                        if model_name != PRO_MODEL:
+                        if model_name != FLASH_MODEL:
                             needs_escalation = True
                             fallback_reason = f"{model_name} JSON parsing failed after all retries"
                             logger.info(f"Escalating from {model_name} due to repeated parsing failures.")
@@ -548,7 +562,7 @@ def process_single_invoice(
                         logger.error(f"❌ {model_name} failed after {MAX_RETRIES} attempts")
                         
                         # Trigger escalation if not already on the final tier
-                        if model_name != PRO_MODEL:
+                        if model_name != FLASH_MODEL:
                             needs_escalation = True
                             err_msg = str(e)
                             fallback_reason = f"{model_name} experienced repeated exceptions: {err_msg[0:100]}"

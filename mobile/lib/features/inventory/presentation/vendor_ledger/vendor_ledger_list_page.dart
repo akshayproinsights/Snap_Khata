@@ -164,34 +164,43 @@ class _LedgerCard extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(
                     timeAgo,
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: timeAgo == 'No payments yet'
+                          ? Colors.grey.shade700
+                          : AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  currencyFormatter.format(ledger.balanceDue),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
+            SizedBox(
+              width: 100,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    currencyFormatter.format(ledger.balanceDue),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'You will give',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
+                  const SizedBox(height: 4),
+                  const Text(
+                    'You will give',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
               icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
               onSelected: (value) async {
                 if (value == 'delete') {

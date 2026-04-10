@@ -461,23 +461,23 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         children: [
           // Balance
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
             child: Column(
               children: [
                 Text(
                   isPositive ? 'Pending Balance' : 'Overpaid',
                   style: const TextStyle(
                     color: Colors.white70,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   currencyFormatter.format(balance.abs()),
                   style: TextStyle(
-                    fontSize: 36,
+                    fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color: isPositive ? Colors.white : Colors.greenAccent.shade200,
                   ),
@@ -502,9 +502,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           // Stats Row
           if (!_isLoading) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
@@ -515,7 +515,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Billed',
                         value: currencyFormatter.format(_totalInvoiced),
-                        color: Colors.orange.shade200,
+                        color: Colors.white,
+                        iconColor: Colors.orange.shade300,
                         icon: LucideIcons.fileText,
                       ),
                     ),
@@ -528,7 +529,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Paid',
                         value: currencyFormatter.format(_totalPaid),
-                        color: Colors.greenAccent.shade200,
+                        color: Colors.white,
+                        iconColor: Colors.greenAccent.shade400,
                         icon: LucideIcons.checkCircle,
                       ),
                     ),
@@ -549,10 +551,11 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     required String value,
     required Color color,
     required IconData icon,
+    Color? iconColor,
   }) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 16),
+        Icon(icon, color: iconColor ?? color, size: 16),
         const SizedBox(height: 4),
         Text(
           label,
@@ -564,7 +567,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.bold,
-            fontSize: 13,
+            fontSize: 14,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -740,25 +743,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     }
   }
 
-  Widget _buildWhatsAppReminderButton(LedgerTransaction tx) {
-    if (tx.transactionType != 'INVOICE' || tx.receiptNumber == null) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: OutlinedButton.icon(
-        onPressed: () => _sendWhatsAppReminder(tx),
-        icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green, size: 18),
-        label: const Text('Send Reminder on WhatsApp', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: Colors.green.shade200),
-          minimumSize: const Size(double.infinity, 44),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
@@ -871,48 +856,77 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 ),
               ],
             ),
-            trailing: SizedBox(
-               width: 80,
-               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: accentColor,
-                    ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 70,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: accentColor,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        LucideIcons.chevronDown,
+                        size: 16,
+                        color: Colors.grey.shade400,
+                      ),
+                    ],
                   ),
-                  Icon(
-                    LucideIcons.chevronDown,
-                    size: 16,
-                    color: Colors.grey.shade400,
+                ),
+                if (canTap) ...[
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
+                    onSelected: (value) {
+                      if (value == 'reminder') {
+                        _sendWhatsAppReminder(tx);
+                      } else if (value == 'view') {
+                        _navigateToOrderDetails(tx);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      if (!tx.isPaid)
+                        const PopupMenuItem(
+                          value: 'reminder',
+                          child: Row(
+                            children: [
+                              FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green, size: 18),
+                              SizedBox(width: 8),
+                              Text('Send Reminder'),
+                            ],
+                          ),
+                        ),
+                      const PopupMenuItem(
+                        value: 'view',
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.fileText, color: AppTheme.textSecondary, size: 18),
+                            SizedBox(width: 8),
+                            Text('View Invoice Summary'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
+              ],
             ),
             children: [
               if (isInvoice)
                  _buildMarkAsPaidButton(tx),
-              if (canTap && !tx.isPaid)
-                _buildWhatsAppReminderButton(tx),
-              if (canTap)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: OutlinedButton.icon(
-                      onPressed: () => _navigateToOrderDetails(tx),
-                      icon: const Icon(LucideIcons.fileText, size: 16),
-                      label: const Text('View Invoice Summary'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 44),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                ),
             ],
           ),
         ),

@@ -46,23 +46,47 @@ class _EditItemModalState extends State<EditItemModal> {
     _descController = TextEditingController(text: widget.item.description);
     _qtyController = TextEditingController(text: _fmt(widget.item.qty));
     _rateController = TextEditingController(text: _fmt(widget.item.rate));
-    
-    // Attempt to reverse engineer or extract discount percentages. 
-    // We will use 0.0 if not present, and handle logic in the processItem callback.
-    _discPctController = TextEditingController(text: '0'); 
-    _discAmtController = TextEditingController(text: _fmt(widget.item.discAmount ?? 0));
-    _cgstPctController = TextEditingController(text: '0');
-    _sgstPctController = TextEditingController(text: '0');
-    _igstPctController = TextEditingController(text: _fmt(widget.item.igstPercent ?? 0));
-    _printedTotalController = TextEditingController(text: _fmt(widget.item.printedTotal ?? widget.item.netBill));
 
-    // Handle COMBINED_GST back to CGST/SGST if applicable
-    if (widget.item.taxType == 'COMBINED_GST' || widget.item.taxType == 'CGST_SGST') {
-      // Simplistic fallback if we don't have the original percent in the model yet
-      // In reality, backend would return cgst_percent, but until then we can assume 9% for 18% total.
-      _cgstPctController.text = '9';
-      _sgstPctController.text = '9';
+    // --- Discount ---
+    // Prefer directly stored discPercent; back-calculate only if absent
+    final storedDiscAmt = widget.item.discAmount ?? 0.0;
+    final grossAmt = widget.item.grossAmount ?? (widget.item.qty * widget.item.rate);
+    double inferredDiscPct = widget.item.discPercent ?? 0.0;
+    if (inferredDiscPct == 0 && storedDiscAmt > 0 && grossAmt > 0) {
+      inferredDiscPct = double.parse((storedDiscAmt / grossAmt * 100).toStringAsFixed(2));
     }
+    _discPctController = TextEditingController(text: inferredDiscPct > 0 ? _fmt(inferredDiscPct) : '0');
+    _discAmtController = TextEditingController(text: _fmt(storedDiscAmt));
+
+    // --- Tax Rates ---
+    // Prefer directly stored cgstPercent/sgstPercent/igstPercent from DB
+    final taxable = widget.item.taxableAmount ?? (grossAmt - storedDiscAmt);
+    double inferredCgstPct = widget.item.cgstPercent ?? 0.0;
+    double inferredSgstPct = widget.item.sgstPercent ?? 0.0;
+    double inferredIgstPct = widget.item.igstPercent ?? 0.0;
+
+    // Back-calculate from amounts only if percent fields are missing
+    if (inferredCgstPct == 0 && (widget.item.cgstAmount ?? 0) > 0 && taxable > 0) {
+      inferredCgstPct = double.parse(((widget.item.cgstAmount! / taxable) * 100).toStringAsFixed(2));
+    }
+    if (inferredSgstPct == 0 && (widget.item.sgstAmount ?? 0) > 0 && taxable > 0) {
+      inferredSgstPct = double.parse(((widget.item.sgstAmount! / taxable) * 100).toStringAsFixed(2));
+    }
+    if (inferredIgstPct == 0 && (widget.item.igstAmount ?? 0) > 0 && taxable > 0) {
+      inferredIgstPct = double.parse(((widget.item.igstAmount! / taxable) * 100).toStringAsFixed(2));
+    }
+
+    // Last resort fallback: CGST_SGST with no data → assume 9%/9%
+    if ((widget.item.taxType == 'CGST_SGST' || widget.item.taxType == 'COMBINED_GST')
+        && inferredCgstPct == 0 && inferredSgstPct == 0 && inferredIgstPct == 0) {
+      inferredCgstPct = 9.0;
+      inferredSgstPct = 9.0;
+    }
+
+    _cgstPctController = TextEditingController(text: inferredCgstPct > 0 ? _fmt(inferredCgstPct) : '0');
+    _sgstPctController = TextEditingController(text: inferredSgstPct > 0 ? _fmt(inferredSgstPct) : '0');
+    _igstPctController = TextEditingController(text: inferredIgstPct > 0 ? _fmt(inferredIgstPct) : '0');
+    _printedTotalController = TextEditingController(text: _fmt(widget.item.printedTotal ?? widget.item.netBill));
 
     // Attach listeners to recalculate on the fly
     _qtyController.addListener(_recalculate);

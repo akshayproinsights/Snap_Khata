@@ -4,13 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/core/utils/whatsapp_utils.dart';
-import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
-import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/shared/presentation/widgets/upload_results_summary.dart';
@@ -39,163 +35,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     });
   }
 
-  /// Quick-sync a single receipt then open WhatsApp — zero deep-navigation needed.
-  Future<void> _syncAndShareReceipt(InvoiceReviewGroup group) async {
-    final header = group.header;
-    if (header == null) return;
 
-    // 1. Mark the receipt as Done in the backend
-    final newRecord = header.copyWith(verificationStatus: 'Done');
-    await ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-
-    if (!mounted) return;
-
-    // 2. Build share message
-    final shopProfile = ref.read(shopProvider);
-    final authState = ref.read(authProvider);
-    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
-    final usernameParam = authState.user?.username != null
-        ? '&u=${authState.user!.username}'
-        : '';
-    final shareUrl =
-        'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$usernameParam';
-    final totalAmount = header.amount;
-    final customerName =
-        (header.customerName?.isNotEmpty == true) ? header.customerName! : 'Customer';
-
-    final caption = WhatsAppUtils.getWhatsAppCaption(
-      status: OrderPaymentStatus.fullyPaid,
-      customerName: customerName,
-      businessName: shopName,
-      orderNumber: group.receiptNumber,
-      totalAmount: totalAmount,
-    );
-    final message =
-        '$caption\n\nView your complete digital receipt here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
-
-    // 3. Phone number dialog
-    final prefilledPhone =
-        header.extraFields['mobile_number']?.toString() ?? '';
-    final phoneController = TextEditingController(text: prefilledPhone);
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF25D366).withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const FaIcon(FontAwesomeIcons.whatsapp,
-                  color: Color(0xFF25D366), size: 20),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text('Sync & Share Receipt',
-                  style: TextStyle(fontSize: 16)),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Receipt #${group.receiptNumber} • ₹${totalAmount.toStringAsFixed(0)}',
-              style: const TextStyle(
-                  fontSize: 13, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              autofocus: prefilledPhone.isEmpty,
-              decoration: InputDecoration(
-                labelText: 'Customer Phone (optional)',
-                prefixText: '+91 ',
-                hintText: 'e.g. 9876543210',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Enter phone to share via WhatsApp, or skip to just save & sync.',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                  height: 1.4),
-            ),
-          ],
-        ),
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actions: [
-          // Option A: save & sync only (no WhatsApp) — empty string = sync only
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              side: BorderSide(color: Colors.grey.shade300),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            ),
-            icon: const Icon(LucideIcons.save, size: 14),
-            label: const Text('Just Save & Sync',
-                style: TextStyle(fontSize: 12)),
-            onPressed: () => Navigator.of(ctx).pop(''),
-          ),
-          // Option B: sync + open WhatsApp
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-            icon: const FaIcon(FontAwesomeIcons.whatsapp,
-                size: 14, color: Colors.white),
-            label: const Text('Sync & Share',
-                style: TextStyle(fontSize: 12)),
-            onPressed: () => Navigator.of(ctx).pop(phoneController.text),
-          ),
-        ],
-      ),
-    );
-
-    // null = user dismissed dialog entirely — do nothing
-    if (result == null || !mounted) return;
-
-    // 4. Always sync (both "Just Save & Sync" and "Sync & Share" paths)
-    await ref.read(reviewProvider.notifier).syncAndFinish();
-    if (!mounted) return;
-
-    final state = ref.read(reviewProvider);
-    if (state.error != null) {
-      AppToast.showError(context, state.error!, title: 'Sync Failed');
-      return;
-    }
-
-    AppToast.showSuccess(context, 'Receipt saved & synced!',
-        title: 'Sync Complete');
-
-    // 5. Open WhatsApp only when user entered a phone number
-    if (result.isNotEmpty) {
-      final opened = await WhatsAppUtils.openWhatsAppChat(
-        phone: result,
-        message: message,
-      );
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Could not open WhatsApp. Please ensure it is installed.')),
-        );
-      }
-    }
-  }
 
   Future<void> _syncAndFinish({required bool allDone}) async {
     // If not all receipts are reviewed, show a warning before proceeding
@@ -606,43 +446,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Sync & Share WhatsApp quick-action
-                GestureDetector(
-                  onTap: () => _syncAndShareReceipt(group),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF25D366), Color(0xFF128C7E)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF25D366).withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FaIcon(FontAwesomeIcons.whatsapp,
-                            size: 13, color: Colors.white),
-                        SizedBox(width: 4),
-                        Text('Sync & Share',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
+
                 // Status badge
                 Row(
                   mainAxisSize: MainAxisSize.min,

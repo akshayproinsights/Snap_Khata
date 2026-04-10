@@ -9,11 +9,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Optimization settings tuned for Gemini handwriting recognition
-OPTIMAL_MAX_DIMENSION = 1920  # Max width or height in pixels
+# Optimization settings tuned for Gemini handwriting recognition from Mobile devices
+OPTIMAL_MAX_DIMENSION = 1280  # Max width or height in pixels (Optimized for mobile portrait)
 OPTIMAL_QUALITY = 85  # JPEG quality (1-100)
 MIN_DPI = 150  # Minimum DPI for OCR accuracy
-TARGET_FILE_SIZE_KB = 500  # Target max file size in KB
+TARGET_FILE_SIZE_KB = 350  # Target max file size in KB
 
 def optimize_image_for_gemini(
     image_data: bytes,

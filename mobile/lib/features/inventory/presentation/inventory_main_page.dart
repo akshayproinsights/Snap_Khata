@@ -493,6 +493,9 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
 
         var bundles = _groupItems(items);
 
+        // Only show verified (synced) deliveries in the recent list
+        bundles = bundles.where((b) => b.isVerified).toList();
+
         // Apply search filter
         if (_searchQuery.isNotEmpty) {
           bundles = bundles.where((b) {

@@ -161,10 +161,65 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             .order('created_at', desc=True) \
             .execute()
             
+        transactions = tx_resp.data
+        enriched_transactions = []
+        
+        # Enrich INVOICE transactions with true grand_total and received_amount
+        receipt_numbers = [tx['receipt_number'] for tx in transactions if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number')]
+        
+        enrichment = {}
+        if receipt_numbers:
+            # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
+            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due').in_('receipt_number', receipt_numbers).eq('username', username).execute()
+            
+            for vi in vi_resp.data:
+                rn = vi.get('receipt_number')
+                if not rn:
+                    continue
+                if rn not in enrichment:
+                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0}
+                enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
+                enrichment[rn]['received_amount'] = float(vi.get('received_amount', 0) or 0)
+                enrichment[rn]['balance_due'] = float(vi.get('balance_due', 0) or 0)
+                
+        for i, tx in enumerate(transactions):
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
+                enr = enrichment[tx['receipt_number']]
+                grand_total = enr['received_amount'] + enr['balance_due']
+                
+                # Update the INVOICE amount to grand_total for display purposes
+                # We copy it so we don't mutate shared references unexpectedly
+                enriched_tx = dict(tx)
+                if grand_total > 0:
+                    enriched_tx['amount'] = grand_total 
+                enriched_transactions.append(enriched_tx)
+                
+                # If there was an initial payment, construct a dummy PAYMENT transaction
+                if enr['received_amount'] > 0:
+                    dummy_payment = {
+                        # Use a predictable negative ID bounded by loop index to avoid React/Flutter key collisions
+                        'id': -(tx['id'] * 1000 + i), 
+                        'ledger_id': ledger_id,
+                        'transaction_type': 'PAYMENT',
+                        'amount': enr['received_amount'],
+                        'receipt_number': tx['receipt_number'],
+                        'notes': f"Initial payment for Invoice {tx['receipt_number']}",
+                        'created_at': tx['created_at'],
+                        'is_paid': False,
+                        'linked_transaction_id': None # Standalone so it is visible
+                    }
+                    enriched_transactions.append(dummy_payment)
+            else:
+                enriched_transactions.append(tx)
+                
+        # Re-sort because injected dummy payments will be out of order 
+        # (they share the same created_at as their parent invoice, but sort ensures stable display)
+        enriched_transactions.sort(key=lambda x: x['created_at'], reverse=True)
+            
         return {
             "status": "success",
             "ledger": ledger,
-            "data": tx_resp.data
+            "data": enriched_transactions
         }
     except HTTPException:
         raise

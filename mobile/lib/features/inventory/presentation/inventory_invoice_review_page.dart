@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/inventory/domain/models/invoice_item_v2_model.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/edit_item_modal.dart';
@@ -427,7 +428,20 @@ class _InventoryInvoiceReviewPageState
     });
 
     final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0 || (i.needsReview ?? false));
-    final adjustmentTotal = widget.bundle.headerAdjustments.fold<double>(0.0, (sum, adj) => sum + adj.amount);
+    // Compute effective signed amount for each adjustment:
+    //   HEADER_DISCOUNT / SCHEME → always a deduction (stored positive by Gemini, but they reduce the total)
+    //   ROUND_OFF / OTHER        → use as-is (can be positive or negative)
+    double effectiveAdjAmount(HeaderAdjustment adj) {
+      final type = adj.adjustmentType.toUpperCase();
+      if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
+        return -adj.amount.abs();
+      }
+      return adj.amount;
+    }
+    final adjustmentTotal = widget.bundle.headerAdjustments.fold<double>(
+      0.0,
+      (sum, adj) => sum + effectiveAdjAmount(adj),
+    );
     final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill)) + adjustmentTotal;
 
     return Scaffold(

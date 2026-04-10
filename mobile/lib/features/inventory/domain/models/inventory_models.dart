@@ -21,7 +21,10 @@ class InventoryItem {
   // v2.1 new fields
   final double? grossAmount;
   final String? discType;
+  final double? discPercent;  // disc_percent from DB (stored % value)
   final double? discAmount;
+  final double? cgstPercent;  // cgst_percent from DB
+  final double? sgstPercent;  // sgst_percent from DB
   final double? igstPercent;
   final double? igstAmount;
   final double? cgstAmount;
@@ -55,7 +58,10 @@ class InventoryItem {
     this.createdAt,
     this.grossAmount,
     this.discType,
+    this.discPercent,
     this.discAmount,
+    this.cgstPercent,
+    this.sgstPercent,
     this.igstPercent,
     this.igstAmount,
     this.cgstAmount,
@@ -116,8 +122,17 @@ class InventoryItem {
           ? double.tryParse(json['gross_amount'].toString())
           : null,
       discType: json['disc_type']?.toString(),
+      discPercent: json['disc_percent'] != null
+          ? double.tryParse(json['disc_percent'].toString())
+          : null,
       discAmount: json['disc_amount'] != null
           ? double.tryParse(json['disc_amount'].toString())
+          : null,
+      cgstPercent: json['cgst_percent'] != null
+          ? double.tryParse(json['cgst_percent'].toString())
+          : null,
+      sgstPercent: json['sgst_percent'] != null
+          ? double.tryParse(json['sgst_percent'].toString())
           : null,
       igstPercent: json['igst_percent'] != null
           ? double.tryParse(json['igst_percent'].toString())
@@ -171,7 +186,10 @@ class InventoryItem {
       'created_at': createdAt,
       'gross_amount': grossAmount,
       'disc_type': discType,
+      'disc_percent': discPercent,
       'disc_amount': discAmount,
+      'cgst_percent': cgstPercent,
+      'sgst_percent': sgstPercent,
       'igst_percent': igstPercent,
       'igst_amount': igstAmount,
       'cgst_amount': cgstAmount,
@@ -207,7 +225,10 @@ class InventoryItem {
     String? createdAt,
     double? grossAmount,
     String? discType,
+    double? discPercent,
     double? discAmount,
+    double? cgstPercent,
+    double? sgstPercent,
     double? igstPercent,
     double? igstAmount,
     double? cgstAmount,
@@ -241,7 +262,10 @@ class InventoryItem {
       createdAt: createdAt ?? this.createdAt,
       grossAmount: grossAmount ?? this.grossAmount,
       discType: discType ?? this.discType,
+      discPercent: discPercent ?? this.discPercent,
       discAmount: discAmount ?? this.discAmount,
+      cgstPercent: cgstPercent ?? this.cgstPercent,
+      sgstPercent: sgstPercent ?? this.sgstPercent,
       igstPercent: igstPercent ?? this.igstPercent,
       igstAmount: igstAmount ?? this.igstAmount,
       cgstAmount: cgstAmount ?? this.cgstAmount,

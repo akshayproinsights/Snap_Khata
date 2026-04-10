@@ -485,7 +485,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 40),
+        padding: const EdgeInsets.only(bottom: 120),
         child: Column(
           children: [
             _buildHeader(),
@@ -498,6 +498,260 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           ],
         ),
       ),
+      bottomNavigationBar: _buildStickyBottomBar(_totalAfterGst(widget.group)),
+    );
+  }
+
+  Widget _buildStickyBottomBar(double grandTotal) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            // ignore: deprecated_member_use_from_same_package
+            color: Colors.black.withValues(alpha: 0.08),
+            offset: const Offset(0, -4),
+            blurRadius: 20,
+          )
+        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: isEditing 
+            ? _buildEditPaymentSection(grandTotal) 
+            : _buildViewSummarySection(grandTotal),
+      ),
+    );
+  }
+
+  Widget _buildViewSummarySection(double grandTotal) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Total Bill Amount', 
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+            const SizedBox(height: 4),
+            Text('₹${_formatAmount(grandTotal)}', 
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+            if (_paymentMode == 'Credit') ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                   const Text('Balance Due: ', style: TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
+                   Text('₹${_formatAmount(grandTotal - _receivedAmount)}', style: const TextStyle(color: AppTheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
+                ],
+              )
+            ]
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+             color: _paymentMode == 'Cash' ? Colors.green.shade50 : Colors.blue.shade50,
+             borderRadius: BorderRadius.circular(24),
+             border: Border.all(
+               color: _paymentMode == 'Cash' ? Colors.green.shade200 : Colors.blue.shade200,
+               width: 1,
+             )
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_paymentMode == 'Cash' ? LucideIcons.checkCircle : LucideIcons.clock, 
+                   size: 18, color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700),
+              const SizedBox(width: 8),
+              Text(_paymentMode, style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700, fontWeight: FontWeight.bold, fontSize: 15)),
+            ],
+          )
+        )
+      ],
+    );
+  }
+
+  Widget _buildEditPaymentSection(double grandTotal) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Payment Type',
+                style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold)),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PaymentToggleBtn(
+                    title: 'Credit',
+                    isSelected: _paymentMode == 'Credit',
+                    onTap: () {
+                      setState(() {
+                        _paymentMode = 'Credit';
+                      });
+                    },
+                  ),
+                  _PaymentToggleBtn(
+                    title: 'Cash',
+                    isSelected: _paymentMode == 'Cash',
+                    onTap: () {
+                      setState(() {
+                        _paymentMode = 'Cash';
+                        _receivedAmount = grandTotal;
+                        _receivedAmountController.text = _formatAmount(grandTotal);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Text('Total Amount',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            const Text('₹ ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            SizedBox(
+              width: 100,
+              child: Text(
+                _formatAmount(grandTotal),
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        if (_paymentMode == 'Credit') ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isReceivedChecked = !_isReceivedChecked;
+                    if (!_isReceivedChecked) {
+                      _receivedAmount = 0;
+                      _receivedAmountController.clear();
+                    } else {
+                      _receivedAmount = grandTotal;
+                      _receivedAmountController.text =
+                          _formatAmount(grandTotal);
+                    }
+                  });
+                },
+                child: Row(
+                  children: [
+                    Icon(
+                      _isReceivedChecked
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
+                      color: _isReceivedChecked
+                          ? AppTheme.primary
+                          : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Received', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              const Text('₹ ',
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _receivedAmountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 16),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                    border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.grey.shade300)),
+                    enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.grey.shade300)),
+                    focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.primary)),
+                    fillColor: Colors.transparent,
+                  ),
+                  onChanged: (val) {
+                    setState(() {
+                      _receivedAmount = double.tryParse(val) ?? 0.0;
+                      _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('Balance Due',
+                  style: TextStyle(
+                      color: AppTheme.error,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+              const Spacer(),
+              const Text('₹ ',
+                  style: TextStyle(
+                      color: AppTheme.error,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500)),
+              SizedBox(
+                width: 100,
+                child: Text(
+                  _formatAmount(grandTotal - _receivedAmount),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      color: AppTheme.error,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _creditDetailsController,
+            decoration: InputDecoration(
+              labelText: 'Customer Details / Notes',
+              labelStyle:
+                  TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300)),
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ],
     );
   }
 
@@ -881,281 +1135,20 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final grandTotal = _totalAfterGst(widget.group);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Column(
-        children: [
-          PaymentSummaryCard(
-            isAutomobile: isAutomobile,
-            gstMode: _gstMode,
-            partsSubtotal: _partsSubtotal(widget.group),
-            laborSubtotal: _laborSubtotal(widget.group),
-            gstAmount: _gstAmount(_partsSubtotal(widget.group) + _laborSubtotal(widget.group)),
-            grandTotal: grandTotal,
-            originalTotal: widget.group.totalAmount,
-            onGstModeChanged: _saveGstMode,
-          ),
-          _buildPaymentSection(grandTotal),
-        ],
+      child: PaymentSummaryCard(
+        isAutomobile: isAutomobile,
+        gstMode: _gstMode,
+        partsSubtotal: _partsSubtotal(widget.group),
+        laborSubtotal: _laborSubtotal(widget.group),
+        gstAmount: _gstAmount(_partsSubtotal(widget.group) + _laborSubtotal(widget.group)),
+        grandTotal: grandTotal,
+        originalTotal: widget.group.totalAmount,
+        onGstModeChanged: _saveGstMode,
       ),
     );
   }
 
-  Widget _buildPaymentSection(double grandTotal) {
-    if (!isEditing) {
-      // View Mode
-      return Container(
-        padding: const EdgeInsets.all(16),
-        margin: const EdgeInsets.only(top: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Payment Type', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _paymentMode == 'Cash' ? Colors.green.shade50 : Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(_paymentMode, style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            if (_paymentMode == 'Credit') ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Received', style: TextStyle(fontSize: 15)),
-                  Text('\u20B9 ${_formatAmount(_receivedAmount)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                   const Text('Balance Due', style: TextStyle(color: AppTheme.success, fontSize: 15, fontWeight: FontWeight.bold)),
-                   Text('\u20B9 ${_formatAmount(grandTotal - _receivedAmount)}', style: const TextStyle(color: AppTheme.success, fontSize: 15, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              if (_creditDetailsController.text.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Notes', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                      const SizedBox(height: 4),
-                      Text(_creditDetailsController.text, style: const TextStyle(fontSize: 14)),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      );
-    }
-    
-    // Edit Mode
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(top: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Payment Type',
-                  style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold)),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _PaymentToggleBtn(
-                      title: 'Credit',
-                      isSelected: _paymentMode == 'Credit',
-                      onTap: () {
-                        setState(() {
-                          _paymentMode = 'Credit';
-                        });
-                      },
-                    ),
-                    _PaymentToggleBtn(
-                      title: 'Cash',
-                      isSelected: _paymentMode == 'Cash',
-                      onTap: () {
-                        setState(() {
-                          _paymentMode = 'Cash';
-                          _receivedAmount = grandTotal;
-                          _receivedAmountController.text = _formatAmount(grandTotal);
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Text('Total Amount',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              const Text('\u20B9 ',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              SizedBox(
-                width: 100,
-                child: Text(
-                  _formatAmount(grandTotal),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          if (_paymentMode == 'Credit') ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isReceivedChecked = !_isReceivedChecked;
-                      if (!_isReceivedChecked) {
-                        _receivedAmount = 0;
-                        _receivedAmountController.clear();
-                      } else {
-                        _receivedAmount = grandTotal;
-                        _receivedAmountController.text =
-                            _formatAmount(grandTotal);
-                      }
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isReceivedChecked
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: _isReceivedChecked
-                            ? AppTheme.primary
-                            : Colors.grey.shade400,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Received', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                const Text('\u20B9 ',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _receivedAmountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-                      border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.grey.shade300)),
-                      enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.grey.shade300)),
-                      focusedBorder: const UnderlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.primary)),
-                      fillColor: Colors.transparent,
-                    ),
-                    onChanged: (val) {
-                      setState(() {
-                        _receivedAmount = double.tryParse(val) ?? 0.0;
-                        _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('Balance Due',
-                    style: TextStyle(
-                        color: AppTheme.success,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
-                const Spacer(),
-                const Text('\u20B9 ',
-                    style: TextStyle(
-                        color: AppTheme.success,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500)),
-                SizedBox(
-                  width: 100,
-                  child: Text(
-                    _formatAmount(grandTotal - _receivedAmount),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                        color: AppTheme.success,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _creditDetailsController,
-              decoration: InputDecoration(
-                labelText: 'Customer Details / Notes',
-                labelStyle:
-                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+
 
   String _formatAmount(double amount) {
     if (amount == amount.roundToDouble()) {
