@@ -436,7 +436,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                       pendingAmount: group.balanceDue,
                     );
                     final message =
-                        '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *$shopName*';
+                        '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
 
                     final phoneController =
                         TextEditingController(text: group.mobileNumber);

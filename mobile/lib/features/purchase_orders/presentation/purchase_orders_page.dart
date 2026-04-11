@@ -11,6 +11,7 @@ import 'package:mobile/features/purchase_orders/presentation/providers/purchase_
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:printing/printing.dart';
 import 'package:mobile/features/purchase_orders/utils/pdf_generator.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -691,9 +692,15 @@ class _PoSuccessSheet extends ConsumerWidget {
                       .getPurchaseOrderDetails(po.id);
 
                   if (details != null) {
+                    final shopProfile = ref.read(shopProvider);
                     final bytes = await MaterialRequestPdfGenerator.generate(
-                        details, 'Adnak',
-                        notes: po.notes);
+                        details, 
+                        shopProfile.name.isNotEmpty ? 'Authorized Signatory' : 'Adnak',
+                        notes: po.notes,
+                        shopName: shopProfile.name.isNotEmpty ? shopProfile.name : null,
+                        shopAddress: shopProfile.address.isNotEmpty ? shopProfile.address : null,
+                        shopPhone: shopProfile.phone.isNotEmpty ? shopProfile.phone : null,
+                    );
                     await Printing.sharePdf(
                         bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
                   } else {
@@ -790,8 +797,15 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
         .getPurchaseOrderDetails(po.id);
 
     if (details != null) {
-      final bytes = await MaterialRequestPdfGenerator.generate(details, 'Adnak',
-          notes: po.notes);
+      final shopProfile = ref.read(shopProvider);
+      final bytes = await MaterialRequestPdfGenerator.generate(
+        details, 
+        shopProfile.name.isNotEmpty ? 'Authorized Signatory' : 'Adnak',
+        notes: po.notes,
+        shopName: shopProfile.name.isNotEmpty ? shopProfile.name : null,
+        shopAddress: shopProfile.address.isNotEmpty ? shopProfile.address : null,
+        shopPhone: shopProfile.phone.isNotEmpty ? shopProfile.phone : null,
+      );
       await Printing.sharePdf(bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
     } else {
       if (mounted) {

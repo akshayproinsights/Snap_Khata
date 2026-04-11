@@ -431,7 +431,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     extraFields: extraFieldsForWa.isNotEmpty ? extraFieldsForWa : null,
                   );
                   final message =
-                      '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *$shopName*';
+                      '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
 
                   final phoneController =
                       TextEditingController(text: widget.group.mobileNumber);
@@ -993,6 +993,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 ctrl: itemCtrls[e.key],
                 isLast: e.key == widget.group.items.length - 1,
                 isEditing: true,
+                isAutomobile: isAutomobile,
               );
             }),
           ],
@@ -1038,6 +1039,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 ctrl: itemCtrls[e.key],
                 isLast: e.key == widget.group.items.length - 1,
                 isEditing: false,
+                isAutomobile: false,
               );
             }),
           ],
@@ -1122,6 +1124,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             ctrl: itemCtrls[idx],
             isLast: entry.key == items.length - 1,
             isEditing: false,
+            isAutomobile: true,
           );
         }),
       ],
@@ -1196,6 +1199,7 @@ class _ItemRow extends StatelessWidget {
   final ItemDetailCtrl ctrl;
   final bool isLast;
   final bool isEditing;
+  final bool isAutomobile;
 
   const _ItemRow({
     required this.index,
@@ -1203,6 +1207,7 @@ class _ItemRow extends StatelessWidget {
     required this.ctrl,
     required this.isLast,
     required this.isEditing,
+    this.isAutomobile = false,
   });
 
   @override
@@ -1255,17 +1260,18 @@ class _ItemRow extends StatelessWidget {
           padding: const EdgeInsets.only(left: 36),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4)),
-                child: Text('${item.type} ',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary)),
-              ),
+              if (isAutomobile)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4)),
+                  child: Text('${item.type} ',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textSecondary)),
+                ),
               const SizedBox(width: 8),
               Text(
                 '$qtyStr  x  ${currencyFormat.format(item.rate)}',
@@ -1298,28 +1304,30 @@ class _ItemRow extends StatelessWidget {
           padding: const EdgeInsets.only(left: 36),
           child: Row(
             children: [
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: ctrl.typeCtrl,
-                builder: (context, value, child) {
-                  final text = value.text.toLowerCase();
-                  final isPart = text.isEmpty || (text != 'labor' && text != 'labour' && text != 'service');
-                  return Row(
-                    children: [
-                      _PartLaborToggle(
-                        isPart: true,
-                        selected: isPart,
-                        onTap: () => ctrl.typeCtrl.text = 'Part',
-                      ),
-                      const SizedBox(width: 4),
-                      _PartLaborToggle(
-                        isPart: false,
-                        selected: !isPart,
-                        onTap: () => ctrl.typeCtrl.text = 'Labour',
-                      ),
-                    ],
-                  );
-                },
-              ),
+              if (isAutomobile)
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: ctrl.typeCtrl,
+                  builder: (context, value, child) {
+                    final text = value.text.toLowerCase();
+                    final isPart = text.isEmpty || (text != 'labor' && text != 'labour' && text != 'service');
+                    return Row(
+                      children: [
+                        _PartLaborToggle(
+                          isPart: true,
+                          selected: isPart,
+                          onTap: () => ctrl.typeCtrl.text = 'Part',
+                        ),
+                        const SizedBox(width: 4),
+                        _PartLaborToggle(
+                          isPart: false,
+                          selected: !isPart,
+                          onTap: () => ctrl.typeCtrl.text = 'Labour',
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    );
+                  },
+                ),
               const SizedBox(width: 8),
               Expanded(
                   flex: 1,

@@ -669,7 +669,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     extraFields: resolvedExtraFields,
                   );
                   final message =
-                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *$shopName*';
+                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
 
                   final phoneController =
                       TextEditingController(text: header?.extraFields['mobile_number']?.toString() ?? '');
@@ -870,13 +870,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               children: [
                 const Text('Balance Due',
                     style: TextStyle(
-                        color: AppTheme.success,
+                        color: AppTheme.error,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
                 const Spacer(),
                 const Text('₹ ',
                     style: TextStyle(
-                        color: AppTheme.success,
+                        color: AppTheme.error,
                         fontSize: 16,
                         fontWeight: FontWeight.w500)),
                 SizedBox(
@@ -885,7 +885,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     _formatAmount(grandTotal - _receivedAmount),
                     textAlign: TextAlign.right,
                     style: const TextStyle(
-                        color: AppTheme.success,
+                        color: AppTheme.error,
                         fontSize: 16,
                         fontWeight: FontWeight.bold),
                   ),

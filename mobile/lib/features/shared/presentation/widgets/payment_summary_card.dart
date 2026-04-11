@@ -83,7 +83,7 @@ class PaymentSummaryCard extends StatelessWidget {
                         )),
                     Text(
                       isGstInvoice
-                          ? 'GST Invoice @18% on Parts & Labor'
+                          ? (isAutomobile ? 'GST Invoice @18% on Parts & Labor' : 'GST Invoice @18%')
                           : 'Order Summary',
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.55), fontSize: 12),

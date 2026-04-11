@@ -277,6 +277,7 @@
 
         .inv-totals-wrap {
             padding: 0;
+            border-left: 1px solid var(--border-strong);
         }
 
         .inv-totals-table {
@@ -298,12 +299,20 @@
         .inv-totals-table td.label-col {
             border-right: 1px solid var(--border-strong);
             font-weight: 600;
+            width: 55%;
         }
         
         .inv-totals-table td.amount-col {
             text-align: right;
             font-weight: 600;
             color: #1e293b;
+            width: 45%;
+        }
+
+        /* Amount in Words row: keep middle divider visible */
+        .inv-totals-table tr.words-row td {
+            border-bottom: none;
+            padding: 10px 12px;
         }
         
         .inv-amount-words-title {
@@ -611,6 +620,18 @@
             const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
             const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
 
+            let displayStatus = data.status || 'UNPAID';
+            if (receivedAmount !== null) {
+                if (receivedAmount >= grandTotal) displayStatus = 'PAID';
+                else if (receivedAmount > 0) displayStatus = 'PARTIAL';
+                else displayStatus = 'UNPAID';
+            } else if (balanceDue !== null) {
+                if (balanceDue <= 0) displayStatus = 'PAID';
+                else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
+                else displayStatus = 'UNPAID';
+            }
+            displayStatus = displayStatus.toUpperCase();
+
             let itemsHtml = '';
             
             if (isAutomobile) {
@@ -705,7 +726,7 @@
                                     <div class="inv-col-val">
                                         <div>No: ${data.id || '—'}</div>
                                         <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${data.status === 'PAID' ? '#16a34a' : '#ea580c'}">${data.status}</div>
+                                        <div style="margin-top:6px;font-weight:700;color:${displayStatus === 'PAID' ? '#16a34a' : '#ea580c'}">${displayStatus}</div>
                                     </div>
                                 </div>
                             </div>
@@ -732,19 +753,14 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
-                                    ${isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) ? `
-                                    <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(subtotal)}</td>
-                                    </tr>
-                                    ` : ''}
+
                                     <tr>
                                         <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
                                         <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
                                     </tr>
                                     ${receivedAmount !== null ? `
                                     <tr>
-                                        <td class="label-col">Payment Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="label-col">Amount Paid</td>
                                         <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
@@ -754,11 +770,9 @@
                                         <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <td colspan="2" style="text-align: center; padding: 12px; border-bottom: none;">
-                                            <div class="inv-amount-words-title" style="font-size: 13px; color: #1e293b;">Amount in Words:</div>
-                                            <div class="inv-amount-words" style="margin-top: 4px; color: #1e293b;">${wordsTotal} Rupees only</div>
-                                        </td>
+                                    <tr class="words-row">
+                                        <td class="label-col" style="font-weight: 600; color: #1e293b; font-size: 12px; vertical-align: top; padding-top: 10px;">Amount in Words:</td>
+                                        <td class="amount-col" style="font-size: 12px; color: #334155; font-weight: 400; text-align: right;">${wordsTotal} Rupees only</td>
                                     </tr>
                                 </table>
                             </div>
@@ -824,6 +838,18 @@
 
             const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
             const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
+
+            let displayStatus = data.status || 'UNPAID';
+            if (receivedAmount !== null) {
+                if (receivedAmount >= grandTotal) displayStatus = 'PAID';
+                else if (receivedAmount > 0) displayStatus = 'PARTIAL';
+                else displayStatus = 'UNPAID';
+            } else if (balanceDue !== null) {
+                if (balanceDue <= 0) displayStatus = 'PAID';
+                else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
+                else displayStatus = 'UNPAID';
+            }
+            displayStatus = displayStatus.toUpperCase();
 
             const taxableValue = gstMode === 'included' ? totalSubtotal - gstAmt : totalSubtotal;
 
@@ -942,7 +968,7 @@
                                     <div class="inv-col-val">
                                         <div>No: ${data.id || '—'}</div>
                                         <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${data.status === 'PAID' ? '#16a34a' : '#ea580c'}">${data.status}</div>
+                                        <div style="margin-top:6px;font-weight:700;color:${displayStatus === 'PAID' ? '#16a34a' : '#ea580c'}">${displayStatus}</div>
                                     </div>
                                 </div>
                             </div>
@@ -970,19 +996,14 @@
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
-                                    ${isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) ? `
-                                    <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(totalSubtotal)}</td>
-                                    </tr>
-                                    ` : ''}
+
                                     <tr>
                                         <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
                                         <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
                                     </tr>
                                     ${receivedAmount !== null ? `
                                     <tr>
-                                        <td class="label-col">Payment Received ${(data.payment_mode && data.payment_mode.toLowerCase() !== 'cash') ? `(${data.payment_mode})` : ''}</td>
+                                        <td class="label-col">Amount Paid</td>
                                         <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
                                     </tr>
                                     ` : ''}
@@ -992,11 +1013,9 @@
                                         <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
                                     </tr>
                                     ` : ''}
-                                    <tr>
-                                        <td colspan="2" style="text-align: center; padding: 12px; border-bottom: none;">
-                                            <div class="inv-amount-words-title" style="font-size: 13px; color: #1e293b;">Amount in Words:</div>
-                                            <div class="inv-amount-words" style="margin-top: 4px; color: #1e293b;">${wordsTotal} Rupees only</div>
-                                        </td>
+                                    <tr class="words-row">
+                                        <td class="label-col" style="font-weight: 600; color: #1e293b; font-size: 12px; vertical-align: top; padding-top: 10px;">Amount in Words:</td>
+                                        <td class="amount-col" style="font-size: 12px; color: #334155; font-weight: 400; text-align: right;">${wordsTotal} Rupees only</td>
                                     </tr>
                                 </table>
                             </div>

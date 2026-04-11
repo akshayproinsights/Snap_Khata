@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, ShoppingCart, FileText, Loader2, AlertCircle, Check } from 'lucide-react';
 import { purchaseOrderAPI, type DraftPOItem as APIDraftPOItem, type ProceedToPORequest } from '../../services/purchaseOrderAPI';
+import { configAPI } from '../../services/api';
 import MaterialRequestPDF from './MaterialRequestPDF';
 import AutocompleteInput from './AutocompleteInput';
 import html2canvas from 'html2canvas';
@@ -187,6 +188,7 @@ const DraftPOManager: React.FC<DraftPOManagerProps> = ({
         items: APIDraftPOItem[];
         notes?: string;
     } | null>(null);
+    const [shopProfile, setShopProfile] = useState<{ shop_name: string; shop_address: string; shop_phone: string } | null>(null);
 
     // Load draft items from API on component mount
     const loadDraftItems = useCallback(async () => {
@@ -205,6 +207,7 @@ const DraftPOManager: React.FC<DraftPOManagerProps> = ({
 
     useEffect(() => {
         loadDraftItems();
+        configAPI.getShopProfile().then(setShopProfile).catch(console.error);
     }, [loadDraftItems]);
 
     // Sync with local state changes (add items from parent)
@@ -480,8 +483,10 @@ const DraftPOManager: React.FC<DraftPOManagerProps> = ({
                                 poNumber={createdPOData.poNumber}
                                 date={new Date()}
                                 vendorName={createdPOData.vendorName}
-                                senderName="Adnak"
-                                senderPhone="9822197172"
+                                senderName={shopProfile?.shop_name ? "Authorized Signatory" : "Adnak"}
+                                senderPhone={shopProfile?.shop_phone || "9822197172"}
+                                shopName={shopProfile?.shop_name}
+                                shopAddress={shopProfile?.shop_address}
                                 notes={createdPOData.notes}
                                 items={chunk}
                                 pageIndex={index}
@@ -501,8 +506,10 @@ const DraftPOManager: React.FC<DraftPOManagerProps> = ({
                             poNumber={createdPOData.poNumber}
                             date={new Date()}
                             vendorName={createdPOData.vendorName}
-                            senderName="Adnak"
-                            senderPhone="9822197172"
+                            senderName={shopProfile?.shop_name ? "Authorized Signatory" : "Adnak"}
+                            senderPhone={shopProfile?.shop_phone || "9822197172"}
+                            shopName={shopProfile?.shop_name}
+                            shopAddress={shopProfile?.shop_address}
                             notes={createdPOData.notes}
                             items={chunk}
                             pageIndex={index}

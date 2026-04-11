@@ -9,7 +9,7 @@ import 'package:mobile/features/purchase_orders/domain/models/purchase_order_mod
 class MaterialRequestPdfGenerator {
   static Future<Uint8List> generate(
       PurchaseOrderDetail details, String userName,
-      {String? notes}) async {
+      {String? notes, String? shopName, String? shopAddress, String? shopPhone}) async {
     final pdf = pw.Document(
       theme: pw.ThemeData.withFont(
         base: await PdfGoogleFonts.interRegular(),
@@ -40,11 +40,7 @@ class MaterialRequestPdfGenerator {
 
     final totalPages = pages.length;
 
-    // Load logo
-    final ByteData logoData =
-        await rootBundle.load('assets/images/snapkhata_seal.png');
-    final Uint8List logoBytes = logoData.buffer.asUint8List();
-    final sealImage = pw.MemoryImage(logoBytes);
+
 
     // Colors exactly from web app
     final colorNavy = PdfColor.fromHex('#1a237e');
@@ -93,7 +89,7 @@ class MaterialRequestPdfGenerator {
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
                               pw.Text(
-                                'NEHA AUTO STORES',
+                                shopName ?? 'NEHA AUTO STORES',
                                 style: pw.TextStyle(
                                   color: colorNavy,
                                   fontSize: 32,
@@ -102,7 +98,7 @@ class MaterialRequestPdfGenerator {
                               ),
                               pw.SizedBox(height: 12),
                               pw.Text(
-                                '5, Shri Datta nagar, Opp. Yogeshwari Mahavidyalaya,\nAmbajogai - Dist. Beed 431517',
+                                shopAddress ?? '5, Shri Datta nagar, Opp. Yogeshwari Mahavidyalaya,\nAmbajogai - Dist. Beed 431517',
                                 style: pw.TextStyle(
                                   color: colorGray700,
                                   fontSize: 10,
@@ -209,12 +205,12 @@ class MaterialRequestPdfGenerator {
                                           fontWeight: pw.FontWeight.bold,
                                           letterSpacing: 1)),
                                   pw.SizedBox(height: 4),
-                                  pw.Text('Mr. Adnak',
+                                  pw.Text(userName,
                                       style: pw.TextStyle(
                                           fontSize: 16,
                                           color: colorGray900,
                                           fontWeight: pw.FontWeight.bold)),
-                                  pw.Text('9822197172',
+                                  pw.Text(shopPhone ?? '9822197172',
                                       style: pw.TextStyle(
                                           fontSize: 14,
                                           color: colorGray900,
@@ -364,39 +360,56 @@ class MaterialRequestPdfGenerator {
                                   pw.MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: pw.CrossAxisAlignment.end,
                               children: [
-                                pw.Text(
-                                  'DIGITALLY GENERATED | VERIFIED REQUEST',
-                                  style: pw.TextStyle(
-                                    color: colorGray400,
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                                pw.Container(
-                                  decoration: pw.BoxDecoration(
-                                    border: pw.Border.all(
-                                        color: colorGray300, width: 2),
-                                    borderRadius: const pw.BorderRadius.all(
-                                        pw.Radius.circular(12)),
-                                    color: PdfColors.white,
-                                  ),
-                                  padding: const pw.EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  child: pw.Column(
-                                    children: [
-                                      pw.Image(sealImage, height: 48),
-                                      pw.SizedBox(height: 4),
-                                      pw.Text(
-                                        'www.mydigientry.com',
-                                        style: pw.TextStyle(
-                                          color: colorBlue700,
-                                          fontSize: 8,
-                                          font: fontMedium,
-                                        ),
+                                pw.Column(
+                                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                  children: [
+                                    pw.Text(
+                                      'This is a digitally verified request and does not require a signature.',
+                                      style: pw.TextStyle(
+                                        color: colorGray600,
+                                        fontSize: 9,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    pw.SizedBox(height: 6),
+                                    pw.Row(
+                                      children: [
+                                        pw.Text(
+                                          'Powered by ',
+                                          style: pw.TextStyle(
+                                            color: colorGray500,
+                                            fontSize: 9,
+                                            fontWeight: pw.FontWeight.bold,
+                                          ),
+                                        ),
+                                        pw.Text(
+                                          'SnapKhata',
+                                          style: pw.TextStyle(
+                                            color: colorGray900,
+                                            fontSize: 9,
+                                            fontWeight: pw.FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                pw.Column(
+                                  children: [
+                                    pw.SizedBox(height: 32),
+                                    pw.Container(
+                                      width: 140,
+                                      height: 1,
+                                      color: colorGray500,
+                                    ),
+                                    pw.SizedBox(height: 4),
+                                    pw.Text(
+                                      'Authorised Signature',
+                                      style: pw.TextStyle(
+                                        color: colorGray500,
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

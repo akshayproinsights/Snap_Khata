@@ -289,6 +289,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         mobileNumber: first.mobileNumber,
         extraFields: first.extraFields,
         uploadDate: first.uploadDate,
+        paymentMode: first.paymentMode,
+        receivedAmount: first.receivedAmount,
+        balanceDue: first.balanceDue,
+        customerDetails: first.customerDetails,
       );
       group.items = records;
       group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
@@ -691,10 +695,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     final pendingFmt = WhatsAppUtils.formatIndianCurrency(widget.ledger.balanceDue);
     
     final message = 'Hi $customerNameMsg,\n\n'
-        'This is a gentle reminder from *$shopName* regarding your pending balance.\n\n'
+        'This is a gentle reminder from *${shopName.trim()}* regarding your pending balance.\n\n'
         '⚠️ *Total Amount Due: $pendingFmt*\n\n'
         'Please find your invoice receipt for reference:\n$link\n\n'
-        'Thank you for your business!\n— *$shopName*';
+        'Thank you for your business!\n— *${shopName.trim()}*';
 
     final phoneController = TextEditingController(text: widget.ledger.customerPhone ?? '');
 

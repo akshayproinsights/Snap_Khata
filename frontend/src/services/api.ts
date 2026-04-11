@@ -322,6 +322,11 @@ export const configAPI = {
         const response = await apiClient.get('/api/config/columns');
         return response.data;
     },
+
+    getShopProfile: async () => {
+        const response = await apiClient.get('/api/shop-profile');
+        return response.data;
+    },
 };
 
 // Mapping Sheet Upload

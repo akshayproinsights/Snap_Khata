@@ -240,7 +240,7 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
     try:
         # Verify ledger belongs to user
         ledger_resp = db.client.table('customer_ledgers') \
-            .select('id') \
+            .select('id, customer_name') \
             .eq('id', ledger_id) \
             .eq('username', username) \
             .execute()
@@ -248,8 +248,37 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
         if not ledger_resp.data:
             raise HTTPException(status_code=404, detail="Ledger not found")
             
+        customer_name = ledger_resp.data[0].get('customer_name')
+            
         # Delete the ledger (transactions will be deleted by CASCADE)
         db.client.table('customer_ledgers').delete().eq('id', ledger_id).execute()
+        
+        # Prevent "Sync & Finish" from resurrecting this deleted ledger by
+        # converting active credit invoices for this customer to Cash.
+        if customer_name:
+            try:
+                db.client.table('invoices') \
+                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
+                    .eq('username', username) \
+                    .eq('customer', customer_name) \
+                    .eq('payment_mode', 'Credit') \
+                    .execute()
+                    
+                db.client.table('verification_dates') \
+                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
+                    .eq('username', username) \
+                    .eq('customer_details', customer_name) \
+                    .eq('payment_mode', 'Credit') \
+                    .execute()
+                    
+                db.client.table('verified_invoices') \
+                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
+                    .eq('username', username) \
+                    .eq('customer_name', customer_name) \
+                    .eq('payment_mode', 'Credit') \
+                    .execute()
+            except Exception as update_err:
+                logger.warning(f"Failed to clear credit status on invoices when deleting ledger: {update_err}")
         
         return {
             "status": "success",

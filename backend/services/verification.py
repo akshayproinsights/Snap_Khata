@@ -870,6 +870,15 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         final_df_snake = final_df_snake.replace([float('inf'), float('-inf')], None)
         final_df_snake = final_df_snake.where(pd.notna(final_df_snake), None)
         
+        # CRITICAL FIX: Ensure NOT NULL text constraints for verified_invoices.
+        # Use fillna("") instead of `lambda x: "" if x is None else x` — pandas
+        # .where(pd.notna(df), None) can produce pd.NA (not Python None) for some
+        # dtypes, and `pd.NA is None` evaluates to False, silently allowing nulls
+        # through to Postgres which then raises a NOT NULL constraint violation.
+        for col in ['receipt_number', 'receipt_link', 'r2_file_path', 'row_id']:
+            if col in final_df_snake.columns:
+                final_df_snake[col] = final_df_snake[col].fillna("").astype(str).replace("None", "").replace("nan", "")
+        
         # Map column names from invoices schema to verified_invoices schema
         # invoices has: customer, vehicle_number
         # verified_invoices has: customer_name, car_number
@@ -941,7 +950,16 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         final_records = final_df_snake.to_dict('records')
         
         # Save to verified_invoices table
-        update_verified_invoices(username, final_records)
+        # CRITICAL: Check return value — if upsert fails, do NOT continue to
+        # clean up verification tables. Leaving them intact preserves user data
+        # and lets the user retry Sync & Finish after the root cause is fixed.
+        save_success = update_verified_invoices(username, final_records)
+        if not save_success:
+            raise RuntimeError(
+                f"Failed to save verified_invoices for {username}. "
+                "Verification tables were NOT cleaned up to preserve user data. "
+                "Check database logs for the constraint violation details."
+            )
         logger.info(f"verified_invoices updated with {len(final_records)} rows")
 
         # 5B. Process Customer Ledgers for Credit transactions

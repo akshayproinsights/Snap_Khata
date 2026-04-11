@@ -8,6 +8,9 @@ export interface MaterialRequestPDFProps {
     vendorName: string;
     senderName: string;
     senderPhone: string;
+    shopName?: string;
+    shopAddress?: string;
+    shopPhone?: string;
     notes?: string;
     items: {
         partNumber: string;
@@ -24,6 +27,11 @@ const MaterialRequestPDF: React.FC<MaterialRequestPDFProps> = ({
     poNumber,
     date,
     vendorName,
+    senderName,
+    senderPhone,
+    shopName,
+    shopAddress,
+    shopPhone,
     notes,
     items,
     pageIndex,
@@ -56,11 +64,10 @@ const MaterialRequestPDF: React.FC<MaterialRequestPDFProps> = ({
                         {/* Top Left: Brand Identity (Dark Navy) */}
                         <div className="flex flex-col max-w-[60%]">
                             <h1 className="text-5xl font-extrabold text-[#1a237e] tracking-tight uppercase leading-none mb-3">
-                                NEHA AUTO STORES
+                                {shopName || 'NEHA AUTO STORES'}
                             </h1>
-                            <p className="text-sm text-gray-700 font-medium leading-relaxed max-w-[90%]">
-                                5, Shri Datta nagar, Opp. Yogeshwari Mahavidyalaya,<br />
-                                Ambajogai - Dist. Beed 431517
+                            <p className="text-sm text-gray-700 font-medium leading-relaxed max-w-[90%] whitespace-pre-wrap">
+                                {shopAddress || '5, Shri Datta nagar, Opp. Yogeshwari Mahavidyalaya,\nAmbajogai - Dist. Beed 431517'}
                             </p>
                         </div>
 
@@ -102,8 +109,8 @@ const MaterialRequestPDF: React.FC<MaterialRequestPDFProps> = ({
                             <div className="w-[40%] p-4">
                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">SITE CONTACT</p>
                                 <div className="flex flex-col">
-                                    <span className="text-xl font-bold text-gray-900">Mr. Adnak</span>
-                                    <span className="text-lg font-bold text-gray-900 tracking-wide">9822197172</span>
+                                    <span className="text-xl font-bold text-gray-900">{senderName || 'Authorized Signatory'}</span>
+                                    <span className="text-lg font-bold text-gray-900 tracking-wide">{senderPhone || shopPhone || ''}</span>
                                 </div>
                             </div>
                         </div>
@@ -160,22 +167,16 @@ const MaterialRequestPDF: React.FC<MaterialRequestPDFProps> = ({
                         {/* Footer Bottom Layout */}
                         <div className="flex justify-between items-end border-t-2 border-gray-800 pt-6">
                             <div className="text-left">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Digitally Generated | Verified Request</p>
+                                <p className="text-[11px] text-gray-600 mb-2">This is a digitally verified request and does not require a signature.</p>
+                                <p className="text-[11px] font-semibold text-gray-500">
+                                    Powered by <span className="text-gray-900">SnapKhata</span>
+                                </p>
                             </div>
 
-                            {/* Trust Seal / Digital Stamp - Refined */}
-                            <div className="flex flex-col items-center">
-                                <div className="border-2 border-gray-200 rounded-xl p-3 bg-white flex flex-col items-center shadow-sm min-w-[140px]">
-                                    <img
-                                        src="/snapkhata_seal.png"
-                                        alt="SnapKhata"
-                                        className="h-14 object-contain mb-1" /* Increased size */
-                                    />
-                                    {/* Text labels removed for Top 1% cleaner look */}
-                                    <a href="https://www.mydigientry.com" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium mt-1">
-                                        www.mydigientry.com
-                                    </a>
-                                </div>
+                            {/* Authorised Signature Block */}
+                            <div className="flex flex-col items-center justify-end">
+                                <div className="w-40 h-[1px] bg-gray-500 mb-2 mt-12"></div>
+                                <p className="text-[11px] text-gray-500">Authorised Signature</p>
                             </div>
                         </div>
                     </div>
