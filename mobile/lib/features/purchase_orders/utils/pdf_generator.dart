@@ -48,6 +48,7 @@ class MaterialRequestPdfGenerator {
     final colorGray800 = PdfColor.fromHex('#1f2937');
     final colorGray900 = PdfColor.fromHex('#111827');
     final colorGray700 = PdfColor.fromHex('#374151');
+    final colorGray600 = PdfColor.fromHex('#4b5563');
     final colorGray500 = PdfColor.fromHex('#6b7280');
     final colorGray400 = PdfColor.fromHex('#9ca3af');
     final colorGray300 = PdfColor.fromHex('#d1d5db');
