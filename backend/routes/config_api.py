@@ -146,8 +146,10 @@ async def get_shop_profile(
         }
     except Exception as e:
         logger.error(f"Error fetching shop profile for {username}: {e}")
-        # Return empty profile gracefully — don't crash the app
-        return {"shop_name": "", "shop_address": "", "shop_phone": "", "shop_gst": ""}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch shop profile: {str(e)}"
+        )
 
 
 @router.post("/shop-profile")

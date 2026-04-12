@@ -404,7 +404,7 @@ class MaterialRequestPdfGenerator {
                                     ),
                                     pw.SizedBox(height: 4),
                                     pw.Text(
-                                      'Authorised Signature',
+                                      'User Name',
                                       style: pw.TextStyle(
                                         color: colorGray500,
                                         fontSize: 9,

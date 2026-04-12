@@ -69,16 +69,22 @@ class ShopNotifier extends Notifier<ShopProfile> {
         developer.log('Parsed shop name from backend: "${newProfile.name}"', name: 'ShopProvider');
         developer.log('Previous shop name: "${state.name}"', name: 'ShopProvider');
         
-        state = newProfile;
-        
-        // Update local cache
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('shop_title', newProfile.name);
-        await prefs.setString('shop_address', newProfile.address);
-        await prefs.setString('shop_phone', newProfile.phone);
-        await prefs.setString('shop_gst', newProfile.gst);
-        
-        developer.log('Updated SharedPreferences cache with new shop data', name: 'ShopProvider');
+        // Defensive check: Only overwrite if local name is empty OR backend provides a non-empty name.
+        // This prevents "losing" local data if the backend returns empty for some reason.
+        if (state.name.isEmpty || newProfile.name.isNotEmpty) {
+          developer.log('Updating shop profile from backend.', name: 'ShopProvider');
+          state = newProfile;
+          
+          // Update local cache
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('shop_title', newProfile.name);
+          await prefs.setString('shop_address', newProfile.address);
+          await prefs.setString('shop_phone', newProfile.phone);
+          await prefs.setString('shop_gst', newProfile.gst);
+          developer.log('Updated SharedPreferences cache with new shop data', name: 'ShopProvider');
+        } else {
+          developer.log('Skipping backend sync because backend returned empty but local profile has data.', name: 'ShopProvider');
+        }
       } else {
         developer.log('Backend API returned non-200 status or empty data', name: 'ShopProvider');
       }

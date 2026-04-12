@@ -7,6 +7,7 @@ class ValidationSaveButton extends StatelessWidget {
   final bool hasMismatch;
   final bool isLoading;
   final VoidCallback onSave;
+  final bool isUpdate;
 
   const ValidationSaveButton({
     super.key,
@@ -14,6 +15,7 @@ class ValidationSaveButton extends StatelessWidget {
     required this.hasMismatch,
     required this.isLoading,
     required this.onSave,
+    this.isUpdate = false,
   });
 
   String _fmt(double? v) {
@@ -80,9 +82,9 @@ class ValidationSaveButton extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : Icon(hasMismatch ? LucideIcons.alertTriangle : LucideIcons.checkCircle),
+                    : Icon(hasMismatch ? LucideIcons.alertTriangle : (isUpdate ? LucideIcons.save : LucideIcons.checkCircle)),
                 label: Text(
-                  hasMismatch ? 'Save with Errors' : 'Confirm & Save ✨',
+                  hasMismatch ? 'Save with Errors' : (isUpdate ? 'Save Updates ✨' : 'Confirm & Save ✨'),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,

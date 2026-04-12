@@ -852,7 +852,7 @@ async def verify_inventory_invoice(
             
         # 1. Fetch items to get total amount and receipt link
         item_response = db.client.table("inventory_items") \
-            .select("id, net_bill, receipt_link, image_hash") \
+            .select("id, net_bill, receipt_link, image_hash, inventory_invoice_id, verification_status") \
             .in_("id", request.item_ids) \
             .eq("username", username) \
             .execute()
@@ -864,6 +864,13 @@ async def verify_inventory_invoice(
         receipt_link = item_response.data[0].get("receipt_link", "")
         image_hash = item_response.data[0].get("image_hash", "")
 
+        # Check if an existing invoice already links these items
+        existing_invoice_id = None
+        for item in item_response.data:
+            if item.get("inventory_invoice_id"):
+                existing_invoice_id = item.get("inventory_invoice_id")
+                break
+
         if request.final_total is not None:
             total_amount = request.final_total
         elif request.adjustments is not None:
@@ -872,7 +879,7 @@ async def verify_inventory_invoice(
         else:
             total_amount = sum_net_bill
 
-        # 2. Insert into inventory_invoices
+        # 2. Upsert into inventory_invoices
         invoice_data = {
             "username": username,
             "invoice_number": request.invoice_number,
@@ -887,12 +894,37 @@ async def verify_inventory_invoice(
             "vendor_notes": request.vendor_notes
         }
         
-        invoice_response = db.client.table("inventory_invoices").insert(invoice_data).execute()
-        
-        if not invoice_response.data:
-            raise HTTPException(status_code=500, detail="Failed to save invoice details")
-            
-        new_invoice_id = invoice_response.data[0]["id"]
+        from datetime import datetime
+        if existing_invoice_id:
+            # Fetch old invoice to rollback vendor ledger if necessary
+            inv_resp = db.client.table("inventory_invoices").select("*").eq("id", existing_invoice_id).execute()
+            existing_invoice = inv_resp.data[0] if inv_resp.data else None
+
+            db.client.table("inventory_invoices").update(invoice_data).eq("id", existing_invoice_id).execute()
+            new_invoice_id = existing_invoice_id
+
+            if existing_invoice:
+                old_balance = float(existing_invoice.get("balance_owed") or 0.0)
+                old_vendor = str(existing_invoice.get("vendor_name") or "").strip()
+                
+                # Reverse old_balance from old vendor's ledger
+                if old_balance > 0 and old_vendor:
+                    old_ld_resp = db.client.table("vendor_ledgers").select("*").eq("username", username).eq("vendor_name", old_vendor).execute()
+                    if old_ld_resp.data:
+                        old_ld = old_ld_resp.data[0]
+                        new_old_balance = float(old_ld.get("balance_due", 0)) - old_balance
+                        db.client.table("vendor_ledgers").update({
+                            "balance_due": new_old_balance,
+                            "updated_at": datetime.utcnow().isoformat()
+                        }).eq("id", old_ld["id"]).execute()
+                        
+                    # Delete the old transaction completely
+                    db.client.table("vendor_ledger_transactions").delete().eq("invoice_number", existing_invoice.get("invoice_number")).eq("transaction_type", "INVOICE").execute()
+        else:
+            invoice_response = db.client.table("inventory_invoices").insert(invoice_data).execute()
+            if not invoice_response.data:
+                raise HTTPException(status_code=500, detail="Failed to save invoice details")
+            new_invoice_id = invoice_response.data[0]["id"]
         
         # 3. Update all linked inventory_items to Verification Status = 'Done' and link invoice ID
         update_data = {
@@ -944,7 +976,6 @@ async def verify_inventory_invoice(
             if ledger_resp.data:
                 ledger = ledger_resp.data[0]
                 new_balance = float(ledger.get('balance_due', 0)) + balance_owed_float
-                from datetime import datetime
                 db.client.table('vendor_ledgers').update({
                     'balance_due': new_balance,
                     'updated_at': datetime.utcnow().isoformat()

@@ -618,6 +618,7 @@ class _InventoryInvoiceReviewPageState
         hasMismatch: hasAnyMismatch,
         isLoading: _isLoading,
         onSave: () => _saveInvoice(sortedItems, totalAmount),
+        isUpdate: widget.bundle.isVerified,
       ),
     );
   }

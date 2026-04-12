@@ -12,30 +12,7 @@ import 'package:mobile/features/inventory/presentation/providers/inventory_provi
 import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
 import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 
-// ─── Grouped invoice bundle ──────────────────────────────────────────────────
-class _InvoiceBundle {
-  final String invoiceNumber;
-  final String date;
-  final String vendorName;
-  final String receiptLink;
-  final List<InventoryItem> items;
-  double totalAmount;
-  bool hasMismatch;
-  bool isVerified;
-  String createdAt;
-
-  _InvoiceBundle({
-    required this.invoiceNumber,
-    required this.date,
-    required this.vendorName,
-    required this.receiptLink,
-    required this.items,
-    required this.totalAmount,
-    required this.hasMismatch,
-    required this.isVerified,
-    required this.createdAt,
-  });
-}
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 class InventoryMainPage extends ConsumerStatefulWidget {
@@ -45,12 +22,21 @@ class InventoryMainPage extends ConsumerStatefulWidget {
   ConsumerState<InventoryMainPage> createState() => _InventoryMainPageState();
 }
 
-class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
+class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -67,8 +53,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
     return DateFormat('d MMM').format(dt);
   }
 
-  List<_InvoiceBundle> _groupItems(List<InventoryItem> items) {
-    final Map<String, _InvoiceBundle> groups = {};
+  List<InventoryInvoiceBundle> _groupItems(List<InventoryItem> items) {
+    final Map<String, InventoryInvoiceBundle> groups = {};
     for (final item in items) {
       final key = item.invoiceNumber.isNotEmpty
           ? item.invoiceNumber
@@ -76,7 +62,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
       final safeKey = key.isNotEmpty ? key : item.id.toString();
 
       if (!groups.containsKey(safeKey)) {
-        groups[safeKey] = _InvoiceBundle(
+        groups[safeKey] = InventoryInvoiceBundle(
           invoiceNumber: item.invoiceNumber,
           date: item.invoiceDate,
           vendorName: item.vendorName?.isNotEmpty == true
@@ -88,6 +74,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
           hasMismatch: false,
           isVerified: true, // assume verified until we find otherwise
           createdAt: item.createdAt ?? '',
+          headerAdjustments: item.headerAdjustments ?? [],
         );
       }
       final bundle = groups[safeKey]!;
@@ -159,45 +146,29 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
         actions: const [
           SizedBox(width: 8),
         ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(inventoryItemsProvider),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildQuickLinksCard(context, pendingCount, poState),
-              const SizedBox(height: 28),
-              Row(
-                children: [
-                  const Text(
-                    'Recent Vendor Deliveries',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (itemsAsync.isLoading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _buildSearchBox(),
-              const SizedBox(height: 12),
-              _buildDeliveriesList(context, itemsAsync),
-              const SizedBox(height: 100),
-            ],
-          ),
+        bottom: TabBar(
+          controller: _tabController,
+          labelStyle: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+          unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
+          indicatorSize: TabBarIndicatorSize.label,
+          indicatorColor: AppTheme.primary,
+          labelColor: AppTheme.primary,
+          unselectedLabelColor: AppTheme.textSecondary,
+          tabs: const [
+            Tab(text: 'Recent Deliveries'),
+            Tab(text: 'Party Details'),
+          ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildRecentDeliveriesTab(context, itemsAsync, pendingCount, poState),
+          _buildPartyDetailsTab(context, itemsAsync),
+        ],
       ),
       floatingActionButton: SizedBox(
         height: 54,
@@ -223,6 +194,52 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildRecentDeliveriesTab(
+      BuildContext context,
+      AsyncValue<List<InventoryItem>> itemsAsync,
+      int pendingCount,
+      PurchaseOrderState poState) {
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(inventoryItemsProvider),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildQuickLinksCard(context, pendingCount, poState),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                const Text(
+                  'Recent Vendor Deliveries',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const Spacer(),
+                if (itemsAsync.isLoading)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildSearchBox(),
+            const SizedBox(height: 12),
+            _buildDeliveriesList(context, itemsAsync),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
     );
   }
 
@@ -557,11 +574,226 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage> {
       },
     );
   }
+  Widget _buildPartyDetailsTab(
+      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
+    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (itemsAsync.hasError) {
+      return Center(
+        child: Text('Error: ${itemsAsync.error}',
+            style: const TextStyle(color: AppTheme.error)),
+      );
+    }
+
+    final items = itemsAsync.value ?? [];
+    final Map<String, _VendorSummary> summaries = {};
+
+    for (var item in items) {
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final matchesName = (item.vendorName ?? '').toLowerCase().contains(query);
+        final matchesInvoice = item.invoiceNumber.toLowerCase().contains(query);
+        if (!matchesName && !matchesInvoice) continue;
+      }
+
+      final String vendorName = item.vendorName ?? 'Unknown';
+      if (!summaries.containsKey(vendorName)) {
+        summaries[vendorName] = _VendorSummary(
+          vendorName: vendorName,
+          latestInvoice: item.invoiceNumber,
+          totalAmount: 0,
+        );
+      }
+
+      summaries[vendorName]!.totalAmount += item.netBill;
+      summaries[vendorName]!.itemIds.add(item.id);
+
+      final String uniqueInvoice = item.invoiceNumber.isNotEmpty
+          ? '${item.invoiceNumber}_$vendorName'
+          : '${item.invoiceDate}_$vendorName';
+
+      summaries[vendorName]!.invoices.add(uniqueInvoice);
+    }
+
+    final vendorList = summaries.values.toList()
+      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    return Column(
+      children: [
+        if (items.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: _buildSearchBox(),
+          ),
+        Expanded(
+          child: summaries.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.users,
+                          size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'No vendors found matching "$_searchQuery"'
+                            : 'No specific vendor deliveries logged yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: vendorList.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final vendor = vendorList[index];
+                    final String initial = vendor.vendorName.isNotEmpty
+                        ? vendor.vendorName.substring(0, 1).toUpperCase()
+                        : '?';
+
+                    return Material(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: AppTheme.border),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          // Setting search filter to vendor name and swiping to Recent Deliveries:
+                          setState(() {
+                            _searchQuery = vendor.vendorName;
+                            _searchController.text = vendor.vendorName;
+                            _tabController.animateTo(0);
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppTheme.primary.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.primary,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      vendor.vendorName,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w700),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${vendor.orderCount} Delivery(s)',
+                                      style: const TextStyle(
+                                          color: AppTheme.textSecondary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    currencyFormat.format(vendor.totalAmount),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          color: AppTheme.textPrimary,
+                                          letterSpacing: -0.3,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      'View Deliveries',
+                                      style: TextStyle(
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 10,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  )
+                                ],
+                              )
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VendorSummary {
+  String vendorName;
+  String latestInvoice;
+  double totalAmount;
+  Set<int> itemIds = {};
+  Set<String> invoices = {};
+  int get orderCount => invoices.length;
+
+  _VendorSummary({
+    required this.vendorName,
+    required this.latestInvoice,
+    required this.totalAmount,
+  });
 }
 
 // ─── Vendor Delivery Card ─────────────────────────────────────────────────────
 class _VendorDeliveryCard extends ConsumerStatefulWidget {
-  final _InvoiceBundle bundle;
+  final InventoryInvoiceBundle bundle;
   final String dateLabel;
   final String searchQuery;
   final List<InventoryItem> allItems;
@@ -794,74 +1026,115 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
                           splashRadius: 20,
                         ),
                         const SizedBox(height: 12),
-                        if (hasMismatch)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Edit Button
+                            InkWell(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                context.push('/inventory-invoice-review', extra: bundle);
+                              },
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color:
-                                      const Color(0xFFEF4444).withValues(alpha: 0.3)),
-                            ),
-                            child: const Text('⚠ Review',
-                                style: TextStyle(
-                                    color: Color(0xFFEF4444),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800)),
-                          )
-                        else
-                          InkWell(
-                            onTap: bundle.receiptLink.isNotEmpty ? () {
-                              HapticFeedback.lightImpact();
-                              InteractiveImageGallery.show(
-                                context,
-                                imageUrls: [bundle.receiptLink],
-                              );
-                            } : () {
-                              HapticFeedback.lightImpact();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('No receipt image available')),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: bundle.receiptLink.isNotEmpty 
-                                  ? Colors.green.shade50 
-                                  : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: bundle.receiptLink.isNotEmpty 
-                                    ? Colors.green.shade200 
-                                    : Colors.grey.shade300,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppTheme.primary.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.edit3,
+                                      size: 14,
+                                      color: AppTheme.primary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text('Edit',
+                                        style: TextStyle(
+                                            color: AppTheme.primary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800)),
+                                  ],
                                 ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.eye,
-                                    size: 14,
-                                    color: bundle.receiptLink.isNotEmpty 
-                                      ? Colors.green.shade700 
-                                      : Colors.grey.shade500,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text('View',
-                                      style: TextStyle(
-                                          color: bundle.receiptLink.isNotEmpty 
-                                              ? Colors.green 
-                                              : Colors.grey.shade600,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800)),
-                                ],
-                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            if (hasMismatch)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                                ),
+                                child: const Text('⚠ Review',
+                                    style: TextStyle(
+                                        color: Color(0xFFEF4444),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800)),
+                              )
+                            else
+                              InkWell(
+                                onTap: bundle.receiptLink.isNotEmpty ? () {
+                                  HapticFeedback.lightImpact();
+                                  InteractiveImageGallery.show(
+                                    context,
+                                    imageUrls: [bundle.receiptLink],
+                                  );
+                                } : () {
+                                  HapticFeedback.lightImpact();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('No receipt image available')),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: bundle.receiptLink.isNotEmpty 
+                                      ? Colors.green.shade50 
+                                      : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: bundle.receiptLink.isNotEmpty 
+                                        ? Colors.green.shade200 
+                                        : Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.eye,
+                                        size: 14,
+                                        color: bundle.receiptLink.isNotEmpty 
+                                          ? Colors.green.shade700 
+                                          : Colors.grey.shade500,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text('View',
+                                          style: TextStyle(
+                                              color: bundle.receiptLink.isNotEmpty 
+                                                  ? Colors.green 
+                                                  : Colors.grey.shade600,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                         const SizedBox(height: 6),
                         AnimatedRotation(
                           turns: _isExpanded ? 0.5 : 0,
@@ -1106,7 +1379,7 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, _InvoiceBundle bundle) async {
+      BuildContext context, WidgetRef ref, InventoryInvoiceBundle bundle) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1148,4 +1421,5 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
       }
     }
   }
+
 }
