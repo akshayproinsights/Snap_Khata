@@ -169,6 +169,62 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       return false;
     }
   }
+
+  /// Fetches all inventory items (purchase invoices) for a specific vendor.
+  /// This combines with ledger transactions to show complete vendor history.
+  Future<List<Map<String, dynamic>>> fetchInventoryItemsByVendor(String vendorName) async {
+    try {
+      final response = await _dio.get('/api/inventory/items', queryParameters: {
+        'show_all': true,
+      });
+      final items = response.data['items'] as List? ?? [];
+      
+      // Filter items by vendor name (case-insensitive match)
+      final vendorItems = items.where((item) {
+        final itemVendor = item['vendor_name']?.toString().toLowerCase() ?? '';
+        final searchVendor = vendorName.toLowerCase();
+        return itemVendor == searchVendor || itemVendor.contains(searchVendor);
+      }).toList();
+      
+      // Group by invoice number to create invoice-level summary
+      final Map<String, Map<String, dynamic>> invoiceGroups = {};
+      for (final item in vendorItems) {
+        final invoiceNum = item['invoice_number']?.toString() ?? '';
+        final invoiceDate = item['invoice_date']?.toString() ?? '';
+        final key = invoiceNum.isNotEmpty ? invoiceNum : '${invoiceDate}_${item['id']}';
+        
+        if (!invoiceGroups.containsKey(key)) {
+          invoiceGroups[key] = {
+            'invoice_number': invoiceNum,
+            'invoice_date': invoiceDate,
+            'vendor_name': item['vendor_name'],
+            'receipt_link': item['receipt_link'],
+            'upload_date': item['upload_date'],
+            'total_amount': 0.0,
+            'item_count': 0,
+            'items': <Map<String, dynamic>>[],
+          };
+        }
+        
+        final netBill = double.tryParse(item['net_bill']?.toString() ?? '0') ?? 0.0;
+        invoiceGroups[key]!['total_amount'] = (invoiceGroups[key]!['total_amount'] as double) + netBill;
+        invoiceGroups[key]!['item_count'] = (invoiceGroups[key]!['item_count'] as int) + 1;
+        (invoiceGroups[key]!['items'] as List<Map<String, dynamic>>).add(item as Map<String, dynamic>);
+      }
+      
+      // Convert to list and sort by date (newest first)
+      final invoices = invoiceGroups.values.toList();
+      invoices.sort((a, b) {
+        final dateA = DateTime.tryParse(a['invoice_date']?.toString() ?? '') ?? DateTime(0);
+        final dateB = DateTime.tryParse(b['invoice_date']?.toString() ?? '') ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+      
+      return invoices;
+    } catch (e) {
+      return [];
+    }
+  }
 }
 
 final vendorLedgerProvider =

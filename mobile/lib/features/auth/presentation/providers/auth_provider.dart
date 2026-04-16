@@ -63,18 +63,38 @@ class AuthNotifier extends Notifier<AuthState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
+      // CRITICAL: Also read the stored username to detect cross-user session issues
+      final storedUsername = prefs.getString('auth_username');
 
       if (token != null) {
         state = state.copyWith(token: token);
+        // Always verify token with server (catches stale/wrong-user tokens)
         final user = await _repository.getMe();
+
+        // CRITICAL SAFETY CHECK: If stored username doesn't match what the
+        // server says, flush the stale token and force re-login.
+        // This prevents cross-user data leakage on shared devices.
+        if (storedUsername != null &&
+            storedUsername.isNotEmpty &&
+            user.username.isNotEmpty &&
+            storedUsername != user.username) {
+          await prefs.remove('auth_token');
+          await prefs.remove('auth_username');
+          state = state.copyWith(isLoading: false, token: null, user: null);
+          return;
+        }
+
+        // Persist the correct username for future checks
+        await prefs.setString('auth_username', user.username);
         state = state.copyWith(user: user, isLoading: false);
       } else {
         state = state.copyWith(isLoading: false);
       }
     } catch (e) {
-      // If fetching user fails, clear token
+      // If fetching user fails, clear all auth state
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
+      await prefs.remove('auth_username');
       state = state.copyWith(isLoading: false, token: null, user: null);
     }
   }
@@ -93,6 +113,8 @@ class AuthNotifier extends Notifier<AuthState> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', token);
+      // CRITICAL: Also save the username so we can detect cross-user token re-use
+      await prefs.setString('auth_username', user.username);
 
       state = state.copyWith(
         token: token,
@@ -130,6 +152,7 @@ class AuthNotifier extends Notifier<AuthState> {
     } finally {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
+      await prefs.remove('auth_username'); // CRITICAL: clear username too
       state = AuthState(); // reset to default
     }
   }

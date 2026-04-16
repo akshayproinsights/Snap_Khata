@@ -24,8 +24,10 @@ class _VendorLedgerDetailPageState
   final dateFormatter = DateFormat('dd MMM yyyy');
 
   List<VendorLedgerTransaction>? _transactions;
+  List<Map<String, dynamic>>? _purchaseInvoices;
   bool _isLoading = true;
-  
+  bool _isLoadingPurchases = true;
+
   // Selection state
   final Set<int> _selectedIds = {};
   bool get _isSelectionMode => _selectedIds.isNotEmpty;
@@ -33,21 +35,48 @@ class _VendorLedgerDetailPageState
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    _loadData();
   }
 
-  Future<void> _loadTransactions() async {
-    setState(() => _isLoading = true);
-    final transactions = await ref
-        .read(vendorLedgerProvider.notifier)
-        .fetchTransactions(widget.ledger.id);
-    
-    // Ensure descending date order
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _isLoadingPurchases = true;
+    });
+
+    // If ledger ID is negative, it's a view-only mode (no actual ledger exists)
+    // Only fetch purchase invoices, skip transactions
+    if (widget.ledger.id < 0) {
+      final purchaseInvoices = await ref
+          .read(vendorLedgerProvider.notifier)
+          .fetchInventoryItemsByVendor(widget.ledger.vendorName);
+
+      setState(() {
+        _transactions = [];
+        _purchaseInvoices = purchaseInvoices;
+        _isLoading = false;
+        _isLoadingPurchases = false;
+      });
+      return;
+    }
+
+    // Fetch both transactions and purchase invoices in parallel
+    final results = await Future.wait([
+      ref.read(vendorLedgerProvider.notifier).fetchTransactions(widget.ledger.id),
+      ref.read(vendorLedgerProvider.notifier).fetchInventoryItemsByVendor(widget.ledger.vendorName),
+    ]);
+
+    final transactions = results[0] as List<VendorLedgerTransaction>;
+    final purchaseInvoices = results[1] as List<Map<String, dynamic>>;
+
+    // Ensure descending date order for transactions
     transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    
+
     setState(() {
       _transactions = transactions;
+      _purchaseInvoices = purchaseInvoices;
       _isLoading = false;
+      _isLoadingPurchases = false;
     });
   }
 
@@ -84,7 +113,7 @@ class _VendorLedgerDetailPageState
       final success = await ref.read(vendorLedgerProvider.notifier).batchTogglePaidStatus(_selectedIds.toList(), paid);
       if (success) {
         _clearSelection();
-        _loadTransactions();
+        _loadData();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update transactions')));
       }
@@ -108,7 +137,7 @@ class _VendorLedgerDetailPageState
       final success = await ref.read(vendorLedgerProvider.notifier).batchDeleteTransactions(_selectedIds.toList());
       if (success) {
         _clearSelection();
-        _loadTransactions();
+        _loadData();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete transactions')));
       }
@@ -404,7 +433,7 @@ class _VendorLedgerDetailPageState
 
                             if (success && context.mounted) {
                               Navigator.pop(context);
-                              _loadTransactions();
+                              _loadData();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content: Text('Payment recorded! 🎉')),
@@ -455,22 +484,50 @@ class _VendorLedgerDetailPageState
         (l) => l.id == widget.ledger.id,
         orElse: () => widget.ledger);
 
-    // Calculate aggregated stats from available transactions
+    // Calculate aggregated stats from available transactions AND purchase invoices
     // Hide auto-generated payments by filtering out those with a linkedTransactionId
     final txList = _transactions?.where((tx) => tx.linkedTransactionId == null).toList() ?? [];
-    double totalSpend = 0;
-    int ordersCount = 0;
-    DateTime? lastOrderDate;
-    
+
+    // Calculate totals from ledger transactions (credit invoices)
+    double ledgerTotalSpend = 0;
+    int ledgerOrdersCount = 0;
+    DateTime? ledgerLastOrderDate;
+
     for (var tx in txList) {
       if (tx.transactionType != 'PAYMENT') {
-        totalSpend += tx.amount;
-        ordersCount++;
-        if (lastOrderDate == null || tx.createdAt.isAfter(lastOrderDate)) {
-          lastOrderDate = tx.createdAt;
+        ledgerTotalSpend += tx.amount;
+        ledgerOrdersCount++;
+        if (ledgerLastOrderDate == null || tx.createdAt.isAfter(ledgerLastOrderDate)) {
+          ledgerLastOrderDate = tx.createdAt;
         }
       }
     }
+
+    // Calculate totals from purchase invoices (inventory items)
+    double purchaseTotalSpend = 0;
+    int purchaseOrdersCount = _purchaseInvoices?.length ?? 0;
+    DateTime? purchaseLastOrderDate;
+
+    if (_purchaseInvoices != null) {
+      for (var invoice in _purchaseInvoices!) {
+        final amount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
+        purchaseTotalSpend += amount;
+
+        final dateStr = invoice['invoice_date']?.toString();
+        if (dateStr != null && dateStr.isNotEmpty) {
+          final date = DateTime.tryParse(dateStr);
+          if (date != null && (purchaseLastOrderDate == null || date.isAfter(purchaseLastOrderDate))) {
+            purchaseLastOrderDate = date;
+          }
+        }
+      }
+    }
+
+    // Combine totals - use purchase invoices as primary source for spend/orders if available
+    // since they represent actual purchase history
+    final totalSpend = purchaseTotalSpend > 0 ? purchaseTotalSpend : ledgerTotalSpend;
+    final ordersCount = purchaseOrdersCount > 0 ? purchaseOrdersCount : ledgerOrdersCount;
+    final lastOrderDate = purchaseLastOrderDate ?? ledgerLastOrderDate;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -517,11 +574,14 @@ class _VendorLedgerDetailPageState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.checkCircle2, 
-                           size: 14, color: AppTheme.primary),
+                      Icon(
+                        widget.ledger.id >= 0 ? LucideIcons.checkCircle2 : LucideIcons.package,
+                        size: 14,
+                        color: AppTheme.primary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        'Verified Supplier',
+                        widget.ledger.id >= 0 ? 'Verified Supplier' : 'Purchase History',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -544,153 +604,215 @@ class _VendorLedgerDetailPageState
                   childAspectRatio: 1.8,
                   children: [
                     _buildMetricCard(
-                      'Total Spend', 
+                      'Total Spend',
                       currencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
                     ),
                     _buildMetricCard('Orders', '$ordersCount'),
-                    _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
+                    // Only show Pending Due if ledger exists (id >= 0)
+                    if (widget.ledger.id >= 0)
+                      _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
                     _buildMetricCard(
-                      'Last Order', 
+                      'Last Order',
                       lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
                     ),
                   ],
                 ),
 
 
-                // Transactions Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Recent Transactions',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                // Transactions Section - only show if ledger exists
+                if (widget.ledger.id >= 0) ...[
+                  // Transactions Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Recent Transactions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
-                    ),
-                    if (_isSelectionMode)
-                      // In selection mode: show Select All / Deselect All
-                      TextButton(
-                        onPressed: () {
-                          final invoiceTxIds = txList
-                              .where((t) => t.transactionType != 'PAYMENT')
-                              .map((t) => t.id)
-                              .toSet();
-                          setState(() {
-                            if (_selectedIds.containsAll(invoiceTxIds)) {
-                              _selectedIds.clear();
-                            } else {
-                              _selectedIds.addAll(invoiceTxIds);
-                            }
-                          });
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppTheme.primary,
-                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                      if (_isSelectionMode)
+                        // In selection mode: show Select All / Deselect All
+                        TextButton(
+                          onPressed: () {
+                            final invoiceTxIds = txList
+                                .where((t) => t.transactionType != 'PAYMENT')
+                                .map((t) => t.id)
+                                .toSet();
+                            setState(() {
+                              if (_selectedIds.containsAll(invoiceTxIds)) {
+                                _selectedIds.clear();
+                              } else {
+                                _selectedIds.addAll(invoiceTxIds);
+                              }
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primary,
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: Builder(builder: (context) {
+                            final invoiceTxIds = txList
+                                .where((t) => t.transactionType != 'PAYMENT')
+                                .map((t) => t.id)
+                                .toSet();
+                            final allSelected = _selectedIds.containsAll(invoiceTxIds) && invoiceTxIds.isNotEmpty;
+                            return Text(
+                              allSelected ? 'Deselect All' : 'Select All',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            );
+                          }),
+                        )
+                      else
+                        Row(
+                          children: [
+                            // Select button
+                            TextButton(
+                              onPressed: () {
+                                // Enter selection mode by selecting the first invoice transaction
+                                final firstInvoiceTx = txList.firstWhere(
+                                  (t) => t.transactionType != 'PAYMENT',
+                                  orElse: () => txList.first,
+                                );
+                                _toggleSelection(firstInvoiceTx.id);
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppTheme.primary,
+                                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(LucideIcons.checkSquare, size: 14),
+                                  SizedBox(width: 6),
+                                  Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Pay button
+                            TextButton(
+                              onPressed: () => _showAddPaymentDialog(context),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppTheme.primary,
+                                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(LucideIcons.indianRupee, size: 14),
+                                  SizedBox(width: 6),
+                                  Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Transactions List
+                  _isLoading
+                      ? const Center(child: Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: CircularProgressIndicator(),
+                        ))
+                      : txList.isEmpty
+                          ? const Center(
+                              child: Padding(
+                              padding: EdgeInsets.all(32.0),
+                              child: Text('No transactions found',
+                                  style: TextStyle(color: AppTheme.textSecondary)),
+                            ))
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: txList.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final tx = txList[index];
+                                final isPayment = tx.transactionType == 'PAYMENT';
+                                return _buildTransactionCard(tx, isPayment);
+                              },
+                            ),
+
+                  const SizedBox(height: 32),
+                ],
+
+                // Purchase History Section Header
+                if (_purchaseInvoices != null && _purchaseInvoices!.isNotEmpty)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Purchase History',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_purchaseInvoices!.length} invoices',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
                           ),
                         ),
-                        child: Builder(builder: (context) {
-                          final invoiceTxIds = txList
-                              .where((t) => t.transactionType != 'PAYMENT')
-                              .map((t) => t.id)
-                              .toSet();
-                          final allSelected = _selectedIds.containsAll(invoiceTxIds) && invoiceTxIds.isNotEmpty;
-                          return Text(
-                            allSelected ? 'Deselect All' : 'Select All',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          );
-                        }),
-                      )
-                    else
-                      Row(
-                        children: [
-                          // Select button
-                          TextButton(
-                            onPressed: () {
-                              // Enter selection mode by selecting the first invoice transaction
-                              final firstInvoiceTx = txList.firstWhere(
-                                (t) => t.transactionType != 'PAYMENT',
-                                orElse: () => txList.first,
-                              );
-                              _toggleSelection(firstInvoiceTx.id);
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(LucideIcons.checkSquare, size: 14),
-                                SizedBox(width: 6),
-                                Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Pay button
-                          TextButton(
-                            onPressed: () => _showAddPaymentDialog(context),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(LucideIcons.indianRupee, size: 14),
-                                SizedBox(width: 6),
-                                Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                  ],
-                ),
-                const SizedBox(height: 16),
+                      ),
+                    ],
+                  ),
 
-                // Transactions List
-                _isLoading
+                if (_purchaseInvoices != null && _purchaseInvoices!.isNotEmpty)
+                  const SizedBox(height: 16),
+
+                // Purchase Invoices List
+                _isLoadingPurchases
                     ? const Center(child: Padding(
                         padding: EdgeInsets.all(32.0),
                         child: CircularProgressIndicator(),
                       ))
-                    : txList.isEmpty
-                        ? const Center(
-                            child: Padding(
-                            padding: EdgeInsets.all(32.0),
-                            child: Text('No transactions found',
-                                style: TextStyle(color: AppTheme.textSecondary)),
-                          ))
+                    : (_purchaseInvoices == null || _purchaseInvoices!.isEmpty)
+                        ? const SizedBox.shrink()
                         : ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: txList.length,
+                            itemCount: _purchaseInvoices!.length,
                             separatorBuilder: (context, index) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (context, index) {
-                              final tx = txList[index];
-                              final isPayment = tx.transactionType == 'PAYMENT';
-                              return _buildTransactionCard(tx, isPayment);
+                              final invoice = _purchaseInvoices![index];
+                              return _buildPurchaseInvoiceCard(invoice);
                             },
                           ),
-                
+
                 const SizedBox(height: 100), // More padding for batch bar
               ],
             ),
           ),
-          if (_isSelectionMode)
+          // Only show batch action bar if in selection mode AND ledger exists
+          if (_isSelectionMode && widget.ledger.id >= 0)
             Positioned(
               bottom: 24,
               left: 16,
@@ -988,11 +1110,232 @@ class _VendorLedgerDetailPageState
   Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool markAsPaid) async {
     final success = await ref.read(vendorLedgerProvider.notifier).toggleTransactionPaidStatus(tx.id, markAsPaid);
     if (success) {
-      _loadTransactions();
+      _loadData();
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update status')));
       }
     }
+  }
+
+  /// Builds a card for displaying a purchase invoice from inventory_items
+  Widget _buildPurchaseInvoiceCard(Map<String, dynamic> invoice) {
+    final invoiceNumber = invoice['invoice_number']?.toString() ?? '';
+    final invoiceDate = invoice['invoice_date']?.toString() ?? '';
+    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final itemCount = (invoice['item_count'] as num?)?.toInt() ?? 0;
+    final receiptLink = invoice['receipt_link']?.toString();
+
+    DateTime? parsedDate;
+    if (invoiceDate.isNotEmpty) {
+      parsedDate = DateTime.tryParse(invoiceDate);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          // Navigate to invoice detail or show receipt
+          if (receiptLink != null && receiptLink.isNotEmpty) {
+            _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber);
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      LucideIcons.package,
+                      color: Color(0xFFF59E0B),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Invoice',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppTheme.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          parsedDate != null
+                              ? dateFormatter.format(parsedDate)
+                              : invoiceDate,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (receiptLink != null && receiptLink.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.primary),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber),
+                      tooltip: 'View Receipt',
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: AppTheme.border),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(LucideIcons.box, size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$itemCount item${itemCount == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    currencyFormatter.format(totalAmount),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shows a modal with the purchase invoice receipt photo
+  void _showPurchaseInvoiceReceipt(String receiptLink, String invoiceNumber) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white38,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Receipt',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(LucideIcons.x, color: Colors.white70),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12),
+              // Receipt photo area
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: receiptLink,
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      placeholder: (context, url) => Container(
+                        height: 300,
+                        color: Colors.white10,
+                        child: const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        height: 200,
+                        color: Colors.white10,
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
+                            SizedBox(height: 8),
+                            Text('Could not load receipt image',
+                              style: TextStyle(color: Colors.white54)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

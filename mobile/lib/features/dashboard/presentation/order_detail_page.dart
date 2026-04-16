@@ -294,8 +294,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final hasLink = widget.group.receiptLink.isNotEmpty &&
         widget.group.receiptLink != 'null';
 
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Order Details',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -498,12 +501,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildStickyBottomBar(_totalAfterGst(widget.group)),
+      bottomNavigationBar:
+          _buildStickyBottomBar(_totalAfterGst(widget.group), keyboardInset),
     );
   }
 
-  Widget _buildStickyBottomBar(double grandTotal) {
-    return Container(
+  Widget _buildStickyBottomBar(double grandTotal, double keyboardInset) {
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      child: Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -523,6 +531,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             ? _buildEditPaymentSection(grandTotal) 
             : _buildViewSummarySection(grandTotal),
       ),
+    ),
     );
   }
 

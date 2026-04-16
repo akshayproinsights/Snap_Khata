@@ -13,6 +13,7 @@ import 'package:mobile/features/inventory/presentation/widgets/edit_item_modal.d
 import 'package:mobile/features/inventory/presentation/widgets/header_adjustments_section.dart';
 import 'package:mobile/features/inventory/presentation/widgets/invoice_item_card.dart';
 import 'package:mobile/features/inventory/presentation/widgets/validation_save_button.dart';
+import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:intl/intl.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
@@ -268,13 +269,12 @@ class _InventoryInvoiceReviewPageState
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Inventory verified & saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
+        AppToast.showSuccess(
+          context,
+          'Inventory updated successfully. You can continue with your next bill.',
+          title: 'Saved',
         );
-        context.pop();
+        context.go('/inventory');
       }
     } catch (e) {
       if (mounted) {
@@ -405,16 +405,35 @@ class _InventoryInvoiceReviewPageState
     // Watch provider so optimistic updates reflect immediately
     final state = ref.watch(inventoryProvider);
 
-    // Recompute items for this bundle from latest state
-    final invoiceKey = widget.bundle.invoiceNumber.isNotEmpty
-        ? widget.bundle.invoiceNumber
-        : '${widget.bundle.date}_${widget.bundle.vendorName}';
+    // Build a lookup of optimistically-updated / deleted items from the provider.
+    // The provider only loads *pending* items by default, so we must NOT replace
+    // the full item list with provider items (verified items won't appear there).
+    // Instead, we always start from widget.bundle.items (loaded via inventoryItemsProvider
+    // with show_all=true) and only apply per-item overrides from the provider by ID.
+    final providerItemById = { for (final i in state.items) i.id: i };
 
-    final currentItems = state.items.where((i) {
+    // Apply optimistic updates: use provider version of each item if present,
+    // skip items that were deleted (absent from provider only if provider has
+    // loaded items for this invoice at all).
+    final providerHasThisInvoice = state.items.any((i) {
       final key = i.invoiceNumber.isNotEmpty
           ? i.invoiceNumber
           : '${i.invoiceDate}_${i.vendorName ?? ''}';
+      final invoiceKey = widget.bundle.invoiceNumber.isNotEmpty
+          ? widget.bundle.invoiceNumber
+          : '${widget.bundle.date}_${widget.bundle.vendorName}';
       return key == invoiceKey;
+    });
+
+    final currentItems = widget.bundle.items.where((bundleItem) {
+      // If the provider has loaded items for this specific invoice, respect deletions
+      if (providerHasThisInvoice && !providerItemById.containsKey(bundleItem.id)) {
+        return false; // Item was deleted (optimistic)
+      }
+      return true;
+    }).map((bundleItem) {
+      // Apply any optimistic edits from provider
+      return providerItemById[bundleItem.id] ?? bundleItem;
     }).toList();
 
     // Mismatch items first

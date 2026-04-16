@@ -628,12 +628,80 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
 
 // ─── PO Success + WhatsApp Share Sheet ───────────────────────────────────────
 
-class _PoSuccessSheet extends ConsumerWidget {
+class _PoSuccessSheet extends ConsumerStatefulWidget {
   final String poNumber;
   const _PoSuccessSheet({required this.poNumber});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PoSuccessSheet> createState() => _PoSuccessSheetState();
+}
+
+class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
+  bool _isSending = false;
+
+  Future<void> _sendPdf() async {
+    if (_isSending) return;
+    setState(() => _isSending = true);
+    try {
+      var po = _findPoInHistory();
+      if (po == null) {
+        await ref.read(purchaseOrderProvider.notifier).loadHistory();
+        po = _findPoInHistory();
+      }
+
+      if (po == null) {
+        if (mounted) {
+          AppToast.showError(
+            context,
+            'Could not find this PO in history. Please try from History tab.',
+          );
+        }
+        return;
+      }
+
+      final details = await ref
+          .read(purchaseOrderRepositoryProvider)
+          .getPurchaseOrderDetails(po.id);
+
+      if (details == null) {
+        if (mounted) {
+          AppToast.showError(context, 'Failed to generate PDF');
+        }
+        return;
+      }
+
+      final shopProfile = ref.read(shopProvider);
+      final bytes = await MaterialRequestPdfGenerator.generate(
+        details,
+        shopProfile.name.isNotEmpty ? 'Authorized Signatory' : 'Adnak',
+        notes: po.notes,
+        shopName: shopProfile.name.isNotEmpty ? shopProfile.name : null,
+        shopAddress: shopProfile.address.isNotEmpty ? shopProfile.address : null,
+        shopPhone: shopProfile.phone.isNotEmpty ? shopProfile.phone : null,
+      );
+
+      await Printing.sharePdf(bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('PDF generation error: $e');
+      if (mounted) {
+        AppToast.showError(context, 'Unable to share PDF right now');
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  PurchaseOrder? _findPoInHistory() {
+    final history = ref.read(purchaseOrderProvider).history;
+    for (final po in history) {
+      if (po.poNumber == widget.poNumber) return po;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
         color: AppTheme.surface,
@@ -657,7 +725,7 @@ class _PoSuccessSheet extends ConsumerWidget {
           const Text('Purchase Order Created!',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Text('PO Number: $poNumber',
+          Text('PO Number: ${widget.poNumber}',
               style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -681,37 +749,7 @@ class _PoSuccessSheet extends ConsumerWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: () async {
-                Navigator.pop(context);
-                try {
-                  final history = ref.read(purchaseOrderProvider).history;
-                  final po = history.firstWhere((p) => p.poNumber == poNumber);
-
-                  final details = await ref
-                      .read(purchaseOrderRepositoryProvider)
-                      .getPurchaseOrderDetails(po.id);
-
-                  if (details != null) {
-                    final shopProfile = ref.read(shopProvider);
-                    final bytes = await MaterialRequestPdfGenerator.generate(
-                        details, 
-                        shopProfile.name.isNotEmpty ? 'Authorized Signatory' : 'Adnak',
-                        notes: po.notes,
-                        shopName: shopProfile.name.isNotEmpty ? shopProfile.name : null,
-                        shopAddress: shopProfile.address.isNotEmpty ? shopProfile.address : null,
-                        shopPhone: shopProfile.phone.isNotEmpty ? shopProfile.phone : null,
-                    );
-                    await Printing.sharePdf(
-                        bytes: bytes, filename: 'PO_${po.poNumber}.pdf');
-                  } else {
-                    if (context.mounted) {
-                      AppToast.showError(context, 'Failed to generate PDF');
-                    }
-                  }
-                } catch (e) {
-                  debugPrint('PDF generation error: $e');
-                }
-              },
+              onPressed: _isSending ? null : _sendPdf,
             ),
           ),
           const SizedBox(height: 10),

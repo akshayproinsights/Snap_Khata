@@ -60,6 +60,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                     ledger_id = existing_ledger['id']
                     existing_tx = db.client.table('ledger_transactions') \
                         .select('id') \
+                        .eq('username', username) \
                         .eq('ledger_id', ledger_id) \
                         .eq('receipt_number', receipt_number) \
                         .eq('transaction_type', 'INVOICE') \
@@ -613,13 +614,50 @@ async def toggle_transaction_paid_status(
         now = datetime.utcnow().isoformat()
         
         if request.is_paid:
-            # MARING AS PAID
-            # Create a PAYMENT transaction
+            # MARKING AS PAID
+            # Use actual outstanding due (for receipt-based invoices) to avoid accidental overpayment.
+            settlement_amount = tx_amount
+            receipt_number = tx.get('receipt_number')
+            if receipt_number:
+                try:
+                    invoice_rows_resp = db.client.table('verified_invoices') \
+                        .select('balance_due') \
+                        .eq('username', username) \
+                        .eq('receipt_number', receipt_number) \
+                        .execute()
+
+                    if invoice_rows_resp.data:
+                        outstanding_due = sum(
+                            float(row.get('balance_due', 0) or 0)
+                            for row in invoice_rows_resp.data
+                        )
+                        if outstanding_due >= 0:
+                            settlement_amount = outstanding_due
+                except Exception as due_err:
+                    logger.warning(
+                        f"Could not resolve outstanding due for receipt {receipt_number}: {due_err}"
+                    )
+
+            # If nothing is due, just mark invoice as paid without creating synthetic payment.
+            if settlement_amount <= 0:
+                db.client.table('ledger_transactions').update({
+                    'is_paid': True,
+                    'linked_transaction_id': None
+                }).eq('id', transaction_id).execute()
+
+                return {
+                    "status": "success",
+                    "message": "Successfully marked as paid",
+                    "new_balance": current_balance,
+                    "is_paid": True
+                }
+
+            # Create a PAYMENT transaction for settlement amount
             payment_resp = db.client.table('ledger_transactions').insert({
                 'username': username,
                 'ledger_id': ledger_id,
                 'transaction_type': 'PAYMENT',
-                'amount': tx_amount,
+                'amount': settlement_amount,
                 'notes': f"Auto-generated payment for Invoice {tx.get('receipt_number', '')}",
                 'linked_transaction_id': transaction_id # Link it to the invoice
             }).execute()
@@ -636,7 +674,7 @@ async def toggle_transaction_paid_status(
             }).eq('id', transaction_id).execute()
             
             # Update customer balance (PAYMENT decreases balance due)
-            new_balance = current_balance - tx_amount
+            new_balance = current_balance - settlement_amount
             db.client.table('customer_ledgers').update({
                 'balance_due': new_balance,
                 'last_payment_date': now,
@@ -646,8 +684,20 @@ async def toggle_transaction_paid_status(
         else:
             # MARKING AS UNPAID
             linked_payment_id = tx.get('linked_transaction_id')
+            linked_payment_amount = 0.0
             
             if linked_payment_id:
+                # Read linked payment amount so we can reverse exactly what was applied.
+                linked_payment_resp = db.client.table('ledger_transactions') \
+                    .select('amount') \
+                    .eq('id', linked_payment_id) \
+                    .eq('ledger_id', ledger_id) \
+                    .eq('username', username) \
+                    .eq('transaction_type', 'PAYMENT') \
+                    .execute()
+                if linked_payment_resp.data:
+                    linked_payment_amount = float(linked_payment_resp.data[0].get('amount', 0) or 0)
+
                 # Delete the linked PAYMENT transaction
                 db.client.table('ledger_transactions').delete().eq('id', linked_payment_id).execute()
                 
@@ -658,7 +708,8 @@ async def toggle_transaction_paid_status(
             }).eq('id', transaction_id).execute()
             
             # Update customer balance (Reverting a PAYMENT increases balance due)
-            new_balance = current_balance + tx_amount
+            reverse_amount = linked_payment_amount if linked_payment_amount > 0 else tx_amount
+            new_balance = current_balance + reverse_amount
             db.client.table('customer_ledgers').update({
                 'balance_due': new_balance,
                 'updated_at': now

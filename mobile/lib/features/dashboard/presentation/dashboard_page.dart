@@ -53,6 +53,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final userState = ref.watch(authProvider);
     final String shopName =
         userState.user?.name ?? userState.user?.username ?? 'My Shop';
+    final String username = userState.user?.username ?? '';
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -74,6 +75,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            if (username.isNotEmpty)
+              Row(
+                children: [
+                  const Icon(LucideIcons.user, size: 10, color: AppTheme.textSecondary),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Logged in as: $username',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
         centerTitle: false,

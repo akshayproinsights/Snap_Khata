@@ -11,6 +11,9 @@ import 'package:mobile/features/inventory/presentation/providers/inventory_items
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
 import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
+import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -672,12 +675,24 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                       child: InkWell(
                         borderRadius: BorderRadius.circular(16),
                         onTap: () {
-                          // Setting search filter to vendor name and swiping to Recent Deliveries:
-                          setState(() {
-                            _searchQuery = vendor.vendorName;
-                            _searchController.text = vendor.vendorName;
-                            _tabController.animateTo(0);
-                          });
+                          // Navigate to Vendor Ledger Detail page to see complete vendor history
+                          final ledgerState = ref.read(vendorLedgerProvider);
+                          // Try to find an existing ledger for this vendor
+                          final existingLedger = ledgerState.ledgers.where(
+                            (l) => l.vendorName.toLowerCase() == vendor.vendorName.toLowerCase(),
+                          ).firstOrNull;
+
+                          final ledger = existingLedger ?? VendorLedger(
+                            id: -1, // Negative ID indicates view-only mode (no ledger exists yet)
+                            vendorName: vendor.vendorName,
+                            balanceDue: 0,
+                          );
+
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => VendorLedgerDetailPage(ledger: ledger),
+                            ),
+                          );
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
