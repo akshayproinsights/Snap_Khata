@@ -128,6 +128,7 @@ def merge_configs(template: Dict[str, Any], user_overrides: Dict[str, Any]) -> D
     """
     # Start with deep copy of template
     merged = deepcopy(template)
+    #
     
     # Override top-level fields from user config
     for key in ['username', 'display_name', 'r2_bucket', 'dashboard_url', 'industry']:
