@@ -9,6 +9,7 @@ from collections import Counter
 # Add project root to path to allow importing backend modules
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(project_root)
+# test
 # Add backend directory to path as well for internal imports (e.g. from config import ...)
 sys.path.append(os.path.join(project_root, 'backend'))
 

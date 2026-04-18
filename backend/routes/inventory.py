@@ -925,7 +925,17 @@ async def verify_inventory_invoice(
             if not invoice_response.data:
                 raise HTTPException(status_code=500, detail="Failed to save invoice details")
             new_invoice_id = invoice_response.data[0]["id"]
-        
+            
+            # Log usage for the new supplier order
+            try:
+                db.client.table('usage_logs').insert([{
+                    "username": username,
+                    "order_type": "supplier"
+                }]).execute()
+                logger.info(f"Logged new supplier order to usage metrics")
+            except Exception as e:
+                logger.error(f"Failed to log supplier usage metrics: {e}")
+
         # 3. Update all linked inventory_items to Verification Status = 'Done' and link invoice ID
         update_data = {
             "verification_status": "Done",

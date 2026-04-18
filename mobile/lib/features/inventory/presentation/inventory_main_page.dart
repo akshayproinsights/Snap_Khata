@@ -139,11 +139,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
-        title: const Text(
-          'Suppliers',
-          style: TextStyle(
-              fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
-        ),
+        title: const Text('Suppliers'),
         actions: const [
           SizedBox(width: 8),
         ],
@@ -178,7 +174,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
             HapticFeedback.mediumImpact();
             context.push('/inventory-upload');
           },
-          backgroundColor: const Color(0xFF16A34A), // green-700 — matches Snap New Order
+          backgroundColor: const Color(0xFFEF4444), // red-500 — matches Outgoing/Due
           foregroundColor: Colors.white,
           icon: const Icon(Icons.camera_alt_rounded, size: 22),
           label: Text(
@@ -658,9 +654,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                       const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final vendor = vendorList[index];
-                    final String initial = vendor.vendorName.isNotEmpty
-                        ? vendor.vendorName.substring(0, 1).toUpperCase()
-                        : '?';
 
                     return Material(
                       color: AppTheme.surface,
@@ -706,13 +699,10 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.primary,
-                                    fontSize: 18,
-                                  ),
+                                child: const Icon(
+                                  Icons.local_shipping,
+                                  size: 22,
+                                  color: AppTheme.primary,
                                 ),
                               ),
                               const SizedBox(width: 14),
@@ -867,6 +857,8 @@ class _VendorDeliveryCard extends ConsumerWidget {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
+    final isPaid = bundle.isPaid;
+    final hasChori = bundle.hasChoriCatcherAlert;
 
     return InkWell(
       onTap: () {
@@ -884,14 +876,14 @@ class _VendorDeliveryCard extends ConsumerWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: hasMismatch
+            color: hasChori
                 ? const Color(0xFFEF4444).withValues(alpha: 0.4)
                 : Colors.grey.shade200,
-            width: hasMismatch ? 1.5 : 1.0,
+            width: hasChori ? 1.5 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: hasMismatch
+              color: hasChori
                   ? const Color(0xFFEF4444).withValues(alpha: 0.06)
                   : Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
@@ -900,41 +892,85 @@ class _VendorDeliveryCard extends ConsumerWidget {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: hasMismatch
-                    ? const Color(0xFFEF4444).withValues(alpha: 0.08)
-                    : AppTheme.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                hasMismatch
-                    ? LucideIcons.alertCircle
-                    : LucideIcons.packageCheck,
-                color: hasMismatch
-                    ? const Color(0xFFEF4444)
-                    : AppTheme.primary,
-                size: 22,
+            // ── Left icon ──────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: hasChori
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.08)
+                      : AppTheme.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  hasChori
+                      ? LucideIcons.alertCircle
+                      : LucideIcons.packageCheck,
+                  color: hasChori
+                      ? const Color(0xFFEF4444)
+                      : AppTheme.primary,
+                  size: 22,
+                ),
               ),
             ),
             const SizedBox(width: 12),
+
+            // ── Main content ────────────────────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    bundle.vendorName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.visible,
+                  // Row 1: vendor name + paid/credit pill
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          bundle.vendorName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14.5,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.visible,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // ── Paid / Credit pill ──────────────────────
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isPaid
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.orange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isPaid
+                                ? Colors.green.withValues(alpha: 0.4)
+                                : Colors.orange.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Text(
+                          isPaid ? '✓ Paid' : 'Credit',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isPaid
+                                ? Colors.green.shade700
+                                : Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+
+                  // Row 2: invoice number
                   if (bundle.invoiceNumber.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -959,7 +995,10 @@ class _VendorDeliveryCard extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  const SizedBox(height: 4),
+
+                  const SizedBox(height: 5),
+
+                  // Row 3: date · items · amount
                   Row(
                     children: [
                       Text(
@@ -994,40 +1033,56 @@ class _VendorDeliveryCard extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      if (bundle.totalPriceHike > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.red.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                spreadRadius: 0,
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            '⚠️ ↑ ${currencyFormat.format(bundle.totalPriceHike)}',
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
+
+                  // Row 4: Chori Catcher alert (only if triggered)
+                  if (hasChori)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFEF4444)
+                                .withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                size: 13, color: Color(0xFFDC2626)),
+                            const SizedBox(width: 5),
+                            Text(
+                              hasMismatch && bundle.totalPriceHike > 0
+                                  ? '🔴 Bill mismatch + price hike detected'
+                                  : hasMismatch
+                                      ? '🔴 Bill amount mismatch detected'
+                                      : '🔴 Price hike: ${currencyFormat.format(bundle.totalPriceHike)} extra',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(LucideIcons.chevronRight,
-                size: 20, color: Colors.grey.shade400),
+
+            // ── Chevron ──────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Icon(LucideIcons.chevronRight,
+                  size: 20, color: Colors.grey.shade400),
+            ),
           ],
         ),
       ),

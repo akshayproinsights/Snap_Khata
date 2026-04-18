@@ -63,20 +63,20 @@ class AppShell extends ConsumerWidget {
                 : AppTheme.primary.withValues(alpha: 0.15),
             destinations: const [
               NavigationDestination(
-                icon: Icon(LucideIcons.home),
-                selectedIcon: Icon(LucideIcons.home, color: AppTheme.primary),
+                icon: Icon(LucideIcons.layoutGrid),
+                selectedIcon:
+                    Icon(LucideIcons.layoutGrid, color: AppTheme.primary),
                 label: 'HOME',
+              ),
+              NavigationDestination(
+                icon: Icon(LucideIcons.users),
+                selectedIcon: Icon(LucideIcons.users, color: AppTheme.primary),
+                label: 'Customers',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.book),
                 selectedIcon: Icon(LucideIcons.book, color: AppTheme.primary),
                 label: 'CREDIT',
-              ),
-              NavigationDestination(
-                icon: Icon(LucideIcons.layoutGrid),
-                selectedIcon:
-                    Icon(LucideIcons.layoutGrid, color: AppTheme.primary),
-                label: 'Suppliers',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.user),

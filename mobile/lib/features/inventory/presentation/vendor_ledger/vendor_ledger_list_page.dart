@@ -184,13 +184,10 @@ class _LedgerCard extends ConsumerWidget {
             CircleAvatar(
               backgroundColor: Colors.red.shade50,
               radius: 24,
-              child: Text(
-                ledger.vendorName.isNotEmpty ? ledger.vendorName[0].toUpperCase() : 'V',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red.shade800,
-                ),
+              child: Icon(
+                Icons.local_shipping,
+                size: 24,
+                color: Colors.red.shade800,
               ),
             ),
             const SizedBox(width: 16),

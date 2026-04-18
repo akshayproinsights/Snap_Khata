@@ -143,9 +143,12 @@ class _LedgerCard extends ConsumerWidget {
         NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
 
     // Calculate days since last activity and urgency flag
+    // Only mark as overdue when there IS a recorded payment date AND it's 30+ days old.
+    // New entries with no payment history should stay visually neutral.
     String timeAgo = '';
     int daysSinceActivity = 0;
-    if (ledger.lastPaymentDate != null) {
+    bool hasActivityDate = ledger.lastPaymentDate != null;
+    if (hasActivityDate) {
       final difference = DateTime.now().difference(ledger.lastPaymentDate!);
       daysSinceActivity = difference.inDays;
       if (difference.inDays > 0) {
@@ -159,10 +162,11 @@ class _LedgerCard extends ConsumerWidget {
       }
     } else {
       timeAgo = 'No payments yet';
-      // No payment date means it's been outstanding since inception — treat as urgent
-      daysSinceActivity = 999;
+      // Do NOT treat as overdue — this is simply a new, untracked entry
+      daysSinceActivity = 0;
     }
-    final bool isOverdue = daysSinceActivity >= 30;
+    // Only flag overdue when we have a real date AND it's been 30+ days
+    final bool isOverdue = hasActivityDate && daysSinceActivity >= 30;
 
     return InkWell(
       onTap: () {
@@ -208,40 +212,42 @@ class _LedgerCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isOverdue ? Colors.red.shade50 : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isOverdue ? Colors.red.shade300 : AppTheme.border,
-            width: isOverdue ? 1.5 : 1,
+            color: isOverdue ? Colors.red.shade200 : Colors.grey.shade200,
+            width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: isOverdue
-                  ? Colors.red.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Row(
           children: [
+            // Avatar circle — subtle teal for normal, amber for overdue
             CircleAvatar(
-              // Orange/amber = neutral pending; red tint if overdue
-              backgroundColor: isOverdue ? Colors.red.shade100 : Colors.orange.shade50,
-              radius: 24,
+              backgroundColor: isOverdue
+                  ? Colors.red.shade50
+                  : const Color(0xFFE8F5E9),
+              radius: 22,
               child: Text(
                 ledger.customerName.isNotEmpty
                     ? ledger.customerName[0].toUpperCase()
                     : 'C',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: isOverdue ? Colors.red.shade800 : Colors.orange.shade800,
+                  color: isOverdue
+                      ? Colors.red.shade700
+                      : const Color(0xFF2E7D32),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,39 +255,41 @@ class _LedgerCard extends ConsumerWidget {
                   Text(
                     ledger.customerName,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       Text(
                         timeAgo,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: isOverdue ? FontWeight.w700 : FontWeight.normal,
-                          color: isOverdue ? Colors.red.shade700 : AppTheme.textSecondary,
+                          color: isOverdue
+                              ? Colors.red.shade600
+                              : AppTheme.textSecondary,
+                          fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                       if (isOverdue) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.red.shade600,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Text(
-                            'Chase now!',
+                            'Follow up',
                             style: TextStyle(
                               fontSize: 9,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: Colors.white,
-                              letterSpacing: 0.4,
+                              letterSpacing: 0.3,
                             ),
                           ),
                         ),
@@ -291,6 +299,7 @@ class _LedgerCard extends ConsumerWidget {
                 ],
               ),
             ),
+            // Amount column
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -299,40 +308,43 @@ class _LedgerCard extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    // Red when overdue to signal urgency; green when recent
-                    color: isOverdue ? Colors.red.shade700 : Colors.green.shade700,
+                    color: isOverdue
+                        ? Colors.red.shade700
+                        : const Color(0xFF1B5E20),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  isOverdue ? 'OVERDUE' : 'You will get',
+                  isOverdue ? 'Overdue' : 'To collect',
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: isOverdue ? FontWeight.w700 : FontWeight.normal,
-                    color: isOverdue ? Colors.red.shade600 : AppTheme.textSecondary,
-                    letterSpacing: isOverdue ? 0.5 : 0,
+                    color: isOverdue ? Colors.red.shade400 : AppTheme.textSecondary,
+                    fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
+            // WhatsApp reminder button
             InkWell(
               onTap: () => _sendGenericReminder(context, ref),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const FaIcon(FontAwesomeIcons.whatsapp,
-                        color: Colors.green, size: 22),
+                    FaIcon(
+                      FontAwesomeIcons.whatsapp,
+                      color: Colors.green.shade600,
+                      size: 20,
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      'Reminder',
+                      'Remind',
                       style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey.shade700,
+                        fontSize: 9,
+                        color: Colors.grey.shade600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
