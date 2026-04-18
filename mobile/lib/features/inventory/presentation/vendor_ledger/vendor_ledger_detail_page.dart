@@ -6,6 +6,9 @@ import 'package:mobile/core/theme/app_theme.dart';
 import '../../domain/models/vendor_ledger_models.dart';
 import '../providers/vendor_ledger_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
+import '../../domain/models/inventory_models.dart';
+import '../inventory_review_page.dart';
 
 class VendorLedgerDetailPage extends ConsumerStatefulWidget {
   final VendorLedger ledger;
@@ -306,30 +309,33 @@ class _VendorLedgerDetailPageState
                     return SingleChildScrollView(
                       controller: scrollController,
                       padding: const EdgeInsets.all(16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
-                          imageUrl: receiptLink,
-                          fit: BoxFit.contain,
-                          width: double.infinity,
-                          placeholder: (context, url) => Container(
-                            height: 300,
-                            color: Colors.white10,
-                            child: const Center(
-                              child: CircularProgressIndicator(color: Colors.white),
+                      child: InteractiveViewer(
+                        maxScale: 5.0,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: receiptLink,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            placeholder: (context, url) => Container(
+                              height: 300,
+                              color: Colors.white10,
+                              child: const Center(
+                                child: CircularProgressIndicator(color: Colors.white),
+                              ),
                             ),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            height: 200,
-                            color: Colors.white10,
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
-                                SizedBox(height: 8),
-                                Text('Could not load receipt image',
-                                  style: TextStyle(color: Colors.white54)),
-                              ],
+                            errorWidget: (context, url, error) => Container(
+                              height: 200,
+                              color: Colors.white10,
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
+                                  SizedBox(height: 8),
+                                  Text('Could not load receipt image',
+                                    style: TextStyle(color: Colors.white54)),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -492,7 +498,7 @@ class _VendorLedgerDetailPageState
                             final success = await ref
                                 .read(vendorLedgerProvider.notifier)
                                 .recordPayment(widget.ledger.id, amount,
-                                    notesController.text);
+                                    notesController.text, vendorName: widget.ledger.vendorName);
 
                             if (success && context.mounted) {
                               Navigator.pop(context);
@@ -638,13 +644,13 @@ class _VendorLedgerDetailPageState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        widget.ledger.id >= 0 ? LucideIcons.checkCircle2 : LucideIcons.package,
+                        LucideIcons.checkCircle2,
                         size: 14,
                         color: AppTheme.primary,
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        widget.ledger.id >= 0 ? 'Verified Supplier' : 'Purchase History',
+                        'Verified Supplier',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -671,9 +677,7 @@ class _VendorLedgerDetailPageState
                       currencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
                     ),
                     _buildMetricCard('Orders', '$ordersCount'),
-                    // Only show Pending Due if ledger exists (id >= 0)
-                    if (widget.ledger.id >= 0)
-                      _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
+                    _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
                     _buildMetricCard(
                       'Last Order',
                       lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
@@ -731,7 +735,7 @@ class _VendorLedgerDetailPageState
                           );
                         }),
                       )
-                    else if (widget.ledger.id >= 0)
+                    else
                       Row(
                         children: [
                           // Select button
@@ -951,6 +955,8 @@ class _VendorLedgerDetailPageState
         onTap: () {
           if (_isSelectionMode) {
             _toggleSelection(tx.id);
+          } else if (!isPayment && tx.invoiceNumber?.isNotEmpty == true) {
+            _navigateToBillDetails(tx.invoiceNumber!);
           }
         },
         borderRadius: BorderRadius.circular(16),
@@ -959,13 +965,14 @@ class _VendorLedgerDetailPageState
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_isSelectionMode) ...[
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 12),
+                        margin: const EdgeInsets.only(right: 10, top: 4),
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
@@ -976,7 +983,8 @@ class _VendorLedgerDetailPageState
                       ),
                     ],
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
@@ -984,10 +992,10 @@ class _VendorLedgerDetailPageState
                       child: Icon(
                         isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
                         color: isPayment ? Colors.green.shade600 : AppTheme.primary,
-                        size: 20,
+                        size: 18,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -996,9 +1004,7 @@ class _VendorLedgerDetailPageState
                             children: [
                               Flexible(
                                 child: Text(
-                                  isPayment
-                                      ? 'Payment Sent'
-                                      : (tx.invoiceNumber?.isNotEmpty == true ? '#${tx.invoiceNumber}' : 'Purchase Order'),
+                                  dateFormatter.format(tx.createdAt.toLocal()),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
@@ -1013,8 +1019,7 @@ class _VendorLedgerDetailPageState
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.shade200),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'PAID',
@@ -1030,11 +1035,15 @@ class _VendorLedgerDetailPageState
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            dateFormatter.format(tx.createdAt.toLocal()),
+                            isPayment
+                                ? 'Payment Sent'
+                                : (tx.invoiceNumber?.isNotEmpty == true ? 'Invoice #${tx.invoiceNumber}' : 'Purchase Order'),
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondary,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -1047,7 +1056,7 @@ class _VendorLedgerDetailPageState
                           children: [
                             if (!isPayment && !_isSelectionMode)
                                IconButton(
-                                 icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.primary),
+                                 icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.textSecondary),
                                  padding: EdgeInsets.zero,
                                  constraints: const BoxConstraints(),
                                  onPressed: () => _showReceiptPhotoDialog(tx),
@@ -1055,13 +1064,30 @@ class _VendorLedgerDetailPageState
                                ),
                             const SizedBox(width: 8),
                             Text(
-                              '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                              '${isPayment ? '-' : ''}${currencyFormatter.format(tx.amount)}',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: isPayment ? Colors.green.shade600 : AppTheme.textPrimary,
+                                color: isPayment ? Colors.green.shade600 : (!tx.isPaid ? const Color(0xFFD84315) : AppTheme.textPrimary),
                               ),
                             ),
+                            if (!isPayment && !_isSelectionMode && tx.isPaid) ...[
+                               const SizedBox(width: 4),
+                               PopupMenuButton<String>(
+                                 icon: const Icon(LucideIcons.moreVertical, size: 18, color: AppTheme.textSecondary),
+                                 padding: EdgeInsets.zero,
+                                 constraints: const BoxConstraints(),
+                                 itemBuilder: (context) => [
+                                   const PopupMenuItem(
+                                     value: 'unpaid',
+                                     child: Text('Mark as Unpaid'),
+                                   ),
+                                 ],
+                                 onSelected: (value) {
+                                   if (value == 'unpaid') _togglePaidStatus(tx, false);
+                                 },
+                               ),
+                            ],
                           ],
                         ),
                         if (tx.notes?.isNotEmpty == true)
@@ -1076,23 +1102,29 @@ class _VendorLedgerDetailPageState
                               ),
                             ),
                           ),
+                        if (!isPayment && !_isSelectionMode && !tx.isPaid)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: SizedBox(
+                              height: 28,
+                              child: ElevatedButton(
+                                onPressed: () => _togglePaidStatus(tx, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green.shade600,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                child: const Text('Mark Paid', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
                 ),
               ),
-              if (!isPayment && !_isSelectionMode) ...[
-                const Divider(height: 1, color: AppTheme.border),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      _buildMarkAsPaidButton(tx),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -1100,26 +1132,46 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  Widget _buildMarkAsPaidButton(VendorLedgerTransaction tx) {
-    if (tx.isPaid) {
-      return TextButton.icon(
-        onPressed: () => _togglePaidStatus(tx, false),
-        icon: Icon(LucideIcons.xCircle, size: 16, color: Colors.red.shade600),
-        label: Text('Mark as Unpaid', style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.bold)),
-      );
-    } else {
-      return ElevatedButton.icon(
-        onPressed: () => _togglePaidStatus(tx, true),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green.shade600,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: const Icon(LucideIcons.checkCircle, size: 16),
-        label: const Text('Mark as Paid', style: TextStyle(fontWeight: FontWeight.bold)),
-      );
+
+
+  void _navigateToBillDetails(String invoiceNumber) {
+    if (invoiceNumber.isEmpty) return;
+    
+    final invoice = _purchaseInvoices?.firstWhere(
+      (inv) => inv['invoice_number']?.toString() == invoiceNumber,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (invoice == null || invoice.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Invoice details not found for #$invoiceNumber')),
+        );
+      }
+      return;
     }
+
+    final itemsList = (invoice['items'] as List<dynamic>?)
+        ?.map((item) => InventoryItem.fromJson(item as Map<String, dynamic>))
+        .toList() ?? [];
+              
+    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final receiptLink = invoice['receipt_link']?.toString();
+    final invoiceDate = invoice['invoice_date']?.toString() ?? '';
+
+    final bundle = InventoryInvoiceBundle(
+      invoiceNumber: invoiceNumber,
+      date: invoiceDate,
+      vendorName: invoice['vendor_name']?.toString() ?? widget.ledger.vendorName,
+      receiptLink: receiptLink ?? '',
+      items: itemsList,
+      totalAmount: totalAmount,
+      hasMismatch: false,
+      isVerified: true,
+      createdAt: invoice['upload_date']?.toString() ?? '',
+    );
+    
+    context.pushNamed('vendor-delivery-detail', extra: bundle);
   }
 
   Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool markAsPaid) async {
@@ -1161,8 +1213,9 @@ class _VendorLedgerDetailPageState
       ),
       child: InkWell(
         onTap: () {
-          // Navigate to invoice detail or show receipt
-          if (receiptLink != null && receiptLink.isNotEmpty) {
+          if (invoiceNumber.isNotEmpty) {
+            _navigateToBillDetails(invoiceNumber);
+          } else if (receiptLink != null && receiptLink.isNotEmpty) {
             _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber);
           }
         },

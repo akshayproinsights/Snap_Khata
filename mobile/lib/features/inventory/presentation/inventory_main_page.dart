@@ -140,7 +140,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
         title: const Text(
-          'Inventory',
+          'Suppliers',
           style: TextStyle(
               fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
         ),
@@ -178,7 +178,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
             HapticFeedback.mediumImpact();
             context.push('/inventory-upload');
           },
-          backgroundColor: AppTheme.primary,
+          backgroundColor: const Color(0xFF16A34A), // green-700 — matches Snap New Order
           foregroundColor: Colors.white,
           icon: const Icon(Icons.camera_alt_rounded, size: 22),
           label: Text(
@@ -761,13 +761,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: Colors.blue.withValues(alpha: 0.1),
+                                      color: Colors.orange.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: const Text(
-                                      'View Deliveries',
+                                      'Supplier',
                                       style: TextStyle(
-                                        color: Colors.blue,
+                                        color: Colors.orange,
                                         fontWeight: FontWeight.w800,
                                         fontSize: 10,
                                         letterSpacing: 0.2,
@@ -873,9 +873,13 @@ class _VendorDeliveryCard extends ConsumerWidget {
         HapticFeedback.lightImpact();
         context.push('/vendor-delivery-detail', extra: bundle);
       },
+      onLongPress: () {
+        HapticFeedback.heavyImpact();
+        _confirmDelete(context, ref, bundle);
+      },
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -990,28 +994,40 @@ class _VendorDeliveryCard extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (bundle.totalPriceHike > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                spreadRadius: 0,
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '⚠️ ↑ ${currencyFormat.format(bundle.totalPriceHike)}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: Icon(LucideIcons.trash2,
-                      size: 18, color: AppTheme.error.withValues(alpha: 0.7)),
-                  onPressed: () => _confirmDelete(context, ref, bundle),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  splashRadius: 20,
-                ),
-                const SizedBox(height: 12),
-                Icon(LucideIcons.chevronRight,
-                    size: 20, color: Colors.grey.shade400),
-              ],
-            ),
+            Icon(LucideIcons.chevronRight,
+                size: 20, color: Colors.grey.shade400),
           ],
         ),
       ),

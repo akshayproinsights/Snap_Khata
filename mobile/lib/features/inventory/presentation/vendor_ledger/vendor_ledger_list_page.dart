@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -15,10 +16,23 @@ class VendorLedgerListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(vendorLedgerProvider);
     final searchQuery = ref.watch(udharSearchQueryProvider).toLowerCase();
+    final filterMode = ref.watch(udharFilterProvider);
 
     final filteredLedgers = state.ledgers.where((ledger) {
-      if (searchQuery.isEmpty) return true;
-      return ledger.vendorName.toLowerCase().contains(searchQuery);
+      // 1. Apply Search
+      if (searchQuery.isNotEmpty && !ledger.vendorName.toLowerCase().contains(searchQuery)) {
+        return false;
+      }
+      
+      // 2. Apply Filter Mode
+      switch (filterMode) {
+        case UdharFilterMode.pending:
+          return ledger.balanceDue > 0;
+        case UdharFilterMode.settled:
+          return ledger.balanceDue == 0;
+        case UdharFilterMode.all:
+          return true;
+      }
     }).toList();
 
     return state.isLoading && state.ledgers.isEmpty
@@ -94,7 +108,7 @@ class _LedgerCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
+    final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
     
     // Calculate time ago
     String timeAgo = '';
@@ -116,6 +130,39 @@ class _LedgerCard extends ConsumerWidget {
     return InkWell(
       onTap: () {
         context.push('/inventory/vendor-ledger/${ledger.id}', extra: ledger);
+      },
+      onLongPress: () async {
+        HapticFeedback.heavyImpact();
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete Vendor Ledger'),
+            content: Text('Are you sure you want to delete ${ledger.vendorName} and all tracking history? This action cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+        
+        if (confirm == true) {
+          final success = await ref.read(vendorLedgerProvider.notifier).deleteLedger(ledger.id);
+          if (success && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Vendor Ledger deleted successfully')),
+            );
+          } else if (!success && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to delete vendor ledger')),
+            );
+          }
+        }
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -197,57 +244,6 @@ class _LedgerCard extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.more_vert, color: AppTheme.textSecondary),
-              onSelected: (value) async {
-                if (value == 'delete') {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Delete Vendor Ledger'),
-                      content: Text('Are you sure you want to delete ${ledger.vendorName} and all tracking history? This action cannot be undone.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                  );
-                  
-                  if (confirm == true) {
-                    final success = await ref.read(vendorLedgerProvider.notifier).deleteLedger(ledger.id);
-                    if (success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Vendor Ledger deleted successfully')),
-                      );
-                    } else if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Failed to delete vendor ledger')),
-                      );
-                    }
-                  }
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                      SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ],
         ),

@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
   final String customerName;
@@ -314,10 +315,18 @@ class _InvoiceGroupTile extends ConsumerWidget {
               ),
             );
           },
-          child: ExpansionTile(
-            tilePadding:
+          child: ListTile(
+            contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OrderDetailPage(group: group),
+                ),
+              );
+            },
             leading: Container(
               width: 44,
               height: 44,
@@ -438,54 +447,12 @@ class _InvoiceGroupTile extends ConsumerWidget {
                     final message =
                         '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
 
-                    final phoneController =
-                        TextEditingController(text: group.mobileNumber);
-
                     if (!context.mounted) return;
-
-                    final result = await showDialog<String>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Share Receipt'),
-                        content: TextField(
-                          controller: phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: 'Customer Phone Number',
-                            prefixText: '+91 ',
-                            hintText: 'e.g. 9876543210',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(context, phoneController.text),
-                            child: const Text('Share to WhatsApp'),
-                          ),
-                        ],
-                      ),
+                    await WhatsAppUtils.shareReceipt(
+                      context,
+                      phone: group.mobileNumber,
+                      message: message,
                     );
-
-                    if (result != null &&
-                        result.isNotEmpty &&
-                        context.mounted) {
-                      final opened = await WhatsAppUtils.openWhatsAppChat(
-                        phone: result,
-                        message: message,
-                      );
-
-                      if (!opened && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Could not open WhatsApp. Please ensure it is installed.')),
-                        );
-                      }
-                    }
                   },
                   child: const Padding(
                     padding: EdgeInsets.all(4.0),
@@ -526,65 +493,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.border.withValues(alpha: 0.5)),
-                ),
-                child: Column(
-                  children: [
-                    ...group.items.map((item) {
-                      final isLast = item == group.items.last;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          border: isLast
-                              ? null
-                              : Border(
-                                  bottom: BorderSide(
-                                      color: AppTheme.border.withValues(alpha: 0.3))),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.description.isNotEmpty
-                                        ? item.description
-                                        : 'Unknown Item',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${item.quantity} x ${currencyFormat.format(item.rate)}',
-                                    style: const TextStyle(
-                                        color: AppTheme.textSecondary,
-                                        fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              currencyFormat.format(item.amount),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ],
-          ), // End ExpansionTile
+          ), // End ListTile
         ), // End GestureDetector
       ), // End Theme
     ); // End Container

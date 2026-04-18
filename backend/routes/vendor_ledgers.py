@@ -19,6 +19,58 @@ class BatchActionRequest(BaseModel):
     transaction_ids: List[int]
     is_paid: Optional[bool] = None
 
+class VendorLedgerCreate(BaseModel):
+    vendor_name: str
+
+@router.post("/vendor-ledgers")
+async def create_vendor_ledger(ledger: VendorLedgerCreate, current_user: Dict = Depends(get_current_user)):
+    """Create a new vendor ledger."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    vendor_name_clean = ledger.vendor_name.strip()
+    if not vendor_name_clean:
+         raise HTTPException(status_code=400, detail="Vendor name cannot be empty")
+         
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Check if exists
+        existing_resp = db.client.table('vendor_ledgers') \
+            .select('*') \
+            .eq('username', username) \
+            .eq('vendor_name', vendor_name_clean) \
+            .execute()
+            
+        if existing_resp.data:
+            return {
+                "status": "success",
+                "message": "Vendor Ledger already exists",
+                "data": existing_resp.data[0]
+            }
+            
+        new_ledger_resp = db.client.table('vendor_ledgers').insert({
+            'username': username,
+            'vendor_name': vendor_name_clean,
+            'balance_due': 0.0,
+        }).execute()
+        
+        if not new_ledger_resp.data:
+            raise HTTPException(status_code=500, detail="Failed to create Vendor Ledger")
+            
+        return {
+            "status": "success",
+            "message": "Vendor Ledger created successfully",
+            "data": new_ledger_resp.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating vendor ledger: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/vendor-ledgers")
 async def get_vendor_ledgers(current_user: Dict = Depends(get_current_user)):
     """Get all vendor ledgers for the current user."""

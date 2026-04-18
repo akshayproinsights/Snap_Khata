@@ -753,29 +753,38 @@
                                 ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
-                                <table class="inv-totals-table">
-
-                                    <tr>
-                                        <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
-                                        <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    ${receivedAmount !== null ? `
-                                    <tr>
-                                        <td class="label-col">Amount Paid</td>
-                                        <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    ${balanceDue !== null ? `
-                                    <tr style="background-color: ${balanceDue > 0 ? '#fcedec' : '#ecfdf5'};">
-                                        <td class="label-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">Balance Due</td>
-                                        <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    <tr class="words-row">
-                                        <td class="label-col" style="font-weight: 600; color: #1e293b; font-size: 12px; vertical-align: top; padding-top: 10px;">Amount in Words:</td>
-                                        <td class="amount-col" style="font-size: 12px; color: #334155; font-weight: 400; text-align: right;">${wordsTotal} Rupees only</td>
-                                    </tr>
-                                </table>
+                                <div style="padding: 10px 12px;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Sub Total</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(subtotal)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px;">Total</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: right;">${fmtMoney(grandTotal)}</td>
+                                        </tr>
+                                        ${receivedAmount !== null ? `
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Amount Paid</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: right;">-${fmtMoney(receivedAmount)}</td>
+                                        </tr>
+                                        ` : ''}
+                                        ${balanceDue !== null ? `
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'};">Balance Due</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: right;">${fmtMoney(balanceDue)}</td>
+                                        </tr>
+                                        ` : ''}
+                                    </table>
+                                </div>
+                                <div style="padding: 10px 12px; border-top: 1px solid var(--border-strong);">
+                                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px; font-size: 13px;">Amount in Words :</div>
+                                    <div style="color: #334155; font-size: 13px;">${wordsTotal} Rupees only</div>
+                                </div>
                             </div>
                         </div>
                         
@@ -995,29 +1004,43 @@
                                 ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
                             </div>
                             <div class="inv-totals-wrap">
-                                <table class="inv-totals-table">
-
-                                    <tr>
-                                        <td class="label-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">Grand Total</td>
-                                        <td class="amount-col" style="font-weight: 700; font-size: 14px; color: #1e293b;">${fmtMoney(grandTotal)}</td>
-                                    </tr>
-                                    ${receivedAmount !== null ? `
-                                    <tr>
-                                        <td class="label-col">Amount Paid</td>
-                                        <td class="amount-col">-${fmtMoney(receivedAmount)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    ${balanceDue !== null ? `
-                                    <tr style="background-color: ${balanceDue > 0 ? '#fcedec' : '#ecfdf5'};">
-                                        <td class="label-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">Balance Due</td>
-                                        <td class="amount-col" style="color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; font-weight: 700;">${fmtMoney(balanceDue)}</td>
-                                    </tr>
-                                    ` : ''}
-                                    <tr class="words-row">
-                                        <td class="label-col" style="font-weight: 600; color: #1e293b; font-size: 12px; vertical-align: top; padding-top: 10px;">Amount in Words:</td>
-                                        <td class="amount-col" style="font-size: 12px; color: #334155; font-weight: 400; text-align: right;">${wordsTotal} Rupees only</td>
-                                    </tr>
-                                </table>
+                                <div style="padding: 10px 12px;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Sub Total</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(totalSubtotal)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Total GST</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(gstAmt)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px;">Total</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: right;">${fmtMoney(grandTotal)}</td>
+                                        </tr>
+                                        ${receivedAmount !== null ? `
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Amount Paid</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: right;">-${fmtMoney(receivedAmount)}</td>
+                                        </tr>
+                                        ` : ''}
+                                        ${balanceDue !== null ? `
+                                        <tr>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'};">Balance Due</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: center; width: 20px;">:</td>
+                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: right;">${fmtMoney(balanceDue)}</td>
+                                        </tr>
+                                        ` : ''}
+                                    </table>
+                                </div>
+                                <div style="padding: 10px 12px; border-top: 1px solid var(--border-strong);">
+                                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px; font-size: 13px;">Amount in Words :</div>
+                                    <div style="color: #334155; font-size: 13px;">${wordsTotal} Rupees only</div>
+                                </div>
                             </div>
                         </div>
                         

@@ -26,12 +26,16 @@ class InvoiceItemCard extends StatelessWidget {
     final hasMismatch = item.amountMismatch.abs() > 1.0;
     // or if item.needsReview is explicitly true
     final needsReview = hasMismatch || (item.needsReview ?? false);
+    final hasPriceHike = item.priceHikeAmount != null && item.priceHikeAmount! > 0;
 
     Color borderColor = AppTheme.border;
     Color bgColor = Colors.white;
     if (needsReview) {
       borderColor = Colors.red.shade200;
       bgColor = Colors.red.shade50;
+    } else if (hasPriceHike) {
+      borderColor = Colors.orange.shade200;
+      bgColor = Colors.orange.shade50;
     }
 
     // Determine tax details (omitted, unused)
@@ -133,6 +137,34 @@ class InvoiceItemCard extends StatelessWidget {
               color: AppTheme.textPrimary,
             ),
           ),
+          if (hasPriceHike) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.trendingUp, size: 14, color: Colors.red.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Last paid ₹${item.previousRate?.toStringAsFixed(0)}. Increased by ₹${item.priceHikeAmount?.toStringAsFixed(0)}.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.red.shade800,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
 
           // Qty & Rate & Gross

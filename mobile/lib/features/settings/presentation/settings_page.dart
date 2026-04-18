@@ -9,6 +9,7 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/settings/domain/models/shop_profile.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -23,6 +24,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopPhone = '';
   String _shopGst = '';
   final bool _isLoadingProfile = false;
+  String _usageFilter = '1 Week';
 
   @override
   void initState() {
@@ -237,6 +239,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 24),
 
+          // Usage Stats
+          _buildUsageChart(context),
+          const SizedBox(height: 24),
+
           // Settings Options
           const Text(
             'Preferences',
@@ -341,6 +347,244 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
+    );
+  }
+
+  Widget _buildUsageChart(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Mock data based on filter
+    List<int> customerOrders;
+    List<int> supplierOrders;
+    List<String> xLabels;
+    int maxX;
+    double maxY;
+
+    switch (_usageFilter) {
+      case '1 Month':
+        customerOrders = [45, 52, 60, 55];
+        supplierOrders = [20, 25, 30, 28];
+        xLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+        maxX = 3;
+        maxY = 70;
+        break;
+      case 'All Time':
+        customerOrders = [120, 150, 180, 210, 250, 300];
+        supplierOrders = [50, 65, 80, 110, 140, 180];
+        xLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+        maxX = 5;
+        maxY = 350;
+        break;
+      case '1 Week':
+      default:
+        customerOrders = [12, 15, 14, 22, 18, 28, 30];
+        supplierOrders = [5, 8, 6, 11, 9, 14, 18];
+        xLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        maxX = 6;
+        maxY = 35;
+        break;
+    }
+
+    final totalCustomer = customerOrders.reduce((a, b) => a + b);
+    final totalSupplier = supplierOrders.reduce((a, b) => a + b);
+    final totalProcessed = totalCustomer + totalSupplier;
+
+    final customerColor = const Color(0xFF0EA5E9); // Modern Blue
+    final supplierColor = const Color(0xFF8B5CF6); // Modern Purple
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppTheme.darkBorder : AppTheme.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Orders Processed',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Total: $totalProcessed',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['1 Week', '1 Month', 'All Time'].map((filter) {
+                final isSelected = _usageFilter == filter;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: FilterChip(
+                    label: Text(filter, style: const TextStyle(fontSize: 12)),
+                    selected: isSelected,
+                    showCheckmark: false,
+                    selectedColor: AppTheme.primary.withValues(alpha: 0.1),
+                    labelStyle: TextStyle(
+                      color: isSelected ? AppTheme.primary : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    side: BorderSide(
+                      color: isSelected ? AppTheme.primary : (isDark ? AppTheme.darkBorder : AppTheme.border),
+                    ),
+                    onSelected: (selected) {
+                      setState(() {
+                        _usageFilter = filter;
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Legends
+          Row(
+            children: [
+              _buildLegendItem('Customers ($totalCustomer)', customerColor),
+              const SizedBox(width: 16),
+              _buildLegendItem('Suppliers ($totalSupplier)', supplierColor),
+            ],
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            height: 160,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4 > 0 ? maxY / 4 : 10,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    );
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 22,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        const style = TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textSecondary,
+                        );
+                        final index = value.toInt();
+                        Widget text;
+                        if (index >= 0 && index < xLabels.length) {
+                          if (_usageFilter == '1 Week') {
+                            if (index % 2 == 0) {
+                              text = Text(xLabels[index], style: style);
+                            } else {
+                              text = const Text('', style: style);
+                            }
+                          } else {
+                            text = Text(xLabels[index], style: style);
+                          }
+                        } else {
+                          text = const Text('', style: style);
+                        }
+                        
+                        return SideTitleWidget(
+                          meta: meta,
+                          child: text,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                minX: 0,
+                maxX: maxX.toDouble(),
+                minY: 0, // start from 0 is clearer usually, wait previously was 0
+                maxY: maxY,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: customerOrders.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
+                    isCurved: true,
+                    color: customerColor,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: customerColor.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  LineChartBarData(
+                    spots: supplierOrders.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
+                    isCurved: true,
+                    color: supplierColor,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: supplierColor.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }

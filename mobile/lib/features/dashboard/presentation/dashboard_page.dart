@@ -53,8 +53,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final userState = ref.watch(authProvider);
     final String shopName =
         userState.user?.name ?? userState.user?.username ?? 'My Shop';
-    final String username = userState.user?.username ?? '';
-
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -75,21 +73,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            if (username.isNotEmpty)
-              Row(
-                children: [
-                  const Icon(LucideIcons.user, size: 10, color: AppTheme.textSecondary),
-                  const SizedBox(width: 3),
-                  Text(
-                    'Logged in as: $username',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
           ],
         ),
         centerTitle: false,
@@ -137,7 +120,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             // In the new app, navigating to upload represents Snap New Order
             context.pushNamed('upload');
           },
-          backgroundColor: AppTheme.primary,
+          backgroundColor: const Color(0xFF16A34A), // green-700 — money coming in
           foregroundColor: Colors.white,
           icon: const Icon(Icons.camera_alt_rounded, size: 22),
           label: Text(

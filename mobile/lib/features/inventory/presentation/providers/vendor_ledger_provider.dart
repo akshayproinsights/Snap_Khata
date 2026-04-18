@@ -68,9 +68,27 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
-  Future<bool> recordPayment(int ledgerId, double amount, String notes) async {
+  Future<bool> recordPayment(int ledgerId, double amount, String notes, {String? vendorName}) async {
     try {
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/$ledgerId/pay', data: {
+      int effectiveLedgerId = ledgerId;
+
+      if (effectiveLedgerId == -1 && vendorName != null && vendorName.isNotEmpty) {
+        final createResponse = await _dio.post('/api/vendor-ledgers/vendor-ledgers', data: {
+          'vendor_name': vendorName,
+        });
+        final data = createResponse.data['data'];
+        if (data != null && data['id'] != null) {
+          effectiveLedgerId = data['id'];
+        } else {
+          return false;
+        }
+      }
+
+      if (effectiveLedgerId == -1) {
+        return false;
+      }
+
+      await _dio.post('/api/vendor-ledgers/vendor-ledgers/$effectiveLedgerId/pay', data: {
         'amount': amount,
         'notes': notes,
       });

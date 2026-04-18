@@ -36,6 +36,10 @@ class InventoryInvoiceBundle {
     required this.createdAt,
     this.headerAdjustments = const [],
   });
+
+  double get totalPriceHike {
+    return items.fold(0.0, (sum, item) => sum + (item.priceHikeAmount ?? 0.0));
+  }
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

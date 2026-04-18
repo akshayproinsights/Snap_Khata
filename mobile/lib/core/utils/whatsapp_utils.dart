@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum OrderPaymentStatus { fullyPaid, partiallyPaid, unpaid }
@@ -78,11 +79,14 @@ class WhatsAppUtils {
   ///
   /// Example: https://wa.me/91XXXXXXXXXX?text=`url_encoded_message`
   static Uri buildWaMeUri({
-    required String phone,
+    String? phone,
     required String message,
   }) {
-    final normalized = normalizeIndianPhone(phone);
     final encodedMessage = Uri.encodeComponent(message);
+    if (phone == null || phone.trim().isEmpty) {
+      return Uri.parse('whatsapp://send?text=$encodedMessage');
+    }
+    final normalized = normalizeIndianPhone(phone);
     return Uri.parse('https://wa.me/$normalized?text=$encodedMessage');
   }
 
@@ -90,13 +94,98 @@ class WhatsAppUtils {
   ///
   /// Returns `true` if the native WhatsApp app (or browser) could be opened.
   static Future<bool> openWhatsAppChat({
-    required String phone,
+    String? phone,
     required String message,
   }) async {
     final uri = buildWaMeUri(phone: phone, message: message);
     if (await canLaunchUrl(uri)) {
       return launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+    
+    // Fallback if the primary uri fails, and we didn't specify a phone
+    if (phone == null || phone.trim().isEmpty) {
+      final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+      if (await canLaunchUrl(webUri)) {
+        return launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+    }
     return false;
+  }
+  
+  /// Helper to share a receipt visually, asking for a phone number only if missing.
+  /// If missing, it provides options to skip (opening WhatsApp without a number).
+  static Future<void> shareReceipt(
+    BuildContext context, {
+    required String phone,
+    required String message,
+    String dialogTitle = 'Share Receipt',
+    String dialogContent = 'Enter customer\'s mobile number, or skip to select contact directly in WhatsApp.',
+  }) async {
+    String finalPhone = phone;
+
+    if (finalPhone.trim().isEmpty) {
+      final phoneController = TextEditingController();
+      if (!context.mounted) return;
+
+      final result = await showDialog<String?>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(dialogTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                dialogContent,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Customer Phone Number',
+                  prefixText: '+91 ',
+                  hintText: 'e.g. 9876543210',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Cancelled entirely
+              child: const Text('Cancel'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, ''), // Escapes with empty string
+              child: const Text('Skip'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, phoneController.text.trim()),
+              child: const Text('Share'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == null) {
+        return; // User intentionally cancelled
+      }
+      finalPhone = result;
+    }
+
+    if (!context.mounted) return;
+    
+    final opened = await openWhatsAppChat(
+      phone: finalPhone,
+      message: message,
+    );
+
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Could not open WhatsApp. Please ensure it is installed.')),
+      );
+    }
   }
 }

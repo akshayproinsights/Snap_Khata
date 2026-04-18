@@ -39,6 +39,8 @@ class InventoryItem {
   final double? taxableAmount;
   final int? confidenceScore;
   final List<HeaderAdjustment>? headerAdjustments;
+  final double? previousRate;
+  final double? priceHikeAmount;
 
   InventoryItem({
     required this.id,
@@ -76,6 +78,8 @@ class InventoryItem {
     this.taxableAmount,
     this.confidenceScore,
     this.headerAdjustments,
+    this.previousRate,
+    this.priceHikeAmount,
   });
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
@@ -164,6 +168,12 @@ class InventoryItem {
           : null,
       confidenceScore: parsedConfidenceScore,
       headerAdjustments: parsedAdjustments,
+      previousRate: json['previous_rate'] != null
+          ? double.tryParse(json['previous_rate'].toString())
+          : null,
+      priceHikeAmount: json['price_hike_amount'] != null
+          ? double.tryParse(json['price_hike_amount'].toString())
+          : null,
     );
   }
 
@@ -204,6 +214,8 @@ class InventoryItem {
       'taxable_amount': taxableAmount,
       'confidence_score': confidenceScore,
       'header_adjustments': headerAdjustments?.map((e) => e.toJson()).toList(),
+      'previous_rate': previousRate,
+      'price_hike_amount': priceHikeAmount,
     };
   }
 
@@ -243,6 +255,8 @@ class InventoryItem {
     double? taxableAmount,
     int? confidenceScore,
     List<HeaderAdjustment>? headerAdjustments,
+    double? previousRate,
+    double? priceHikeAmount,
   }) {
     return InventoryItem(
       id: id ?? this.id,
@@ -280,6 +294,8 @@ class InventoryItem {
       taxableAmount: taxableAmount ?? this.taxableAmount,
       confidenceScore: confidenceScore ?? this.confidenceScore,
       headerAdjustments: headerAdjustments ?? this.headerAdjustments,
+      previousRate: previousRate ?? this.previousRate,
+      priceHikeAmount: priceHikeAmount ?? this.priceHikeAmount,
     );
   }
 }

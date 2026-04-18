@@ -612,6 +612,8 @@ class _InventoryInvoiceReviewPageState
                     EditItemModal.show(context, item, (updatedItem) {
                       ref.read(inventoryProvider.notifier).updateItem(updatedItem.id, {
                         'description': updatedItem.description,
+                        'part_number': updatedItem.partNumber,
+                        'hsn_code': updatedItem.hsnCode,
                         'qty': updatedItem.qty,
                         'rate': updatedItem.rate,
                         'gross_amount': updatedItem.grossAmount,

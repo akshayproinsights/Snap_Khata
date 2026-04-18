@@ -571,6 +571,36 @@ def convert_to_inventory_rows(
         unique_id = str(uuid.uuid4()).split('-')[0]
         row_id = f"{str(image_hash):.8}_{unique_id}_{idx}"
 
+        # ── Price Hike Detection ──────────────────────────────────────────────
+        previous_rate = None
+        price_hike_amount = None
+        current_vendor_name = header.get('vendor_name', '')
+        current_part_number = item.get('part_number', 'N/A')
+        
+        if current_vendor_name and current_part_number and current_part_number.lower() != 'n/a':
+            try:
+                from database import get_database_client
+                db = get_database_client()
+                hist_res = db.client.table('inventory_items') \
+                    .select('rate, discounted_price') \
+                    .eq('username', username) \
+                    .eq('vendor_name', current_vendor_name) \
+                    .eq('part_number', current_part_number) \
+                    .eq('verification_status', 'Done') \
+                    .order('invoice_date', desc=True) \
+                    .limit(1) \
+                    .execute()
+                    
+                if hist_res.data and len(hist_res.data) > 0:
+                    previous_rate_val = hist_res.data[0].get('rate')
+                    if previous_rate_val is not None:
+                        previous_rate_val = float(previous_rate_val)
+                        previous_rate = previous_rate_val
+                        if rate > previous_rate_val:
+                            price_hike_amount = float(rate - previous_rate_val)
+            except Exception as e:
+                logger.error(f"Error fetching historical price for {current_part_number}: {e}")
+
         row = {
             # System columns
             'row_id':        row_id,
@@ -658,6 +688,10 @@ def convert_to_inventory_rows(
             'taxable_amount':  v2['v2_taxable_amount'],
             # AI confidence per line item (0–100)
             'confidence_score': int(item.get('confidence', 0) or 0),
+            
+            # ── Price Hike Detection ──────────────────────────────────────────────
+            'previous_rate': previous_rate,
+            'price_hike_amount': price_hike_amount,
         }
 
         # ── extra_fields: v2 data + any unrecognised Gemini fields ───────────

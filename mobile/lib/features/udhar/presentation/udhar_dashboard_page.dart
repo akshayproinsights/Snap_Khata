@@ -15,6 +15,7 @@ class UdharDashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboardState = ref.watch(udharDashboardProvider);
+    final filterMode = ref.watch(udharFilterProvider);
 
     return DefaultTabController(
       length: 2,
@@ -100,6 +101,41 @@ class UdharDashboardPage extends ConsumerWidget {
                         ),
                       ),
 
+                      // Filter Pills
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Row(
+                          children: [
+                            _buildFilterChip(
+                              context, 
+                              ref, 
+                              label: 'All', 
+                              mode: UdharFilterMode.all, 
+                              currentMode: filterMode,
+                              activeColor: AppTheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              context, 
+                              ref, 
+                              label: 'Pending', 
+                              mode: UdharFilterMode.pending, 
+                              currentMode: filterMode,
+                              activeColor: Colors.orange.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              context, 
+                              ref, 
+                              label: 'Settled', 
+                              mode: UdharFilterMode.settled, 
+                              currentMode: filterMode,
+                              activeColor: AppTheme.success,
+                            ),
+                          ],
+                        ),
+                      ),
                       
                       // Tab Views
                       const Expanded(
@@ -132,9 +168,43 @@ class UdharDashboardPage extends ConsumerWidget {
     );
   }
 
+  Widget _buildFilterChip(
+    BuildContext context,
+    WidgetRef ref, {
+    required String label,
+    required UdharFilterMode mode,
+    required UdharFilterMode currentMode,
+    required Color activeColor,
+  }) {
+    final isSelected = currentMode == mode;
+    return GestureDetector(
+      onTap: () {
+        ref.read(udharFilterProvider.notifier).setFilter(mode);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isSelected ? activeColor.withValues(alpha: 0.5) : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? activeColor : AppTheme.textSecondary,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummaryCard(double receivable, double payable) {
     final currencyFormatter =
-        NumberFormat.currency(symbol: '₹', decimalDigits: 2, locale: 'en_IN');
+        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -671,51 +671,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   final message =
                       '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
 
-                  final phoneController =
-                      TextEditingController(text: header?.extraFields['mobile_number']?.toString() ?? '');
-
+                  await saveFuture;
                   if (!context.mounted) return;
-
-                  final result = await showDialog<String>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Share Receipt'),
-                      content: TextField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Customer Phone Number',
-                          prefixText: '+91 ',
-                          hintText: 'e.g. 9876543210',
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => context.pop(),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => context.pop(phoneController.text),
-                          child: const Text('Share to WhatsApp'),
-                        ),
-                      ],
-                    ),
+                  await WhatsAppUtils.shareReceipt(
+                    context,
+                    phone: header?.extraFields['mobile_number']?.toString() ?? '',
+                    message: message,
                   );
-
-                  if (result != null && result.isNotEmpty && context.mounted) {
-                    await saveFuture;
-                    final opened = await WhatsAppUtils.openWhatsAppChat(
-                      phone: result,
-                      message: message,
-                    );
-                    if (!opened && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Could not open WhatsApp. Please ensure it is installed.')),
-                      );
-                    }
-                  }
                 },
               ),
             ),

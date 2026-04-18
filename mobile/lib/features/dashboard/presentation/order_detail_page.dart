@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
@@ -14,6 +15,7 @@ import 'package:mobile/features/shared/presentation/widgets/payment_summary_card
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -57,6 +59,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   late TextEditingController receiptCtrl;
   late TextEditingController dateCtrl;
   late TextEditingController customerCtrl;
+  late TextEditingController mobileCtrl;
 
   // Dynamic controllers for industry-specific extra fields (e.g. vehicle_number, site_name)
   // Keyed by the extra_fields JSON key. Empty if no industry is configured.
@@ -146,6 +149,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     receiptCtrl = TextEditingController(text: widget.group.receiptNumber);
     dateCtrl = TextEditingController(text: widget.group.date);
     customerCtrl = TextEditingController(text: widget.group.customerName);
+    mobileCtrl = TextEditingController(text: widget.group.mobileNumber);
 
     // Dynamically create controllers for each extra field provided by the backend.
     // No forced fallback — if extra_fields is empty, the section simply won't render.
@@ -181,6 +185,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     receiptCtrl.dispose();
     dateCtrl.dispose();
     customerCtrl.dispose();
+    mobileCtrl.dispose();
     for (final ctrl in _extraFieldCtrls.values) {
       ctrl.dispose();
     }
@@ -246,6 +251,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         receiptNumber: receiptCtrl.text,
         date: dateCtrl.text,
         customerName: customerCtrl.text,
+        mobileNumber: mobileCtrl.text,
         description: ctrl.descCtrl.text,
         type: ctrl.typeCtrl.text,
         quantity: qty,
@@ -271,6 +277,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     widget.group.receiptNumber = receiptCtrl.text;
     widget.group.date = dateCtrl.text;
     widget.group.customerName = customerCtrl.text;
+    widget.group.mobileNumber = mobileCtrl.text;
     widget.group.extraFields
       ..clear()
       ..addAll(newGroupExtraFields);
@@ -436,52 +443,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   final message =
                       '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
 
-                  final phoneController =
-                      TextEditingController(text: widget.group.mobileNumber);
-
                   if (!context.mounted) return;
-
-                  final result = await showDialog<String>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Share Receipt'),
-                      content: TextField(
-                        controller: phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Customer Phone Number',
-                          prefixText: '+91 ',
-                          hintText: 'e.g. 9876543210',
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () =>
-                              Navigator.pop(context, phoneController.text),
-                          child: const Text('Share to WhatsApp'),
-                        ),
-                      ],
-                    ),
+                  await WhatsAppUtils.shareReceipt(
+                    context,
+                    phone: widget.group.mobileNumber,
+                    message: message,
                   );
-
-                  if (result != null && result.isNotEmpty && context.mounted) {
-                    final opened = await WhatsAppUtils.openWhatsAppChat(
-                      phone: result,
-                      message: message,
-                    );
-
-                    if (!opened && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Could not open WhatsApp. Please ensure it is installed.')),
-                      );
-                    }
-                  }
                 },
               ),
             ),
@@ -562,20 +529,20 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-             color: _paymentMode == 'Cash' ? Colors.green.shade50 : Colors.blue.shade50,
+             color: _paymentMode == 'Cash' ? Colors.green.shade50 : Colors.red.shade50,
              borderRadius: BorderRadius.circular(24),
              border: Border.all(
-               color: _paymentMode == 'Cash' ? Colors.green.shade200 : Colors.blue.shade200,
+               color: _paymentMode == 'Cash' ? Colors.green.shade200 : Colors.red.shade200,
                width: 1,
              )
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_paymentMode == 'Cash' ? LucideIcons.checkCircle : LucideIcons.clock, 
-                   size: 18, color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700),
+              Icon(_paymentMode == 'Cash' ? LucideIcons.checkCircle : LucideIcons.alertCircle, 
+                   size: 18, color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.red.shade700),
               const SizedBox(width: 8),
-              Text(_paymentMode, style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.blue.shade700, fontWeight: FontWeight.bold, fontSize: 15)),
+              Text(_paymentMode == 'Cash' ? 'Cash' : 'Credit (Due)', style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           )
         )
@@ -907,6 +874,27 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                 color: AppTheme.textPrimary),
                             overflow: TextOverflow.ellipsis),
 
+                      const SizedBox(height: 12),
+                      const Text('Mobile Number',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5)),
+                      const SizedBox(height: 4),
+                      if (isEditing)
+                        _buildTextField(mobileCtrl, 'Mobile Number', isNumber: true)
+                      else
+                        Text(
+                            widget.group.mobileNumber.isNotEmpty
+                                ? widget.group.mobileNumber
+                                : '—',
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary),
+                            overflow: TextOverflow.ellipsis),
+
                       // ── Dynamic extra fields (only if industry provides them) ──
                       if (hasExtraFields) ...[
                         const SizedBox(height: 14),
@@ -953,6 +941,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               ],
             ),
           ),
+          // ── Credit Book shortcut (only for Credit orders, view mode) ──
+          if (!isEditing && _paymentMode == 'Credit') ...[
+            const SizedBox(height: 14),
+            _CreditBookButton(customerName: widget.group.customerName),
+          ],
         ],
       ),
     );
@@ -1485,6 +1478,72 @@ class _PartLaborToggle extends StatelessWidget {
             fontWeight: FontWeight.w700,
             color: selected ? selectedColor : Colors.grey.shade500,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Credit Book shortcut button
+// ─────────────────────────────────────────────────────────────────────────────
+class _CreditBookButton extends ConsumerWidget {
+  final String customerName;
+
+  const _CreditBookButton({required this.customerName});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        final ledgers = ref.read(udharProvider).ledgers;
+
+        // Try exact match first, then partial match
+        final match = ledgers.firstWhere(
+          (l) =>
+              l.customerName.toLowerCase().trim() ==
+              customerName.toLowerCase().trim(),
+          orElse: () => ledgers.firstWhere(
+            (l) => l.customerName
+                .toLowerCase()
+                .contains(customerName.toLowerCase().trim()),
+            orElse: () => ledgers.isEmpty ? ledgers.first : ledgers.first,
+          ),
+        );
+
+        // If ledgers list is empty or no match, go to credit tab
+        if (ledgers.isEmpty) {
+          context.go('/udhar-dashboard');
+          return;
+        }
+
+        context.push('/udhar/${match.id}', extra: match);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          border: Border.all(color: Colors.orange.shade200),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(LucideIcons.bookOpen, size: 16, color: Colors.orange.shade700),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'View in Credit Book',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.orange.shade800,
+                ),
+              ),
+            ),
+            Icon(LucideIcons.arrowRight, size: 14, color: Colors.orange.shade600),
+          ],
         ),
       ),
     );

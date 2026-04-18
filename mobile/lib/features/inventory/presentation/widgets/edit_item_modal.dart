@@ -29,6 +29,8 @@ class EditItemModal extends StatefulWidget {
 
 class _EditItemModalState extends State<EditItemModal> {
   late TextEditingController _descController;
+  late TextEditingController _partNumberController;
+  late TextEditingController _hsnController;
   late TextEditingController _qtyController;
   late TextEditingController _rateController;
   late TextEditingController _discPctController;
@@ -37,6 +39,7 @@ class _EditItemModalState extends State<EditItemModal> {
   late TextEditingController _sgstPctController;
   late TextEditingController _igstPctController;
   late TextEditingController _printedTotalController;
+  late TextEditingController _extraAdjController;
 
   Map<String, dynamic> _previewState = {};
 
@@ -44,11 +47,12 @@ class _EditItemModalState extends State<EditItemModal> {
   void initState() {
     super.initState();
     _descController = TextEditingController(text: widget.item.description);
+    _partNumberController = TextEditingController(text: widget.item.partNumber);
+    _hsnController = TextEditingController(text: widget.item.hsnCode ?? '');
     _qtyController = TextEditingController(text: _fmt(widget.item.qty));
     _rateController = TextEditingController(text: _fmt(widget.item.rate));
 
     // --- Discount ---
-    // Prefer directly stored discPercent; back-calculate only if absent
     final storedDiscAmt = widget.item.discAmount ?? 0.0;
     final grossAmt = widget.item.grossAmount ?? (widget.item.qty * widget.item.rate);
     double inferredDiscPct = widget.item.discPercent ?? 0.0;
@@ -59,13 +63,11 @@ class _EditItemModalState extends State<EditItemModal> {
     _discAmtController = TextEditingController(text: _fmt(storedDiscAmt));
 
     // --- Tax Rates ---
-    // Prefer directly stored cgstPercent/sgstPercent/igstPercent from DB
     final taxable = widget.item.taxableAmount ?? (grossAmt - storedDiscAmt);
     double inferredCgstPct = widget.item.cgstPercent ?? 0.0;
     double inferredSgstPct = widget.item.sgstPercent ?? 0.0;
     double inferredIgstPct = widget.item.igstPercent ?? 0.0;
 
-    // Back-calculate from amounts only if percent fields are missing
     if (inferredCgstPct == 0 && (widget.item.cgstAmount ?? 0) > 0 && taxable > 0) {
       inferredCgstPct = double.parse(((widget.item.cgstAmount! / taxable) * 100).toStringAsFixed(2));
     }
@@ -76,7 +78,6 @@ class _EditItemModalState extends State<EditItemModal> {
       inferredIgstPct = double.parse(((widget.item.igstAmount! / taxable) * 100).toStringAsFixed(2));
     }
 
-    // Last resort fallback: CGST_SGST with no data → assume 9%/9%
     if ((widget.item.taxType == 'CGST_SGST' || widget.item.taxType == 'COMBINED_GST')
         && inferredCgstPct == 0 && inferredSgstPct == 0 && inferredIgstPct == 0) {
       inferredCgstPct = 9.0;
@@ -87,8 +88,9 @@ class _EditItemModalState extends State<EditItemModal> {
     _sgstPctController = TextEditingController(text: inferredSgstPct > 0 ? _fmt(inferredSgstPct) : '0');
     _igstPctController = TextEditingController(text: inferredIgstPct > 0 ? _fmt(inferredIgstPct) : '0');
     _printedTotalController = TextEditingController(text: _fmt(widget.item.printedTotal ?? widget.item.netBill));
+    _extraAdjController = TextEditingController(text: '0');
 
-    // Attach listeners to recalculate on the fly
+    // Listeners
     _qtyController.addListener(_recalculate);
     _rateController.addListener(_recalculate);
     _discPctController.addListener(_recalculate);
@@ -97,6 +99,7 @@ class _EditItemModalState extends State<EditItemModal> {
     _sgstPctController.addListener(_recalculate);
     _igstPctController.addListener(_recalculate);
     _printedTotalController.addListener(_recalculate);
+    _extraAdjController.addListener(_recalculate);
 
     _recalculate();
   }
@@ -104,6 +107,8 @@ class _EditItemModalState extends State<EditItemModal> {
   @override
   void dispose() {
     _descController.dispose();
+    _partNumberController.dispose();
+    _hsnController.dispose();
     _qtyController.dispose();
     _rateController.dispose();
     _discPctController.dispose();
@@ -112,6 +117,7 @@ class _EditItemModalState extends State<EditItemModal> {
     _sgstPctController.dispose();
     _igstPctController.dispose();
     _printedTotalController.dispose();
+    _extraAdjController.dispose();
     super.dispose();
   }
 
@@ -154,12 +160,24 @@ class _EditItemModalState extends State<EditItemModal> {
     });
   }
 
+  /// The final net amount = calculated net + extra adjustment
+  double get _adjustedNetAmount {
+    final calcNet = (_previewState['netAmount'] as double?) ?? 0.0;
+    final adj = _parse(_extraAdjController.text);
+    return calcNet + adj;
+  }
+
+
+
   void _handleSave() {
     final qty = _parse(_qtyController.text);
     final rate = _parse(_rateController.text);
+    final adjustedNet = _adjustedNetAmount;
 
     final updated = widget.item.copyWith(
       description: _descController.text,
+      partNumber: _partNumberController.text,
+      hsnCode: _hsnController.text.trim().isEmpty ? null : _hsnController.text.trim(),
       qty: qty,
       rate: rate,
       grossAmount: _previewState['grossAmount'],
@@ -170,11 +188,11 @@ class _EditItemModalState extends State<EditItemModal> {
       sgstAmount: _previewState['sgstAmount'],
       igstPercent: _previewState['igstPercent'],
       igstAmount: _previewState['igstAmount'],
-      netAmount: _previewState['netAmount'],
-      netBill: _previewState['netAmount'],
+      netAmount: adjustedNet,
+      netBill: adjustedNet,
       printedTotal: _previewState['printedTotal'],
-      amountMismatch: _previewState['mismatchAmount'],
-      needsReview: _previewState['needsReview'],
+      amountMismatch: 0.0,   // user resolved it manually
+      needsReview: false,    // always clear after explicit save
       taxType: _previewState['taxType'],
     );
 
@@ -184,8 +202,9 @@ class _EditItemModalState extends State<EditItemModal> {
 
   @override
   Widget build(BuildContext context) {
-    final bool needsReview = _previewState['needsReview'] ?? false;
-    final double mismatch = _previewState['mismatchAmount'] ?? 0.0;
+    final double mismatch = (_previewState['mismatchAmount'] as double?) ?? 0.0;
+    final double extraAdj = _parse(_extraAdjController.text);
+    final double residualMismatch = mismatch - extraAdj.abs();
 
     return Container(
       padding: EdgeInsets.only(
@@ -222,7 +241,7 @@ class _EditItemModalState extends State<EditItemModal> {
               ),
             ),
             const Divider(height: 1),
-            
+
             // Scrollable Form
             Flexible(
               child: SingleChildScrollView(
@@ -230,24 +249,48 @@ class _EditItemModalState extends State<EditItemModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildTextField('Description', _descController, maxLines: 2),
-                    const SizedBox(height: 16),
+
+                    // ── Item Info Section ──────────────────────────────────
+                    _buildSectionLabel('Item Info', LucideIcons.package),
+                    const SizedBox(height: 10),
+                    _buildTextField('Item Description', _descController, maxLines: 2),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _buildTextField('Quantity', _qtyController, isNumber: true)),
+                        Expanded(child: _buildTextField('Part Number', _partNumberController,
+                          hint: 'e.g. BRK-12345')),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildTextField('HSN Code', _hsnController,
+                          hint: 'e.g. 8708')),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Pricing Section ────────────────────────────────────
+                    _buildSectionLabel('Pricing', LucideIcons.indianRupee),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _buildTextField('Qty', _qtyController, isNumber: true)),
                         const SizedBox(width: 12),
                         Expanded(child: _buildTextField('Rate (₹)', _rateController, isNumber: true)),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(child: _buildTextField('Disc %', _discPctController, isNumber: true)),
                         const SizedBox(width: 12),
-                        Expanded(child: _buildTextField('Disc Amt', _discAmtController, isNumber: true)),
+                        Expanded(child: _buildTextField('Disc Amt (₹)', _discAmtController, isNumber: true)),
                       ],
                     ),
-                    const SizedBox(height: 16),
+
+                    const SizedBox(height: 20),
+
+                    // ── Tax Section ────────────────────────────────────────
+                    _buildSectionLabel('Tax (GST)', LucideIcons.percent),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(child: _buildTextField('CGST %', _cgstPctController, isNumber: true)),
@@ -257,12 +300,13 @@ class _EditItemModalState extends State<EditItemModal> {
                         Expanded(child: _buildTextField('IGST %', _igstPctController, isNumber: true)),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    _buildTextField('Printed Total (From OCR)', _printedTotalController, isNumber: true),
-                    
+                    const SizedBox(height: 12),
+                    _buildTextField('Printed Total (from bill)', _printedTotalController,
+                      isNumber: true, hint: 'Amount as printed on the paper bill'),
+
                     const SizedBox(height: 24),
-                    
-                    // Live Preview Section
+
+                    // ── Live Preview ───────────────────────────────────────
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -273,61 +317,127 @@ class _EditItemModalState extends State<EditItemModal> {
                       child: Column(
                         children: [
                           _buildPreviewRow('Gross Amount', _previewState['grossAmount']),
-                          _buildPreviewRow('Discount Amt', -(_previewState['discAmount'] ?? 0.0), color: Colors.green),
+                          _buildPreviewRow('Discount', -((_previewState['discAmount'] ?? 0.0) as double), color: Colors.green),
                           _buildPreviewRow('Taxable Value', _previewState['taxableAmount']),
-                          _buildPreviewRow('Total Tax', (_previewState['cgstAmount'] ?? 0) + (_previewState['sgstAmount'] ?? 0) + (_previewState['igstAmount'] ?? 0), color: Colors.orange.shade700),
+                          _buildPreviewRow('Total Tax',
+                            ((_previewState['cgstAmount'] ?? 0) as double) +
+                            ((_previewState['sgstAmount'] ?? 0) as double) +
+                            ((_previewState['igstAmount'] ?? 0) as double),
+                            color: Colors.orange.shade700),
                           const Divider(),
-                          _buildPreviewRow('Calculated Net', _previewState['netAmount'], isBold: true),
-                          
-                          if (mismatch > 0) ...[
+                          _buildPreviewRow('Calculated Net',
+                            (_previewState['netAmount'] as double?) ?? 0.0,
+                            isBold: true),
+
+                          if (extraAdj != 0.0) ...[ 
+                            _buildPreviewRow(
+                              extraAdj > 0 ? 'Extra Adjustment (+)' : 'Extra Adjustment (-)',
+                              extraAdj,
+                              color: extraAdj > 0 ? Colors.orange : Colors.green,
+                            ),
+                            const Divider(),
+                            _buildPreviewRow('Final Amount', _adjustedNetAmount, isBold: true,
+                              color: AppTheme.primary),
+                          ],
+
+                          if (mismatch > 0.5 && extraAdj == 0.0) ...[ 
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  needsReview ? '⚠ Review Needed' : 'Accepted Diff',
-                                  style: TextStyle(
-                                    color: needsReview ? Colors.red : Colors.grey.shade600,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.amber.shade300),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(LucideIcons.alertCircle, size: 16, color: Colors.amber.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Total differs by ₹${mismatch.toStringAsFixed(2)} from the bill. '
+                                      'Use "Extra Adjustment" below to fix it.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.amber.shade800,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  'Diff: ₹${mismatch.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    color: needsReview ? Colors.red : Colors.grey.shade600,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          if (extraAdj != 0.0 && residualMismatch.abs() <= 0.5) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade300),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(LucideIcons.checkCircle2, size: 16, color: Colors.green.shade700),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Total looks correct now ✓',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            )
-                          ]
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Extra Adjustment Section ───────────────────────────
+                    _buildSectionLabel('Extra Adjustment', LucideIcons.arrowUpDown),
+                    const SizedBox(height: 6),
+                    Text(
+                      'If the grand total still doesn\'t match the bill, add a small + or − amount here to fix it. '
+                      'For example, enter "-2" to reduce total by ₹2, or "3" to add ₹3.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.5),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildTextField('Adjustment Amount (₹)', _extraAdjController,
+                      isNumber: true,
+                      allowNegative: true,
+                      hint: 'e.g. -2 or 3',
+                      prefixIcon: LucideIcons.arrowUpDown,
+                    ),
+
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
             ),
-            
+
             // Footer
             Padding(
               padding: const EdgeInsets.all(20),
               child: ElevatedButton(
-                onPressed: needsReview ? null : _handleSave,
+                onPressed: _handleSave,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(
-                  needsReview ? 'Fix Math Errors to Save' : 'Save Item',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                child: const Text(
+                  'Save Item',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ),
@@ -337,14 +447,46 @@ class _EditItemModalState extends State<EditItemModal> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool isNumber = false, int maxLines = 1}) {
+  Widget _buildSectionLabel(String label, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppTheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    bool isNumber = false,
+    bool allowNegative = false,
+    int maxLines = 1,
+    String? hint,
+    IconData? prefixIcon,
+  }) {
     return TextFormField(
       controller: controller,
-      keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+      keyboardType: isNumber
+          ? (allowNegative
+              ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+              : const TextInputType.numberWithOptions(decimal: true))
+          : TextInputType.text,
       maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 11, color: Colors.grey.shade400),
         labelStyle: const TextStyle(fontSize: 12),
+        prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 16, color: AppTheme.textSecondary) : null,
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
@@ -361,7 +503,8 @@ class _EditItemModalState extends State<EditItemModal> {
     );
   }
 
-  Widget _buildPreviewRow(String label, double? value, {bool isBold = false, Color? color}) {
+  Widget _buildPreviewRow(String label, double? value,
+      {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(

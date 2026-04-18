@@ -76,7 +76,7 @@ class AppShell extends ConsumerWidget {
                 icon: Icon(LucideIcons.layoutGrid),
                 selectedIcon:
                     Icon(LucideIcons.layoutGrid, color: AppTheme.primary),
-                label: 'Inventory',
+                label: 'Suppliers',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.user),
