@@ -20,91 +20,155 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     """
     Called from verification.py during Sync & Finish.
     Checks for credit records and updates customer ledgers and creates transactions.
+
+    OPTIMIZED: Pre-fetches all ledgers and existing transactions in 2 bulk queries
+    instead of 2 sequential queries per record, reducing DB round-trips from O(N) to O(1).
     """
     if not final_records:
         return
-        
+
     db = get_database_client()
     db.set_user_context(username)
-    
+
+    # ── 1. Filter to only Credit records that need processing ─────────────────
+    credit_records = []
     for record in final_records:
         payment_mode = record.get('payment_mode', 'Cash')
         balance_due = record.get('balance_due')
-        # Try customer_name first (from verified_invoices), fallback to customer_details (from verification_dates)
         customer_name = record.get('customer_name') or record.get('customer_details')
-        
-        # We only care about Credit transactions that have a customer name and a balance due
-        if payment_mode == 'Credit' and customer_name and balance_due is not None and float(balance_due) > 0:
-            customer_name_clean = str(customer_name).strip()
-            if not customer_name_clean:
-                continue
-                
-            balance_due_float = float(balance_due)
-                
+        if payment_mode == 'Credit' and customer_name and balance_due is not None:
             try:
-                # 1. Add Transaction
-                # Check if this invoice receipt_number already caused a transaction
-                receipt_number = record.get('receipt_number')
-                ledger_id = None
-                
-                # Fetch existing ledger first to get its ID (we need ID to check for existing transactions)
-                ledger_resp = db.client.table('customer_ledgers') \
-                    .select('id, balance_due') \
-                    .eq('username', username) \
-                    .eq('customer_name', customer_name_clean) \
-                    .execute()
-                
-                existing_ledger = ledger_resp.data[0] if ledger_resp.data else None
+                bal = float(balance_due)
+            except (TypeError, ValueError):
+                continue
+            if bal > 0:
+                credit_records.append({
+                    **record,
+                    '_customer_clean': str(customer_name).strip(),
+                    '_balance_due_float': bal,
+                })
 
-                if receipt_number and existing_ledger:
-                    ledger_id = existing_ledger['id']
-                    existing_tx = db.client.table('ledger_transactions') \
-                        .select('id') \
-                        .eq('username', username) \
-                        .eq('ledger_id', ledger_id) \
-                        .eq('receipt_number', receipt_number) \
-                        .eq('transaction_type', 'INVOICE') \
-                        .execute()
-                    
-                    # Prevent duplicate ledger increment if transaction already exists
-                    if existing_tx.data:
-                        logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
-                        continue
+    if not credit_records:
+        logger.info("No Credit records to process for ledgers")
+        return
 
-                # 2. Upsert Ledger
-                if existing_ledger:
-                    # Update existing ledger
-                    ledger_id = existing_ledger['id']
-                    new_balance = float(existing_ledger.get('balance_due', 0)) + balance_due_float
-                    db.client.table('customer_ledgers').update({
-                        'balance_due': new_balance,
-                        'updated_at': datetime.utcnow().isoformat()
-                    }).eq('id', ledger_id).execute()
-                else:
-                    # Create new ledger
-                    new_ledger_resp = db.client.table('customer_ledgers').insert({
+    customer_names = list({r['_customer_clean'] for r in credit_records if r['_customer_clean']})
+
+    # ── 2. Bulk-fetch all relevant ledgers in ONE query ───────────────────────
+    ledger_resp = db.client.table('customer_ledgers') \
+        .select('id, customer_name, balance_due') \
+        .eq('username', username) \
+        .in_('customer_name', customer_names) \
+        .execute()
+
+    # Map: customer_name -> ledger row
+    ledger_map: Dict[str, Dict] = {}
+    for row in (ledger_resp.data or []):
+        ledger_map[row['customer_name']] = row
+
+    # ── 3. Bulk-fetch all existing INVOICE transactions for ALL ledger IDs ────
+    existing_ledger_ids = [row['id'] for row in ledger_map.values()]
+    existing_tx_set: set = set()  # (ledger_id, receipt_number)
+
+    if existing_ledger_ids:
+        tx_resp = db.client.table('ledger_transactions') \
+            .select('ledger_id, receipt_number') \
+            .eq('username', username) \
+            .eq('transaction_type', 'INVOICE') \
+            .in_('ledger_id', existing_ledger_ids) \
+            .execute()
+        for tx in (tx_resp.data or []):
+            if tx.get('receipt_number'):
+                existing_tx_set.add((tx['ledger_id'], str(tx['receipt_number'])))
+
+    # ── 4. Process each record entirely in-memory, collect writes ─────────────
+    ledger_updates: Dict[str, float] = {}   # ledger_id -> new balance
+    new_ledgers: List[Dict] = []            # rows to INSERT into customer_ledgers
+    new_transactions: List[Dict] = []       # rows to INSERT into ledger_transactions
+
+    # Track ledgers we are creating mid-loop so siblings share the same pending ledger
+    pending_new_ledgers: Dict[str, Dict] = {}  # customer_name -> {balance_due, transactions[]}
+
+    for record in credit_records:
+        customer_name_clean = record['_customer_clean']
+        balance_due_float = record['_balance_due_float']
+        receipt_number = record.get('receipt_number')
+
+        existing_ledger = ledger_map.get(customer_name_clean)
+
+        if existing_ledger:
+            ledger_id = existing_ledger['id']
+            # Dedup check (in-memory, no DB round-trip)
+            if receipt_number and (ledger_id, str(receipt_number)) in existing_tx_set:
+                logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
+                continue
+
+            # Accumulate balance delta (in case multiple records for same ledger)
+            ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(existing_ledger.get('balance_due', 0))) + balance_due_float
+
+            new_transactions.append({
+                'username': username,
+                'ledger_id': ledger_id,
+                'transaction_type': 'INVOICE',
+                'amount': balance_due_float,
+                'receipt_number': receipt_number,
+                'notes': record.get('customer_details', ''),
+            })
+        else:
+            # No ledger yet — group by customer to avoid duplicate creates for siblings
+            if customer_name_clean not in pending_new_ledgers:
+                pending_new_ledgers[customer_name_clean] = {
+                    'balance_due': 0.0,
+                    'transactions': [],
+                }
+            pending_new_ledgers[customer_name_clean]['balance_due'] += balance_due_float
+            pending_new_ledgers[customer_name_clean]['transactions'].append({
+                'receipt_number': receipt_number,
+                'amount': balance_due_float,
+                'notes': record.get('customer_details', ''),
+            })
+
+    # ── 5. Write ledger balance updates (one UPDATE per ledger) ───────────────
+    now_iso = datetime.utcnow().isoformat()
+    for ledger_id, new_balance in ledger_updates.items():
+        try:
+            db.client.table('customer_ledgers').update({
+                'balance_due': new_balance,
+                'updated_at': now_iso,
+            }).eq('id', ledger_id).execute()
+        except Exception as e:
+            logger.error(f"Error updating ledger {ledger_id}: {e}")
+
+    # ── 6. Create new ledgers + their transactions ────────────────────────────
+    for customer_name_clean, info in pending_new_ledgers.items():
+        try:
+            new_ledger_resp = db.client.table('customer_ledgers').insert({
+                'username': username,
+                'customer_name': customer_name_clean,
+                'balance_due': info['balance_due'],
+            }).execute()
+
+            if new_ledger_resp.data:
+                new_ledger_id = new_ledger_resp.data[0]['id']
+                for tx in info['transactions']:
+                    new_transactions.append({
                         'username': username,
-                        'customer_name': customer_name_clean,
-                        'balance_due': balance_due_float,
-                    }).execute()
-                    
-                    if new_ledger_resp.data:
-                        ledger_id = new_ledger_resp.data[0]['id']
-                    else:
-                        logger.error(f"Failed to create ledger for {customer_name_clean}")
-                        continue
-                
-                # 3. Add Transaction Record
-                db.client.table('ledger_transactions').insert({
-                    'username': username,
-                    'ledger_id': ledger_id,
-                    'transaction_type': 'INVOICE',
-                    'amount': balance_due_float,
-                    'receipt_number': receipt_number,
-                    'notes': record.get('customer_details', '')
-                }).execute()
-            except Exception as e:
-                logger.error(f"Error processing ledger for {customer_name_clean}: {e}")
+                        'ledger_id': new_ledger_id,
+                        'transaction_type': 'INVOICE',
+                        **tx,
+                    })
+            else:
+                logger.error(f"Failed to create ledger for {customer_name_clean}")
+        except Exception as e:
+            logger.error(f"Error creating ledger for {customer_name_clean}: {e}")
+
+    # ── 7. Batch-insert all new transactions in ONE query ─────────────────────
+    if new_transactions:
+        try:
+            db.client.table('ledger_transactions').insert(new_transactions).execute()
+            logger.info(f"✅ Inserted {len(new_transactions)} ledger transactions in batch")
+        except Exception as e:
+            logger.error(f"Error batch-inserting ledger transactions: {e}")
 
 @router.get("/ledgers")
 async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):

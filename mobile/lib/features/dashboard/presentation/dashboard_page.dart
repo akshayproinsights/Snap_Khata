@@ -54,11 +54,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final String shopName =
         userState.user?.name ?? userState.user?.username ?? 'My Shop';
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
-        backgroundColor: AppTheme.surface,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -68,7 +68,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
-                    color: AppTheme.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -96,9 +96,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               ?.copyWith(fontWeight: FontWeight.w700),
           unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
           indicatorSize: TabBarIndicatorSize.label,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
+          indicatorColor: Theme.of(context).colorScheme.primary,
+          labelColor: Theme.of(context).colorScheme.primary,
+          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
           tabs: const [
             Tab(text: 'Recent Orders'),
             Tab(text: 'Party Details'),
@@ -160,7 +160,7 @@ class _RecentOrdersTab extends ConsumerWidget {
     if (state.error != null && state.records.isEmpty) {
       return Center(
           child: Text('Error: ${state.error}',
-              style: const TextStyle(color: AppTheme.error)));
+              style: TextStyle(color: Theme.of(context).colorScheme.error)));
     }
 
     // 1. Group records by receiptNumber (fallback to date)
@@ -240,12 +240,14 @@ class _RecentOrdersTab extends ConsumerWidget {
           }
 
           if (sortedGroups.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.only(top: 24.0),
+            return Padding(
+              padding: const EdgeInsets.only(top: 24.0),
               child: Text(
                 'No verified orders yet.\nSnap a new order to get started!',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 16),
               ),
             );
           }
@@ -294,9 +296,9 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -344,15 +346,15 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                                 .read(verifiedProvider.notifier)
                                 .deleteBulk(rowIds);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order deleted successfully.'),
-                                backgroundColor: AppTheme.success,
+                              SnackBar(
+                                content: const Text('Order deleted successfully.'),
+                                backgroundColor: Theme.of(context).colorScheme.primary,
                               ),
                             );
                           }
                         },
                         style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.error),
+                            foregroundColor: Theme.of(context).colorScheme.error),
                         child: const Text('Delete'),
                       ),
                     ],
@@ -370,7 +372,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: isUnknown
                             ? Colors.blue.withValues(alpha: 0.1)
-                            : AppTheme.primary.withValues(alpha: 0.08),
+                            : Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -378,7 +380,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                         initial,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: isUnknown ? Colors.blue : AppTheme.primary,
+                          color: isUnknown ? Colors.blue : Theme.of(context).colorScheme.primary,
                           fontSize: 18,
                         ),
                       ),
@@ -403,7 +405,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                               Icon(
                                 LucideIcons.calendar,
                                 size: 12,
-                                color: AppTheme.textSecondary.withValues(alpha: 0.7),
+                                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -412,7 +414,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                                     .textTheme
                                     .bodySmall
                                     ?.copyWith(
-                                      color: AppTheme.textSecondary,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       fontWeight: FontWeight.w500,
                                     ),
                               ),
@@ -430,7 +432,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
-                                    color: AppTheme.textPrimary,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     letterSpacing: -0.3,
                                   ),
                         ),
@@ -444,7 +446,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                           ),
                           child: Text(
                             statusLabel,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: statusColor,
                               fontWeight: FontWeight.w800,
                               fontSize: 10,
@@ -521,7 +523,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
     if (state.error != null && state.records.isEmpty) {
       return Center(
           child: Text('Error: ${state.error}',
-              style: const TextStyle(color: AppTheme.error)));
+              style: TextStyle(color: Theme.of(context).colorScheme.error)));
     }
 
     // Aggregate records grouped by vehicle number (when present), else by customer name
@@ -591,25 +593,25 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
               decoration: InputDecoration(
                 hintText: 'Search by name, vehicle, or mobile',
                 hintStyle:
-                    TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.6)),
-                prefixIcon: const Icon(LucideIcons.search,
-                    color: AppTheme.textSecondary),
+                    TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                prefixIcon: Icon(LucideIcons.search,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 filled: true,
-                fillColor: AppTheme.surface,
+                fillColor: Theme.of(context).colorScheme.surface,
                 contentPadding:
                     const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppTheme.border),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppTheme.border),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide:
-                      const BorderSide(color: AppTheme.primary, width: 2),
+                      BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
                 ),
               ),
               onChanged: _onSearchChanged,
@@ -625,8 +627,9 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                           ? 'No parties found for "$_searchQuery".'
                           : 'No parties yet.\nSnap a new order to build your ledger.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 16),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 16),
                     ),
                   ),
                 )
@@ -648,9 +651,9 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: AppTheme.surface,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.border),
+                          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.02),
@@ -699,7 +702,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                                             SnackBar(
                                               content: Text(
                                                   'Deleted all orders for $displayTitle.'),
-                                              backgroundColor: AppTheme.success,
+                                              backgroundColor: Theme.of(context).colorScheme.primary,
                                             ),
                                           );
                                         }
@@ -721,15 +724,15 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                                     width: 44,
                                     height: 44,
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primary.withValues(alpha: 0.12),
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                                       shape: BoxShape.circle,
                                     ),
                                     alignment: Alignment.center,
                                     child: Text(
                                       initial,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w800,
-                                        color: AppTheme.primary,
+                                        color: Theme.of(context).colorScheme.primary,
                                         fontSize: 18,
                                       ),
                                     ),
@@ -753,8 +756,8 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                                         const SizedBox(height: 4),
                                         Text(
                                           '${party.orderCount} Order(s)',
-                                          style: const TextStyle(
-                                              color: AppTheme.textSecondary,
+                                          style: TextStyle(
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w500),
                                         ),
@@ -773,7 +776,7 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                                             .titleMedium
                                             ?.copyWith(
                                               fontWeight: FontWeight.w900,
-                                              color: AppTheme.textPrimary,
+                                              color: Theme.of(context).colorScheme.onSurface,
                                               letterSpacing: -0.3,
                                             ),
                                       ),
@@ -868,9 +871,9 @@ class _QuickLinksSection extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -886,7 +889,7 @@ class _QuickLinksSection extends ConsumerWidget {
             'Quick Links',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
           ),
           const SizedBox(height: 16),
@@ -1021,7 +1024,7 @@ class _QuickLinksSection extends ConsumerWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -1033,7 +1036,7 @@ class _QuickLinksSection extends ConsumerWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 9,
                       ),
                   maxLines: 2,
@@ -1070,9 +1073,9 @@ class _TodaySaleSheet extends StatelessWidget {
 
     return Container(
       constraints: BoxConstraints(maxHeight: screenH * 0.82),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1110,19 +1113,19 @@ class _TodaySaleSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         "Today's Sale",
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: Color(0xFF111827),
+                          color: Theme.of(context).colorScheme.onSurface,
                           letterSpacing: -0.3,
                         ),
                       ),
                       Text(
                         '${groups.length} unique receipt${groups.length == 1 ? '' : 's'}',
                         style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1145,7 +1148,7 @@ class _TodaySaleSheet extends StatelessWidget {
                     Text(
                       'Total Revenue',
                       style: TextStyle(
-                        color: Colors.grey.shade400,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1173,7 +1176,7 @@ class _TodaySaleSheet extends StatelessWidget {
                         Text(
                           'No sales recorded today',
                           style: TextStyle(
-                            color: Colors.grey.shade400,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1182,7 +1185,7 @@ class _TodaySaleSheet extends StatelessWidget {
                         Text(
                           'Snap a new order to get started!',
                           style: TextStyle(
-                            color: Colors.grey.shade400,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                             fontSize: 13,
                           ),
                         ),
@@ -1246,10 +1249,10 @@ class _TodaySaleSheet extends StatelessWidget {
                                   children: [
                                     Text(
                                       displayName,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14,
-                                        color: Color(0xFF111827),
+                                        color: Theme.of(context).colorScheme.onSurface,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -1261,13 +1264,13 @@ class _TodaySaleSheet extends StatelessWidget {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 7, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: emeraldLight,
+                                            color: emerald.withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(6),
                                           ),
                                           child: Text(
                                             receiptLabel,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: emerald,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 10,
@@ -1279,7 +1282,7 @@ class _TodaySaleSheet extends StatelessWidget {
                                         Text(
                                           '$itemCount item${itemCount == 1 ? '' : 's'}',
                                           style: TextStyle(
-                                            color: Colors.grey.shade500,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w500,
                                           ),
@@ -1292,10 +1295,10 @@ class _TodaySaleSheet extends StatelessWidget {
                               // Amount
                               Text(
                                 currencyFormat.format(group.totalAmount),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 15,
-                                  color: Color(0xFF111827),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: -0.3,
                                 ),
                               ),

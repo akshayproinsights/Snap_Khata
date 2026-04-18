@@ -304,12 +304,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Order Details',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         centerTitle: true,
@@ -326,15 +326,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           else if (isEditing)
             TextButton(
               onPressed: _saveChanges,
-              child: const Text('Save',
+              child: Text('Save',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: AppTheme.primary)),
+                      color: Theme.of(context).colorScheme.primary)),
             )
           else
             IconButton(
-              icon: const Icon(LucideIcons.edit, color: AppTheme.primary),
+              icon: Icon(LucideIcons.edit, color: Theme.of(context).colorScheme.primary),
               tooltip: 'Edit Details',
               onPressed: () => setState(() => isEditing = true),
             ),
@@ -342,7 +342,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: const Icon(LucideIcons.eye, color: AppTheme.primary),
+                icon: Icon(LucideIcons.eye, color: Theme.of(context).colorScheme.primary),
                 tooltip: 'View Original Receipt',
                 onPressed: () => _showReceiptDialog(context),
               ),
@@ -351,8 +351,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: const FaIcon(FontAwesomeIcons.whatsapp,
-                    color: AppTheme.primary),
+                icon: FaIcon(FontAwesomeIcons.whatsapp,
+                    color: Theme.of(context).colorScheme.primary),
                 tooltip: 'Share Receipt on WhatsApp',
                 onPressed: () async {
                   HapticFeedback.lightImpact();
@@ -481,7 +481,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
             // ignore: deprecated_member_use_from_same_package
@@ -520,7 +520,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               Row(
                 children: [
                    const Text('Balance Due: ', style: TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
-                   Text('₹${_formatAmount(grandTotal - _receivedAmount)}', style: const TextStyle(color: AppTheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
+                   Text('₹${_formatAmount(grandTotal - _receivedAmount)}', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
                 ],
               )
             ]
@@ -540,9 +540,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(_paymentMode == 'Cash' ? LucideIcons.checkCircle : LucideIcons.alertCircle, 
-                   size: 18, color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.red.shade700),
+                   size: 18, color: _paymentMode == 'Cash' ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error),
               const SizedBox(width: 8),
-              Text(_paymentMode == 'Cash' ? 'Cash' : 'Credit (Due)', style: TextStyle(color: _paymentMode == 'Cash' ? Colors.green.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold, fontSize: 15)),
+              Text(_paymentMode == 'Cash' ? 'Cash' : 'Credit (Due)', style: TextStyle(color: _paymentMode == 'Cash' ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           )
         )
@@ -640,8 +640,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                           ? Icons.check_box
                           : Icons.check_box_outline_blank,
                       color: _isReceivedChecked
-                          ? AppTheme.primary
-                          : Colors.grey.shade400,
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
                     ),
                     const SizedBox(width: 8),
                     const Text('Received', style: TextStyle(fontSize: 16)),
@@ -668,8 +668,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         borderSide: BorderSide(color: Colors.grey.shade300)),
                     enabledBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: Colors.grey.shade300)),
-                    focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppTheme.primary)),
+                    focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
                     fillColor: Colors.transparent,
                   ),
                   onChanged: (val) {
@@ -701,8 +701,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 child: Text(
                   _formatAmount(grandTotal - _receivedAmount),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      color: AppTheme.error,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                       fontSize: 16,
                       fontWeight: FontWeight.bold),
                 ),
@@ -715,14 +715,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             decoration: InputDecoration(
               labelText: 'Customer Details / Notes',
               labelStyle:
-                  TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
               alignLabelWithHint: true,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300)),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
               enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300)),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
             ),
             maxLines: 2,
           ),
@@ -736,7 +736,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // ─────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
@@ -745,23 +745,23 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Receipt Number',
+                Text('Receipt Number',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 if (isEditing)
-                  _buildTextField(receiptCtrl, 'Receipt No')
+                  _buildTextField(context, receiptCtrl, 'Receipt No')
                 else
                   Text(
                       widget.group.receiptNumber.isNotEmpty
                           ? '#${widget.group.receiptNumber}'
                           : 'N/A',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: AppTheme.textPrimary)),
+                          color: Theme.of(context).colorScheme.onSurface)),
               ],
             ),
           ),
@@ -769,7 +769,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           Container(
             width: 1,
             height: 40,
-            color: Colors.grey.shade200,
+            color: Theme.of(context).colorScheme.outlineVariant,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           // Date
@@ -777,20 +777,20 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Date',
+                Text('Date',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 if (isEditing)
-                  _buildTextField(dateCtrl, 'Date')
+                  _buildTextField(context, dateCtrl, 'Date')
                 else
                   Text(_formattedDate(),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: AppTheme.textPrimary)),
+                          color: Theme.of(context).colorScheme.onSurface)),
               ],
             ),
           ),
@@ -811,25 +811,25 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final hasExtraFields = _extraFieldCtrls.isNotEmpty;
 
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Customer Details',
+          Text('Customer Details',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary)),
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.04),
-              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
-              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -837,16 +837,16 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4))
                     ],
                   ),
-                  child: const Icon(LucideIcons.user, color: AppTheme.primary),
+                  child: Icon(LucideIcons.user, color: Theme.of(context).colorScheme.primary),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -854,52 +854,52 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ── Customer Name (always shown) ──
-                      const Text('Customer Name',
+                      Text('Customer Name',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       if (isEditing)
-                        _buildTextField(customerCtrl, 'Name')
+                        _buildTextField(context, customerCtrl, 'Name')
                       else
                         Text(
                             widget.group.customerName.isNotEmpty
                                 ? widget.group.customerName
                                 : 'Unknown',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary),
+                                color: Theme.of(context).colorScheme.onSurface),
                             overflow: TextOverflow.ellipsis),
 
                       const SizedBox(height: 12),
-                      const Text('Mobile Number',
+                      Text('Mobile Number',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       if (isEditing)
-                        _buildTextField(mobileCtrl, 'Mobile Number', isNumber: true)
+                        _buildTextField(context, mobileCtrl, 'Mobile Number', isNumber: true)
                       else
                         Text(
                             widget.group.mobileNumber.isNotEmpty
                                 ? widget.group.mobileNumber
                                 : '—',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary),
+                                color: Theme.of(context).colorScheme.onSurface),
                             overflow: TextOverflow.ellipsis),
 
                       // ── Dynamic extra fields (only if industry provides them) ──
                       if (hasExtraFields) ...[
-                        const SizedBox(height: 14),
-                        const Divider(height: 1),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
+                        Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+                        const SizedBox(height: 16),
                         Wrap(
                           spacing: 16,
                           runSpacing: 12,
@@ -911,23 +911,23 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(label,
-                                      style: const TextStyle(
-                                          color: AppTheme.textSecondary,
+                                      style: TextStyle(
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           letterSpacing: 0.5)),
                                   const SizedBox(height: 4),
                                   if (isEditing)
-                                    _buildTextField(entry.value, label)
+                                    _buildTextField(context, entry.value, label)
                                   else
                                     Text(
                                         entry.value.text.isNotEmpty
                                             ? entry.value.text
                                             : '—',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
-                                            color: AppTheme.textPrimary),
+                                            color: Theme.of(context).colorScheme.onSurface),
                                         overflow: TextOverflow.ellipsis),
                                 ],
                               ),
@@ -951,27 +951,27 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint,
+  Widget _buildTextField(BuildContext context, TextEditingController controller, String hint,
       {bool isNumber = false}) {
     return TextFormField(
       controller: controller,
       keyboardType: isNumber
           ? const TextInputType.numberWithOptions(decimal: true)
           : TextInputType.text,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
       decoration: InputDecoration(
         hintText: hint,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         isDense: true,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.shade300)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.shade300)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppTheme.primary)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
       ),
     );
   }
@@ -982,7 +982,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   Widget _buildItemsSection(bool isAutomobile) {
     if (isEditing) {
       return Container(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1017,7 +1017,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         .toList();
 
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1026,13 +1026,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           if (isAutomobile) ...[
             if (parts.isNotEmpty)
               _buildCategoryGroup(
-                  'Spare Parts', parts, LucideIcons.package2, Colors.blue),
+                  'Spare Parts', parts, LucideIcons.package2, Theme.of(context).colorScheme.primary),
             if (servicing.isNotEmpty)
               _buildCategoryGroup(
-                  'Servicing', servicing, LucideIcons.wrench, Colors.orange),
+                  'Servicing', servicing, LucideIcons.wrench, Theme.of(context).colorScheme.secondary),
             if (others.isNotEmpty)
               _buildCategoryGroup(
-                  'Other Items', others, LucideIcons.box, Colors.grey),
+                  'Other Items', others, LucideIcons.box, Theme.of(context).colorScheme.outline),
           ] else ...[
             ...widget.group.items.asMap().entries.map((e) {
               return _ItemRow(
@@ -1046,11 +1046,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             }),
           ],
           if (widget.group.items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(32),
+            Padding(
+              padding: const EdgeInsets.all(32),
               child: Center(
                   child: Text('No items found',
-                      style: TextStyle(color: AppTheme.textSecondary))),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
             ),
         ],
       ),
@@ -1061,20 +1061,20 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)],
+          colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(LucideIcons.shoppingBag, color: Colors.white, size: 18),
-          SizedBox(width: 8),
+          Icon(LucideIcons.shoppingBag, color: Theme.of(context).colorScheme.onPrimary, size: 18),
+          const SizedBox(width: 8),
           Text('Ordered Items',
               style: TextStyle(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold)),
         ],
@@ -1083,7 +1083,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   Widget _buildCategoryGroup(String title, List<VerifiedInvoice> items,
-      IconData icon, MaterialColor color) {
+      IconData icon, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1094,26 +1094,26 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                    color: color.shade50,
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6)),
-                child: Icon(icon, size: 14, color: color.shade700),
+                child: Icon(icon, size: 14, color: color),
               ),
               const SizedBox(width: 8),
               Text(title.toUpperCase(),
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: color.shade700,
+                      color: color,
                       letterSpacing: 1.0)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(10)),
                 child: Text('${items.length}',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             ],
           ),
@@ -1178,8 +1178,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => Container(
                   padding: const EdgeInsets.all(32),
-                  color: AppTheme.surface,
-                  child: const Text('Failed to load receipt image.'),
+                  color: Theme.of(context).colorScheme.surface,
+                  child: Text('Failed to load receipt image.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                 ),
               ),
             ),
@@ -1222,83 +1222,78 @@ class _ItemRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
             bottom: BorderSide(
-                color: isLast ? Colors.transparent : Colors.grey.shade200)),
+                color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant)),
       ),
-      child: isEditing ? _buildEditMode() : _buildViewMode(currencyFormat),
+      child: isEditing ? _buildEditMode(context) : _buildViewMode(context, currencyFormat),
     );
   }
 
-  Widget _buildViewMode(NumberFormat currencyFormat) {
+  Widget _buildViewMode(BuildContext context, NumberFormat currencyFormat) {
     final qtyStr = item.quantity == item.quantity.roundToDouble()
         ? item.quantity.toInt().toString()
         : item.quantity.toStringAsFixed(1);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildIndexBadge(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                  item.description.isNotEmpty ? item.description : 'Unknown',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: AppTheme.textPrimary)),
-            ),
-            const SizedBox(width: 8),
-            Text(currencyFormat.format(item.amount),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: AppTheme.textPrimary)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.only(left: 36),
-          child: Row(
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isAutomobile)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(4)),
-                  child: Text('${item.type} ',
-                      style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondary)),
-                ),
-              const SizedBox(width: 8),
               Text(
-                '$qtyStr  x  ${currencyFormat.format(item.rate)}',
-                style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500),
+                item.description.isNotEmpty ? item.description : 'Unknown',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  if (isAutomobile)
+                    _Badge(
+                      text: item.type.toUpperCase().contains('PART') ? 'PART' : 'LABOR',
+                      color: item.type.toUpperCase().contains('PART') 
+                          ? Theme.of(context).colorScheme.primary 
+                          : Theme.of(context).colorScheme.secondary,
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$qtyStr  x  ${currencyFormat.format(item.rate)}',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 16),
+        Text(
+          currencyFormat.format(item.amount),
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).colorScheme.onSurface),
         ),
       ],
     );
   }
 
-  Widget _buildEditMode() {
+  Widget _buildEditMode(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _buildIndexBadge(),
+            _buildIndexBadge(context),
             const SizedBox(width: 12),
-            Expanded(child: _buildTextField(ctrl.descCtrl, 'Description')),
+            Expanded(child: _buildTextField(context, ctrl.descCtrl, 'Description')),
           ],
         ),
         const SizedBox(height: 8),
@@ -1330,20 +1325,17 @@ class _ItemRow extends StatelessWidget {
                     );
                   },
                 ),
-              const SizedBox(width: 8),
               Expanded(
                   flex: 1,
-                  child: _buildTextField(ctrl.qtyCtrl, 'Qty', isNumber: true)),
+                  child: _buildTextField(context, ctrl.qtyCtrl, 'Qty', isNumber: true)),
               const SizedBox(width: 8),
               Expanded(
                   flex: 2,
-                  child:
-                      _buildTextField(ctrl.rateCtrl, 'Rate', isNumber: true)),
+                  child: _buildTextField(context, ctrl.rateCtrl, 'Rate', isNumber: true)),
               const SizedBox(width: 8),
               Expanded(
                   flex: 2,
-                  child:
-                      _buildTextField(ctrl.amtCtrl, 'Amount', isNumber: true)),
+                  child: _buildTextField(context, ctrl.amtCtrl, 'Amount', isNumber: true)),
             ],
           ),
         ),
@@ -1351,26 +1343,26 @@ class _ItemRow extends StatelessWidget {
     );
   }
 
-  Widget _buildIndexBadge() {
+  Widget _buildIndexBadge(BuildContext context) {
     return Container(
       width: 24,
       height: 24,
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade300),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(
         child: Text('#$index',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 10)),
       ),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint,
+  Widget _buildTextField(BuildContext context, TextEditingController controller, String hint,
       {bool isNumber = false}) {
     return TextFormField(
       controller: controller,
@@ -1384,13 +1376,13 @@ class _ItemRow extends StatelessWidget {
         isDense: true,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Colors.grey.shade300)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Colors.grey.shade300)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: const BorderSide(color: AppTheme.primary)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
       ),
     );
   }
@@ -1415,12 +1407,12 @@ class _PaymentToggleBtn extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   )
@@ -1430,7 +1422,7 @@ class _PaymentToggleBtn extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            color: isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -1543,6 +1535,33 @@ class _CreditBookButton extends ConsumerWidget {
             ),
             Icon(LucideIcons.arrowRight, size: 14, color: Colors.orange.shade600),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _Badge({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

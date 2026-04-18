@@ -36,6 +36,9 @@ class _InventoryInvoiceReviewPageState
   String _paymentMode = 'Credit';
   bool _isLoading = false;
 
+  late List<HeaderAdjustment> _adjustments;
+  double? _targetTotal;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +55,7 @@ class _InventoryInvoiceReviewPageState
         }
     } catch (_) {}
     _dateController = TextEditingController(text: initialDate);
+    _adjustments = List.from(widget.bundle.headerAdjustments);
   }
 
   Future<void> _deleteItem(InventoryItem item) async {
@@ -154,6 +158,110 @@ class _InventoryInvoiceReviewPageState
     _invoiceNumberController.dispose();
     _dateController.dispose();
     super.dispose();
+  }
+
+  void _showEditAdjustmentDialog(int index, HeaderAdjustment adj) {
+    final controller = TextEditingController(text: adj.amount.abs().toStringAsFixed(2));
+    final type = adj.adjustmentType;
+    final isDeduction = adj.amount < 0 || type == 'HEADER_DISCOUNT' || type == 'SCHEME';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit ${adj.description ?? adj.adjustmentType}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Amount (₹)',
+                prefixText: '₹ ',
+                suffixText: isDeduction ? '(Deduction)' : '(Addition)',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text) ?? 0.0;
+              setState(() {
+                _adjustments[index] = adj.copyWith(amount: isDeduction ? -val.abs() : val.abs());
+                // Reset target total if we manually edit adjustments to avoid dual-conflicts
+                _targetTotal = null;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditTotalDialog(double currentCalculatedTotal) {
+    final controller = TextEditingController(text: (_targetTotal ?? currentCalculatedTotal).toStringAsFixed(2));
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Adjust Grand Total'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the correct total from the bill. We will adjust the extras to match.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Total Bill Amount (₹)',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _targetTotal = null;
+                // Remove any manual correction adjustments if they exist
+                _adjustments.removeWhere((a) => a.description == 'Manual Correction');
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Reset to Auto'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final newTotal = double.tryParse(controller.text);
+              if (newTotal != null) {
+                setState(() {
+                  _targetTotal = newTotal;
+                });
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Update Total'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showFullImage(String imageUrl) {
@@ -263,7 +371,7 @@ class _InventoryInvoiceReviewPageState
         'balance_owed': _paymentMode == 'Credit' ? totalAmount : 0.0,
         'amount_paid': _paymentMode == 'Cash' ? totalAmount : 0.0,
         'final_total': totalAmount,
-        'adjustments': widget.bundle.headerAdjustments.map((a) => a.toJson()).toList(),
+        'adjustments': _adjustments.map((a) => a.toJson()).toList(),
       };
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
@@ -450,32 +558,111 @@ class _InventoryInvoiceReviewPageState
     });
 
     final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0 || (i.needsReview ?? false));
-    // Compute effective signed amount for each adjustment:
-    //   HEADER_DISCOUNT / SCHEME → EXCLUDED from total calculation because each
-    //     item's netAmount already has the per-item discount baked in via the
-    //     math engine. Adding them here would double-count the discount.
-    //   ROUND_OFF / OTHER        → use as-is (can be positive or negative);
-    //     these are genuine header-level adjustments not reflected in line items.
-    double effectiveAdjAmount(HeaderAdjustment adj) {
-      final type = adj.adjustmentType.toUpperCase();
-      if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
-        return -adj.amount.abs();
-      }
-      return adj.amount;
-    }
-    // Only include ROUND_OFF and OTHER in the grand total.
-    // HEADER_DISCOUNT / SCHEME are already embedded in each item's netAmount.
-    final adjustmentTotal = widget.bundle.headerAdjustments.fold<double>(
+
+    // ── Two-Scenario Grand Total Logic ────────────────────────────────────────
+    //
+    // SCENARIO A — Per-item discount (discAmount > 0 OR discPercent > 0 on any item):
+    //   Each item's netAmount already has: gross → (gross − discAmt) → +GST.
+    //   HEADER_DISCOUNT/SCHEME are just a summary of what's already in items.
+    //   → Sum item netAmounts; skip HEADER_DISCOUNT from adjustments (avoid double-count).
+    //
+    // SCENARIO B — Header-only discount (all items have discAmount=0, discPercent=0):
+    //   Items have no per-item discount; discount appears only as a footer line.
+    //   Correct bill math: totalGross − headerDiscount = totalTaxable → GST on taxable.
+    //   Items' netAmounts currently include GST on FULL gross (no discount applied).
+    //   → Recalculate: totalTaxable = totalGross − headerDiscount;
+    //     scale GST proportionally from items' original GST amounts.
+    //   → HEADER_DISCOUNT is consumed here and NOT added to adjustmentTotal.
+
+    final hasPerItemDiscount = sortedItems.any(
+      (i) => (i.discAmount ?? 0.0) > 0.01 || (i.discPercent ?? 0.0) > 0.01,
+    );
+
+
+
+    // ROUND_OFF / OTHER always added on top in both scenarios.
+    final nonDiscountAdjTotal = _adjustments.fold<double>(
       0.0,
       (sum, adj) {
         final type = adj.adjustmentType.toUpperCase();
-        if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
-          return sum; // skip — already in item netAmounts
+        if (type == 'ROUND_OFF' || type == 'OTHER') {
+          return sum + (adj.amount); // use signed amount
         }
-        return sum + effectiveAdjAmount(adj);
+        return sum;
       },
     );
-    final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill)) + adjustmentTotal;
+
+    double baseItemsTotal;
+
+    if (hasPerItemDiscount) {
+      // ── Scenario A ──────────────────────────────────────────────────────────
+      // Discounts are already inside each item's netAmount. Just sum them up.
+      baseItemsTotal = sortedItems.fold(
+        0.0,
+        (sum, item) => sum + (item.netAmount ?? item.netBill),
+      );
+    } else {
+      // ── Scenario B ──────────────────────────────────────────────────────────
+      // No per-item discount. Apply HEADER_DISCOUNT/SCHEME to total gross,
+      // THEN scale GST proportionally (discount before tax, not after).
+
+      final totalGross = sortedItems.fold(
+        0.0,
+        (sum, item) => sum + (item.grossAmount ?? (item.qty * item.rate)),
+      );
+
+      final headerDiscountAmt = _adjustments.fold<double>(
+        0.0,
+        (sum, adj) {
+          final type = adj.adjustmentType.toUpperCase();
+          if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
+            return sum + adj.amount.abs();
+          }
+          return sum;
+        },
+      );
+
+      final totalTaxable = (totalGross - headerDiscountAmt).clamp(0.0, double.infinity);
+
+      // Scale existing GST amounts proportionally to the discounted taxable base.
+      // (Items' GST was computed on grossAmount since discPct=0 at item level)
+      final originalTaxableBase = sortedItems.fold<double>(
+        0.0,
+        (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.qty * item.rate)),
+      );
+      final totalGst = sortedItems.fold<double>(
+        0.0,
+        (sum, item) =>
+            sum + (item.cgstAmount ?? 0.0) + (item.sgstAmount ?? 0.0) + (item.igstAmount ?? 0.0),
+      );
+      final scaledGst = originalTaxableBase > 0
+          ? totalGst * (totalTaxable / originalTaxableBase)
+          : totalGst;
+
+      baseItemsTotal = totalTaxable + scaledGst;
+    }
+
+    double totalAmount = baseItemsTotal + nonDiscountAdjTotal;
+
+    // ── Apply Manual Correction if Target Total is set ────────────────────────
+    if (_targetTotal != null) {
+        final diff = _targetTotal! - totalAmount;
+        if (diff.abs() > 0.001) {
+            // Find existing manual correction or create new
+            final idx = _adjustments.indexWhere((a) => a.description == 'Manual Correction');
+            if (idx != -1) {
+                _adjustments[idx] = _adjustments[idx].copyWith(amount: _adjustments[idx].amount + diff);
+            } else {
+                _adjustments.add(HeaderAdjustment(
+                    adjustmentType: 'OTHER',
+                    amount: diff,
+                    description: 'Manual Correction',
+                ));
+            }
+            // Re-calculate to reflect the correction
+            totalAmount = _targetTotal!;
+        }
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -638,7 +825,11 @@ class _InventoryInvoiceReviewPageState
                   },
                   onDelete: () => _deleteItem(item),
                 )),
-                HeaderAdjustmentsSection(adjustments: widget.bundle.headerAdjustments),
+                HeaderAdjustmentsSection(
+                  adjustments: _adjustments,
+                  hasPerItemDiscount: hasPerItemDiscount,
+                  onEdit: _showEditAdjustmentDialog,
+                ),
                 const SizedBox(height: 16),
                 
                 // Add lots of padding at the bottom so we can easily scroll past the FAB area
@@ -653,6 +844,7 @@ class _InventoryInvoiceReviewPageState
         hasMismatch: hasAnyMismatch,
         isLoading: _isLoading,
         onSave: () => _saveInvoice(sortedItems, totalAmount),
+        onTotalTap: () => _showEditTotalDialog(totalAmount),
         isUpdate: widget.bundle.isVerified,
       ),
     );

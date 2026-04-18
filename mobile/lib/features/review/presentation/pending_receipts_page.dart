@@ -10,6 +10,7 @@ import 'package:mobile/features/review/presentation/providers/review_provider.da
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/shared/presentation/widgets/upload_results_summary.dart';
+import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
 
 class PendingReceiptsPage extends ConsumerStatefulWidget {
   final int skippedCount;
@@ -31,6 +32,8 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(reviewProvider.notifier).fetchReviewData();
+        // Clear the "Orders ready to review!" banner — user has arrived at the review page
+        ref.read(backgroundTaskProvider.notifier).clearTask();
       }
     });
   }

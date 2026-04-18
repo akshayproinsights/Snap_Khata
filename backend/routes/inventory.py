@@ -1164,17 +1164,14 @@ async def delete_bulk_inventory_items(
     try:
         db = get_database_client()
         
-        # Delete all items matching the IDs for this user
-        deleted_count = 0
-        for item_id in ids:
-            response = db.client.table("inventory_items")\
-                .delete()\
-                .eq("id", item_id)\
-                .eq("username", username)\
-                .execute()
-            
-            if response.data:
-                deleted_count += 1
+        # Bulk delete all items in a single query instead of N sequential deletes
+        response = db.client.table("inventory_items")\
+            .delete()\
+            .in_("id", ids)\
+            .eq("username", username)\
+            .execute()
+        
+        deleted_count = len(response.data) if response.data else 0
         
         logger.info(f"Deleted {deleted_count} inventory items for {username}")
         

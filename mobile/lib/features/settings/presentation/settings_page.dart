@@ -87,9 +87,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Text(
                 'This info appears on your invoices & syncs across devices',
                 style: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppTheme.darkTextSecondary
-                        : AppTheme.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13),
               ),
               const SizedBox(height: 24),
@@ -176,10 +174,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.darkBorder
-                      : AppTheme.border),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child: Row(
               children: [
@@ -210,9 +205,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       if (userEmail.isNotEmpty)
                         Text(
                           userEmail,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: AppTheme.textSecondary,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       if (_shopName.isNotEmpty)
@@ -222,10 +217,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             _isLoadingProfile ? 'Syncing...' : _shopName,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? AppTheme.darkTextSecondary
-                                  : AppTheme.textSecondary,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -325,10 +317,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppTheme.darkBorder
-                : AppTheme.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: ListTile(
         leading: Icon(icon,
@@ -342,9 +331,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ? Text(subtitle,
                 style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppTheme.darkTextSecondary
-                        : AppTheme.textSecondary))
+                    color: Theme.of(context).colorScheme.onSurfaceVariant))
             : null,
         trailing: trailing ?? const Icon(LucideIcons.chevronRight, size: 20),
         onTap: onTap,

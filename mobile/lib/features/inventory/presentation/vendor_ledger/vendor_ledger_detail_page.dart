@@ -396,7 +396,7 @@ class _VendorLedgerDetailPageState
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppTheme.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -417,12 +417,12 @@ class _VendorLedgerDetailPageState
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Record Payment',
                         style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary),
+                            color: Theme.of(context).colorScheme.onSurface),
                       ),
                       IconButton(
                         icon: const Icon(LucideIcons.x),
@@ -434,7 +434,7 @@ class _VendorLedgerDetailPageState
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -450,8 +450,8 @@ class _VendorLedgerDetailPageState
                         ),
                         Text(
                           currencyFormatter.format(widget.ledger.balanceDue),
-                          style: const TextStyle(
-                            color: AppTheme.primary,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -519,7 +519,8 @@ class _VendorLedgerDetailPageState
                           },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: AppTheme.primary,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -599,7 +600,7 @@ class _VendorLedgerDetailPageState
     final lastOrderDate = purchaseLastOrderDate ?? ledgerLastOrderDate;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         leading: _isSelectionMode 
           ? IconButton(icon: const Icon(LucideIcons.x), onPressed: _clearSelection)
@@ -626,18 +627,18 @@ class _VendorLedgerDetailPageState
                 // Header Profile
                 Text(
                   currentLedger.vendorName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,
-                    color: AppTheme.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Builder(
                   builder: (context) {
                     final isPending = currentLedger.balanceDue > 0;
-                    final statusColor = isPending ? Colors.red : Colors.green;
+                    final statusColor = isPending ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.tertiary;
                     final statusText = isPending ? 'Pending' : 'Settled';
                     final statusIcon = isPending ? LucideIcons.clock : LucideIcons.checkCircle2;
 
@@ -700,12 +701,12 @@ class _VendorLedgerDetailPageState
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Account Activity',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     if (_isSelectionMode)
@@ -725,8 +726,8 @@ class _VendorLedgerDetailPageState
                           });
                         },
                         style: TextButton.styleFrom(
-                          foregroundColor: AppTheme.primary,
-                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          foregroundColor: Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
@@ -759,8 +760,8 @@ class _VendorLedgerDetailPageState
                               }
                             },
                             style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              foregroundColor: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
@@ -779,8 +780,8 @@ class _VendorLedgerDetailPageState
                           TextButton(
                             onPressed: () => _showAddPaymentDialog(context),
                             style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              foregroundColor: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
@@ -807,11 +808,11 @@ class _VendorLedgerDetailPageState
                         child: CircularProgressIndicator(),
                       ))
                     : (_activityItems == null || _activityItems!.isEmpty)
-                        ? const Center(
+                        ? Center(
                             child: Padding(
-                            padding: EdgeInsets.all(32.0),
+                            padding: const EdgeInsets.all(32.0),
                             child: Text('No account activity found',
-                                style: TextStyle(color: AppTheme.textSecondary)),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           ))
                         : ListView.separated(
                             shrinkWrap: true,
@@ -846,7 +847,7 @@ class _VendorLedgerDetailPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.textPrimary,
+        color: Theme.of(context).colorScheme.onSurface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
@@ -888,7 +889,7 @@ class _VendorLedgerDetailPageState
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(label, style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 10, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -898,9 +899,9 @@ class _VendorLedgerDetailPageState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,19 +909,19 @@ class _VendorLedgerDetailPageState
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: AppTheme.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ],
@@ -945,9 +946,9 @@ class _VendorLedgerDetailPageState
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: isSelected ? AppTheme.primary.withValues(alpha: 0.05) : AppTheme.surface,
+        color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05) : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.border, width: isSelected ? 2 : 1),
+        border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant, width: isSelected ? 2 : 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -985,22 +986,22 @@ class _VendorLedgerDetailPageState
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: isSelected ? AppTheme.primary : Colors.transparent,
-                          border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.textSecondary, width: 2),
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                          border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant, width: 2),
                         ),
-                        child: Icon(LucideIcons.check, size: 12, color: isSelected ? Colors.white : Colors.transparent),
+                        child: Icon(LucideIcons.check, size: 12, color: isSelected ? Theme.of(context).colorScheme.onPrimary : Colors.transparent),
                       ),
                     ],
                     Container(
                       margin: const EdgeInsets.only(top: 2),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isPayment ? Colors.green.shade50 : AppTheme.primary.withValues(alpha: 0.1),
+                        color: isPayment ? Colors.green.withValues(alpha: 0.1) : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
-                        color: isPayment ? Colors.green.shade600 : AppTheme.primary,
+                        color: isPayment ? Colors.green : Theme.of(context).colorScheme.primary,
                         size: 18,
                       ),
                     ),
@@ -1014,10 +1015,10 @@ class _VendorLedgerDetailPageState
                               Flexible(
                                 child: Text(
                                   dateFormatter.format(tx.createdAt.toLocal()),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
-                                    color: AppTheme.textPrimary,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1047,9 +1048,9 @@ class _VendorLedgerDetailPageState
                             isPayment
                                 ? 'Payment Sent'
                                 : (tx.invoiceNumber?.isNotEmpty == true ? 'Invoice #${tx.invoiceNumber}' : 'Purchase Order'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: AppTheme.textSecondary,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1065,7 +1066,7 @@ class _VendorLedgerDetailPageState
                           children: [
                             if (!isPayment && !_isSelectionMode)
                                IconButton(
-                                 icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.textSecondary),
+                                 icon: Icon(LucideIcons.eye, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                  padding: EdgeInsets.zero,
                                  constraints: const BoxConstraints(),
                                  onPressed: () => _showReceiptPhotoDialog(tx),
@@ -1077,13 +1078,13 @@ class _VendorLedgerDetailPageState
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: isPayment ? Colors.green.shade600 : (!tx.isPaid ? const Color(0xFFD84315) : AppTheme.textPrimary),
+                                color: isPayment ? Colors.green : (!tx.isPaid ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
                             if (!isPayment && !_isSelectionMode && tx.isPaid) ...[
                                const SizedBox(width: 4),
                                PopupMenuButton<String>(
-                                 icon: const Icon(LucideIcons.moreVertical, size: 18, color: AppTheme.textSecondary),
+                                 icon: Icon(LucideIcons.moreVertical, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                  padding: EdgeInsets.zero,
                                  constraints: const BoxConstraints(),
                                  itemBuilder: (context) => [
@@ -1209,9 +1210,9 @@ class _VendorLedgerDetailPageState
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -1258,11 +1259,11 @@ class _VendorLedgerDetailPageState
                             Expanded(
                               child: Text(
                                 invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Invoice',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: AppTheme.textPrimary,
-                                ),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -1290,9 +1291,9 @@ class _VendorLedgerDetailPageState
                           parsedDate != null
                               ? dateFormatter.format(parsedDate)
                               : invoiceDate,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppTheme.textSecondary,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -1300,7 +1301,7 @@ class _VendorLedgerDetailPageState
                   ),
                   if (receiptLink != null && receiptLink.isNotEmpty)
                     IconButton(
-                      icon: const Icon(LucideIcons.eye, size: 18, color: AppTheme.primary),
+                       icon: Icon(LucideIcons.eye, size: 18, color: Theme.of(context).colorScheme.primary),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () => _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber),
@@ -1309,20 +1310,20 @@ class _VendorLedgerDetailPageState
                 ],
               ),
               const SizedBox(height: 12),
-              const Divider(height: 1, color: AppTheme.border),
+              Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      Icon(LucideIcons.box, size: 14, color: Colors.grey.shade500),
+                       Icon(LucideIcons.box, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Text(
                         '$itemCount item${itemCount == 1 ? '' : 's'}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1330,10 +1331,10 @@ class _VendorLedgerDetailPageState
                   ),
                   Text(
                     currencyFormatter.format(totalAmount),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: AppTheme.textPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ],

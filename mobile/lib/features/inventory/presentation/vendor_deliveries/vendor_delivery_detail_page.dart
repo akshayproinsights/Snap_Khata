@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:mobile/core/theme/app_theme.dart';
+
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -57,17 +57,17 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     final hasChori = bundle.hasChoriCatcherAlert;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Bill Details'),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.edit, color: AppTheme.primary),
+            icon: Icon(LucideIcons.edit, color: Theme.of(context).colorScheme.primary),
             tooltip: 'Edit Details',
             onPressed: () => context.push('/inventory-invoice-review', extra: bundle),
           ),
@@ -75,7 +75,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: const Icon(LucideIcons.eye, color: AppTheme.primary),
+                icon: Icon(LucideIcons.eye, color: Theme.of(context).colorScheme.primary),
                 tooltip: 'View Original Receipt',
                 onPressed: () => _showReceiptDialog(context),
               ),
@@ -87,12 +87,12 @@ class VendorDeliveryDetailPage extends StatelessWidget {
         child: Column(
           children: [
             // ── Chori Catcher Alert banner ──────────────────────────
-            if (hasChori) _buildChoriCatcherBanner(),
-            _buildHeader(),
+            if (hasChori) _buildChoriCatcherBanner(context),
+            _buildHeader(context),
             const SizedBox(height: 12),
-            _buildVendorCard(),
+            _buildVendorCard(context),
             const SizedBox(height: 12),
-            _buildItemsSection(),
+            _buildItemsSection(context),
           ],
         ),
       ),
@@ -101,7 +101,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
   }
 
   // ── Chori Catcher banner ────────────────────────────────────────────────────
-  Widget _buildChoriCatcherBanner() {
+  Widget _buildChoriCatcherBanner(BuildContext context) {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
@@ -121,9 +121,9 @@ class VendorDeliveryDetailPage extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F1),
-        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
-        borderRadius: BorderRadius.circular(14),
+        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
+        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,17 +137,17 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                   color: const Color(0xFFEF4444).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.warning_amber_rounded,
-                    size: 18, color: Color(0xFFDC2626)),
+                child: Icon(Icons.warning_amber_rounded,
+                    size: 18, color: Theme.of(context).colorScheme.error),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   '🔴 Chori Catcher Alert',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFFDC2626),
+                    color: Theme.of(context).colorScheme.error,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -161,15 +161,15 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('• ',
+                    Text('• ',
                         style: TextStyle(
-                            color: Color(0xFFDC2626),
+                            color: Theme.of(context).colorScheme.error,
                             fontWeight: FontWeight.bold)),
                     Expanded(
                         child: Text(a,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF7F1D1D),
+                                color: Theme.of(context).colorScheme.onErrorContainer,
                                 fontWeight: FontWeight.w500))),
                   ],
                 ),
@@ -179,7 +179,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             'Tap Edit (top-right) to review and fix.',
             style: TextStyle(
                 fontSize: 11.5,
-                color: Colors.red.shade400,
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic),
           ),
         ],
@@ -197,7 +197,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
@@ -220,18 +220,18 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Bill Amount',
+                        Text('Total Bill Amount',
                             style: TextStyle(
-                                color: AppTheme.textSecondary,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5)),
                         const SizedBox(height: 4),
                         Text('₹${_formatAmount(grandTotal)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimary,
+                                color: Theme.of(context).colorScheme.onSurface,
                                 letterSpacing: -0.5)),
                         const SizedBox(height: 6),
                         // ── Paid / Credit status pill ──────────────
@@ -258,8 +258,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                                     : LucideIcons.clock,
                                 size: 13,
                                 color: isPaid
-                                    ? Colors.green.shade700
-                                    : Colors.orange.shade700,
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.orange.shade700,
                               ),
                               const SizedBox(width: 5),
                               Text(
@@ -268,7 +268,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: isPaid
-                                      ? Colors.green.shade700
+                                      ? Theme.of(context).colorScheme.primary
                                       : Colors.orange.shade700,
                                 ),
                               ),
@@ -287,7 +287,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                       icon: const Icon(LucideIcons.checkCircle, size: 18),
                       label: const Text('Verify'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.orange.shade600,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 12),
                       ),
@@ -312,7 +312,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                           const SizedBox(width: 8),
                           Text('Verified',
                               style: TextStyle(
-                                  color: Colors.green.shade700,
+                                  color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15)),
                         ],
@@ -327,9 +327,9 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
@@ -338,9 +338,9 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Invoice Number',
+                Text('Invoice Number',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -348,10 +348,10 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                     bundle.invoiceNumber.isNotEmpty
                         ? '#${bundle.invoiceNumber}'
                         : 'N/A',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
-                        color: AppTheme.textPrimary)),
+                        color: Theme.of(context).colorScheme.onSurface)),
               ],
             ),
           ),
@@ -359,7 +359,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
           Container(
             width: 1,
             height: 40,
-            color: Colors.grey.shade200,
+            color: Theme.of(context).colorScheme.outlineVariant,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           // Date
@@ -367,17 +367,17 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Date',
+                Text('Date',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text(bundle.date.isNotEmpty ? bundle.date : 'N/A',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
-                        color: AppTheme.textPrimary)),
+                        color: Theme.of(context).colorScheme.onSurface)),
               ],
             ),
           ),
@@ -386,27 +386,27 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildVendorCard() {
+  Widget _buildVendorCard(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Vendor Details',
+          Text('Vendor Details',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary)),
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.04),
-              border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
-              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,16 +414,16 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4))
                     ],
                   ),
-                  child: const Icon(LucideIcons.store, color: AppTheme.primary),
+                  child: Icon(LucideIcons.store, color: Theme.of(context).colorScheme.primary),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -432,7 +432,6 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                     children: [
                       const Text('Vendor Name',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.5)),
@@ -441,10 +440,10 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                           bundle.vendorName.isNotEmpty
                               ? bundle.vendorName
                               : 'Unknown Vendor',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.textPrimary),
+                              color: Theme.of(context).colorScheme.onSurface),
                           overflow: TextOverflow.ellipsis),
                     ],
                   ),
@@ -457,9 +456,9 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildItemsSection() {
+  Widget _buildItemsSection(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,20 +466,20 @@ class VendorDeliveryDetailPage extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)],
+                colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(LucideIcons.shoppingBag, color: Colors.white, size: 18),
-                SizedBox(width: 8),
+                Icon(LucideIcons.shoppingBag, color: Theme.of(context).colorScheme.onPrimary, size: 18),
+                const SizedBox(width: 8),
                 Text('Item Details',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
               ],
@@ -529,7 +528,7 @@ class _ItemRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
             bottom: BorderSide(
-                color: isLast ? Colors.transparent : Colors.grey.shade200)),
+                color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,28 +536,28 @@ class _ItemRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildIndexBadge(),
+              _buildIndexBadge(context),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                     item.description.isNotEmpty ? item.description : item.partNumber,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: AppTheme.textPrimary)),
+                        color: Theme.of(context).colorScheme.onSurface)),
               ),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text('₹${_formatAmount(item.netBill)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
-                          color: AppTheme.textPrimary)),
+                          color: Theme.of(context).colorScheme.onSurface)),
                   if (hasMismatch) ...[
                     const SizedBox(height: 2),
-                    const Text('+Tax/Fees', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.w600)),
+                    Text('+Tax/Fees', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 10, fontWeight: FontWeight.w600)),
                   ]
                 ],
               )
@@ -571,8 +570,8 @@ class _ItemRow extends StatelessWidget {
               children: [
                 Text(
                   '$qtyStr  x  ₹${_formatAmount(item.rate)}',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,
                       fontWeight: FontWeight.w500),
                 ),
@@ -583,14 +582,14 @@ class _ItemRow extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('Mismatch',
+                      child: Text('Mismatch',
                           style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFFEF4444))),
+                              color: Theme.of(context).colorScheme.error)),
                     ),
                   ),
               ],
@@ -601,20 +600,20 @@ class _ItemRow extends StatelessWidget {
     );
   }
 
-  Widget _buildIndexBadge() {
+  Widget _buildIndexBadge(BuildContext context) {
     return Container(
       width: 24,
       height: 24,
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade300),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(
         child: Text('#$index',
-            style: const TextStyle(
+            style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 10)),
       ),
     );

@@ -1,6 +1,46 @@
 class InvoiceMathLogic {
   static const double toleranceLimit = 2.00;
 
+  // ── Grand-Total Rule ─────────────────────────────────────────────────────────
+  //
+  // SCENARIO A  (hasPerItemDiscount = true)
+  //   At least one line item has discAmount > 0 or discPercent > 0.
+  //   Each item's netAmount already encodes: gross → taxable (after disc) → +GST.
+  //   HEADER_DISCOUNT/SCHEME in the footer are just a recap — do NOT subtract again.
+  //   grandTotal = Σ(netAmount) + ROUND_OFF/OTHER adjustments
+  //
+  // SCENARIO B  (hasPerItemDiscount = false)
+  //   No per-item discount. Discount appears only as a footer line on the invoice.
+  //   Correct invoice math:  totalGross − headerDiscount = totalTaxable → +GST on taxable.
+  //   Because items were calculated with discPct=0, their netAmount = gross * (1 + gstRate).
+  //   We correct this by scaling GST proportionally to the discounted taxable base.
+  //   grandTotal = totalTaxable + scaledGST + ROUND_OFF/OTHER adjustments
+  //
+  // Use [computeGrandTotal] as the single source of truth for both scenarios.
+  //
+  static double computeGrandTotal({
+    required List<Map<String, double>> items,
+    // Each map must contain: grossAmount, taxableAmount, cgstAmount, sgstAmount, igstAmount, netAmount
+    required double headerDiscountAmt,  // sum of all HEADER_DISCOUNT/SCHEME amounts (positive)
+    required double nonDiscountAdjAmt,  // sum of ROUND_OFF + OTHER amounts (signed)
+    required bool hasPerItemDiscount,
+  }) {
+    if (hasPerItemDiscount) {
+      // Scenario A — discounts already inside netAmounts
+      final itemsTotal = items.fold(0.0, (s, i) => s + (i['netAmount'] ?? 0.0));
+      return itemsTotal + nonDiscountAdjAmt;
+    } else {
+      // Scenario B — apply header discount before GST
+      final totalGross    = items.fold(0.0, (s, i) => s + (i['grossAmount'] ?? 0.0));
+      final totalTaxable  = (totalGross - headerDiscountAmt).clamp(0.0, double.maxFinite);
+      final origTaxable   = items.fold(0.0, (s, i) => s + (i['taxableAmount'] ?? i['grossAmount'] ?? 0.0));
+      final totalGst      = items.fold(0.0, (s, i) =>
+          s + (i['cgstAmount'] ?? 0.0) + (i['sgstAmount'] ?? 0.0) + (i['igstAmount'] ?? 0.0));
+      final scaledGst     = origTaxable > 0 ? totalGst * (totalTaxable / origTaxable) : totalGst;
+      return totalTaxable + scaledGst + nonDiscountAdjAmt;
+    }
+  }
+
   /// Replicates Python's Decimal quantization: Decimal.quantize('0.01', ROUND_HALF_UP)
   /// Using (value * 100).round() / 100 is equivalent to half-up for positive values,
   /// but we should handle it cleanly.

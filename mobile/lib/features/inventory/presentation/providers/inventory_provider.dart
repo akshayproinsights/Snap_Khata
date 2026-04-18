@@ -179,8 +179,41 @@ class InventoryNotifier extends Notifier<InventoryState> {
         if (groupItems.isEmpty) continue;
         final firstItem = groupItems.first;
         
-        final adjustmentTotal = (firstItem.headerAdjustments ?? []).fold<double>(0.0, (sum, adj) => sum + adj.amount);
-        final totalAmount = groupItems.fold(0.0, (sum, item) => sum + item.netBill) + adjustmentTotal;
+        // ── Two-Scenario Grand Total (mirrors inventory_invoice_review_page) ──
+        final hasPerItemDiscount = groupItems.any(
+          (i) => (i.discAmount ?? 0.0) > 0.01 || (i.discPercent ?? 0.0) > 0.01,
+        );
+
+        final adjList = firstItem.headerAdjustments ?? [];
+
+        // ROUND_OFF / OTHER only — always applied on top in both scenarios
+        final nonDiscountAdj = adjList.fold<double>(0.0, (sum, adj) {
+          final t = adj.adjustmentType.toUpperCase();
+          return (t == 'ROUND_OFF' || t == 'OTHER') ? sum + adj.amount : sum;
+        });
+
+        double baseTotal;
+        if (hasPerItemDiscount) {
+          // Scenario A: discounts already baked into each item's netAmount
+          baseTotal = groupItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill));
+        } else {
+          // Scenario B: header-only discount → apply before GST
+          final totalGross = groupItems.fold(0.0,
+              (sum, item) => sum + (item.grossAmount ?? (item.qty * item.rate)));
+          final headerDiscount = adjList.fold<double>(0.0, (sum, adj) {
+            final t = adj.adjustmentType.toUpperCase();
+            return (t == 'HEADER_DISCOUNT' || t == 'SCHEME') ? sum + adj.amount.abs() : sum;
+          });
+          final totalTaxable = (totalGross - headerDiscount).clamp(0.0, double.maxFinite);
+          final origTaxable = groupItems.fold<double>(0.0,
+              (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.qty * item.rate)));
+          final totalGst = groupItems.fold<double>(0.0,
+              (sum, item) => sum + (item.cgstAmount ?? 0.0) + (item.sgstAmount ?? 0.0) + (item.igstAmount ?? 0.0));
+          final scaledGst = origTaxable > 0 ? totalGst * (totalTaxable / origTaxable) : totalGst;
+          baseTotal = totalTaxable + scaledGst;
+        }
+
+        final totalAmount = baseTotal + nonDiscountAdj;
         final data = {
           'invoice_number': firstItem.invoiceNumber.isNotEmpty ? firstItem.invoiceNumber : 'Auto-Gen-${DateTime.now().millisecondsSinceEpoch}',
           'vendor_name': firstItem.vendorName ?? 'Unknown Vendor',

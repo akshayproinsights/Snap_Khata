@@ -583,13 +583,28 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
                 label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 onPressed: () async {
-                  // Start saving changes in the background without blocking the UI dialog
+                  // ── Step 1: Flush any pending debounced edits ──────────────
+                  // Dismissing the keyboard triggers _onFocusChange → _saveCurrentValue()
+                  // immediately so state has the latest typed values.
+                  FocusScope.of(context).unfocus();
+                  await Future.delayed(const Duration(milliseconds: 150));
+                  if (!context.mounted) return;
+
+                  // ── Step 2: Re-read freshest state after flush ─────────────
+                  final freshState = ref.read(reviewProvider);
+                  final freshGroup = freshState.groups.firstWhere(
+                    (g) => g.receiptNumber == widget.group.receiptNumber,
+                    orElse: () => group,
+                  );
+                  final freshHeader = freshGroup.header;
+
+                  // ── Step 3: Background-save all edits ─────────────────────
                   final saveFuture = _saveCurrentState();
 
-                  // Calculate total amount from line items, fallback to header amount if line items total is zero
-                  double totalAmount = _totalAfterGst(group);
-                  if (totalAmount == 0.0 && group.header != null) {
-                    totalAmount = group.header!.amount;
+                  // ── Step 4: Build the WhatsApp message ────────────────────
+                  double totalAmount = _totalAfterGst(freshGroup);
+                  if (totalAmount == 0.0 && freshGroup.header != null) {
+                    totalAmount = freshGroup.header!.amount;
                   }
 
                   final authState = ref.read(authProvider);
@@ -601,13 +616,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
                   final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
-                  
                   final shareUrl =
-                      'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
+                      'https://mydigientry.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
 
-                  final shopName = shopProfile.name.isNotEmpty
-                      ? shopProfile.name
-                      : 'Our Shop';
+                  final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 
                   OrderPaymentStatus status;
                   if (_paymentMode == 'Cash') {
@@ -623,33 +635,24 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   }
 
                   final Set<String> ignoredExtraFields = {
-                    'total_bill_amount',
-                    'total bill amount',
-                    'amount',
-                    'calculated_amount',
-                    'amount_mismatch',
-                    'receipt_number',
-                    'date',
-                    'customer_name',
-                    'mobile_number',
-                    'mobile number',
-                    'mobile',
-                    'receipt_link',
-                    'audit_findings',
-                    'taxable_row_ids',
-                    'gst_mode',
+                    'total_bill_amount', 'total bill amount', 'amount',
+                    'calculated_amount', 'amount_mismatch', 'receipt_number',
+                    'date', 'customer_name', 'mobile_number', 'mobile number',
+                    'mobile', 'receipt_link', 'audit_findings',
+                    'taxable_row_ids', 'gst_mode',
                   };
 
                   final Map<String, String> resolvedExtraFields = {};
-
-                  if (header?.extraFields != null) {
-                    header!.extraFields.forEach((key, value) {
-                      final configLabel = invoiceColumns.firstWhere((c) => c['db_column'] == key, orElse: () => {'label': key})['label'].toString();
+                  if (freshHeader?.extraFields != null) {
+                    freshHeader!.extraFields.forEach((key, value) {
+                      final configLabel = invoiceColumns.firstWhere(
+                        (c) => c['db_column'] == key,
+                        orElse: () => {'label': key},
+                      )['label'].toString();
                       final lowerKey = key.toString().toLowerCase();
                       final lowerLabel = configLabel.toLowerCase();
-                      
-                      if (value != null && value.toString().isNotEmpty && 
-                          !ignoredExtraFields.contains(lowerKey) && 
+                      if (value != null && value.toString().isNotEmpty &&
+                          !ignoredExtraFields.contains(lowerKey) &&
                           !ignoredExtraFields.contains(lowerLabel)) {
                         resolvedExtraFields[configLabel] = value.toString();
                       }
@@ -658,11 +661,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
                     status: status,
-                    customerName: header?.customerName?.isNotEmpty == true
-                        ? header!.customerName!
+                    customerName: freshHeader?.customerName?.isNotEmpty == true
+                        ? freshHeader!.customerName!
                         : 'Customer',
                     businessName: shopName,
-                    orderNumber: group.receiptNumber,
+                    orderNumber: freshGroup.receiptNumber,
                     totalAmount: totalAmount,
                     paidAmount: _receivedAmount,
                     pendingAmount: balanceDue,
@@ -671,13 +674,164 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   final message =
                       '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
 
+                  // ── Step 5: Wait for the save to finish ───────────────────
                   await saveFuture;
                   if (!context.mounted) return;
-                  await WhatsAppUtils.shareReceipt(
-                    context,
-                    phone: header?.extraFields['mobile_number']?.toString() ?? '',
+
+                  // ── Step 6: Determine phone number ────────────────────────
+                  String phoneNumber = freshHeader
+                          ?.extraFields['mobile_number']
+                          ?.toString()
+                          .trim() ??
+                      '';
+
+                  // ── Step 7: If no number, show Ask / Skip dialog ──────────
+                  if (phoneNumber.isEmpty) {
+                    final phoneController = TextEditingController();
+                    // null → Cancelled | '' → Skip | '<digits>' → entered
+                    final result = await showDialog<String?>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => StatefulBuilder(
+                        builder: (ctx, setDialogState) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          title: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366)
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const FaIcon(
+                                    FontAwesomeIcons.whatsapp,
+                                    color: Color(0xFF25D366),
+                                    size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text('Send via WhatsApp',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'No mobile number found for '
+                                '${freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : "this customer"}.'
+                                '\nEnter a number to share directly, or skip.',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                    height: 1.5),
+                              ),
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                autofocus: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Mobile Number',
+                                  hintText: '9876543210',
+                                  prefixIcon: const Icon(
+                                      LucideIcons.phone, size: 18),
+                                  prefixText: '+91  ',
+                                  border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10)),
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          vertical: 12, horizontal: 12),
+                                ),
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                            ],
+                          ),
+                          actionsPadding:
+                              const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, null),
+                              child: Text('Cancel',
+                                  style: TextStyle(
+                                      color: Colors.grey.shade600)),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(ctx, ''),
+                              icon: const Icon(LucideIcons.skipForward,
+                                  size: 14),
+                              label: const Text('Skip'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.grey.shade700,
+                                side: BorderSide(
+                                    color: Colors.grey.shade300),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(8)),
+                              ),
+                            ),
+                            FilledButton.icon(
+                              onPressed: phoneController.text
+                                      .trim()
+                                      .isEmpty
+                                  ? null
+                                  : () => Navigator.pop(
+                                      ctx, phoneController.text.trim()),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF25D366),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(8)),
+                              ),
+                              icon: const FaIcon(
+                                  FontAwesomeIcons.whatsapp, size: 14),
+                              label: const Text('Share'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    if (result == null) return; // Cancelled — abort
+
+                    if (result.isNotEmpty) {
+                      phoneNumber = result;
+                      // Save entered number back to record
+                      if (freshHeader != null) {
+                        final newExtra = Map<String, dynamic>.from(
+                            freshHeader.extraFields);
+                        newExtra['mobile_number'] = result;
+                        final updatedHeader =
+                            freshHeader.copyWith(extraFields: newExtra);
+                        await ref
+                            .read(reviewProvider.notifier)
+                            .updateDateRecord(updatedHeader);
+                      }
+                    }
+                    // result == '' → Skip: phoneNumber stays '' so WhatsApp
+                    // opens the contact/share picker instead of a direct chat.
+                  }
+
+                  // ── Step 8: Open WhatsApp ──────────────────────────────────
+                  if (!context.mounted) return;
+                  final opened = await WhatsAppUtils.openWhatsAppChat(
+                    phone: phoneNumber,
                     message: message,
                   );
+                  if (!opened && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Could not open WhatsApp. Please ensure it is installed.')),
+                    );
+                  }
                 },
               ),
             ),

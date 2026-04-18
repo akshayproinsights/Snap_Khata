@@ -7,6 +7,7 @@ class ValidationSaveButton extends StatelessWidget {
   final bool hasMismatch;
   final bool isLoading;
   final VoidCallback onSave;
+  final VoidCallback? onTotalTap;
   final bool isUpdate;
 
   const ValidationSaveButton({
@@ -15,12 +16,14 @@ class ValidationSaveButton extends StatelessWidget {
     required this.hasMismatch,
     required this.isLoading,
     required this.onSave,
+    this.onTotalTap,
     this.isUpdate = false,
   });
 
   String _fmt(double? v) {
     if (v == null) return '0.00';
     final s = v.toStringAsFixed(2);
+    // Keep 2 decimal places for money, but if user wants shorter, we can keep it
     return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
   }
 
@@ -47,27 +50,42 @@ class ValidationSaveButton extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Grand Total',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
+            child: InkWell(
+              onTap: onTotalTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Grand Total',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (onTotalTap != null) ...[
+                          const SizedBox(width: 4),
+                          Icon(LucideIcons.edit3, size: 10, color: AppTheme.primary.withValues(alpha: 0.6)),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      '₹${_fmt(totalAmount)}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '₹${_fmt(totalAmount)}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           Expanded(

@@ -75,9 +75,7 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? AppTheme.darkBorder : AppTheme.border,
-            ),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,14 +120,14 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
                         label: Text(filter, style: const TextStyle(fontSize: 12)),
                         selected: isSelected,
                         showCheckmark: false,
-                        selectedColor: AppTheme.primary.withValues(alpha: 0.1),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
                         labelStyle: TextStyle(
-                          color: isSelected ? AppTheme.primary : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                         backgroundColor: Theme.of(context).colorScheme.surface,
                         side: BorderSide(
-                          color: isSelected ? AppTheme.primary : (isDark ? AppTheme.darkBorder : AppTheme.border),
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
                         ),
                         onSelected: (selected) {
                           setState(() {
@@ -167,9 +165,9 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
                         horizontalInterval: maxY / 4 > 0 ? maxY / 4 : 10,
                         getDrawingHorizontalLine: (value) {
                           return FlLine(
-                            color: isDark ? AppTheme.darkBorder : AppTheme.border,
+                            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
                             strokeWidth: 1,
-                            dashArray: [5, 5],
+                            dashArray: [4, 4],
                           );
                         },
                       ),
@@ -186,19 +184,19 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
                             getTitlesWidget: (value, meta) {
                               const style = TextStyle(
                                 fontSize: 10,
-                                color: AppTheme.textSecondary,
                               );
+                              final color = Theme.of(context).colorScheme.onSurfaceVariant;
                               final index = value.toInt();
                               Widget text;
                               if (index >= 0 && index < xLabels.length) {
                                 if (_usageFilter == '1 Week' || _usageFilter == '1 Month') {
                                   if (index % 2 == 0) {
-                                    text = Text(xLabels[index], style: style);
+                                    text = Text(xLabels[index], style: style.copyWith(color: color));
                                   } else {
                                     text = const Text('', style: style);
                                   }
                                 } else {
-                                  text = Text(xLabels[index], style: style);
+                                  text = Text(xLabels[index], style: style.copyWith(color: color));
                                 }
                               } else {
                                 text = const Text('', style: style);
@@ -268,7 +266,11 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
       ],
     );

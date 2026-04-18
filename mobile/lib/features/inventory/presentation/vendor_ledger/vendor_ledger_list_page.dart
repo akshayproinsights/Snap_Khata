@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:mobile/core/theme/app_theme.dart';
+
 import '../providers/vendor_ledger_provider.dart';
 import '../../domain/models/vendor_ledger_models.dart';
 import 'package:intl/intl.dart';
@@ -40,7 +40,7 @@ class VendorLedgerListPage extends ConsumerWidget {
           : state.error != null && state.ledgers.isEmpty
               ? _buildErrorState(context, ref, state.error!)
               : state.ledgers.isEmpty
-                  ? _buildEmptyState()
+                  ? _buildEmptyState(context)
                   : _buildLedgerList(filteredLedgers);
   }
 
@@ -51,7 +51,7 @@ class VendorLedgerListPage extends ConsumerWidget {
         children: [
           const Icon(LucideIcons.alertCircle, color: Colors.orange, size: 48),
           const SizedBox(height: 16),
-          Text(error, style: const TextStyle(color: AppTheme.textSecondary)),
+          Text(error, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => ref.read(vendorLedgerProvider.notifier).fetchLedgers(),
@@ -62,25 +62,25 @@ class VendorLedgerListPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(LucideIcons.truck, color: Colors.grey.shade400, size: 64),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No pending Supplier dues',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Amazing! You have cleared all vendor dues.',
-            style: TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
         ],
@@ -168,9 +168,9 @@ class _LedgerCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
                color: Colors.black.withValues(alpha: 0.02),
@@ -197,10 +197,10 @@ class _LedgerCard extends ConsumerWidget {
                 children: [
                   Text(
                     ledger.vendorName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -211,8 +211,8 @@ class _LedgerCard extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 12,
                       color: timeAgo == 'No payments yet'
-                          ? Colors.grey.shade700
-                          : AppTheme.textSecondary,
+                          ? Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -225,18 +225,18 @@ class _LedgerCard extends ConsumerWidget {
                 children: [
                   Text(
                     currencyFormatter.format(ledger.balanceDue),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.red,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'You will give',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.textSecondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],

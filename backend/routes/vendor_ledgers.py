@@ -353,22 +353,117 @@ async def batch_toggle_paid_status(request: BatchActionRequest, current_user: Di
     db.set_user_context(username)
     
     try:
+        tx_ids = request.transaction_ids
+        if not tx_ids:
+            return {"status": "success", "message": "No transactions to update", "new_balance": 0}
+
+        # ── Bulk fetch all transactions in one query ───────────────────────
+        all_tx_resp = db.client.table('vendor_ledger_transactions') \
+            .select('*') \
+            .in_('id', tx_ids) \
+            .eq('username', username) \
+            .execute()
+        tx_map = {tx['id']: tx for tx in (all_tx_resp.data or [])}
+
+        # Only INVOICE transactions can be toggled
+        valid_txs = [tx for tx in tx_map.values() if tx.get('transaction_type') == 'INVOICE']
+        if not valid_txs:
+            return {"status": "success", "message": "No valid INVOICE transactions found", "new_balance": 0}
+
+        ledger_ids = list({tx['ledger_id'] for tx in valid_txs})
+
+        # ── Bulk fetch all relevant ledgers in one query ───────────────────
+        ledger_resp = db.client.table('vendor_ledgers') \
+            .select('*') \
+            .in_('id', ledger_ids) \
+            .eq('username', username) \
+            .execute()
+        ledger_map = {ld['id']: ld for ld in (ledger_resp.data or [])}
+
+        now = datetime.utcnow().isoformat()
+        new_payments_to_insert = []
+        tx_ids_to_mark_paid = []
+        tx_ids_to_mark_unpaid = []
+        linked_tx_ids_to_delete = []
+        linked_invoice_ids_to_unmark = []
+        balance_deltas = {}  # ledger_id -> delta
+
+        for tx in valid_txs:
+            tx_id = tx['id']
+            ledger_id = tx['ledger_id']
+            amount = float(tx.get('amount', 0))
+            currently_paid = tx.get('is_paid', False)
+
+
+            if request.is_paid and not currently_paid:
+                # Mark PAID: create auto-payment, mark invoice paid
+                notes = f"Auto-payment for Invoice {tx.get('invoice_number') or f'#{tx_id}'}"
+                new_payments_to_insert.append({
+                    'username': username,
+                    'ledger_id': ledger_id,
+                    'transaction_type': 'PAYMENT',
+                    'amount': amount,
+                    'notes': notes,
+                    'linked_transaction_id': tx_id
+                })
+                tx_ids_to_mark_paid.append(tx_id)
+                balance_deltas[ledger_id] = balance_deltas.get(ledger_id, 0) - amount
+
+            elif not request.is_paid and currently_paid:
+                # Mark UNPAID: delete linked payment, unmark invoice
+                linked_invoice_ids_to_unmark.append(tx_id)
+                balance_deltas[ledger_id] = balance_deltas.get(ledger_id, 0) + amount
+
+        # Delete linked PAYMENT records for all being un-paid in one bulk query
+        if linked_invoice_ids_to_unmark:
+            db.client.table('vendor_ledger_transactions') \
+                .delete() \
+                .in_('linked_transaction_id', linked_invoice_ids_to_unmark) \
+                .eq('username', username) \
+                .execute()
+            tx_ids_to_mark_unpaid = linked_invoice_ids_to_unmark
+
+        # Batch insert new PAYMENT transactions
+        if new_payments_to_insert:
+            db.client.table('vendor_ledger_transactions').insert(new_payments_to_insert).execute()
+
+        # Mark invoices as paid (one UPDATE per distinct is_paid value is ideal;
+        # Supabase doesn't support batch update with different values, so do 2 calls max)
+        if tx_ids_to_mark_paid:
+            db.client.table('vendor_ledger_transactions') \
+                .update({'is_paid': True}) \
+                .in_('id', tx_ids_to_mark_paid) \
+                .execute()
+
+        if tx_ids_to_mark_unpaid:
+            db.client.table('vendor_ledger_transactions') \
+                .update({'is_paid': False}) \
+                .in_('id', tx_ids_to_mark_unpaid) \
+                .execute()
+
+        # Apply balance deltas — one UPDATE per ledger (not per transaction)
         last_balance = 0
-        for tx_id in request.transaction_ids:
-            try:
-                last_balance = await _toggle_transaction_paid_status_internal(db, username, tx_id, request.is_paid)
-            except HTTPException as e:
-                logger.warning(f"Skipping transaction {tx_id}: {e.detail}")
+        for ledger_id, delta in balance_deltas.items():
+            ledger = ledger_map.get(ledger_id)
+            if not ledger:
                 continue
-                
+            new_balance = float(ledger.get('balance_due', 0)) + delta
+            db.client.table('vendor_ledgers').update({
+                'balance_due': new_balance,
+                'last_payment_date': now if request.is_paid else None,
+                'updated_at': now
+            }).eq('id', ledger_id).execute()
+            last_balance = new_balance
+
         return {
             "status": "success",
-            "message": f"Updated {len(request.transaction_ids)} transactions",
+            "message": f"Updated {len(valid_txs)} transactions",
             "new_balance": last_balance
         }
     except Exception as e:
         logger.error(f"Error in batch toggle paid status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/vendor-ledgers/transactions/{transaction_id}")
 async def delete_transaction(transaction_id: int, current_user: Dict = Depends(get_current_user)):
@@ -411,15 +506,6 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
         current_balance = float(ledger.get('balance_due', 0))
         
         # 3. Calculate balance adjustment
-        # If we delete an INVOICE, balance decreases (unless it was already PAID, but wait)
-        # Actually, if we delete an INVOICE:
-        #   - if it was NOT PAID: balance decreases by amount.
-        #   - if it was PAID: we should also delete the linked payment. Balance adjustment:
-        #     INVOICE (+amount) then PAYMENT (-amount) = 0 net change.
-        #     If we delete INVOICE, we should delete the PAYMENT too. Net change still 0.
-        # If we delete a PAYMENT:
-        #   - balance increases by amount.
-        
         new_balance = current_balance
         if tx_type == 'INVOICE':
             if is_paid:
@@ -434,7 +520,7 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
                 new_balance = current_balance - amount
         elif tx_type == 'PAYMENT':
             new_balance = current_balance + amount
-            # If this is a linked payment, we should probably unmark the invoice as paid
+            # If this is a linked payment, unmark the invoice as paid
             linked_id = transaction.get('linked_transaction_id')
             if linked_id:
                 db.client.table('vendor_ledger_transactions') \
@@ -463,9 +549,10 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
         logger.error(f"Error deleting transaction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/vendor-ledgers/transactions/batch-delete")
 async def batch_delete_transactions(request: BatchActionRequest, current_user: Dict = Depends(get_current_user)):
-    """Delete multiple transactions."""
+    """Delete multiple transactions with bulk pre-fetching."""
     username = current_user.get("username")
     if not username:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -474,24 +561,100 @@ async def batch_delete_transactions(request: BatchActionRequest, current_user: D
     db.set_user_context(username)
     
     try:
+        tx_ids = request.transaction_ids
+        if not tx_ids:
+            return {"status": "success", "message": "No transactions to delete", "new_balance": 0}
+
+        # ── Bulk fetch all transactions at once ────────────────────────────
+        all_tx_resp = db.client.table('vendor_ledger_transactions') \
+            .select('*') \
+            .in_('id', tx_ids) \
+            .eq('username', username) \
+            .execute()
+        tx_map = {tx['id']: tx for tx in (all_tx_resp.data or [])}
+
+        if not tx_map:
+            return {"status": "success", "message": "No transactions found", "new_balance": 0}
+
+        ledger_ids = list({tx['ledger_id'] for tx in tx_map.values()})
+
+        # ── Bulk fetch all relevant ledgers ────────────────────────────────
+        ledger_resp = db.client.table('vendor_ledgers') \
+            .select('*') \
+            .in_('id', ledger_ids) \
+            .eq('username', username) \
+            .execute()
+        ledger_map = {ld['id']: ld for ld in (ledger_resp.data or [])}
+
+        now = datetime.utcnow().isoformat()
+        balance_deltas = {}               # ledger_id -> delta
+        linked_payment_ids = []           # IDs of auto-payments to delete
+        orphaned_invoice_ids = []         # invoice IDs to unmark is_paid
+
+        for tx_id, tx in tx_map.items():
+            ledger_id = tx.get('ledger_id')
+            amount = float(tx.get('amount', 0))
+            tx_type = tx.get('transaction_type')
+            is_paid = tx.get('is_paid', False)
+
+            if tx_type == 'INVOICE':
+                if is_paid:
+                    # Linked payment will also be deleted; net balance change = 0
+                    linked_payment_ids.append(tx_id)   # delete payments WHERE linked_transaction_id IN (...)
+                else:
+                    balance_deltas[ledger_id] = balance_deltas.get(ledger_id, 0) - amount
+            elif tx_type == 'PAYMENT':
+                balance_deltas[ledger_id] = balance_deltas.get(ledger_id, 0) + amount
+                linked_id = tx.get('linked_transaction_id')
+                if linked_id:
+                    orphaned_invoice_ids.append(linked_id)
+
+        # Delete linked auto-payments for paid invoices
+        if linked_payment_ids:
+            db.client.table('vendor_ledger_transactions') \
+                .delete() \
+                .in_('linked_transaction_id', linked_payment_ids) \
+                .eq('username', username) \
+                .execute()
+
+        # Unmark invoices whose PAYMENT is being deleted
+        if orphaned_invoice_ids:
+            db.client.table('vendor_ledger_transactions') \
+                .update({'is_paid': False}) \
+                .in_('id', orphaned_invoice_ids) \
+                .eq('username', username) \
+                .execute()
+
+        # Bulk delete all requested transactions
+        db.client.table('vendor_ledger_transactions') \
+            .delete() \
+            .in_('id', tx_ids) \
+            .eq('username', username) \
+            .execute()
+
+        # Apply balance deltas — one UPDATE per affected ledger
         last_balance = 0
-        for tx_id in request.transaction_ids:
-            try:
-                # Reusing the logic from single delete
-                # Fetch balance from DB again to avoid race conditions if multiple users are involved, 
-                # though here it's fine for simple implementation.
-                result = await delete_transaction(tx_id, current_user)
-                last_balance = result.get('new_balance', 0)
-            except HTTPException as e:
-                logger.warning(f"Skipping transaction {tx_id}: {e.detail}")
+        for ledger_id, delta in balance_deltas.items():
+            if delta == 0:
                 continue
-                
+            ledger = ledger_map.get(ledger_id)
+            if not ledger:
+                continue
+            new_balance = float(ledger.get('balance_due', 0)) + delta
+            db.client.table('vendor_ledgers').update({
+                'balance_due': new_balance,
+                'updated_at': now
+            }).eq('id', ledger_id).execute()
+            last_balance = new_balance
+
         return {
             "status": "success",
-            "message": f"Deleted {len(request.transaction_ids)} transactions",
+            "message": f"Deleted {len(tx_map)} transactions",
             "new_balance": last_balance
         }
     except Exception as e:
         logger.error(f"Error in batch delete transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 

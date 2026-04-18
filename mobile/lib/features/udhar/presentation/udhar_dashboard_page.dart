@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:mobile/core/theme/app_theme.dart';
+
 import 'package:mobile/features/udhar/presentation/udhar_list_page.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
@@ -44,20 +44,20 @@ class UdharDashboardPage extends ConsumerWidget {
                 : Column(
                     children: [
                       // Net Outstanding Dues Card
-                      _buildSummaryCard(dashboardState.summary?.totalReceivable ?? 0.0,
+                      _buildSummaryCard(context, dashboardState.summary?.totalReceivable ?? 0.0,
                           dashboardState.summary?.totalPayable ?? 0.0),
                       
                       const SizedBox(height: 12),
 
                       // Tabs
-                      const TabBar(
+                      TabBar(
                         tabs: [
                           Tab(icon: Icon(Icons.person), text: 'Customers'),
                           Tab(icon: Icon(Icons.local_shipping), text: 'Suppliers'),
                         ],
-                        labelColor: AppTheme.primary,
-                        unselectedLabelColor: AppTheme.textSecondary,
-                        indicatorColor: AppTheme.primary,
+                        labelColor: Theme.of(context).colorScheme.primary,
+                        unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                        indicatorColor: Theme.of(context).colorScheme.primary,
                       ),
                       
                       // Search Bar
@@ -69,13 +69,17 @@ class UdharDashboardPage extends ConsumerWidget {
                               child: TextField(
                                 decoration: InputDecoration(
                                   hintText: 'Search Party Name...',
-                                  prefixIcon: const Icon(Icons.search),
+                                  prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
+                                    borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                                   ),
                                   filled: true,
-                                  fillColor: Colors.grey.shade100,
+                                  fillColor: Theme.of(context).colorScheme.surface,
                                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                                 ),
                                 onChanged: (value) {
@@ -86,15 +90,16 @@ class UdharDashboardPage extends ConsumerWidget {
                             const SizedBox(width: 8),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
+                                color: Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                               ),
                               child: IconButton(
                                 icon: const Icon(Icons.filter_list),
                                 onPressed: () {
                                   // Optional: Add filter bottom sheet logic later
                                 },
-                                color: AppTheme.textSecondary,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -113,7 +118,7 @@ class UdharDashboardPage extends ConsumerWidget {
                               label: 'All', 
                               mode: UdharFilterMode.all, 
                               currentMode: filterMode,
-                              activeColor: AppTheme.primary,
+                              activeColor: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 8),
                             _buildFilterChip(
@@ -131,7 +136,7 @@ class UdharDashboardPage extends ConsumerWidget {
                               label: 'Settled', 
                               mode: UdharFilterMode.settled, 
                               currentMode: filterMode,
-                              activeColor: AppTheme.success,
+                              activeColor: Theme.of(context).colorScheme.primary,
                             ),
                           ],
                         ),
@@ -160,8 +165,8 @@ class UdharDashboardPage extends ConsumerWidget {
             },
             label: const Text('New Credit Entry'),
             icon: const Icon(Icons.add),
-            backgroundColor: AppTheme.primary,
-            foregroundColor: Colors.white,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
           ),
         ),
       ),
@@ -184,16 +189,16 @@ class UdharDashboardPage extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.1) : Colors.white,
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? activeColor.withValues(alpha: 0.5) : Colors.grey.shade300,
+            color: isSelected ? activeColor.withValues(alpha: 0.5) : Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? activeColor : AppTheme.textSecondary,
+            color: isSelected ? activeColor : Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             fontSize: 14,
           ),
@@ -202,7 +207,7 @@ class UdharDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryCard(double receivable, double payable) {
+  Widget _buildSummaryCard(BuildContext context, double receivable, double payable) {
     final currencyFormatter =
         NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
 
@@ -210,16 +215,16 @@ class UdharDashboardPage extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -256,7 +261,7 @@ class UdharDashboardPage extends ConsumerWidget {
           Container(
             width: 1,
             height: 50,
-            color: Colors.grey.shade300,
+            color: Theme.of(context).colorScheme.outlineVariant,
           ),
           const SizedBox(width: 16),
           Expanded(

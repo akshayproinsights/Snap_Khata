@@ -108,7 +108,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: Theme.of(context).colorScheme.outlineVariant,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -132,23 +132,30 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.shade200),
+                      border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Balance Due:',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w600),
                         ),
                         Text(
                           currencyFormatter.format(widget.ledger.balanceDue),
                           style: TextStyle(
-                            color: Colors.orange.shade800,
+                            color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -225,18 +232,18 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               }
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: isSubmitting
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 24,
                               height: 24,
                               child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
+                                  color: Theme.of(context).colorScheme.onPrimary, strokeWidth: 2))
                           : const Text(
                               'Save Payment',
                               style: TextStyle(
@@ -327,21 +334,21 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         : 'C';
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         elevation: 0,
         titleSpacing: 0,
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: Colors.white.withValues(alpha: 0.25),
+              backgroundColor: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.25),
               child: Text(
                 initials,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
@@ -354,10 +361,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 children: [
                   Text(
                     currentLedger.customerName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -367,14 +374,14 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     Text(
                       currentLedger.customerPhone!,
                       style:
-                          const TextStyle(fontSize: 12, color: Colors.white70),
+                          TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)),
                     ),
                 ],
               ),
             ),
           ],
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
       ),
       body: Column(
         children: [
@@ -390,17 +397,17 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   width: 3,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: AppTheme.primary,
+                    color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'TRANSACTIONS',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -436,12 +443,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddPaymentDialog(context),
-        backgroundColor: AppTheme.primary,
-        icon: const Icon(LucideIcons.indianRupee, color: Colors.white),
-        label: const Text(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        icon: Icon(LucideIcons.indianRupee, color: Theme.of(context).colorScheme.onPrimary),
+        label: Text(
           'Add Payment',
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -454,9 +461,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppTheme.primary,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary,
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
         ),
@@ -484,7 +491,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color:
-                        isPositive ? Colors.white : Colors.greenAccent.shade200,
+                        isPositive ? Theme.of(context).colorScheme.onPrimary : Colors.greenAccent.shade200,
                   ),
                 ),
                 if (!isPositive)
@@ -522,7 +529,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Billed',
                         value: currencyFormatter.format(_totalInvoiced),
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                         iconColor: Colors.orange.shade300,
                         icon: LucideIcons.fileText,
                       ),
@@ -536,7 +543,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Paid',
                         value: currencyFormatter.format(_totalPaid),
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                         iconColor: Colors.greenAccent.shade400,
                         icon: LucideIcons.checkCircle,
                       ),
@@ -566,7 +573,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7), fontSize: 11),
         ),
         const SizedBox(height: 2),
         Text(
@@ -687,9 +694,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     final canTap = isInvoice && tx.receiptNumber != null;
 
     final Color accentColor =
-        isPayment ? AppTheme.success : Colors.orange.shade600;
+        isPayment ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error;
     final Color bgColor =
-        isPayment ? Colors.green.shade50 : Colors.orange.shade50;
+        isPayment ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : Theme.of(context).colorScheme.error.withValues(alpha: 0.1);
     final IconData txIcon =
         isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
     final String txTitle = isPayment
@@ -700,16 +707,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -739,10 +739,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                             Expanded(
                               child: Text(
                                 txTitle,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
-                                  color: AppTheme.textPrimary,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -754,15 +754,15 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
                                   border:
-                                      Border.all(color: Colors.green.shade200),
+                                      Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
                                 ),
                                 child: Text(
                                   'PAID',
                                   style: TextStyle(
-                                    color: Colors.green.shade700,
+                                    color: Theme.of(context).colorScheme.primary,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -775,9 +775,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                           isInvoice
                               ? 'Invoice Date: ${dateFormatter.format(tx.createdAt.toLocal())}'
                               : dateFormatter.format(tx.createdAt.toLocal()),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: AppTheme.textSecondary,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         if (tx.notes != null && tx.notes!.isNotEmpty) ...[

@@ -54,7 +54,7 @@ class UdharListPage extends ConsumerWidget {
         children: [
           const Icon(LucideIcons.alertCircle, color: Colors.orange, size: 48),
           const SizedBox(height: 16),
-          Text(error, style: const TextStyle(color: AppTheme.textSecondary)),
+          Text(error, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => ref.read(udharProvider.notifier).fetchLedgers(),
@@ -212,15 +212,17 @@ class _LedgerCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isOverdue ? Colors.red.shade200 : Colors.grey.shade200,
+            color: isOverdue
+                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.3)
+                : Theme.of(context).colorScheme.outlineVariant,
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -254,10 +256,10 @@ class _LedgerCard extends ConsumerWidget {
                 children: [
                   Text(
                     ledger.customerName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -270,8 +272,8 @@ class _LedgerCard extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: isOverdue
-                              ? Colors.red.shade600
-                              : AppTheme.textSecondary,
+                               ? Theme.of(context).colorScheme.error
+                               : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
