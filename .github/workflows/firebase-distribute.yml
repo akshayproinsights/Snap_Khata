@@ -1,4 +1,6 @@
 name: 🚀 Build & Distribute to Beta Testers
+# NOTE: This workflow ONLY builds the Flutter mobile APK.
+# The backend runs on Hetzner and is NOT deployed here.
 
 on:
   push:
@@ -66,12 +68,19 @@ jobs:
 
       # ── 7. Write google-services.json (from secret if available) ───────────
       #       Falls back to the committed file if secret is not set.
+      #       NOTE: `secrets` cannot be used in `if:` expressions on GitHub Actions,
+      #       so we pass it into an env var and check that instead.
       - name: 🔑 Write google-services.json
-        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
-        working-directory: ${{ env.WORKING_DIR }}/android/app
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: echo "$GOOGLE_SERVICES_JSON" > google-services.json
+        working-directory: ${{ env.WORKING_DIR }}/android/app
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "Writing google-services.json from secret..."
+            echo "$GOOGLE_SERVICES_JSON" > google-services.json
+          else
+            echo "No GOOGLE_SERVICES_JSON secret found — using committed google-services.json"
+          fi
 
       # ── 8. Build Release APK ───────────────────────────────────────────────
       - name: 🔨 Build release APK
