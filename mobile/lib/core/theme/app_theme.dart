@@ -42,8 +42,9 @@ class AppTheme {
         iconTheme: IconThemeData(color: textPrimary),
         titleTextStyle: TextStyle(
           color: textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -114,8 +115,9 @@ class AppTheme {
         iconTheme: IconThemeData(color: darkTextPrimary),
         titleTextStyle: TextStyle(
           color: darkTextPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

@@ -23,6 +23,8 @@ class InventoryInvoiceBundle {
   bool isVerified;
   String createdAt;
   List<HeaderAdjustment> headerAdjustments;
+  /// 'Cash' = fully paid on delivery; 'Credit' = outstanding/unpaid
+  String paymentMode;
 
   InventoryInvoiceBundle({
     required this.invoiceNumber,
@@ -35,11 +37,16 @@ class InventoryInvoiceBundle {
     required this.isVerified,
     required this.createdAt,
     this.headerAdjustments = const [],
+    this.paymentMode = 'Credit',
   });
+
+  bool get isPaid => paymentMode == 'Cash';
 
   double get totalPriceHike {
     return items.fold(0.0, (sum, item) => sum + (item.priceHikeAmount ?? 0.0));
   }
+
+  bool get hasChoriCatcherAlert => hasMismatch || totalPriceHike > 0;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

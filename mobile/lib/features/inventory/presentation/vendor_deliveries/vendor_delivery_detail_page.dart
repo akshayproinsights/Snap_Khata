@@ -54,12 +54,13 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     final hasLink = bundle.receiptLink.isNotEmpty && bundle.receiptLink != 'null';
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final totalAmount = bundle.totalAmount;
+    final hasChori = bundle.hasChoriCatcherAlert;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Bill Details', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Bill Details'),
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -85,6 +86,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 120),
         child: Column(
           children: [
+            // ── Chori Catcher Alert banner ──────────────────────────
+            if (hasChori) _buildChoriCatcherBanner(),
             _buildHeader(),
             const SizedBox(height: 12),
             _buildVendorCard(),
@@ -97,7 +100,96 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
+  // ── Chori Catcher banner ────────────────────────────────────────────────────
+  Widget _buildChoriCatcherBanner() {
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final hasMismatch = bundle.hasMismatch;
+    final priceHike = bundle.totalPriceHike;
+
+    // Build list of plain-language alerts
+    final List<String> alerts = [];
+    if (hasMismatch) {
+      alerts.add('Bill total does not match our calculation — possible overcharge.');
+    }
+    if (priceHike > 0) {
+      alerts.add(
+          'Price went up by ${currencyFormat.format(priceHike)} compared to last purchase.');
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F1),
+        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    size: 18, color: Color(0xFFDC2626)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  '🔴 Chori Catcher Alert',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFDC2626),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Alert lines
+          ...alerts.map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ',
+                        style: TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontWeight: FontWeight.bold)),
+                    Expanded(
+                        child: Text(a,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF7F1D1D),
+                                fontWeight: FontWeight.w500))),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 4),
+          Text(
+            'Tap Edit (top-right) to review and fix.',
+            style: TextStyle(
+                fontSize: 11.5,
+                color: Colors.red.shade400,
+                fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStickyBottomBar(BuildContext context, double grandTotal, double keyboardInset) {
+    final isPaid = bundle.isPaid;
+
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -121,35 +213,83 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Total Bill Amount',
-                          style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text('₹${_formatAmount(grandTotal)}',
-                          style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                              letterSpacing: -0.5)),
-                    ],
+                  // Amount column
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total Bill Amount',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5)),
+                        const SizedBox(height: 4),
+                        Text('₹${_formatAmount(grandTotal)}',
+                            style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                                letterSpacing: -0.5)),
+                        const SizedBox(height: 6),
+                        // ── Paid / Credit status pill ──────────────
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isPaid
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isPaid
+                                  ? Colors.green.withValues(alpha: 0.4)
+                                  : Colors.orange.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isPaid
+                                    ? LucideIcons.checkCircle2
+                                    : LucideIcons.clock,
+                                size: 13,
+                                color: isPaid
+                                    ? Colors.green.shade700
+                                    : Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                isPaid ? 'Paid (Cash)' : 'Credit – Unpaid',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: isPaid
+                                      ? Colors.green.shade700
+                                      : Colors.orange.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  // Verify / Verified button
                   if (!bundle.isVerified)
                     FilledButton.icon(
-                      onPressed: () => context.push('/inventory-invoice-review', extra: bundle),
+                      onPressed: () =>
+                          context.push('/inventory-invoice-review', extra: bundle),
                       icon: const Icon(LucideIcons.checkCircle, size: 18),
                       label: const Text('Verify'),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.orange.shade600,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
                       ),
                     )
                   else
@@ -177,7 +317,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                                   fontSize: 15)),
                         ],
                       ),
-                    )
+                    ),
                 ],
               ),
             ],

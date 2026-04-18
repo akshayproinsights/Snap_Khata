@@ -618,21 +618,22 @@ async def toggle_transaction_paid_status(
             # Use actual outstanding due (for receipt-based invoices) to avoid accidental overpayment.
             settlement_amount = tx_amount
             receipt_number = tx.get('receipt_number')
+            old_balance_due = 0.0
+            old_received = 0.0
             if receipt_number:
                 try:
                     invoice_rows_resp = db.client.table('verified_invoices') \
-                        .select('balance_due') \
+                        .select('balance_due, received_amount') \
                         .eq('username', username) \
                         .eq('receipt_number', receipt_number) \
+                        .limit(1) \
                         .execute()
 
                     if invoice_rows_resp.data:
-                        outstanding_due = sum(
-                            float(row.get('balance_due', 0) or 0)
-                            for row in invoice_rows_resp.data
-                        )
-                        if outstanding_due >= 0:
-                            settlement_amount = outstanding_due
+                        old_balance_due = float(invoice_rows_resp.data[0].get('balance_due', 0) or 0)
+                        old_received = float(invoice_rows_resp.data[0].get('received_amount', 0) or 0)
+                        if old_balance_due > 0:
+                            settlement_amount = old_balance_due
                 except Exception as due_err:
                     logger.warning(
                         f"Could not resolve outstanding due for receipt {receipt_number}: {due_err}"
@@ -681,6 +682,17 @@ async def toggle_transaction_paid_status(
                 'updated_at': now
             }).eq('id', ledger_id).execute()
             
+            # Sync to verified_invoices
+            if receipt_number and settlement_amount > 0:
+                try:
+                    db.client.table('verified_invoices').update({
+                        'balance_due': 0,
+                        'received_amount': old_received + old_balance_due,
+                        'payment_mode': 'Cash' # or leave as Credit, but it's paid
+                    }).eq('username', username).eq('receipt_number', receipt_number).execute()
+                except Exception as e:
+                    logger.warning(f"Could not update verified_invoices for receipt {receipt_number}: {e}")
+            
         else:
             # MARKING AS UNPAID
             linked_payment_id = tx.get('linked_transaction_id')
@@ -714,6 +726,29 @@ async def toggle_transaction_paid_status(
                 'balance_due': new_balance,
                 'updated_at': now
             }).eq('id', ledger_id).execute()
+            
+            # Sync revert to verified_invoices
+            receipt_number = tx.get('receipt_number')
+            if receipt_number:
+                try:
+                    invoice_rows_resp = db.client.table('verified_invoices') \
+                        .select('balance_due, received_amount') \
+                        .eq('username', username) \
+                        .eq('receipt_number', receipt_number) \
+                        .limit(1) \
+                        .execute()
+
+                    if invoice_rows_resp.data:
+                        old_balance_due = float(invoice_rows_resp.data[0].get('balance_due', 0) or 0)
+                        old_received = float(invoice_rows_resp.data[0].get('received_amount', 0) or 0)
+                        
+                        db.client.table('verified_invoices').update({
+                            'balance_due': old_balance_due + reverse_amount,
+                            'received_amount': max(0, old_received - reverse_amount),
+                            'payment_mode': 'Credit'
+                        }).eq('username', username).eq('receipt_number', receipt_number).execute()
+                except Exception as e:
+                    logger.warning(f"Could not revert verified_invoices for receipt {receipt_number}: {e}")
             
         return {
             "status": "success",

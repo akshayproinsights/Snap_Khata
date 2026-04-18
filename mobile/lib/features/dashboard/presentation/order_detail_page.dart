@@ -1499,21 +1499,20 @@ class _CreditBookButton extends ConsumerWidget {
         HapticFeedback.lightImpact();
         final ledgers = ref.read(udharProvider).ledgers;
 
-        // Try exact match first, then partial match
-        final match = ledgers.firstWhere(
-          (l) =>
-              l.customerName.toLowerCase().trim() ==
-              customerName.toLowerCase().trim(),
-          orElse: () => ledgers.firstWhere(
-            (l) => l.customerName
-                .toLowerCase()
-                .contains(customerName.toLowerCase().trim()),
-            orElse: () => ledgers.isEmpty ? ledgers.first : ledgers.first,
-          ),
-        );
+        final searchName = customerName.toLowerCase().trim();
+        
+        final exactMatches = ledgers.where((l) =>
+              l.customerName.toLowerCase().trim() == searchName);
+        
+        final partialMatches = ledgers.where((l) => 
+              l.customerName.toLowerCase().contains(searchName));
 
-        // If ledgers list is empty or no match, go to credit tab
-        if (ledgers.isEmpty) {
+        final match = exactMatches.isNotEmpty 
+            ? exactMatches.first 
+            : (partialMatches.isNotEmpty ? partialMatches.first : null);
+
+        // If no match is found, go to the general credit book dashboard
+        if (match == null) {
           context.go('/udhar-dashboard');
           return;
         }

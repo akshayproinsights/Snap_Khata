@@ -27,6 +27,7 @@ import 'package:mobile/features/purchase_orders/presentation/quick_reorder_page.
 import 'package:mobile/features/notifications/presentation/notifications_page.dart';
 import 'package:mobile/core/routing/app_shell.dart';
 import 'package:mobile/features/settings/presentation/settings_page.dart';
+import 'package:mobile/features/settings/presentation/usage_stats_page.dart';
 import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
@@ -64,6 +65,15 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/inventory',
+                name: 'inventory',
+                builder: (context, state) => const InventoryMainPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/dashboard',
                 name: 'dashboard',
                 builder: (context, state) => const DashboardPage(),
@@ -76,15 +86,6 @@ class AppRouter {
                 path: '/udhar-dashboard',
                 name: 'udhar-dashboard',
                 builder: (context, state) => const UdharDashboardPage(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/inventory',
-                name: 'inventory',
-                builder: (context, state) => const InventoryMainPage(),
               ),
             ],
           ),
@@ -291,6 +292,12 @@ class AppRouter {
           final bundle = state.extra as InventoryInvoiceBundle;
           return VendorDeliveryDetailPage(bundle: bundle);
         },
+      ),
+      GoRoute(
+        path: '/usage-stats',
+        name: 'usage-stats',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const UsageStatsPage(),
       ),
     ],
   );

@@ -949,6 +949,20 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         
         final_records = final_df_snake.to_dict('records')
         
+        # Log newly verified invoices for usage metrics before upsert
+        try:
+            existing_receipts_response = db.client.table('verified_invoices').select('receipt_number').eq('username', username).execute()
+            existing_receipts = {r.get('receipt_number') for r in existing_receipts_response.data if r.get('receipt_number')}
+            
+            new_receipts = [r for r in final_records if r.get('receipt_number') and r.get('receipt_number') not in existing_receipts]
+            
+            if new_receipts:
+                usage_records = [{"username": username, "order_type": "customer"} for _ in new_receipts]
+                db.client.table('usage_logs').insert(usage_records).execute()
+                logger.info(f"Logged {len(new_receipts)} new customer orders to usage_logs")
+        except Exception as e:
+            logger.error(f"Failed to log customer usage metrics: {e}")
+            
         # Save to verified_invoices table
         # CRITICAL: Check return value — if upsert fails, do NOT continue to
         # clean up verification tables. Leaving them intact preserves user data

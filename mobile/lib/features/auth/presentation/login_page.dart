@@ -31,7 +31,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     // Listen to changes to route on auth success
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.isAuthenticated) {
-        context.go('/dashboard');
+        context.go('/inventory');
       }
       if (next.error != null) {
         AppToast.showError(context, next.error!, title: 'Login Failed');

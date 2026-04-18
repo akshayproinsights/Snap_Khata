@@ -268,6 +268,9 @@ class _InventoryInvoiceReviewPageState
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
 
+      // Persist payment mode on the bundle so downstream pages reflect it
+      widget.bundle.paymentMode = _paymentMode;
+
       if (mounted) {
         AppToast.showSuccess(
           context,
