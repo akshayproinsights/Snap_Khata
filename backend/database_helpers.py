@@ -21,6 +21,7 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     float_fields = ['quantity', 'rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch', 'received_amount', 'balance_due', 'model_accuracy', 'cost_inr']
     
     for key, value in row_dict.items():
+        # test
         if isinstance(value, (dict, list)):
             continue
             
