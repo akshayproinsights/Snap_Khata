@@ -137,6 +137,11 @@ jobs:
               sed -i "s/\${GOOGLE_API_KEY}/${{ secrets.GOOGLE_API_KEY }}/g" backend/.env
             fi
 
+            # ── Frontend Dependencies ─────────────────────────────────
+            cd frontend
+            npm ci
+            cd ..
+
             # ── Python Backend ────────────────────────────────────────────
             cd backend
             
