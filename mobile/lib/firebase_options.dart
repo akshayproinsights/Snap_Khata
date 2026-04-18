@@ -66,10 +66,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: const String.fromEnvironment('GOOGLE_API_KEY_IOS'),
-    appId: '1:47234500199:ios:070ac54b7cb2abf742f6c2',
+    appId: '1:47234500199:ios:9e793e87747ce6c042f6c2',
     messagingSenderId: '47234500199',
     projectId: 'snapkhata',
     storageBucket: 'snapkhata.firebasestorage.app',
-    iosBundleId: 'com.example.mobile',
+    iosBundleId: 'com.snapkhata.app',
   );
 }
