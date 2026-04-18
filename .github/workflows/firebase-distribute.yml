@@ -1,43 +1,140 @@
-name: Build and Send APK to Firebase
+name: 🚀 Build & Distribute to Beta Testers
 
 on:
   push:
     branches:
-      - main
+      - stable
+  workflow_dispatch:          # Allow manual trigger from GitHub UI
+    inputs:
+      release_notes:
+        description: 'Custom release notes (optional)'
+        required: false
+        default: ''
+
+env:
+  FLUTTER_VERSION: '3.32.0'   # Pin to avoid surprise breakage; update intentionally
+  JAVA_VERSION: '17'
+  WORKING_DIR: mobile
 
 jobs:
-  build:
+  build-and-distribute:
+    name: Build APK & Send to Firebase
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Setup Java
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: 📥 Checkout stable branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # Full history for accurate commit messages
+
+      # ── 2. Java Setup ──────────────────────────────────────────────────────
+      - name: ☕ Setup Java ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Setup Flutter
+      # ── 3. Flutter Setup ───────────────────────────────────────────────────
+      - name: 🐦 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          cache: true
+          cache-key: flutter-${{ env.FLUTTER_VERSION }}
 
-      - name: Install dependencies
+      # ── 4. Cache Gradle ────────────────────────────────────────────────────
+      - name: 📦 Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-
+
+      # ── 5. Accept Android Licenses ─────────────────────────────────────────
+      - name: ✅ Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      # ── 6. Install Flutter Dependencies ────────────────────────────────────
+      - name: 📚 Install Flutter dependencies
+        working-directory: ${{ env.WORKING_DIR }}
         run: flutter pub get
-        working-directory: mobile
 
-      - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses || true
+      # ── 7. Write google-services.json (from secret if available) ───────────
+      #       Falls back to the committed file if secret is not set.
+      - name: 🔑 Write google-services.json
+        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+        working-directory: ${{ env.WORKING_DIR }}/android/app
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: echo "$GOOGLE_SERVICES_JSON" > google-services.json
 
-      - name: Build APK
-        run: flutter build apk --release
-        working-directory: mobile
+      # ── 8. Build Release APK ───────────────────────────────────────────────
+      - name: 🔨 Build release APK
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          flutter build apk --release \
+            --build-number=${{ github.run_number }} \
+            --build-name="1.0.${{ github.run_number }}"
 
-      - name: Upload to Firebase App Distribution
+      # ── 9. Rename APK with version info ───────────────────────────────────
+      - name: 📝 Rename APK
+        run: |
+          mv \
+            ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/app-release.apk \
+            ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
+
+      # ── 10. Compose Release Notes ──────────────────────────────────────────
+      - name: 📋 Compose release notes
+        id: notes
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          BUILD_NUM="${{ github.run_number }}"
+          MANUAL_NOTES="${{ github.event.inputs.release_notes }}"
+
+          if [ -n "$MANUAL_NOTES" ]; then
+            NOTES="$MANUAL_NOTES"
+          else
+            NOTES="Build #$BUILD_NUM — $COMMIT_MSG ($COMMIT_SHA)"
+          fi
+
+          echo "notes=$NOTES" >> $GITHUB_OUTPUT
+          echo "Release notes: $NOTES"
+
+      # ── 11. Distribute via Firebase App Distribution ───────────────────────
+      - name: 🚀 Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
-          token: ${{ secrets.FIREBASE_TOKEN }}
-          testers: "akshay.proinsights@gmail.com" 
-          file: mobile/build/app/outputs/flutter-apk/app-release.apk
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: beta-testers
+          releaseNotes: ${{ steps.notes.outputs.notes }}
+          file: ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
+
+      # ── 12. Upload APK as GitHub Artifact (backup) ─────────────────────────
+      - name: 💾 Save APK as GitHub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnapKhata-v1.0.${{ github.run_number }}
+          path: ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
+          retention-days: 30
+
+      # ── 13. Summary ────────────────────────────────────────────────────────
+      - name: 📊 Write job summary
+        if: always()
+        run: |
+          echo "## 🚀 SnapKhata Beta Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | 1.0.${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`$(git rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Notes | ${{ steps.notes.outputs.notes }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK distributed to **beta-testers** group via Firebase App Distribution." >> $GITHUB_STEP_SUMMARY
