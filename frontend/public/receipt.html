@@ -495,7 +495,8 @@
         const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
         const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
 
-        const fmtMoney = v => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmtMoney = v => '₹ ' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmtQty = v => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fmtDate = raw => {
             if (!raw) return '—';
             try {
@@ -645,7 +646,7 @@
                         <tr>
                             <td class="center">${idx + 1}</td>
                             <td>${item.name || 'Spare Part'}</td>
-                            <td class="center">${qty}</td>
+                            <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                             <td class="right">${fmtMoney(amount)}</td>
                         </tr>`;
@@ -662,7 +663,7 @@
                         <tr>
                             <td class="center">${taxableItems.length + idx + 1}</td>
                             <td>${item.name || 'Servicing'}</td>
-                            <td class="center">${qty}</td>
+                            <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                             <td class="right">${fmtMoney(amount)}</td>
                         </tr>`;
@@ -677,7 +678,7 @@
                     <tr>
                         <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Item'}</td>
-                        <td class="center">${qty}</td>
+                        <td class="center">${fmtQty(qty)}</td>
                         <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                         <td class="right">${fmtMoney(amount)}</td>
                     </tr>`;
@@ -685,12 +686,12 @@
             }
             
             let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
-            if (isAutomobile) {
+            if (items.length > 0) {
                 itemsHtml += `
                 <tr>
                    <td></td>
                    <td style="font-weight:700;">Total</td>
-                   <td class="center" style="font-weight:700;">${totalQty}</td>
+                   <td class="center" style="font-weight:700;">${fmtQty(totalQty)}</td>
                    <td></td>
                    <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
                 </tr>`;
@@ -871,9 +872,9 @@
                         <tr>
                             <td class="center">${idx + 1}</td>
                             <td>${item.name || 'Spare Part'}</td>
-                            <td class="center">${qty}</td>
+                            <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(baseRate)}</td>
-                            <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                            <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
                             <td class="right">${fmtMoney(totalForItem)}</td>
                         </tr>`;
                     });
@@ -894,9 +895,9 @@
                         <tr>
                             <td class="center">${taxableItems.length + idx + 1}</td>
                             <td>${item.name || 'Servicing'}</td>
-                            <td class="center">${qty}</td>
+                            <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(baseRate)}</td>
-                            <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                            <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
                             <td class="right">${fmtMoney(totalForItem)}</td>
                         </tr>`;
                     });
@@ -915,22 +916,21 @@
                     <tr>
                         <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Item'}</td>
-                        <td class="center">${qty}</td>
+                        <td class="center">${fmtQty(qty)}</td>
                         <td class="right">${fmtMoney(baseRate)}</td>
-                        <td class="right">${fmtMoney(gstAmountForItem)} (18%)</td>
+                        <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
                         <td class="right">${fmtMoney(totalForItem)}</td>
                     </tr>`;
                 });
             }
             
             let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
-            let totalGstAmt = gstAmt;
-            if (isAutomobile) {
+            if (items.length > 0) {
                 itemsHtml += `
                 <tr>
                    <td></td>
                    <td style="font-weight:700;">Total</td>
-                   <td class="center" style="font-weight:700;">${totalQty}</td>
+                   <td class="center" style="font-weight:700;">${fmtQty(totalQty)}</td>
                    <td></td>
                    <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
                    <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>

@@ -181,9 +181,9 @@ async def get_revenue_summary(
         logger.info(f"Revenue summary for {username}: {len(items)} transactions, ₹{total_revenue:.2f}")
         
         return RevenueSummary(
-            total_revenue=round(total_revenue, 2),
-            part_revenue=round(part_revenue, 2),
-            labour_revenue=round(labour_revenue, 2),
+            total_revenue=int(round(total_revenue)),
+            part_revenue=int(round(part_revenue)),
+            labour_revenue=int(round(labour_revenue)),
             total_transactions=len(items),
             date_from=date_from_str,
             date_to=date_to_str
@@ -276,9 +276,9 @@ async def get_revenue_trends(
         trends = [
             DailyRevenue(
                 date=date_key,
-                total_amount=round(data["total"], 2),
-                part_amount=round(data["part"], 2),
-                labour_amount=round(data["labour"], 2)
+                total_amount=int(round(data["total"])),
+                part_amount=int(round(data["part"])),
+                labour_amount=int(round(data["labour"]))
             )
             for date_key, data in sorted(daily_data.items())
         ]
@@ -347,7 +347,7 @@ async def get_stock_summary(
         logger.info(f"Stock summary for {username}: {len(items)} items, ₹{total_stock_value:.2f}")
         
         return StockSummary(
-            total_stock_value=round(total_stock_value, 2),
+            total_stock_value=int(round(total_stock_value)),
             low_stock_count=low_stock_count,
             out_of_stock_count=out_of_stock_count,
             below_reorder_count=below_reorder_count,
@@ -411,7 +411,7 @@ async def get_stock_alerts(
                     item_name=item.get(item_col) or "Unknown Item",
                     current_stock=round(stock, 2),
                     reorder_point=round(reorder, 2),
-                    stock_value=round(float(item.get(value_col) or 0), 2),
+                    stock_value=int(round(float(item.get(value_col) or 0))),
                     status=status
                 ))
         
@@ -567,15 +567,15 @@ async def get_dashboard_kpis(
         
         return DashboardKPIs(
             total_revenue=KPICard(
-                current_value=round(current_revenue, 2),
-                previous_value=round(prev_revenue, 2),
+                current_value=int(round(current_revenue)),
+                previous_value=int(round(prev_revenue)),
                 change_percent=round(revenue_change, 1),
                 label="Total Revenue",
                 format_type="currency"
             ),
             avg_job_value=KPICard(
-                current_value=round(current_avg, 2),
-                previous_value=round(prev_avg, 2),
+                current_value=int(round(current_avg)),
+                previous_value=int(round(prev_avg)),
                 change_percent=round(avg_change, 1),
                 label="Avg. Job Value",
                 format_type="currency"
@@ -772,7 +772,7 @@ async def get_inventory_by_priority(
                 "item_name": item.get("internal_item_name") or "Unknown Item",
                 "current_stock": round(stock_on_hand, 2),  # Stock on hand (current + old)
                 "reorder_point": round(reorder, 2),
-                "stock_value": round(stock_value, 2),
+                "stock_value": int(round(stock_value)),
                 "priority": item.get("priority"),
                 "unit_value": item.get("unit_value")  # Last buy price
             }
@@ -885,7 +885,7 @@ async def search_inventory(
                     "item_name": item.get("internal_item_name") or "Unknown Item",
                     "current_stock": round(stock_on_hand, 2),
                     "reorder_point": round(reorder, 2),
-                    "stock_value": round(float(item.get(value_col) or 0), 2),
+                    "stock_value": int(round(float(item.get(value_col) or 0))),
                     "priority": item.get("priority"),
                     "unit_value": item.get("unit_value")  # Last buy price - ADDED
                 })

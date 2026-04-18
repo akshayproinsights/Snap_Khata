@@ -891,7 +891,7 @@ const VerifyPartsPage: React.FC = () => {
                                                         />
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-900">₹{item.rate?.toFixed(2) || '0.00'}</span>
+                                                    <span className="text-gray-900">₹{Math.round(item.rate || 0).toLocaleString('en-IN')}</span>
                                                 )}
                                             </td>
 
@@ -929,7 +929,7 @@ const VerifyPartsPage: React.FC = () => {
 
                                             {/* Net Bill */}
                                             <td className="px-2 py-2 text-xs font-medium text-gray-900">
-                                                ₹{item.net_bill?.toFixed(2) || '0.00'}
+                                                ₹{Math.round(item.net_bill || 0).toLocaleString('en-IN')}
                                             </td>
 
                                             {/* Acc% */}

@@ -1705,11 +1705,11 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ partN
                 <div className="grid grid-cols-3 gap-4 p-6 border-b border-gray-200 bg-gray-50">
                     <div className="text-center">
                         <p className="text-sm text-gray-600">Total IN</p>
-                        <p className="text-2xl font-bold text-green-600">{summary.total_in.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-green-600">{Math.round(summary.total_in).toLocaleString('en-IN')}</p>
                     </div>
                     <div className="text-center">
                         <p className="text-sm text-gray-600">Total OUT</p>
-                        <p className="text-2xl font-bold text-red-600">{summary.total_out.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-red-600">{Math.round(summary.total_out).toLocaleString('en-IN')}</p>
                     </div>
                     <div className="text-center">
                         <p className="text-sm text-gray-600">Transactions</p>
@@ -1801,7 +1801,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ partN
                                             </td>
                                             {/* Calculated AMOUNT Cell (read-only) */}
                                             <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
-                                                ₹{txn.amount.toFixed(2)}
+                                                ₹{Math.round(txn.amount).toLocaleString('en-IN')}
                                             </td>
                                             <td className="px-4 py-3 text-sm text-center">
                                                 {txn.receipt_link ? (

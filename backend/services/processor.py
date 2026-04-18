@@ -531,8 +531,8 @@ def process_single_invoice(
                     data["processing_errors"] = " | ".join(processing_errors) if processing_errors else None
                     
                     print(f"\n[SUCCESS] Processed: {filename}", flush=True)
-                    print(f"          Model: {model_name} | Accuracy: {accuracy:.2f}% | Cost: Rs.{cost_inr:.4f}\n", flush=True)
-                    logger.info(f"Successfully processed: {filename} | Model: {model_name} | Accuracy: {accuracy:.2f}% | Cost: Rs.{cost_inr:.4f}")
+                    print(f"          Model: {model_name} | Accuracy: {accuracy:.2f}% | Cost: Rs.{int(round(cost_inr))}\n", flush=True)
+                    logger.info(f"Successfully processed: {filename} | Model: {model_name} | Accuracy: {accuracy:.2f}% | Cost: Rs.{int(round(cost_inr))}")
                     if fallback_attempted:
                         logger.info(f"  ℹ️ Fallback was used: {fallback_reason}")
                     

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGlobalStatus } from '../contexts/GlobalStatusContext';
 import {
     LayoutDashboard,
+    Wallet,
     Upload,
     ClipboardCheck,
     CheckCircle,
@@ -30,7 +31,7 @@ const Sidebar: React.FC = () => {
     const { inventory, sales } = useGlobalStatus();
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [expandedSections, setExpandedSections] = useState<string[]>(['Sales', 'Inventory']);
+    const [expandedSections, setExpandedSections] = useState<string[]>(['Sales', 'Inventory', 'Credit']);
 
     const toggleSection = (sectionName: string) => {
         setExpandedSections(prev =>
@@ -42,6 +43,7 @@ const Sidebar: React.FC = () => {
 
     const navigation: NavItem[] = [
         { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+        { name: 'Credit / Ledger', path: '/credit', icon: Wallet },
         {
             name: 'Sales',
             icon: ShoppingCart,

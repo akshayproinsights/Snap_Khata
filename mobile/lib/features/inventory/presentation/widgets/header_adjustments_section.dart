@@ -23,17 +23,28 @@ class HeaderAdjustmentsSection extends StatelessWidget {
   double _effectiveAmount(HeaderAdjustment adj) {
     final type = adj.adjustmentType.toUpperCase();
     if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
-      // These are always discounts — stored as positive by Gemini, but they reduce total
       return -adj.amount.abs();
     }
     return adj.amount; // ROUND_OFF, OTHER: use as-is
+  }
+
+  /// HEADER_DISCOUNT and SCHEME are already baked into each item's netAmount
+  /// by the math engine. They should NOT be re-subtracted at the header level.
+  bool _isAlreadyInItems(HeaderAdjustment adj) {
+    final type = adj.adjustmentType.toUpperCase();
+    return type == 'HEADER_DISCOUNT' || type == 'SCHEME';
   }
 
   @override
   Widget build(BuildContext context) {
     if (adjustments.isEmpty) return const SizedBox.shrink();
 
-    final netTotal = adjustments.fold<double>(0.0, (sum, adj) => sum + _effectiveAmount(adj));
+    // Only ROUND_OFF / OTHER contribute to the displayed grand-total adjustment.
+    // HEADER_DISCOUNT / SCHEME are already embedded in each item's netAmount.
+    final additiveTotal = adjustments.fold<double>(0.0, (sum, adj) {
+      if (_isAlreadyInItems(adj)) return sum;
+      return sum + _effectiveAmount(adj);
+    });
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
@@ -58,6 +69,7 @@ class HeaderAdjustmentsSection extends StatelessWidget {
           ...adjustments.map((adj) {
             final effective = _effectiveAmount(adj);
             final isDeduction = effective < 0;
+            final alreadyInItems = _isAlreadyInItems(adj);
             final label = (adj.description != null && adj.description!.isNotEmpty)
                 ? adj.description!
                 : adj.adjustmentType;
@@ -66,11 +78,44 @@ class HeaderAdjustmentsSection extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: alreadyInItems
+                                  ? Colors.grey.shade400
+                                  : AppTheme.textSecondary,
+                              fontStyle: alreadyInItems
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                            ),
+                          ),
+                        ),
+                        if (alreadyInItems) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Text(
+                              'in items',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade500,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   Text(
@@ -78,7 +123,14 @@ class HeaderAdjustmentsSection extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: isDeduction ? Colors.green.shade700 : AppTheme.textPrimary,
+                      color: alreadyInItems
+                          ? Colors.grey.shade400
+                          : (isDeduction
+                              ? Colors.green.shade700
+                              : AppTheme.textPrimary),
+                      fontStyle: alreadyInItems
+                          ? FontStyle.italic
+                          : FontStyle.normal,
                     ),
                   ),
                 ],
@@ -98,15 +150,21 @@ class HeaderAdjustmentsSection extends StatelessWidget {
                 ),
               ),
               Text(
-                '${netTotal < 0 ? '-' : '+'}₹${_fmt(netTotal.abs())}',
+                additiveTotal == 0.0
+                    ? '₹0'
+                    : '${additiveTotal < 0 ? '-' : '+'}₹${_fmt(additiveTotal.abs())}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: netTotal < 0 ? Colors.green.shade700 : AppTheme.primary,
+                  color: additiveTotal < 0
+                      ? Colors.green.shade700
+                      : (additiveTotal > 0
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary),
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );

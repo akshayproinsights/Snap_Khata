@@ -9,8 +9,6 @@ import 'package:mobile/features/purchase_orders/presentation/providers/purchase_
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:mobile/features/inventory/presentation/widgets/item_purchase_history_sheet.dart';
-import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
@@ -807,7 +805,7 @@ class _VendorSummary {
 }
 
 // ─── Vendor Delivery Card ─────────────────────────────────────────────────────
-class _VendorDeliveryCard extends ConsumerStatefulWidget {
+class _VendorDeliveryCard extends ConsumerWidget {
   final InventoryInvoiceBundle bundle;
   final String dateLabel;
   final String searchQuery;
@@ -819,579 +817,6 @@ class _VendorDeliveryCard extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.allItems,
   });
-
-  @override
-  ConsumerState<_VendorDeliveryCard> createState() =>
-      _VendorDeliveryCardState();
-}
-
-class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
-  bool _isExpanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-expand when search is active
-    _isExpanded = widget.searchQuery.isNotEmpty;
-  }
-
-  @override
-  void didUpdateWidget(_VendorDeliveryCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Update expansion state when search query changes
-    if (oldWidget.searchQuery != widget.searchQuery) {
-      setState(() {
-        _isExpanded = widget.searchQuery.isNotEmpty;
-      });
-    }
-  }
-
-  List<InventoryItem> _getVisibleItems() {
-    final searchQuery = widget.searchQuery;
-    final allItems = widget.bundle.items;
-    
-    if (searchQuery.isEmpty) {
-      return allItems;
-    }
-    
-    // If the search query matches the bundle's vendor or invoice number, show all items
-    if (widget.bundle.vendorName.toLowerCase().contains(searchQuery) ||
-        widget.bundle.invoiceNumber.toLowerCase().contains(searchQuery)) {
-      return allItems;
-    }
-    
-    // When search is active and vendor/invoice don't match, show only matching items
-    return allItems.where((item) {
-      final descMatch = item.description.toLowerCase().contains(searchQuery);
-      final partMatch = item.partNumber.toLowerCase().contains(searchQuery);
-      return descMatch || partMatch;
-    }).toList();
-  }
-
-  void _showItemHistory(InventoryItem item) {
-    HapticFeedback.mediumImpact();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ItemPurchaseHistorySheet(
-        itemDescription: item.description,
-        itemPartNumber: item.partNumber,
-        allItems: widget.allItems,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    final bundle = widget.bundle;
-    final hasMismatch = bundle.hasMismatch;
-    final visibleItems = _getVisibleItems();
-    final isSearching = widget.searchQuery.isNotEmpty;
-    final filteredCount = visibleItems.length;
-    final totalCount = bundle.items.length;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasMismatch
-              ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-              : Colors.grey.shade200,
-          width: hasMismatch ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: hasMismatch
-                ? const Color(0xFFEF4444).withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() => _isExpanded = !_isExpanded);
-              },
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: hasMismatch
-                            ? const Color(0xFFEF4444).withValues(alpha: 0.08)
-                            : AppTheme.primary.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        hasMismatch
-                            ? LucideIcons.alertCircle
-                            : LucideIcons.packageCheck,
-                        color: hasMismatch
-                            ? const Color(0xFFEF4444)
-                            : AppTheme.primary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Vendor name — always fully shown
-                          Text(
-                            bundle.vendorName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14.5,
-                              color: AppTheme.textPrimary,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.visible,
-                          ),
-                          // Invoice ID on its own line (if present)
-                          if (bundle.invoiceNumber.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  Icon(LucideIcons.hash,
-                                      size: 11, color: Colors.grey.shade500),
-                                  const SizedBox(width: 3),
-                                  Expanded(
-                                    child: Text(
-                                      bundle.invoiceNumber,
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: Colors.grey.shade600,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 0.2,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                widget.dateLabel,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const Text(' · ',
-                                  style: TextStyle(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 12)),
-                              Text(
-                                '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
-                                style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const Text(' · ',
-                                  style: TextStyle(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 12)),
-                              Text(
-                                currencyFormat.format(bundle.totalAmount),
-                                style: const TextStyle(
-                                  color: AppTheme.textPrimary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: Icon(LucideIcons.trash2,
-                              size: 18,
-                              color: AppTheme.error.withValues(alpha: 0.7)),
-                          onPressed: () => _confirmDelete(context, ref, bundle),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          splashRadius: 20,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Edit Button
-                            InkWell(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                context.push('/inventory-invoice-review', extra: bundle);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: AppTheme.primary.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      LucideIcons.edit3,
-                                      size: 14,
-                                      color: AppTheme.primary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text('Edit',
-                                        style: TextStyle(
-                                            color: AppTheme.primary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w800)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (hasMismatch)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color:
-                                          const Color(0xFFEF4444).withValues(alpha: 0.3)),
-                                ),
-                                child: const Text('⚠ Review',
-                                    style: TextStyle(
-                                        color: Color(0xFFEF4444),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800)),
-                              )
-                            else
-                              InkWell(
-                                onTap: bundle.receiptLink.isNotEmpty ? () {
-                                  HapticFeedback.lightImpact();
-                                  InteractiveImageGallery.show(
-                                    context,
-                                    imageUrls: [bundle.receiptLink],
-                                  );
-                                } : () {
-                                  HapticFeedback.lightImpact();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('No receipt image available')),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: bundle.receiptLink.isNotEmpty 
-                                      ? Colors.green.shade50 
-                                      : Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: bundle.receiptLink.isNotEmpty 
-                                        ? Colors.green.shade200 
-                                        : Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        LucideIcons.eye,
-                                        size: 14,
-                                        color: bundle.receiptLink.isNotEmpty 
-                                          ? Colors.green.shade700 
-                                          : Colors.grey.shade500,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text('View',
-                                          style: TextStyle(
-                                              color: bundle.receiptLink.isNotEmpty 
-                                                  ? Colors.green 
-                                                  : Colors.grey.shade600,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w800)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        AnimatedRotation(
-                          turns: _isExpanded ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 250),
-                          child: Icon(
-                            LucideIcons.chevronDown,
-                            size: 18,
-                            color: Colors.grey.shade400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 220),
-              crossFadeState: _isExpanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: Column(
-                children: [
-                  const Divider(height: 1, thickness: 1),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                            flex: 4,
-                            child: Text('Item',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textSecondary))),
-                        SizedBox(
-                            width: 48,
-                            child: Text('Qty',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textSecondary))),
-                        SizedBox(width: 8),
-                        SizedBox(
-                            width: 60,
-                            child: Text('Rate',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textSecondary))),
-                        SizedBox(width: 8),
-                        SizedBox(
-                            width: 70,
-                            child: Text('Net Amt',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textSecondary))),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ...visibleItems.map((item) {
-                    final rowMismatch = item.amountMismatch.abs() > 1.0;
-                    return InkWell(
-                      onTap: () => _showItemHistory(item),
-                      child: Container(
-                        color: rowMismatch
-                            ? const Color(0xFFEF4444).withValues(alpha: 0.04)
-                            : null,
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.description.isNotEmpty
-                                        ? item.description
-                                        : item.partNumber,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: rowMismatch
-                                          ? const Color(0xFFEF4444)
-                                          : AppTheme.textPrimary,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (isSearching)
-                                    Text(
-                                      'Tap for history →',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: AppTheme.primary,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(
-                              width: 48,
-                              child: Text(
-                                item.qty == item.qty.roundToDouble()
-                                    ? item.qty.toInt().toString()
-                                    : item.qty.toStringAsFixed(2),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppTheme.textSecondary),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 60,
-                              child: Text(
-                                '₹${item.rate.toStringAsFixed(0)}',
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                    fontSize: 12, color: AppTheme.textSecondary),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 70,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '₹${item.netBill.toStringAsFixed(0)}',
-                                    textAlign: TextAlign.right,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: rowMismatch
-                                          ? const Color(0xFFEF4444)
-                                          : AppTheme.textPrimary,
-                                    ),
-                                  ),
-                                  if (rowMismatch)
-                                     const Text(
-                                       '(+Tax/Fees)',
-                                       textAlign: TextAlign.right,
-                                       style: TextStyle(
-                                         fontSize: 9,
-                                         height: 1.2,
-                                         fontWeight: FontWeight.w600,
-                                         color: Color(0xFFEF4444),
-                                       ),
-                                     )
-                                   else if ((item.rate * item.qty - item.netBill).abs() > 1.0)
-                                     Padding(
-                                       padding: const EdgeInsets.only(top: 1),
-                                       child: Text(
-                                         '(Incl. Taxes)',
-                                         textAlign: TextAlign.right,
-                                         style: TextStyle(
-                                           fontSize: 10,
-                                           height: 1.1,
-                                           fontWeight: FontWeight.w500,
-                                           color: Colors.grey.shade500,
-                                         ),
-                                       ),
-                                     ),
-                                 ],
-                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  Container(
-                    color: Colors.grey.shade50,
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              isSearching && filteredCount != totalCount
-                                  ? 'Showing $filteredCount of $totalCount items'
-                                  : '$totalCount item${totalCount == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: isSearching && filteredCount != totalCount
-                                      ? AppTheme.primary
-                                      : Colors.grey.shade500,
-                                  fontWeight: isSearching && filteredCount != totalCount
-                                      ? FontWeight.w600
-                                      : FontWeight.w500),
-                            ),
-                            if (isSearching && filteredCount != totalCount)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 6),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    'filtered',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        Text(
-                          'Total: ${currencyFormat.format(bundle.totalAmount)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              secondChild: const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _confirmDelete(
       BuildContext context, WidgetRef ref, InventoryInvoiceBundle bundle) async {
@@ -1437,4 +862,159 @@ class _VendorDeliveryCardState extends ConsumerState<_VendorDeliveryCard> {
     }
   }
 
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final hasMismatch = bundle.hasMismatch;
+
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.push('/vendor-delivery-detail', extra: bundle);
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: hasMismatch
+                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                : Colors.grey.shade200,
+            width: hasMismatch ? 1.5 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: hasMismatch
+                  ? const Color(0xFFEF4444).withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: hasMismatch
+                    ? const Color(0xFFEF4444).withValues(alpha: 0.08)
+                    : AppTheme.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                hasMismatch
+                    ? LucideIcons.alertCircle
+                    : LucideIcons.packageCheck,
+                color: hasMismatch
+                    ? const Color(0xFFEF4444)
+                    : AppTheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    bundle.vendorName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                      color: AppTheme.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.visible,
+                  ),
+                  if (bundle.invoiceNumber.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.hash,
+                              size: 11, color: Colors.grey.shade500),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              bundle.invoiceNumber,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        dateLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Text(' · ',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12)),
+                      Text(
+                        '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Text(' · ',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12)),
+                      Text(
+                        currencyFormat.format(bundle.totalAmount),
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(LucideIcons.trash2,
+                      size: 18, color: AppTheme.error.withValues(alpha: 0.7)),
+                  onPressed: () => _confirmDelete(context, ref, bundle),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 20,
+                ),
+                const SizedBox(height: 12),
+                Icon(LucideIcons.chevronRight,
+                    size: 20, color: Colors.grey.shade400),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

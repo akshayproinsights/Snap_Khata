@@ -110,6 +110,12 @@ async def export_inventory_to_excel(
             
             # Create DataFrame
             df = pd.DataFrame(items)[available_columns]
+
+            # Round monetary columns to 0 decimals as per SMB requirement
+            monetary_cols = ['rate', 'taxable_amount', 'discounted_price', 'taxed_amount', 'net_bill', 'amount_mismatch']
+            for col in monetary_cols:
+                if col in df.columns:
+                    df[col] = df[col].apply(lambda x: round(float(x)) if x is not None else 0)
             
             # Rename columns for better readability
             column_names = {

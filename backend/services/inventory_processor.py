@@ -606,10 +606,10 @@ def convert_to_inventory_rows(
             'sgst_percent': sgst_percent,
 
             # Calculated compat columns
-            'discounted_price': round(discounted_price, 2),
-            'taxed_amount':     round(taxed_amount_col, 2),
-            'net_bill':         round(net_bill, 2),
-            'amount_mismatch':  round(amount_mismatch, 2),
+            'discounted_price': int(round(discounted_price)),
+            'taxed_amount':     int(round(taxed_amount_col)),
+            'net_bill':         int(round(net_bill)),
+            'amount_mismatch':  int(round(amount_mismatch)),
 
             # AI model tracking
             'model_used':     model_used,

@@ -13,6 +13,7 @@ import InventoryUploadPage from './pages/InventoryUploadPage';
 import VerifyPartsPage from './pages/VerifyPartsPage';
 import InventoryMappedPage from './pages/InventoryMappedPage';
 import CurrentStockPage from './pages/CurrentStockPage';
+import UdharDashboardPage from './pages/UdharDashboardPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,7 @@ function App() {
               >
                 {/* Dashboard */}
                 <Route index element={<DashboardPage />} />
+                <Route path="credit" element={<UdharDashboardPage />} />
 
                 {/* Sales Section */}
                 <Route path="sales/upload" element={<UploadPage />} />

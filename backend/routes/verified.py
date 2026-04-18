@@ -613,6 +613,12 @@ async def export_verified_invoices(
             
             if available_columns:
                 df = df[available_columns]
+
+                # Round monetary columns to 0 decimals
+                monetary_cols = ['rate', 'amount']
+                for col in monetary_cols:
+                    if col in df.columns:
+                        df[col] = df[col].apply(lambda x: round(float(x)) if x is not None and str(x).strip() != '' else 0)
                 
                 # Rename columns for Excel export (user-friendly names)
                 column_names = {

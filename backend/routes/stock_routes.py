@@ -328,7 +328,7 @@ def get_stock_summary(
         return {
             "success": True,
             "summary": {
-                "total_stock_value": round(total_stock_value, 2),
+                "total_stock_value": int(round(total_stock_value)),
                 "low_stock_items": low_stock_count,
                 "out_of_stock": out_of_stock_count,
                 "total_items": len(items)

@@ -448,8 +448,11 @@ class _InventoryInvoiceReviewPageState
 
     final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0 || (i.needsReview ?? false));
     // Compute effective signed amount for each adjustment:
-    //   HEADER_DISCOUNT / SCHEME → always a deduction (stored positive by Gemini, but they reduce the total)
-    //   ROUND_OFF / OTHER        → use as-is (can be positive or negative)
+    //   HEADER_DISCOUNT / SCHEME → EXCLUDED from total calculation because each
+    //     item's netAmount already has the per-item discount baked in via the
+    //     math engine. Adding them here would double-count the discount.
+    //   ROUND_OFF / OTHER        → use as-is (can be positive or negative);
+    //     these are genuine header-level adjustments not reflected in line items.
     double effectiveAdjAmount(HeaderAdjustment adj) {
       final type = adj.adjustmentType.toUpperCase();
       if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
@@ -457,9 +460,17 @@ class _InventoryInvoiceReviewPageState
       }
       return adj.amount;
     }
+    // Only include ROUND_OFF and OTHER in the grand total.
+    // HEADER_DISCOUNT / SCHEME are already embedded in each item's netAmount.
     final adjustmentTotal = widget.bundle.headerAdjustments.fold<double>(
       0.0,
-      (sum, adj) => sum + effectiveAdjAmount(adj),
+      (sum, adj) {
+        final type = adj.adjustmentType.toUpperCase();
+        if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
+          return sum; // skip — already in item netAmounts
+        }
+        return sum + effectiveAdjAmount(adj);
+      },
     );
     final totalAmount = sortedItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill)) + adjustmentTotal;
 

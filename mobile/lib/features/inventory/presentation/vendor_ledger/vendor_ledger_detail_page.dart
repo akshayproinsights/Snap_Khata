@@ -17,6 +17,20 @@ class VendorLedgerDetailPage extends ConsumerStatefulWidget {
       _VendorLedgerDetailPageState();
 }
 
+class ActivityItem {
+  final DateTime date;
+  final VendorLedgerTransaction? transaction;
+  final Map<String, dynamic>? purchaseInvoice;
+  final bool isPayment;
+
+  ActivityItem({
+    required this.date,
+    this.transaction,
+    this.purchaseInvoice,
+    required this.isPayment,
+  });
+}
+
 class _VendorLedgerDetailPageState
     extends ConsumerState<VendorLedgerDetailPage> {
   final currencyFormatter =
@@ -25,8 +39,8 @@ class _VendorLedgerDetailPageState
 
   List<VendorLedgerTransaction>? _transactions;
   List<Map<String, dynamic>>? _purchaseInvoices;
+  List<ActivityItem>? _activityItems;
   bool _isLoading = true;
-  bool _isLoadingPurchases = true;
 
   // Selection state
   final Set<int> _selectedIds = {};
@@ -41,42 +55,91 @@ class _VendorLedgerDetailPageState
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
-      _isLoadingPurchases = true;
     });
 
+    List<VendorLedgerTransaction> transactions = [];
+    List<Map<String, dynamic>> purchaseInvoices = [];
+
     // If ledger ID is negative, it's a view-only mode (no actual ledger exists)
-    // Only fetch purchase invoices, skip transactions
     if (widget.ledger.id < 0) {
-      final purchaseInvoices = await ref
+      purchaseInvoices = await ref
           .read(vendorLedgerProvider.notifier)
           .fetchInventoryItemsByVendor(widget.ledger.vendorName);
+    } else {
+      // Fetch both transactions and purchase invoices in parallel
+      final results = await Future.wait([
+        ref.read(vendorLedgerProvider.notifier).fetchTransactions(widget.ledger.id),
+        ref.read(vendorLedgerProvider.notifier).fetchInventoryItemsByVendor(widget.ledger.vendorName),
+      ]);
 
-      setState(() {
-        _transactions = [];
-        _purchaseInvoices = purchaseInvoices;
-        _isLoading = false;
-        _isLoadingPurchases = false;
-      });
-      return;
+      transactions = results[0] as List<VendorLedgerTransaction>;
+      purchaseInvoices = results[1] as List<Map<String, dynamic>>;
     }
 
-    // Fetch both transactions and purchase invoices in parallel
-    final results = await Future.wait([
-      ref.read(vendorLedgerProvider.notifier).fetchTransactions(widget.ledger.id),
-      ref.read(vendorLedgerProvider.notifier).fetchInventoryItemsByVendor(widget.ledger.vendorName),
-    ]);
+    // Unify them
+    final List<ActivityItem> activityItems = [];
+    final Set<String> matchedInvoiceNumbers = {};
 
-    final transactions = results[0] as List<VendorLedgerTransaction>;
-    final purchaseInvoices = results[1] as List<Map<String, dynamic>>;
+    // 1. Process ledger transactions
+    for (var tx in transactions) {
+      if (tx.linkedTransactionId != null) continue; // Skip auto-generated payments
 
-    // Ensure descending date order for transactions
+      if (tx.transactionType == 'PAYMENT') {
+        activityItems.add(ActivityItem(
+          date: tx.createdAt,
+          transaction: tx,
+          isPayment: true,
+        ));
+      } else {
+        Map<String, dynamic>? matchedInvoice;
+        if (tx.invoiceNumber != null && tx.invoiceNumber!.isNotEmpty) {
+          try {
+            matchedInvoice = purchaseInvoices.firstWhere(
+              (inv) => inv['invoice_number']?.toString() == tx.invoiceNumber
+            );
+            matchedInvoiceNumbers.add(tx.invoiceNumber!);
+          } catch (_) {}
+        }
+        activityItems.add(ActivityItem(
+          date: tx.createdAt,
+          transaction: tx,
+          purchaseInvoice: matchedInvoice,
+          isPayment: false,
+        ));
+      }
+    }
+
+    // 2. Process unmatched purchase invoices
+    for (var inv in purchaseInvoices) {
+      final invNumber = inv['invoice_number']?.toString() ?? '';
+      if (invNumber.isNotEmpty && matchedInvoiceNumbers.contains(invNumber)) {
+        continue; // Already processed
+      }
+      
+      DateTime date = DateTime.now();
+      final dateStr = inv['invoice_date']?.toString();
+      if (dateStr != null && dateStr.isNotEmpty) {
+        date = DateTime.tryParse(dateStr) ?? DateTime.now();
+      }
+
+      activityItems.add(ActivityItem(
+        date: date,
+        purchaseInvoice: inv,
+        isPayment: false,
+      ));
+    }
+
+    // 3. Sort chronologically
+    activityItems.sort((a, b) => b.date.compareTo(a.date));
+
+    // Ensure descending date order for transactions (just in case they are used elsewhere)
     transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     setState(() {
       _transactions = transactions;
       _purchaseInvoices = purchaseInvoices;
+      _activityItems = activityItems;
       _isLoading = false;
-      _isLoadingPurchases = false;
     });
   }
 
@@ -619,191 +682,133 @@ class _VendorLedgerDetailPageState
                 ),
 
 
-                // Transactions Section - only show if ledger exists
-                if (widget.ledger.id >= 0) ...[
-                  // Transactions Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Recent Transactions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
+                // Account Activity Section
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Account Activity',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
                       ),
-                      if (_isSelectionMode)
-                        // In selection mode: show Select All / Deselect All
-                        TextButton(
-                          onPressed: () {
-                            final invoiceTxIds = txList
-                                .where((t) => t.transactionType != 'PAYMENT')
-                                .map((t) => t.id)
-                                .toSet();
-                            setState(() {
-                              if (_selectedIds.containsAll(invoiceTxIds)) {
-                                _selectedIds.clear();
-                              } else {
-                                _selectedIds.addAll(invoiceTxIds);
+                    ),
+                    if (_isSelectionMode)
+                      // In selection mode: show Select All / Deselect All
+                      TextButton(
+                        onPressed: () {
+                          final activityTxIds = (_activityItems ?? [])
+                              .where((a) => !a.isPayment && a.transaction != null)
+                              .map((a) => a.transaction!.id)
+                              .toSet();
+                          setState(() {
+                            if (_selectedIds.containsAll(activityTxIds) && activityTxIds.isNotEmpty) {
+                              _selectedIds.clear();
+                            } else {
+                              _selectedIds.addAll(activityTxIds);
+                            }
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.primary,
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        child: Builder(builder: (context) {
+                          final activityTxIds = (_activityItems ?? [])
+                              .where((a) => !a.isPayment && a.transaction != null)
+                              .map((a) => a.transaction!.id)
+                              .toSet();
+                          final allSelected = _selectedIds.containsAll(activityTxIds) && activityTxIds.isNotEmpty;
+                          return Text(
+                            allSelected ? 'Deselect All' : 'Select All',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          );
+                        }),
+                      )
+                    else if (widget.ledger.id >= 0)
+                      Row(
+                        children: [
+                          // Select button
+                          TextButton(
+                            onPressed: () {
+                              final firstInvoiceTx = (_activityItems ?? []).firstWhere(
+                                (a) => !a.isPayment && a.transaction != null,
+                                orElse: () => ActivityItem(date: DateTime.now(), isPayment: false),
+                              );
+                              if (firstInvoiceTx.transaction != null) {
+                                _toggleSelection(firstInvoiceTx.transaction!.id);
                               }
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.primary,
-                            backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.primary,
+                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(LucideIcons.checkSquare, size: 14),
+                                SizedBox(width: 6),
+                                Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ],
                             ),
                           ),
-                          child: Builder(builder: (context) {
-                            final invoiceTxIds = txList
-                                .where((t) => t.transactionType != 'PAYMENT')
-                                .map((t) => t.id)
-                                .toSet();
-                            final allSelected = _selectedIds.containsAll(invoiceTxIds) && invoiceTxIds.isNotEmpty;
-                            return Text(
-                              allSelected ? 'Deselect All' : 'Select All',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            );
-                          }),
-                        )
-                      else
-                        Row(
-                          children: [
-                            // Select button
-                            TextButton(
-                              onPressed: () {
-                                // Enter selection mode by selecting the first invoice transaction
-                                final firstInvoiceTx = txList.firstWhere(
-                                  (t) => t.transactionType != 'PAYMENT',
-                                  orElse: () => txList.first,
-                                );
-                                _toggleSelection(firstInvoiceTx.id);
-                              },
-                              style: TextButton.styleFrom(
-                                foregroundColor: AppTheme.primary,
-                                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(LucideIcons.checkSquare, size: 14),
-                                  SizedBox(width: 6),
-                                  Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ],
+                          const SizedBox(width: 8),
+                          // Pay button
+                          TextButton(
+                            onPressed: () => _showAddPaymentDialog(context),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.primary,
+                              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            // Pay button
-                            TextButton(
-                              onPressed: () => _showAddPaymentDialog(context),
-                              style: TextButton.styleFrom(
-                                foregroundColor: AppTheme.primary,
-                                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(LucideIcons.indianRupee, size: 14),
-                                  SizedBox(width: 6),
-                                  Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              ),
+                            child: const Row(
+                              children: [
+                                Icon(LucideIcons.indianRupee, size: 14),
+                                SizedBox(width: 6),
+                                Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ],
                             ),
-                          ],
-                        )
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Transactions List
-                  _isLoading
-                      ? const Center(child: Padding(
-                          padding: EdgeInsets.all(32.0),
-                          child: CircularProgressIndicator(),
-                        ))
-                      : txList.isEmpty
-                          ? const Center(
-                              child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: Text('No transactions found',
-                                  style: TextStyle(color: AppTheme.textSecondary)),
-                            ))
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: txList.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final tx = txList[index];
-                                final isPayment = tx.transactionType == 'PAYMENT';
-                                return _buildTransactionCard(tx, isPayment);
-                              },
-                            ),
-
-                  const SizedBox(height: 32),
-                ],
-
-                // Purchase History Section Header
-                if (_purchaseInvoices != null && _purchaseInvoices!.isNotEmpty)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Purchase History',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${_purchaseInvoices!.length} invoices',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
+                        ],
+                      )
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-                if (_purchaseInvoices != null && _purchaseInvoices!.isNotEmpty)
-                  const SizedBox(height: 16),
-
-                // Purchase Invoices List
-                _isLoadingPurchases
+                // Unified Activity List
+                _isLoading
                     ? const Center(child: Padding(
                         padding: EdgeInsets.all(32.0),
                         child: CircularProgressIndicator(),
                       ))
-                    : (_purchaseInvoices == null || _purchaseInvoices!.isEmpty)
-                        ? const SizedBox.shrink()
+                    : (_activityItems == null || _activityItems!.isEmpty)
+                        ? const Center(
+                            child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Text('No account activity found',
+                                style: TextStyle(color: AppTheme.textSecondary)),
+                          ))
                         : ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _purchaseInvoices!.length,
+                            itemCount: _activityItems!.length,
                             separatorBuilder: (context, index) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (context, index) {
-                              final invoice = _purchaseInvoices![index];
-                              return _buildPurchaseInvoiceCard(invoice);
+                              final item = _activityItems![index];
+                              return _buildActivityCard(item);
                             },
                           ),
 
@@ -910,6 +915,16 @@ class _VendorLedgerDetailPageState
     );
   }
 
+  Widget _buildActivityCard(ActivityItem item) {
+    if (item.isPayment && item.transaction != null) {
+      return _buildTransactionCard(item.transaction!, true);
+    } else if (item.transaction != null) {
+      return _buildTransactionCard(item.transaction!, false);
+    } else if (item.purchaseInvoice != null) {
+      return _buildPurchaseInvoiceCard(item.purchaseInvoice!);
+    }
+    return const SizedBox.shrink();
+  }
 
   Widget _buildTransactionCard(VendorLedgerTransaction tx, bool isPayment) {
     final isSelected = _selectedIds.contains(tx.id);
@@ -1176,14 +1191,37 @@ class _VendorLedgerDetailPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Invoice',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: AppTheme.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Invoice',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.orange.shade200),
+                              ),
+                              child: Text(
+                                'UNSYNCED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(

@@ -18,6 +18,7 @@ import 'package:mobile/features/inventory/presentation/inventory_item_mapping_pa
 import 'package:mobile/features/inventory/presentation/inventory_mapped_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_invoice_review_page.dart';
+import 'package:mobile/features/inventory/presentation/vendor_deliveries/vendor_delivery_detail_page.dart';
 import 'package:mobile/features/inventory/presentation/current_stock_page.dart';
 import 'package:mobile/features/vendor/presentation/vendor_mapping_page.dart';
 import 'package:mobile/features/purchase_orders/presentation/purchase_orders_page.dart';
@@ -280,6 +281,15 @@ class AppRouter {
         builder: (context, state) {
           final group = state.extra as InvoiceGroup;
           return OrderDetailPage(group: group);
+        },
+      ),
+      GoRoute(
+        path: '/vendor-delivery-detail',
+        name: 'vendor-delivery-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final bundle = state.extra as InventoryInvoiceBundle;
+          return VendorDeliveryDetailPage(bundle: bundle);
         },
       ),
     ],
