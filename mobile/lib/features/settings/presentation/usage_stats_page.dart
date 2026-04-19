@@ -75,7 +75,10 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+            boxShadow: Theme.of(context).brightness == Brightness.light
+                ? AppTheme.premiumShadow
+                : AppTheme.darkPremiumShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

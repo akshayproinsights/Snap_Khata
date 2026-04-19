@@ -216,17 +216,13 @@ class _LedgerCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isOverdue
-                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.3)
+                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.15)
                 : Theme.of(context).colorScheme.outlineVariant,
-            width: 1,
+            width: 0.5,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: Theme.of(context).brightness == Brightness.light
+              ? AppTheme.premiumShadow
+              : AppTheme.darkPremiumShadow,
         ),
         child: Row(
           children: [

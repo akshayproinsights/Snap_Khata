@@ -384,20 +384,31 @@ def process_vendor_invoice(
         accuracy = 0.0
         
         # ── Tier 1: Lite ──────────────────────────────────
-        try:
-            l_data, l_items, l_acc, l_in, l_out, l_cost = _run_model(LITE_MODEL, "Lite")
-            if l_data:
-                extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
-                    l_data, l_items, l_acc, l_in, l_out, l_cost
-                model_used = "Lite"
-                best_res_stored = {
-                    "data": l_data, "items": l_items, "acc": l_acc,
-                    "in": l_in, "out": l_out, "cost": l_cost, "model": "Lite"
-                }
-        except Exception as e:
-            logger.error(f"Lite tier crash: {e}")
-            # Ensure accuracy is initialized for the next tier check
-            accuracy = 0.0
+        lite_max_retries = 2
+        for att in range(lite_max_retries):
+            try:
+                l_data, l_items, l_acc, l_in, l_out, l_cost = _run_model(LITE_MODEL, f"Lite (Attempt {att+1})")
+                if l_data:
+                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                        l_data, l_items, l_acc, l_in, l_out, l_cost
+                    model_used = "Lite"
+                    best_res_stored = {
+                        "data": l_data, "items": l_items, "acc": l_acc,
+                        "in": l_in, "out": l_out, "cost": l_cost, "model": "Lite"
+                    }
+                    # If lite accuracy is good enough, we stop here
+                    if accuracy >= ACCURACY_THRESHOLD:
+                        break
+                    else:
+                        logger.warning(f"Lite accuracy {accuracy}% too low (threshold {ACCURACY_THRESHOLD}%).")
+                elif att < lite_max_retries - 1:
+                    logger.warning(f"Lite (Attempt {att+1}) returned no data. Retrying...")
+            except Exception as e:
+                logger.error(f"Lite tier attempt {att+1} crash: {e}")
+                # Ensure accuracy is initialized for the next tier check if this is the last attempt
+                if att == lite_max_retries - 1:
+                    accuracy = 0.0
+                time.sleep(1) # Small backoff before retry
 
         # ── Tier 2: Flash (if Lite failed or accuracy < threshold) ────────────
         if accuracy < ACCURACY_THRESHOLD or not best_res_stored:

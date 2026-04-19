@@ -65,13 +65,18 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Purchase Orders',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-            Text('Draft basket & order history',
+            Text('PURCHASE ORDERS',
                 style: TextStyle(
-                    fontSize: 12,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                )),
+            Text('DRAFT BASKET & ORDER HISTORY',
+                style: TextStyle(
+                    fontSize: 10,
                     color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.normal)),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5)),
           ],
         ),
         bottom: TabBar(

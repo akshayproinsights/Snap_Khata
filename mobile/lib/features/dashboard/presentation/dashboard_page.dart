@@ -26,12 +26,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
 
   @override
   void initState() {
@@ -59,21 +53,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${_getGreeting()}, $shopName',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+        title: const Text(
+          'SALES',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
         ),
         centerTitle: false,
         actions: [
@@ -298,14 +284,10 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Material(
         color: Colors.transparent,
@@ -653,14 +635,10 @@ class _PartyDetailsTabState extends ConsumerState<_PartyDetailsTab> {
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+                          boxShadow: Theme.of(context).brightness == Brightness.light
+                              ? AppTheme.premiumShadow
+                              : AppTheme.darkPremiumShadow,
                         ),
                         child: Material(
                           color: Colors.transparent,
@@ -872,15 +850,11 @@ class _QuickLinksSection extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1160,7 +1134,7 @@ class _TodaySaleSheet extends StatelessWidget {
           ),
 
           // Divider
-          Divider(height: 1, color: Colors.grey.shade100),
+          Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
 
           // Receipts list
           Flexible(
@@ -1213,10 +1187,15 @@ class _TodaySaleSheet extends StatelessWidget {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(14),
-                          border:
-                              Border.all(color: Colors.grey.shade100, width: 1),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                            width: 0.5,
+                          ),
+                          boxShadow: Theme.of(context).brightness == Brightness.light
+                              ? AppTheme.premiumShadow
+                              : AppTheme.darkPremiumShadow,
                         ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(

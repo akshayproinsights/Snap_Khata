@@ -307,8 +307,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Order Details',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('ORDER DETAILS',
+            style: TextStyle(
+              fontSize: 22, // Slightly smaller for detail pages but still prominent
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            )),
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -827,9 +831,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
-              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+              color: Theme.of(context).colorScheme.surface,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
               borderRadius: BorderRadius.circular(16),
+              boxShadow: Theme.of(context).brightness == Brightness.light
+                  ? AppTheme.premiumShadow
+                  : AppTheme.darkPremiumShadow,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -837,16 +847,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4))
-                    ],
                   ),
-                  child: Icon(LucideIcons.user, color: Theme.of(context).colorScheme.primary),
+                  child: Icon(LucideIcons.user, color: Theme.of(context).colorScheme.primary, size: 20),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -944,7 +948,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           // ── Credit Book shortcut (only for Credit orders, view mode) ──
           if (!isEditing && _paymentMode == 'Credit') ...[
             const SizedBox(height: 14),
-            _CreditBookButton(customerName: widget.group.customerName),
+            _CreditBookButton(
+              customerName: widget.group.customerName,
+              customerDetails: widget.group.customerDetails ?? '',
+            ),
           ],
         ],
       ),
@@ -965,13 +972,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         isDense: true,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5), width: 0.5)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5), width: 0.5)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
       ),
     );
   }
@@ -1222,7 +1229,8 @@ class _ItemRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
             bottom: BorderSide(
-                color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant)),
+                color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+                width: 0.5)),
       ),
       child: isEditing ? _buildEditMode(context) : _buildViewMode(context, currencyFormat),
     );
@@ -1348,15 +1356,15 @@ class _ItemRow extends StatelessWidget {
       width: 24,
       height: 24,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5), width: 0.5),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(
         child: Text('#$index',
             style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 fontSize: 10)),
       ),
     );
@@ -1376,13 +1384,13 @@ class _ItemRow extends StatelessWidget {
         isDense: true,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.2)),
       ),
     );
   }
@@ -1459,8 +1467,8 @@ class _PartLaborToggle extends StatelessWidget {
               selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? selectedColor : Colors.grey.shade300,
-            width: 1,
+            color: selected ? selectedColor : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: 0.5,
           ),
         ),
         child: Text(
@@ -1481,31 +1489,65 @@ class _PartLaborToggle extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _CreditBookButton extends ConsumerWidget {
   final String customerName;
+  final String customerDetails;
 
-  const _CreditBookButton({required this.customerName});
+  const _CreditBookButton({
+    required this.customerName,
+    required this.customerDetails,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         HapticFeedback.lightImpact();
-        final ledgers = ref.read(udharProvider).ledgers;
 
-        final searchName = customerName.toLowerCase().trim();
-        
-        final exactMatches = ledgers.where((l) =>
-              l.customerName.toLowerCase().trim() == searchName);
-        
-        final partialMatches = ledgers.where((l) => 
-              l.customerName.toLowerCase().contains(searchName));
+        CustomerLedger? findMatch(List<CustomerLedger> ledgers) {
+          final sName = customerName.toLowerCase().trim();
+          final sDetails = customerDetails.toLowerCase().trim();
 
-        final match = exactMatches.isNotEmpty 
-            ? exactMatches.first 
-            : (partialMatches.isNotEmpty ? partialMatches.first : null);
+          if (sName.isEmpty && sDetails.isEmpty) return null;
 
-        // If no match is found, go to the general credit book dashboard
+          // 1. Try exact match on Name
+          if (sName.isNotEmpty && sName != 'unknown' && sName != 'unknown customer') {
+            final matches = ledgers.where((l) => l.customerName.toLowerCase().trim() == sName);
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          // 2. Try exact match on Details (if name didn't match or was generic)
+          if (sDetails.isNotEmpty) {
+            final matches = ledgers.where((l) => l.customerName.toLowerCase().trim() == sDetails);
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          // 3. Try partial match on Name
+          if (sName.isNotEmpty && sName != 'unknown' && sName != 'unknown customer') {
+            final matches = ledgers.where((l) => l.customerName.toLowerCase().contains(sName));
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          // 4. Try partial match on Details
+          if (sDetails.isNotEmpty) {
+            final matches = ledgers.where((l) => l.customerName.toLowerCase().contains(sDetails));
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          return null;
+        }
+
+        final state = ref.read(udharProvider);
+        CustomerLedger? match = findMatch(state.ledgers);
+
+        // If no match found, try refreshing data once
         if (match == null) {
-          context.go('/udhar-dashboard');
+          await ref.read(udharProvider.notifier).fetchLedgers();
+          final newState = ref.read(udharProvider);
+          match = findMatch(newState.ledgers);
+        }
+
+        if (match == null) {
+          // If still no match, go to dashboard
+          context.push('/udhar-dashboard');
           return;
         }
 
@@ -1513,27 +1555,52 @@ class _CreditBookButton extends ConsumerWidget {
       },
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          border: Border.all(color: Colors.orange.shade200),
-          borderRadius: BorderRadius.circular(10),
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.orange.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
+          boxShadow: Theme.of(context).brightness == Brightness.light
+              ? AppTheme.premiumShadow
+              : AppTheme.darkPremiumShadow,
         ),
         child: Row(
           children: [
-            Icon(LucideIcons.bookOpen, size: 16, color: Colors.orange.shade700),
-            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(LucideIcons.bookOpen, size: 18, color: Colors.orange),
+            ),
+            const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                'View in Credit Book',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.orange.shade800,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'View in Credit Book',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  Text(
+                    'Check previous balances & history',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ),
             ),
-            Icon(LucideIcons.arrowRight, size: 14, color: Colors.orange.shade600),
+            Icon(LucideIcons.chevronRight, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
           ],
         ),
       ),

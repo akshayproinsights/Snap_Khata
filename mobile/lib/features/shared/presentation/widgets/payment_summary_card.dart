@@ -46,13 +46,9 @@ class PaymentSummaryCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,7 +126,7 @@ class PaymentSummaryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.25), width: 0.5),
                 ),
                 padding: const EdgeInsets.all(4),
                 child: Row(
@@ -161,7 +157,7 @@ class PaymentSummaryCard extends StatelessWidget {
           Container(
             height: 1,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withValues(alpha: 0.08),
           ),
 
           // ── Amount Breakdown ─────────────────────────────────────────────
@@ -198,7 +194,7 @@ class PaymentSummaryCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
-                Container(height: 1, color: Colors.white.withValues(alpha: 0.15)),
+                Container(height: 0.5, color: Colors.white.withValues(alpha: 0.12)),
                 const SizedBox(height: 14),
                 // Grand Total
                 Row(
@@ -231,7 +227,7 @@ class PaymentSummaryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.amber.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 0.5),
                     ),
                     child: Row(
                       children: [

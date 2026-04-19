@@ -13,6 +13,7 @@ import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dar
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -41,6 +42,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
   }
 
   String _dateLabel(String rawDate) {
@@ -134,13 +142,39 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       orElse: () => 0,
     );
 
+    final userState = ref.watch(authProvider);
+    final String shopName =
+        userState.user?.name ?? userState.user?.username ?? 'My Shop';
+    final String greeting = '${_getGreeting()}, $shopName'.toUpperCase();
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
-        title: const Text('Suppliers'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'HOME',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+            Text(
+              greeting,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
         actions: const [
           SizedBox(width: 8),
         ],
@@ -157,8 +191,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           unselectedLabelColor: AppTheme.textSecondary,
           tabs: const [
             Tab(text: 'Recent Deliveries'),
-            Tab(text: 'Party Details'),
             Tab(text: 'Items'),
+            Tab(text: 'Party Details'),
           ],
         ),
       ),
@@ -166,8 +200,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         controller: _tabController,
         children: [
           _buildRecentDeliveriesTab(context, itemsAsync, pendingCount, poState),
-          _buildPartyDetailsTab(context, itemsAsync),
           _buildItemsCatalogTab(context, itemsAsync),
+          _buildPartyDetailsTab(context, itemsAsync),
         ],
       ),
       floatingActionButton: SizedBox(
@@ -944,7 +978,23 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                             fontWeight: FontWeight.w700,
                             color: AppTheme.textPrimary,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        if (item.vendorName != null) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            item.vendorName!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.primary.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         if (item.partNumber.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(

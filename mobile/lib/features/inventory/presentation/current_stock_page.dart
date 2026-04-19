@@ -36,8 +36,12 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Current Stock',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('CURRENT STOCK',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            )),
         actions: [
           // Cart Button
           Stack(

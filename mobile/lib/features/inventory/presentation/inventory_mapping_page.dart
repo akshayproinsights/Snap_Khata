@@ -25,8 +25,14 @@ class InventoryMappingPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Inventory Mapping',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'LINK ITEMS',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
         actions: [
           TextButton.icon(
             onPressed: () {

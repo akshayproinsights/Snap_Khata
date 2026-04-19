@@ -1,10 +1,14 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/item_price_history_provider.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 
 class ItemPriceHistorySheet extends ConsumerWidget {
   final String description;
@@ -86,7 +90,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                     if (items.isEmpty) {
                       return const Center(child: Text('No history available'));
                     }
-                    return _buildContent(context, items, scrollController);
+                    return _buildContent(context, ref, items, scrollController);
                   },
                 ),
               ),
@@ -97,7 +101,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildContent(BuildContext context, List<InventoryItem> items, ScrollController scrollController) {
+  Widget _buildContent(BuildContext context, WidgetRef ref, List<InventoryItem> items, ScrollController scrollController) {
     final latestItem = items.last; // Since it's sorted ASC chronologically
 
     // Trend badge
@@ -154,7 +158,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                 // Sparkline
                 if (items.length > 1)
                   SizedBox(
-                    height: 80,
+                    height: 120, // Increased height for labels
                     width: double.infinity,
                     child: CustomPaint(
                       painter: _SparklinePainter(items: items),
@@ -189,7 +193,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                 // Read from end to beginning
                 final reversedIndex = items.length - 1 - index;
                 final item = items[reversedIndex];
-                return _buildHistoryCard(item, reversedIndex > 0 ? items[reversedIndex - 1] : null);
+                return _buildHistoryCard(context, ref, item, reversedIndex > 0 ? items[reversedIndex - 1] : null);
               },
               childCount: items.length,
             ),
@@ -199,7 +203,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildHistoryCard(InventoryItem item, InventoryItem? previousItem) {
+  Widget _buildHistoryCard(BuildContext context, WidgetRef ref, InventoryItem item, InventoryItem? previousItem) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     
     // Parse date
@@ -214,7 +218,6 @@ class ItemPriceHistorySheet extends ConsumerWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -227,92 +230,154 @@ class ItemPriceHistorySheet extends ConsumerWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: InkWell(
+        onTap: () => _navigateToBillDetails(context, ref, item),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  dateStr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (delta != 0)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      delta > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-                      size: 14,
-                      color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${delta > 0 ? '+' : ''}${currencyFormat.format(delta)}',
+                    child: Text(
+                      dateStr,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
                       ),
                     ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            item.vendorName ?? 'Unknown Supplier',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                '×${item.qty.toInt()} units',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
-                ),
+                  ),
+                  const Spacer(),
+                  if (delta != 0)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          delta > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+                          size: 14,
+                          color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${delta > 0 ? '+' : ''}${currencyFormat.format(delta)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
-              const Text(' @ ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              const SizedBox(height: 12),
               Text(
-                currencyFormat.format(item.rate),
+                item.vendorName ?? 'Unknown Supplier',
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary,
                 ),
               ),
-              const Spacer(),
-              Text(
-                currencyFormat.format(item.netBill),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primary,
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '×${item.qty.toInt()} units',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const Text(' @ ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  Text(
+                    currencyFormat.format(item.rate),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    currencyFormat.format(item.netBill),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<void> _navigateToBillDetails(BuildContext context, WidgetRef ref, InventoryItem item) async {
+    if (item.invoiceNumber.isEmpty) return;
+
+    // Show a loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final repo = ref.read(verifiedRepositoryProvider);
+      final records = await repo.getVerifiedInvoices(receiptNumber: item.invoiceNumber);
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (records.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not find bill details.')),
+        );
+        return;
+      }
+
+      // Construct InvoiceGroup
+      final first = records.first;
+      final group = InvoiceGroup(
+        receiptNumber: first.receiptNumber,
+        date: first.date.isNotEmpty ? first.date : first.uploadDate,
+        receiptLink: first.receiptLink,
+        customerName: first.customerName,
+        mobileNumber: first.mobileNumber,
+        extraFields: first.extraFields,
+        uploadDate: first.uploadDate,
+        paymentMode: first.paymentMode,
+        receivedAmount: first.receivedAmount,
+        balanceDue: first.balanceDue,
+        customerDetails: first.customerDetails,
+      );
+      group.items = records;
+      group.totalAmount = records.fold(0, (sum, i) => sum + i.amount);
+
+      if (context.mounted) {
+        context.pushNamed('order-detail', extra: group);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 }
 
@@ -329,10 +394,10 @@ class _SparklinePainter extends CustomPainter {
     final minRate = rates.reduce((a, b) => a < b ? a : b);
     final maxRate = rates.reduce((a, b) => a > b ? a : b);
     
-    // Add padding to range
+    // Add padding to range to accommodate labels above and below
     final range = (maxRate - minRate) == 0 ? 1.0 : (maxRate - minRate);
-    final paddedMin = minRate - (range * 0.1);
-    final paddedMax = maxRate + (range * 0.1);
+    final paddedMin = minRate - (range * 0.4); // Space for month labels
+    final paddedMax = maxRate + (range * 0.4); // Space for price labels
     final paddedRange = paddedMax - paddedMin;
 
     final linePaint = Paint()
@@ -371,8 +436,9 @@ class _SparklinePainter extends CustomPainter {
     // Draw line
     canvas.drawPath(path, linePaint);
 
-    // Draw solid points
+    // Draw solid points and labels
     for (int i = 0; i < points.length; i++) {
+      // 1. Draw point
       if (i == points.length - 1) {
         // Draw bigger latest point with a glow
         final glowPaint = Paint()
@@ -383,7 +449,71 @@ class _SparklinePainter extends CustomPainter {
       } else {
         canvas.drawCircle(points[i], 3, pointPaint);
       }
+
+      // 2. Draw Data Label (Price) - Above point
+      final priceLabel = rates[i].toInt().toString();
+      _drawText(
+        canvas,
+        priceLabel,
+        points[i] + const Offset(0, -22), // Offset above
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.textPrimary.withValues(alpha: 0.9),
+      );
+
+      // 3. Draw Month Label - Below point
+      // Only show month if it's the first point, the last point, or different from previous
+      bool shouldShowMonth = i == 0 || i == points.length - 1;
+      if (i > 0) {
+        final currentDt = DateTime.tryParse(items[i].invoiceDate);
+        final prevDt = DateTime.tryParse(items[i - 1].invoiceDate);
+        if (currentDt != null && prevDt != null && currentDt.month != prevDt.month) {
+          shouldShowMonth = true;
+        }
+      }
+
+      if (shouldShowMonth) {
+        final dt = DateTime.tryParse(items[i].invoiceDate);
+        if (dt != null) {
+          final monthLabel = DateFormat('MMM').format(dt);
+          _drawText(
+            canvas,
+            monthLabel,
+            points[i] + const Offset(0, 18), // Offset below
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondary.withValues(alpha: 0.6),
+          );
+        }
+      }
     }
+  }
+
+  void _drawText(
+    Canvas canvas,
+    String text,
+    Offset center, {
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+  }) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: color,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2),
+    );
   }
 
   Color _getTrendColor(InventoryItem item) {

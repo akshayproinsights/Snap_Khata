@@ -35,16 +35,27 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     for record in final_records:
         payment_mode = record.get('payment_mode', 'Cash')
         balance_due = record.get('balance_due')
-        customer_name = record.get('customer_name') or record.get('customer_details')
+        
+        raw_name = str(record.get('customer_name') or '').strip()
+        raw_details = str(record.get('customer_details') or '').strip()
+        
+        # Heuristic: if name is empty or generic, prefer details for ledger name
+        if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
+            customer_name = raw_details if raw_details else raw_name
+        else:
+            customer_name = raw_name
+
         if payment_mode == 'Credit' and customer_name and balance_due is not None:
             try:
                 bal = float(balance_due)
             except (TypeError, ValueError):
                 continue
             if bal > 0:
+                clean_name = str(customer_name).strip()
+                logger.info(f"Processing credit for '{clean_name}' (Original: '{raw_name}', Details: '{raw_details}')")
                 credit_records.append({
                     **record,
-                    '_customer_clean': str(customer_name).strip(),
+                    '_customer_clean': clean_name,
                     '_balance_due_float': bal,
                 })
 

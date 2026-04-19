@@ -845,6 +845,9 @@ async def get_item_price_history(
     username = current_user.get("username")
     db = get_database_client()
     
+    # Log the request for debugging
+    logger.info(f"Fetching price history for item: description='{description}', part_number='{part_number}' (user: {username})")
+    
     try:
         # Base query for this user's verified items
         query = db.client.table("inventory_items").select("*") \

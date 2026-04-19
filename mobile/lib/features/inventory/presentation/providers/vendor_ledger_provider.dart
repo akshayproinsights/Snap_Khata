@@ -148,6 +148,26 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
+  Future<bool> markInvoiceAsPaid({
+    required String vendorName,
+    required String invoiceNumber,
+    required double amount,
+    String? date,
+  }) async {
+    try {
+      await _dio.post('/api/vendor-ledgers/vendor-ledgers/onboard-invoice-paid', data: {
+        'vendor_name': vendorName,
+        'invoice_number': invoiceNumber,
+        'amount': amount,
+        'date': date,
+      });
+      await fetchLedgers();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<dynamic>> fetchInvoiceItems(String invoiceNumber) async {
     try {
       final response = await _dio.get('/api/inventory/items', queryParameters: {

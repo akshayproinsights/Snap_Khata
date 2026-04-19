@@ -21,7 +21,14 @@ class UdharDashboardPage extends ConsumerWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Credit / Ledger Dashboard'),
+          title: const Text(
+            'CREDIT',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            ),
+          ),
         ),
         body: dashboardState.isLoading && dashboardState.summary == null
             ? const Center(child: CircularProgressIndicator())
@@ -92,7 +99,7 @@ class UdharDashboardPage extends ConsumerWidget {
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
                               ),
                               child: IconButton(
                                 icon: const Icon(Icons.filter_list),
@@ -192,7 +199,8 @@ class UdharDashboardPage extends ConsumerWidget {
           color: isSelected ? activeColor.withValues(alpha: 0.1) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? activeColor.withValues(alpha: 0.5) : Theme.of(context).colorScheme.outlineVariant,
+            color: isSelected ? activeColor.withValues(alpha: 0.3) : Theme.of(context).colorScheme.outlineVariant,
+            width: 0.5,
           ),
         ),
         child: Text(
@@ -216,15 +224,11 @@ class UdharDashboardPage extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
       ),
       child: Row(
         children: [

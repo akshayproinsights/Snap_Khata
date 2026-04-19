@@ -50,12 +50,28 @@ class _InventoryItemMappingPageState
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Inventory Mapping',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text(
+              'ITEM LINKING',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
             Text(
-              state.activeTab == MappingTab.pending
-                  ? '${state.pendingCount} items need mapping'
-                  : '${state.mappedCount} items mapped',
+              (state.activeTab == MappingTab.pending
+                      ? '${state.pendingCount} items need mapping'
+                      : '${state.mappedCount} items mapped')
+                  .toUpperCase(),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
               style: const TextStyle(
                   fontSize: 12,
                   color: AppTheme.textSecondary,

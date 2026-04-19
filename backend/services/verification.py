@@ -265,7 +265,7 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
             
             if not in_base and not in_included:
                 # This is an orphaned record - create synthetic invoice record
-                # FIXED: Check if Receipt Link exists (mapped to r2_file_path which is NOT NULL)
+                # Check if Receipt Link exists
                 receipt_link = row.get('Receipt Link', '')
                 if not receipt_link or str(receipt_link).strip() == '':
                     logger.warning(f"⚠️ Skipping orphaned Date verification record {row_id_val} due to missing Receipt Link")
@@ -304,7 +304,7 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
             
             if not in_base and not in_included:
                 # This is an orphaned record - create synthetic invoice record
-                # FIXED: Check if Receipt Link exists (mapped to r2_file_path which is NOT NULL)
+                # Check if Receipt Link exists
                 receipt_link = row.get('Receipt Link', '')
                 if not receipt_link or str(receipt_link).strip() == '':
                     logger.warning(f"⚠️ Skipping orphaned Amount verification record {row_id_val} due to missing Receipt Link")
@@ -519,8 +519,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'id': 'Database_Id',                # Preserve integer PK for verified_invoices
             'row_id': 'Row_Id',                 # Map text row_id for matching with verification tables
             'receipt_number': 'Receipt Number',
-            'r2_file_path': 'Receipt Link',     # invoices.r2_file_path -> Receipt Link (CRITICAL FIX)
-            'receipt_link': 'Receipt Link_Orig', # Keep original link if needed, but primary is r2_file_path
+            'receipt_link': 'Receipt Link',     # Primary: invoices.receipt_link -> Receipt Link
             'date': 'Date',
             'customer': 'Customer Name',        # invoices.customer -> Customer Name
             'vehicle_number': 'Car Number',     # invoices.vehicle_number -> Car Number
@@ -542,13 +541,10 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         }
         
         # Rename columns for processing
-        # Note: We prioritize r2_file_path as 'Receipt Link' for correct processing
         df_raw = df_raw.rename(columns=column_map)
         
-        # For verification tables, 'receipt_link' is the correct column
+        # For verification tables, also map 'receipt_link' to 'Receipt Link'
         verification_map = column_map.copy()
-        verification_map['receipt_link'] = 'Receipt Link' # Override for verification tables
-        del verification_map['r2_file_path']
         
         df_date = df_date.rename(columns=verification_map)
         df_amount = df_amount.rename(columns=verification_map)
@@ -556,10 +552,6 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # ROBUSTNESS: Ensure 'Receipt Link' column always exists in all DataFrames.
         # Supabase omits null columns from rows, so pandas may not create the column at all
         # if ALL rows have null receipt_link. Guarantee the column exists with empty string default.
-        # NOTE: We only add 'Receipt Link' here (not 'Receipt Link_Orig')
-        # because Receipt Link_Orig is mapped from invoices.receipt_link, and adding it as
-        # empty string would cause the upsert to overwrite existing receipt_link values with ''.
-        # The existing fallback at REPAIR STEP 2 handles the missing Receipt Link_Orig case.
         for _df_name, _df in [('df_raw', df_raw), ('df_date', df_date), ('df_amount', df_amount)]:
             if 'Receipt Link' not in _df.columns:
                 _df['Receipt Link'] = ''
@@ -631,23 +623,10 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                     if r_num in receipt_link_map:
                         new_link = receipt_link_map[r_num]
                         df_raw.at[idx, 'Receipt Link'] = new_link
-                        # Also update Receipt Link_Orig if it exists
-                        if 'Receipt Link_Orig' in df_raw.columns:
-                            df_raw.at[idx, 'Receipt Link_Orig'] = new_link
                         repaired_count += 1
         
         if repaired_count > 0:
             logger.info(f"✨ Repaired {repaired_count} invoice records with missing file links")
-        # Some legacy/dev data has null r2_file_path but valid receipt_link (mapped to 'Receipt Link_Orig')
-        if 'Receipt Link' in df_raw.columns and 'Receipt Link_Orig' in df_raw.columns:
-            # Fill null Receipt Link with Receipt Link_Orig
-            df_raw['Receipt Link'] = df_raw['Receipt Link'].fillna(df_raw['Receipt Link_Orig'])
-            # Also handle empty strings if any
-            mask_empty = df_raw['Receipt Link'].astype(str).str.strip() == ''
-            if mask_empty.any():
-                df_raw.loc[mask_empty, 'Receipt Link'] = df_raw.loc[mask_empty, 'Receipt Link_Orig']
-            
-            logger.info("✓ Applied fallback for missing r2_file_path using receipt_link")
 
         corrections_made = False
         db = get_database_client()
@@ -803,12 +782,8 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
 
 
         # Build the column reverse map here (outside if block) so it's available for verified_invoices too
-        # FIX: The live Supabase 'invoices' table has 'receipt_link', NOT 'r2_file_path'.
-        # r2_file_path only exists in migration SQL files but was never created in production.
         invoice_reverse_map = {v: k for k, v in column_map.items()}
-        invoice_reverse_map['Receipt Link'] = 'receipt_link'  # Map to actual DB column name
-        # Drop the intermediate 'Receipt Link_Orig' — only used during processing, not stored directly
-        invoice_reverse_map.pop('Receipt Link_Orig', None)
+        invoice_reverse_map['Receipt Link'] = 'receipt_link'  # Ensure correct reverse mapping
 
         # 4. Save updated invoices to Supabase
         if corrections_made:
@@ -819,10 +794,6 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                 df_raw['Date'] = safe_format_date_series(df_raw['Date'], output_format='%Y-%m-%d')
             
             df_raw_snake = df_raw.rename(columns=invoice_reverse_map)
-            
-            # Drop the intermediate helper column if it somehow survived the rename
-            if 'Receipt Link_Orig' in df_raw_snake.columns:
-                df_raw_snake = df_raw_snake.drop(columns=['Receipt Link_Orig'])
             
             # Clean NaN/Inf values (not JSON compliant)
             df_raw_snake = df_raw_snake.replace([float('inf'), float('-inf')], None)
@@ -875,7 +846,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # .where(pd.notna(df), None) can produce pd.NA (not Python None) for some
         # dtypes, and `pd.NA is None` evaluates to False, silently allowing nulls
         # through to Postgres which then raises a NOT NULL constraint violation.
-        for col in ['receipt_number', 'receipt_link', 'r2_file_path', 'row_id']:
+        for col in ['receipt_number', 'receipt_link', 'row_id']:
             if col in final_df_snake.columns:
                 final_df_snake[col] = final_df_snake[col].fillna("").astype(str).replace("None", "").replace("nan", "")
         
@@ -892,7 +863,6 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         columns_to_exclude = [
             'updated_at',           # Only in invoices table
             'Review Status',         # Only used internally, not in verified_invoices table
-            'Receipt Link_Orig',    # Intermediate column
             # NOTE: 'extra_fields' was excluded here because verified_invoices lacked the column.
             # The migration SQL (add_extra_fields.sql) now includes verified_invoices too.
             # Once you run that migration in Supabase, remove this exclusion to start storing
