@@ -1,10 +1,11 @@
-name: 🚀 Build & Distribute to Beta Testers
+name: 🚀 Build & Distribute Mobile App
 # NOTE: This workflow ONLY builds the Flutter mobile APK.
 # The backend runs on Hetzner and is NOT deployed here.
 
 on:
   push:
     branches:
+      - main
       - stable
   workflow_dispatch:          # Allow manual trigger from GitHub UI
     inputs:
@@ -26,7 +27,7 @@ jobs:
 
     steps:
       # ── 1. Checkout ────────────────────────────────────────────────────────
-      - name: 📥 Checkout stable branch
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0          # Full history for accurate commit messages
@@ -121,7 +122,7 @@ jobs:
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          groups: beta-testers
+          groups: ${{ github.ref_name == 'main' && 'internal-development' || 'beta-testers' }}
           releaseNotes: ${{ steps.notes.outputs.notes }}
           file: ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
 
@@ -137,7 +138,8 @@ jobs:
       - name: 📊 Write job summary
         if: always()
         run: |
-          echo "## 🚀 SnapKhata Beta Build" >> $GITHUB_STEP_SUMMARY
+          DIST_GROUP="${{ github.ref_name == 'main' && 'internal-development' || 'beta-testers' }}"
+          echo "## 🚀 SnapKhata Build for $DIST_GROUP" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -146,4 +148,4 @@ jobs:
           echo "| Commit | \`$(git rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Release Notes | ${{ steps.notes.outputs.notes }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ APK distributed to **beta-testers** group via Firebase App Distribution." >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK distributed to **$DIST_GROUP** group via Firebase App Distribution." >> $GITHUB_STEP_SUMMARY
