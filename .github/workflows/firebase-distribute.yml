@@ -116,15 +116,11 @@ jobs:
           echo "notes=$NOTES" >> $GITHUB_OUTPUT
           echo "Release notes: $NOTES"
 
-      # ── 11. Distribute via Firebase App Distribution ───────────────────────
-      - name: 🔑 Write service account
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
-
       - name: 🚀 Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1.7.1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
-          serviceCredentialsFile: /tmp/service-account.json
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           groups: ${{ github.ref_name == 'main' && 'internal-development' || 'beta-testers' }}
           releaseNotes: ${{ steps.notes.outputs.notes }}
           file: ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
