@@ -246,7 +246,12 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
           icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.go('/dashboard'),
         ),
-        title: const Text('Pending Review'),
+        title: const Text('PENDING REVIEW',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            )),
         centerTitle: false,
         actions: [
           IconButton(

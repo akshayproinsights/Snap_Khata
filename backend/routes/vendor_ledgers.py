@@ -22,6 +22,12 @@ class BatchActionRequest(BaseModel):
 class VendorLedgerCreate(BaseModel):
     vendor_name: str
 
+class OnboardInvoicePaidRequest(BaseModel):
+    vendor_name: str
+    invoice_number: str
+    amount: float
+    date: Optional[str] = None
+
 @router.post("/vendor-ledgers")
 async def create_vendor_ledger(ledger: VendorLedgerCreate, current_user: Dict = Depends(get_current_user)):
     """Create a new vendor ledger."""
@@ -170,6 +176,103 @@ async def delete_vendor_ledger(ledger_id: int, current_user: Dict = Depends(get_
         raise
     except Exception as e:
         logger.error(f"Error deleting vendor ledger: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/vendor-ledgers/onboard-invoice-paid")
+async def onboard_invoice_paid(request: OnboardInvoicePaidRequest, current_user: Dict = Depends(get_current_user)):
+    """Onboard an inventory invoice into the ledger and mark it as paid."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # 1. Get or create ledger
+        ledger_resp = db.client.table('vendor_ledgers') \
+            .select('*') \
+            .eq('username', username) \
+            .eq('vendor_name', request.vendor_name) \
+            .execute()
+            
+        if ledger_resp.data:
+            ledger = ledger_resp.data[0]
+            ledger_id = ledger['id']
+        else:
+            # Create ledger
+            new_ledger_resp = db.client.table('vendor_ledgers').insert({
+                'username': username,
+                'vendor_name': request.vendor_name,
+                'balance_due': 0.0,
+            }).execute()
+            if not new_ledger_resp.data:
+                raise HTTPException(status_code=500, detail="Failed to create Vendor Ledger")
+            ledger = new_ledger_resp.data[0]
+            ledger_id = ledger['id']
+
+        # 2. Check if transaction exists
+        tx_resp = db.client.table('vendor_ledger_transactions') \
+            .select('*') \
+            .eq('username', username) \
+            .eq('ledger_id', ledger_id) \
+            .eq('invoice_number', request.invoice_number) \
+            .eq('transaction_type', 'INVOICE') \
+            .execute()
+            
+        if tx_resp.data:
+            transaction = tx_resp.data[0]
+            transaction_id = transaction['id']
+            if transaction.get('is_paid'):
+                return {
+                    "status": "success",
+                    "message": "Invoice already onboarded and paid",
+                    "transaction_id": transaction_id
+                }
+        else:
+            # Create transaction
+            # Balance-due is usually increased by INVOICE, but if we mark it paid immediately, 
+            # net change is 0. However, _toggle_paid_status_internal handles balance updates.
+            # So first create invoice (which increases balance), then toggle paid (which decreases it).
+            
+            # Update balance for the new invoice
+            current_balance = float(ledger.get('balance_due', 0))
+            new_balance_with_invoice = current_balance + request.amount
+            
+            db.client.table('vendor_ledgers').update({
+                'balance_due': new_balance_with_invoice,
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('id', ledger_id).execute()
+
+            insert_tx_resp = db.client.table('vendor_ledger_transactions').insert({
+                'username': username,
+                'ledger_id': ledger_id,
+                'transaction_type': 'INVOICE',
+                'amount': request.amount,
+                'invoice_number': request.invoice_number,
+                'is_paid': False,
+                'created_at': request.date or datetime.utcnow().isoformat()
+            }).execute()
+            
+            if not insert_tx_resp.data:
+                raise HTTPException(status_code=500, detail="Failed to create transaction")
+            
+            transaction = insert_tx_resp.data[0]
+            transaction_id = transaction['id']
+
+        # 3. Mark as paid
+        final_balance = await _toggle_transaction_paid_status_internal(db, username, transaction_id, True)
+        
+        return {
+            "status": "success",
+            "message": "Invoice onboarded and marked as paid",
+            "transaction_id": transaction_id,
+            "new_balance": final_balance
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error onboarding invoice paid: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vendor-ledgers/{ledger_id}/pay")

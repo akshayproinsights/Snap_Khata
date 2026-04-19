@@ -295,11 +295,12 @@ class _UploadPageState extends ConsumerState<UploadPage>
                   ),
                   const Spacer(),
                   const Text(
-                    '📄  Snap Orders',
+                    'UPLOAD INVOICES',
                     style: TextStyle(
                         color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5),
                   ),
                   const Spacer(),
                   const SizedBox(width: 48),
@@ -314,8 +315,14 @@ class _UploadPageState extends ConsumerState<UploadPage>
 
   AppBar _buildBasicAppBar() {
     return AppBar(
-      title: const Text('New Order',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+      title: const Text(
+        'UPLOAD INVOICES',
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.5,
+        ),
+      ),
       centerTitle: true,
       leading: IconButton(
         icon: const Icon(LucideIcons.arrowLeft),

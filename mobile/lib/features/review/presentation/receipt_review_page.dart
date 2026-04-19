@@ -185,8 +185,30 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
+                  httpHeaders: const {
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                  },
                   placeholder: (context, url) => const Center(
                       child: CircularProgressIndicator(color: Colors.white)),
+                  errorWidget: (context, url, error) => const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          LucideIcons.imageOff,
+                          color: Colors.white54,
+                          size: 60),
+                        SizedBox(height: 16),
+                        Text(
+                          'Image unavailable',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -381,13 +403,32 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         imageUrl: header.receiptLink,
                         fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
+                        httpHeaders: const {
+                          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                        },
                         placeholder: (context, url) => const Center(
                             child:
                                 CircularProgressIndicator(color: Colors.white)),
-                        errorWidget: (context, url, error) => const Icon(
-                            LucideIcons.imageOff,
-                            color: Colors.white54,
-                            size: 40),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.black,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                LucideIcons.imageOff,
+                                color: Colors.white54,
+                                size: 40),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Image unavailable',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                     Positioned(

@@ -22,15 +22,20 @@ class InventoryHubPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Inventory Hub',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              'ITEM STOCK',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
             ),
             Text(
-              'All inventory tools in one place',
+              'ALL TOOLS IN ONE PLACE',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
-                fontWeight: FontWeight.normal,
+                letterSpacing: 0.5,
               ),
             ),
           ],

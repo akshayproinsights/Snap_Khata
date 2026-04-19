@@ -156,10 +156,15 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
+          icon: const Icon(LucideIcons.arrowLeft, size: 20),
           onPressed: () => context.go('/dashboard'),
         ),
-        title: const Text('Pending Review'),
+        title: const Text('PENDING REVIEW',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            )),
         centerTitle: false,
       ),
       body: Stack(

@@ -132,16 +132,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.2)),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), width: 0.5),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -360,7 +353,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    currentLedger.customerName,
+                    currentLedger.customerName.toUpperCase(),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -709,7 +702,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+          boxShadow: Theme.of(context).brightness == Brightness.light
+              ? AppTheme.premiumShadow
+              : AppTheme.darkPremiumShadow,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

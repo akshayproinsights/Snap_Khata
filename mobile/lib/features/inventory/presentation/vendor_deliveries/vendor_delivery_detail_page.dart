@@ -12,11 +12,11 @@ class VendorDeliveryDetailPage extends StatelessWidget {
 
   const VendorDeliveryDetailPage({super.key, required this.bundle});
 
-  String _formatAmount(double amount) {
-    if (amount == amount.roundToDouble()) {
-      return NumberFormat('#,##0', 'en_IN').format(amount);
-    }
-    return NumberFormat('#,##0.00', 'en_IN').format(amount);
+  /// Formats amount as Indian Rupee with zero decimals and comma separation.
+  /// Always rounds to nearest whole number. e.g., ₹18,103
+  String _formatCurrency(double amount) {
+    final rounded = amount.round();
+    return '₹${NumberFormat('#,##0', 'en_IN').format(rounded)}';
   }
 
   void _showReceiptDialog(BuildContext context) {
@@ -43,6 +43,97 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                 errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shows the centralized payment recording flow dialog.
+  void _showAddPaymentDialog(BuildContext context) {
+    // TODO: Connect to your centralized payment recording flow
+    // For now, shows a placeholder dialog - replace with your actual payment flow
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Icon(
+                LucideIcons.wallet,
+                size: 48,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Record Payment',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bill: ${bundle.invoiceNumber}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Amount Due: ${_formatCurrency(bundle.totalAmount)}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // TODO: Implement actual payment recording
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF97316),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Confirm Payment',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
         ),
       ),
@@ -227,54 +318,69 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5)),
                         const SizedBox(height: 4),
-                        Text('₹${_formatAmount(grandTotal)}',
+                        Text(_formatCurrency(grandTotal),
                             style: TextStyle(
-                                fontSize: 24,
+                                fontSize: 28,
                                 fontWeight: FontWeight.w800,
                                 color: Theme.of(context).colorScheme.onSurface,
                                 letterSpacing: -0.5)),
-                        const SizedBox(height: 6),
-                        // ── Paid / Credit status pill ──────────────
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isPaid
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.orange.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isPaid
-                                  ? Colors.green.withValues(alpha: 0.4)
-                                  : Colors.orange.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                isPaid
-                                    ? LucideIcons.checkCircle2
-                                    : LucideIcons.clock,
-                                size: 13,
-                                color: isPaid
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.orange.shade700,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                isPaid ? 'Paid (Cash)' : 'Credit – Unpaid',
+                        const SizedBox(height: 10),
+                        // ── Add Payment Button (replaces passive status badge) ──────────────
+                        if (!isPaid)
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _showAddPaymentDialog(context),
+                              icon: const Icon(LucideIcons.wallet, size: 18),
+                              label: const Text(
+                                'Add Payment',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: isPaid
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.orange.shade700,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ],
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFF97316), // Energetic orange
+                                foregroundColor: Colors.white,
+                                elevation: 2,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.checkCircle2,
+                                  size: 13,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Paid (Cash)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -509,11 +615,10 @@ class _ItemRow extends StatelessWidget {
     this.isLast = false,
   });
 
-  String _formatAmount(double amount) {
-    if (amount == amount.roundToDouble()) {
-      return NumberFormat('#,##0', 'en_IN').format(amount);
-    }
-    return NumberFormat('#,##0.00', 'en_IN').format(amount);
+  /// Formats amount as Indian Rupee with zero decimals and comma separation.
+  String _formatCurrency(double amount) {
+    final rounded = amount.round();
+    return '₹${NumberFormat('#,##0', 'en_IN').format(rounded)}';
   }
 
   @override
@@ -541,6 +646,8 @@ class _ItemRow extends StatelessWidget {
               Expanded(
                 child: Text(
                     item.description.isNotEmpty ? item.description : item.partNumber,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
@@ -550,7 +657,7 @@ class _ItemRow extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('₹${_formatAmount(item.netBill)}',
+                  Text(_formatCurrency(item.netBill),
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
@@ -569,7 +676,7 @@ class _ItemRow extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  '$qtyStr  x  ₹${_formatAmount(item.rate)}',
+                  '$qtyStr  x  ${_formatCurrency(item.rate)}',
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,

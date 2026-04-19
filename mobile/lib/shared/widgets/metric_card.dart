@@ -41,6 +41,21 @@ class MetricCard extends StatelessWidget {
     }
   }
 
+  Color _getSoftBorderColor() {
+    switch (theme) {
+      case MetricTheme.blue:
+        return const Color(0x33BFDBFE);
+      case MetricTheme.amber:
+        return const Color(0x33FDE68A);
+      case MetricTheme.red:
+        return const Color(0x33FECACA);
+      case MetricTheme.green:
+        return const Color(0x33BBF7D0);
+      case MetricTheme.defaultTheme:
+        return AppTheme.border;
+    }
+  }
+
   Color _getIconBgColor() {
     switch (theme) {
       case MetricTheme.blue:
@@ -80,22 +95,18 @@ class MetricCard extends StatelessWidget {
     return Container(
       height: 90,
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _getSoftBorderColor(), width: 0.5),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onAction,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
@@ -106,7 +117,7 @@ class MetricCard extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: iconBgColor,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: accentColor, size: 22),
                 ),

@@ -45,7 +45,7 @@ LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
 FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping so we do not get NameError
-ACCURACY_THRESHOLD = 70.0  # escalate to next tier if accuracy < 70%
+ACCURACY_THRESHOLD = 50.0  # escalate to next tier if accuracy < 50%
 
 # Pricing Configuration (USD per 1M tokens)
 # Gemini 3 Flash Preview pricing (approximate)
@@ -358,12 +358,14 @@ def process_single_invoice(
             
             # Generate content with retry logic (full retries for each model)
             tier_succeeded = False   # Tracks if this tier managed to return ANY valid JSON
-            for attempt in range(MAX_RETRIES):
+            # Lite model gets 2 attempts (1 retry), others get full MAX_RETRIES
+            current_max_retries = 2 if model_name == LITE_MODEL else MAX_RETRIES
+            for attempt in range(current_max_retries):
                 try:
                     limiter.wait()
                     
-                    print(f"[ATTEMPT {attempt + 1}/{MAX_RETRIES}] Using model: {model_name}", flush=True)
-                    logger.info(f"Attempting with {model_name} (attempt {attempt + 1}/{MAX_RETRIES})")
+                    print(f"[ATTEMPT {attempt + 1}/{current_max_retries}] Using model: {model_name}", flush=True)
+                    logger.info(f"Attempting with {model_name} (attempt {attempt + 1}/{current_max_retries})")
                     
                     # Configure generation with system instruction
                     config = types.GenerateContentConfig(
@@ -540,11 +542,10 @@ def process_single_invoice(
                     return data
                     
                 except json.JSONDecodeError as e:
-                    error_msg = f"JSON decode error on attempt {attempt + 1}/{MAX_RETRIES}"
+                    error_msg = f"JSON decode error on attempt {attempt + 1}/{current_max_retries}"
                     logger.warning(f"{error_msg}: {e}")
-                    if attempt == MAX_RETRIES - 1:
-                        processing_errors.append(f"{model_name} failed after {MAX_RETRIES} attempts: {e}")
-                        logger.error(f"❌ {model_name} failed to parse JSON after {MAX_RETRIES} attempts")
+                    if attempt == current_max_retries - 1:
+                        logger.error(f"❌ {model_name} failed after {current_max_retries} attempts")
                         
                         # Trigger escalation if not already on the final tier
                         if model_name != FLASH_MODEL:
@@ -555,11 +556,11 @@ def process_single_invoice(
                         time.sleep(2 ** attempt)  # Exponential backoff
                     
                 except Exception as e:
-                    error_msg = f"Error on attempt {attempt + 1}/{MAX_RETRIES}"
+                    error_msg = f"Error on attempt {attempt + 1}/{current_max_retries}"
                     logger.error(f"{error_msg}: {e}")
                     processing_errors.append(f"{model_name} error: {str(e)}")
-                    if attempt == MAX_RETRIES - 1:
-                        logger.error(f"❌ {model_name} failed after {MAX_RETRIES} attempts")
+                    if attempt == current_max_retries - 1:
+                        logger.error(f"❌ {model_name} failed after {current_max_retries} attempts")
                         
                         # Trigger escalation if not already on the final tier
                         if model_name != FLASH_MODEL:

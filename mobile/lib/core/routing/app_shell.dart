@@ -71,7 +71,7 @@ class AppShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(LucideIcons.users),
                 selectedIcon: Icon(LucideIcons.users, color: AppTheme.primary),
-                label: 'Customers',
+                label: 'CUSTOMERS',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.book),
@@ -81,7 +81,7 @@ class AppShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(LucideIcons.user),
                 selectedIcon: Icon(LucideIcons.user, color: AppTheme.primary),
-                label: 'Settings',
+                label: 'SETTINGS',
               ),
             ],
           ),

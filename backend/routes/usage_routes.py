@@ -11,89 +11,103 @@ router = APIRouter()
 
 @router.get("/stats")
 async def get_usage_stats(
-    filter: str = Query("All Time", description="Filter for stats: '1 Week', '1 Month', 'All Time'"),
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Get actual usage statistics based on records processed via sync-finish.
+    Get actual usage statistics for all time periods.
+    Returns data in the format expected by the mobile app:
+    {
+        "1 Week": {"customer_orders": [], "supplier_orders": [], "labels": [], "total_customer": 0, "total_supplier": 0},
+        "1 Month": {...},
+        "All Time": {...}
+    }
     """
     try:
         username = current_user.get("username")
         if not username:
             raise HTTPException(status_code=401, detail="User not authenticated properly")
-            
-        db = get_database_client()
-        
-        # Build the time filter
-        now = datetime.now(timezone.utc)
-        start_date = None
-        
-        if filter == "1 Week":
-            start_date = now - timedelta(days=7)
-        elif filter == "1 Month":
-            start_date = now - timedelta(days=30)
-            
-        # Instead of grouping by day, we just need total counts grouped by order_type
-        # for a simple replacement of the frontend mock data
-        query = db.client.table("usage_logs").select("*").eq("username", username)
-        
-        if start_date:
-            query = query.gte("processed_at", start_date.isoformat())
-            
-        response = query.execute()
-        logs = response.data
-        
-        # Aggregate the data
-        customer_orders = 0
-        supplier_orders = 0
-        
-        # For the line chart, the frontend expects a list of daily values
-        # e.g., [{"day": "Mon", "value": 10}, ...]
-        # We can group counts by date
-        from collections import defaultdict
-        
-        customer_by_date = defaultdict(int)
-        supplier_by_date = defaultdict(int)
-        
-        for log in logs:
-            if log.get("order_type") == "customer":
-                customer_orders += 1
-                try:
-                    date_str = log.get("processed_at", "")[:10]  # YYYY-MM-DD
-                    if date_str:
-                        customer_by_date[date_str] += 1
-                except: pass
-            elif log.get("order_type") == "supplier":
-                supplier_orders += 1
-                try:
-                    date_str = log.get("processed_at", "")[:10]  # YYYY-MM-DD
-                    if date_str:
-                        supplier_by_date[date_str] += 1
-                except: pass
 
-        # Sort dates and format for chart points
-        # Keep it simple: if just total counts are enough, we can send that,
-        # but the chart needs data points.
-        def format_chart_data(date_counts):
-            sorted_dates = sorted(date_counts.keys())
-            chart_data = []
+        db = get_database_client()
+        now = datetime.now(timezone.utc)
+
+        # Fetch all usage logs for this user
+        response = db.client.table("usage_logs").select("*").eq("username", username).execute()
+        logs = response.data
+
+        from collections import defaultdict
+
+        def build_period_data(logs_filtered, period_name):
+            """Build data structure for a specific time period."""
+            customer_by_date = defaultdict(int)
+            supplier_by_date = defaultdict(int)
+            total_customer = 0
+            total_supplier = 0
+
+            for log in logs_filtered:
+                order_type = log.get("order_type")
+                try:
+                    date_str = log.get("processed_at", "")[:10]  # YYYY-MM-DD
+                    if order_type == "customer":
+                        total_customer += 1
+                        if date_str:
+                            customer_by_date[date_str] += 1
+                    elif order_type == "supplier":
+                        total_supplier += 1
+                        if date_str:
+                            supplier_by_date[date_str] += 1
+                except:
+                    pass
+
+            # Sort dates and build chart data
+            sorted_dates = sorted(set(customer_by_date.keys()) | set(supplier_by_date.keys()))
+
+            # If no data, return empty structure
+            if not sorted_dates:
+                return {
+                    "customer_orders": [],
+                    "supplier_orders": [],
+                    "labels": [],
+                    "total_customer": 0,
+                    "total_supplier": 0
+                }
+
+            # Build daily arrays
+            customer_orders = [customer_by_date[d] for d in sorted_dates]
+            supplier_orders = [supplier_by_date[d] for d in sorted_dates]
+
+            # Format labels based on period
+            labels = []
             for d in sorted_dates:
-                # Convert YYYY-MM-DD to a short string like "DD MMM"
-                # Since we don't have a complex date formatter here, just use the string
-                chart_data.append({"date": d, "value": date_counts[d]})
-            
-            # If no data, provide an empty base point so the chart doesn't crash
-            if not chart_data:
-                chart_data.append({"date": now.strftime("%Y-%m-%d"), "value": 0})
-            return chart_data
-            
+                dt = datetime.strptime(d, "%Y-%m-%d")
+                if period_name == "1 Week":
+                    labels.append(dt.strftime("%a"))  # Mon, Tue, etc.
+                elif period_name == "1 Month":
+                    labels.append(dt.strftime("%d"))  # 01, 02, etc.
+                else:
+                    labels.append(dt.strftime("%b %d"))  # Jan 01
+
+            return {
+                "customer_orders": customer_orders,
+                "supplier_orders": supplier_orders,
+                "labels": labels,
+                "total_customer": total_customer,
+                "total_supplier": total_supplier
+            }
+
+        # Calculate date ranges
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        # Filter logs for each period
+        week_logs = [log for log in logs if log.get("processed_at", "") >= week_ago.isoformat()]
+        month_logs = [log for log in logs if log.get("processed_at", "") >= month_ago.isoformat()]
+
         return {
-            "totalCustomerOrders": customer_orders,
-            "totalSupplierOrders": supplier_orders,
-            "customerChartData": format_chart_data(customer_by_date),
-            "supplierChartData": format_chart_data(supplier_by_date)
+            "1 Week": build_period_data(week_logs, "1 Week"),
+            "1 Month": build_period_data(month_logs, "1 Month"),
+            "All Time": build_period_data(logs, "All Time")
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

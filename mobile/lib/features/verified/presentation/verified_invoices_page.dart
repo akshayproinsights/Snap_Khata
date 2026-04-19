@@ -260,11 +260,15 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
               ],
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-                title: const Text('Verified Invoices',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20)),
+                title: const Text(
+                  'VERIFIED BILLS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+                ),
                 background: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

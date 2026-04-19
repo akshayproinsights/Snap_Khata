@@ -626,7 +626,7 @@ class _VendorLedgerDetailPageState
               children: [
                 // Header Profile
                 Text(
-                  currentLedger.vendorName,
+                  currentLedger.vendorName.toUpperCase(),
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -849,9 +849,9 @@ class _VendorLedgerDetailPageState
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.onSurface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -901,7 +901,13 @@ class _VendorLedgerDetailPageState
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 0.5,
+        ),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,16 +952,19 @@ class _VendorLedgerDetailPageState
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05) : Theme.of(context).colorScheme.surface,
+        color: isSelected
+            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05)
+            : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant, width: isSelected ? 2 : 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: isSelected ? 1.5 : 0.5,
+        ),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: InkWell(
         onLongPress: () {
@@ -1184,14 +1193,31 @@ class _VendorLedgerDetailPageState
     context.pushNamed('vendor-delivery-detail', extra: bundle);
   }
 
-  Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool markAsPaid) async {
-    final success = await ref.read(vendorLedgerProvider.notifier).toggleTransactionPaidStatus(tx.id, markAsPaid);
-    if (success) {
+    }
+  }
+
+  Future<void> _markPurchaseAsPaid(Map<String, dynamic> invoice) async {
+    final invoiceNumber = invoice['invoice_number']?.toString() ?? '';
+    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final vendorName = invoice['vendor_name']?.toString() ?? widget.ledger.vendorName;
+    final date = invoice['invoice_date']?.toString();
+
+    final success = await ref.read(vendorLedgerProvider.notifier).markInvoiceAsPaid(
+      vendorName: vendorName,
+      invoiceNumber: invoiceNumber,
+      amount: totalAmount,
+      date: date,
+    );
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invoice marked as paid! 🎉')),
+      );
       _loadData();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update status')));
-      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to mark invoice as paid.')),
+      );
     }
   }
 
@@ -1212,14 +1238,13 @@ class _VendorLedgerDetailPageState
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 0.5,
+        ),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? AppTheme.premiumShadow
+            : AppTheme.darkPremiumShadow,
       ),
       child: InkWell(
         onTap: () {
@@ -1294,7 +1319,7 @@ class _VendorLedgerDetailPageState
                 ],
               ),
               const SizedBox(height: 12),
-              Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+              Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1313,16 +1338,34 @@ class _VendorLedgerDetailPageState
                       ),
                     ],
                   ),
-                  Text(
-                    currencyFormatter.format(totalAmount),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ],
               ),
+              if (!_isSelectionMode)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 32,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _markPurchaseAsPaid(invoice),
+                          icon: const Icon(LucideIcons.checkCircle, size: 14),
+                          label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade600,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
