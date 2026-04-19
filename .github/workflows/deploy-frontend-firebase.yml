@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'frontend/**'
-      - 'firebase.json'
   workflow_dispatch:
 
 jobs:
@@ -25,6 +22,11 @@ jobs:
 
       - name: Install and Build
         working-directory: ./frontend
+        env:
+          # Firebase Hosting and Hetzner are different origins.
+          # We explicitly point the build at the Hetzner backend URL
+          # so all /api/* calls go to the right place.
+          VITE_API_URL: https://mydigientry.com
         run: |
           npm ci
           npm run build
@@ -34,5 +36,5 @@ jobs:
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          projectId: snapkhata
           channelId: live
