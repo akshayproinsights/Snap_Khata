@@ -44,10 +44,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
 
   @override
   Widget build(BuildContext context) {
-    final userState = ref.watch(authProvider);
-    final String shopName =
-        userState.user?.name ?? userState.user?.username ?? 'My Shop';
+
     return Scaffold(
+
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         titleSpacing: 16,

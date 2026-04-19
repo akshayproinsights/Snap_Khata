@@ -16,6 +16,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -1544,6 +1545,8 @@ class _CreditBookButton extends ConsumerWidget {
           final newState = ref.read(udharProvider);
           match = findMatch(newState.ledgers);
         }
+
+        if (!context.mounted) return;
 
         if (match == null) {
           // If still no match, go to dashboard

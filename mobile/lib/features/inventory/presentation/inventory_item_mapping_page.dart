@@ -72,13 +72,6 @@ class _InventoryItemMappingPageState
             ),
           ],
         ),
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.normal),
-            ),
-          ],
-        ),
         actions: [
           if (state.isRecalculating)
             const Padding(

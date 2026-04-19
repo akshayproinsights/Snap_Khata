@@ -421,10 +421,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                               const SizedBox(height: 8),
                               Text(
                                 'Image unavailable',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 12,
-                                ),
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                  ),
                               ),
                             ],
                           ),

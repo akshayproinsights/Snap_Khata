@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../domain/models/vendor_ledger_models.dart';
 import '../providers/vendor_ledger_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
+
 import '../../domain/models/inventory_models.dart';
 import '../inventory_review_page.dart';
 
@@ -1155,7 +1157,7 @@ class _VendorLedgerDetailPageState
 
   void _navigateToBillDetails(String invoiceNumber) {
     if (invoiceNumber.isEmpty) return;
-    
+
     final invoice = _purchaseInvoices?.firstWhere(
       (inv) => inv['invoice_number']?.toString() == invoiceNumber,
       orElse: () => <String, dynamic>{},
@@ -1164,35 +1166,47 @@ class _VendorLedgerDetailPageState
     if (invoice == null || invoice.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Invoice details not found for #$invoiceNumber')),
+          SnackBar(content: Text('Invoice details not found for #$invoiceNumber')),
         );
       }
       return;
     }
-
-    final itemsList = (invoice['items'] as List<dynamic>?)
-        ?.map((item) => InventoryItem.fromJson(item as Map<String, dynamic>))
-        .toList() ?? [];
-              
-    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final receiptLink = invoice['receipt_link']?.toString();
-    final invoiceDate = invoice['invoice_date']?.toString() ?? '';
-
+    
+    // Create a bundle for navigation
     final bundle = InventoryInvoiceBundle(
       invoiceNumber: invoiceNumber,
-      date: invoiceDate,
+      date: invoice['invoice_date']?.toString() ?? '',
       vendorName: invoice['vendor_name']?.toString() ?? widget.ledger.vendorName,
-      receiptLink: receiptLink ?? '',
-      items: itemsList,
-      totalAmount: totalAmount,
+      receiptLink: invoice['receipt_link']?.toString() ?? '',
+      items: (invoice['items'] as List<dynamic>?)
+              ?.map((item) => InventoryItem.fromJson(item as Map<String, dynamic>))
+              .toList() ??
+          [],
+      totalAmount: (invoice['total_amount'] as num?)?.toDouble() ?? 0.0,
       hasMismatch: false,
       isVerified: true,
-      createdAt: invoice['upload_date']?.toString() ?? '',
+      createdAt: invoice['created_at']?.toString() ?? '',
     );
-    
-    context.pushNamed('vendor-delivery-detail', extra: bundle);
+
+    if (mounted) {
+      context.push('/inventory-invoice-review', extra: bundle);
+    }
   }
 
+  Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool paid) async {
+    final success = await ref
+        .read(vendorLedgerProvider.notifier)
+        .toggleTransactionPaidStatus(tx.id, paid);
+    
+    if (success && mounted) {
+      _loadData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Transaction marked as ${paid ? 'paid' : 'unpaid'}')),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update transaction status')),
+      );
     }
   }
 
@@ -1225,7 +1239,7 @@ class _VendorLedgerDetailPageState
   Widget _buildPurchaseInvoiceCard(Map<String, dynamic> invoice) {
     final invoiceNumber = invoice['invoice_number']?.toString() ?? '';
     final invoiceDate = invoice['invoice_date']?.toString() ?? '';
-    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
+
     final itemCount = (invoice['item_count'] as num?)?.toInt() ?? 0;
     final receiptLink = invoice['receipt_link']?.toString();
 
@@ -1337,8 +1351,6 @@ class _VendorLedgerDetailPageState
                         ),
                       ),
                     ],
-                  ),
-                    ),
                   ),
                 ],
               ),

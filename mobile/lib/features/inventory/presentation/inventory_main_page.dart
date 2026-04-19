@@ -180,6 +180,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
           labelStyle: Theme.of(context)
               .textTheme
               .titleSmall
