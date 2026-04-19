@@ -16,6 +16,7 @@ class MobileTextField extends StatefulWidget {
   final bool obscureText;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final Widget? suffixIcon;
 
   const MobileTextField({
     super.key,
@@ -30,6 +31,7 @@ class MobileTextField extends StatefulWidget {
     this.obscureText = false,
     this.textInputAction,
     this.onSubmitted,
+    this.suffixIcon,
   });
 
   @override
@@ -131,7 +133,7 @@ class _MobileTextFieldState extends State<MobileTextField> {
           tooltip: 'Save',
         );
       case InputState.idle:
-        return null;
+        return widget.suffixIcon;
     }
   }
 

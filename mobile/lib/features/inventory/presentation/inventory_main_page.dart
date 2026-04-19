@@ -12,6 +12,7 @@ import 'package:mobile/features/inventory/presentation/providers/inventory_provi
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
+import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -32,7 +33,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -157,6 +158,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           tabs: const [
             Tab(text: 'Recent Deliveries'),
             Tab(text: 'Party Details'),
+            Tab(text: 'Items'),
           ],
         ),
       ),
@@ -165,6 +167,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         children: [
           _buildRecentDeliveriesTab(context, itemsAsync, pendingCount, poState),
           _buildPartyDetailsTab(context, itemsAsync),
+          _buildItemsCatalogTab(context, itemsAsync),
         ],
       ),
       floatingActionButton: SizedBox(
@@ -777,7 +780,252 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       ],
     );
   }
+  Widget _buildItemsCatalogTab(
+      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
+    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (itemsAsync.hasError) {
+      return Center(
+        child: Text('Error: ${itemsAsync.error}',
+            style: const TextStyle(color: AppTheme.error)),
+      );
+    }
+
+    final allItems = itemsAsync.value ?? [];
+    
+    // Filter to verified only
+    final verifiedItems = allItems.where((i) => i.verificationStatus == 'Done').toList();
+    
+    // Deduplicate by description
+    final Map<String, InventoryItem> latestItemMap = {};
+    final Map<String, int> orderCountMap = {};
+    
+    for (var item in verifiedItems) {
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final matchesDesc = item.description.toLowerCase().contains(query);
+        final matchesPart = item.partNumber.toLowerCase().contains(query);
+        final matchesVendor = (item.vendorName ?? '').toLowerCase().contains(query);
+        if (!matchesDesc && !matchesPart && !matchesVendor) continue;
+      }
+      
+      final key = item.description.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      
+      orderCountMap[key] = (orderCountMap[key] ?? 0) + 1;
+      
+      if (!latestItemMap.containsKey(key)) {
+        latestItemMap[key] = item;
+      } else {
+        // Compare dates, keep most recent
+        final currentLatest = latestItemMap[key]!;
+        final currentDate = DateTime.tryParse(currentLatest.invoiceDate) ?? DateTime(0);
+        final newDate = DateTime.tryParse(item.invoiceDate) ?? DateTime(0);
+        
+        if (newDate.isAfter(currentDate)) {
+          latestItemMap[key] = item;
+        }
+      }
+    }
+
+    final uniqueItems = latestItemMap.values.toList()
+      ..sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate)); // sort by most recently ordered
+
+    return Column(
+      children: [
+        if (verifiedItems.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: _buildSearchBox(),
+          ),
+        Expanded(
+          child: uniqueItems.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.box,
+                          size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'No items found matching "$_searchQuery"'
+                            : 'No verified items logged yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: uniqueItems.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final item = uniqueItems[index];
+                    final orderCount = orderCountMap[item.description.trim().toLowerCase()] ?? 1;
+                    return _buildItemCatalogCard(context, item, orderCount);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
+    // Determine price trend
+    Color trendColor = Colors.grey.shade500;
+    IconData trendIcon = LucideIcons.minus; // stable
+    String trendText = 'Stable';
+    
+    if ((item.priceHikeAmount ?? 0) > 0) {
+      trendColor = const Color(0xFFEF4444); // red
+      trendIcon = LucideIcons.trendingUp;
+      trendText = 'Going Up';
+    } else if ((item.priceHikeAmount ?? 0) < 0) {
+      trendColor = const Color(0xFF22C55E); // green
+      trendIcon = LucideIcons.trendingDown;
+      trendText = 'Going Down';
+    }
+
+    String dateLabel = '';
+    try {
+      final dt = DateTime.parse(item.invoiceDate);
+      dateLabel = DateFormat('dd MMM yy').format(dt);
+    } catch (_) {
+      dateLabel = item.invoiceDate.split('T').first;
+    }
+
+    return Material(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppTheme.border),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => ItemPriceHistorySheet(
+              description: item.description,
+              partNumber: item.partNumber,
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.description,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        if (item.partNumber.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            item.partNumber,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ]
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Price block
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        currencyFormat.format(item.rate),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(trendIcon, size: 14, color: trendColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            trendText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: trendColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(LucideIcons.history, size: 14, color: Colors.grey.shade500),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Last: $dateLabel',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+
 
 class _VendorSummary {
   String vendorName;
@@ -1088,4 +1336,6 @@ class _VendorDeliveryCard extends ConsumerWidget {
       ),
     );
   }
+
+
 }

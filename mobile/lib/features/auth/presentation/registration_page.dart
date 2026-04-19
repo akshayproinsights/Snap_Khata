@@ -22,6 +22,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
   String? _selectedIndustry;
   List<Map<String, dynamic>> _industries = [];
   bool _isLoadingIndustries = true;
+  bool _isPasswordVisible = false;
 
   @override
   void initState() {
@@ -32,20 +33,22 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
   Future<void> _fetchIndustries() async {
     try {
       final repo = AuthRepository();
-      final industries = await repo.getIndustries();
+      var industries = await repo.getIndustries();
+      if (industries.isEmpty) {
+        industries = [{'id': 'general', 'display': 'General', 'icon': '🏪'}];
+      }
       if (mounted) {
         setState(() {
           _industries = industries;
-          if (industries.isNotEmpty) {
-            _selectedIndustry = industries.first['id'] as String;
-          }
+          _selectedIndustry = industries.first['id'] as String;
           _isLoadingIndustries = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        AppToast.showError(context, 'Failed to load industries', title: 'Error');
         setState(() {
+          _industries = [{'id': 'general', 'display': 'General', 'icon': '🏪'}];
+          _selectedIndustry = 'general';
           _isLoadingIndustries = false;
         });
       }
@@ -165,13 +168,13 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      const Text('User ID',
+                      const Text('User Name',
                           style: TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 14)),
                       const SizedBox(height: 8),
                       MobileTextField(
                         initialValue: _username,
-                        placeholder: 'Choose a User ID',
+                        placeholder: 'Choose a User Name',
                         textInputAction: TextInputAction.next,
                         onSave: (val) {
                           setState(() {
@@ -188,8 +191,22 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       MobileTextField(
                         initialValue: _password,
                         placeholder: 'Choose a password',
-                        obscureText: true,
+                        obscureText: !_isPasswordVisible,
                         textInputAction: TextInputAction.next,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible
+                                ? LucideIcons.eyeOff
+                                : LucideIcons.eye,
+                            color: AppTheme.textSecondary,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
+                          },
+                        ),
                         onSave: (val) {
                           setState(() {
                             _password = val;

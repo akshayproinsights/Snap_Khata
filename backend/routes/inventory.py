@@ -830,6 +830,49 @@ async def get_inventory_items(
     except Exception as e:
         logger.error(f"Error fetching inventory items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/items/price-history")
+async def get_item_price_history(
+    description: Optional[str] = None,
+    part_number: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get the price history of a specific inventory item by its description or part number.
+    Only includes verified items (verification_status = 'Done'), chronologically sorted.
+    """
+    from database import get_database_client
+    
+    username = current_user.get("username")
+    db = get_database_client()
+    
+    try:
+        # Base query for this user's verified items
+        query = db.client.table("inventory_items").select("*") \
+            .eq("username", username) \
+            .eq("verification_status", "Done")
+            
+        if description:
+            query = query.eq("description", description)
+        elif part_number:
+            query = query.eq("part_number", part_number)
+        else:
+            raise HTTPException(status_code=400, detail="Must provide description or part_number")
+            
+        # Order chronologically for the sparkline chart
+        query = query.order("invoice_date", desc=False).order("created_at", desc=False)
+        
+        response = query.execute()
+        
+        return {
+            "success": True,
+            "items": response.data,
+            "count": len(response.data)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching item price history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/verify-invoice")

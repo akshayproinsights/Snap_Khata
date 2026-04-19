@@ -17,6 +17,15 @@ class InventoryRepository {
     return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
   }
 
+  Future<List<InventoryItem>> getPriceHistory({String? description, String? partNumber}) async {
+    final response = await _dio.get('/api/inventory/items/price-history', queryParameters: {
+      if (description != null) 'description': description,
+      if (partNumber != null) 'part_number': partNumber,
+    });
+    final items = response.data['items'] as List?;
+    return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
+  }
+
   Future<void> updateInventoryItem(int id, Map<String, dynamic> updates) async {
     await _dio.patch('/api/inventory/items/$id', data: updates);
   }
