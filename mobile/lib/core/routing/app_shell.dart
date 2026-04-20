@@ -69,9 +69,9 @@ class AppShell extends ConsumerWidget {
                 label: 'HOME',
               ),
               NavigationDestination(
-                icon: Icon(LucideIcons.users),
-                selectedIcon: Icon(LucideIcons.users, color: AppTheme.primary),
-                label: 'CUSTOMERS',
+                icon: Icon(LucideIcons.box),
+                selectedIcon: Icon(LucideIcons.box, color: AppTheme.primary),
+                label: 'ITEMS',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.book),

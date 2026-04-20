@@ -823,10 +823,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(LucideIcons.receipt,
+                          icon: const Icon(LucideIcons.eye,
                               color: AppTheme.textSecondary, size: 24),
                           onPressed: () => _navigateToOrderDetails(tx),
-                          tooltip: 'View Invoice Summary',
+                          tooltip: 'View Order Details',
                         ),
                       ],
                     ],

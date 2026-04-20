@@ -554,12 +554,12 @@ def update_transaction(
         else:
             raise HTTPException(status_code=400, detail="Invalid transaction type. Must be 'IN' or 'OUT'")
         
-        # Trigger stock recalculation
-        recalculate_stock_for_user(username)
+        # ── v1: Stock recalculation disabled — uncomment to re-enable ──
+        # recalculate_stock_for_user(username)
         
         return {
             "success": True,
-            "message": "Transaction updated and stock levels recalculated"
+            "message": "Transaction updated successfully"
         }
         
     except HTTPException:
@@ -611,12 +611,12 @@ def delete_transaction(
         else:
             raise HTTPException(status_code=400, detail="Invalid transaction type. Must be 'IN' or 'OUT'")
         
-        # Trigger stock recalculation
-        recalculate_stock_for_user(username)
+        # ── v1: Stock recalculation disabled — uncomment to re-enable ──
+        # recalculate_stock_for_user(username)
         
         return {
             "success": True,
-            "message": "Transaction deleted and stock levels recalculated"
+            "message": "Transaction deleted successfully"
         }
         
     except HTTPException:
@@ -778,644 +778,682 @@ async def delete_stock_items_bulk(
 
 
 
-@router.post("/calculate")
-async def calculate_stock_levels(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Trigger stock recalculation in background (non-blocking).
-    Returns immediately with a task_id for status polling.
-    """
-    username = current_user.get("username")
-    task_id = str(uuid.uuid4())
-    
-    logger.info(f"========== STOCK RECALCULATION TRIGGERED ==========")
-    logger.info(f"User: {username}")
-    logger.info(f"Task ID: {task_id}")
-    
-    # Initialize task status in database
-    db = get_database_client()
-    
-    initial_status = {
-        "task_id": task_id,
-        "username": username,
-        "status": "queued",
-        "message": "Stock recalculation queued",
-        "progress": {
-            "total": 0,
-            "processed": 0
-        },
-        "created_at": datetime.utcnow().isoformat()
-    }
-    
-    try:
-        db.insert("recalculation_tasks", initial_status)
-        logger.info(f"Created recalculation task {task_id} in database")
-    except Exception as e:
-        logger.error(f"Failed to create recalculation task in DB: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
-    # Submit to thread pool (non-blocking)
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            stock_executor,
-            recalculate_stock_wrapper,
-            task_id,
-            username
-        )
-        logger.info(f"Submitted recalculation task {task_id} to thread pool")
-    except Exception as e:
-        logger.error(f"Failed to submit recalculation task: {e}")
-        try:
-            db.update("recalculation_tasks", 
-                     {"status": "failed", "message": f"Failed to start: {str(e)}"}, 
-                     {"task_id": task_id})
-        except:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to start recalculation: {str(e)}")
-    
-    return {
-        "success": True,
-        "task_id": task_id,
-        "message": "Stock recalculation started in background"
-    }
 
+# ══════════════════════════════════════════════════════════════════════════
+# v1 DISABLED: Stock Recalculation Endpoints & Core Functions
+# These are intentionally commented out for the first release.
+# To re-enable: uncomment this entire block (lines ~781-1417).
+# Includes:
+#   - POST   /stock/calculate          (trigger background recalculation)
+#   - GET    /stock/calculate/status   (poll task status)
+#   - GET    /stock/needs-recalculation (check if needed)
+#   - recalculate_stock_wrapper()      (background thread wrapper)
+#   - recalculate_stock_for_user()     (main orchestrator)
+#   - _perform_stock_recalculation()   (core logic)
+# ══════════════════════════════════════════════════════════════════════════
 
-@router.get("/calculate/status/{task_id}")
-def get_recalculation_status(
-    task_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get status of a stock recalculation task.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        # Query task status from database
-        response = db.query("recalculation_tasks").eq("task_id", task_id).execute()
-        
-        if not response.data or len(response.data) == 0:
-            raise HTTPException(status_code=404, detail="Task not found")
-        
-        task = response.data[0]
-        
-        # Verify ownership
-        if task.get("username") != username:
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        return {
-            "success": True,
-            "task_id": task.get("task_id"),
-            "status": task.get("status"),
-            "message": task.get("message"),
-            "progress": task.get("progress", {}),
-            "started_at": task.get("started_at"),
-            "completed_at": task.get("completed_at")
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching recalculation status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+#
+# # ══════════════════════════════════════════════════════════════════════════
+# # v1 DISABLED: Stock Recalculation Endpoints & Core Functions
+# # These are intentionally commented out for the first release.
+# # To re-enable: uncomment this entire block (lines ~781-1417).
+# # Includes:
+# #   - POST   /stock/calculate          (trigger background recalculation)
+# #   - GET    /stock/calculate/status   (poll task status)
+# #   - GET    /stock/needs-recalculation (check if needed)
+# #   - recalculate_stock_wrapper()      (background thread wrapper)
+# #   - recalculate_stock_for_user()     (main orchestrator)
+# #   - _perform_stock_recalculation()   (core logic)
+# # ══════════════════════════════════════════════════════════════════════════
+#
+# # @router.post("/calculate")
+# # async def calculate_stock_levels(
+# #     current_user: Dict[str, Any] = Depends(get_current_user)
+# # ):
+# #     """
+# #     Trigger stock recalculation in background (non-blocking).
+# #     Returns immediately with a task_id for status polling.
+# #     """
+# #     username = current_user.get("username")
+# #     task_id = str(uuid.uuid4())
+# #
+# #     logger.info(f"========== STOCK RECALCULATION TRIGGERED ==========")
+# #     logger.info(f"User: {username}")
+# #     logger.info(f"Task ID: {task_id}")
+# #
+# #     # Initialize task status in database
+# #     db = get_database_client()
+# #
+# #     initial_status = {
+# #         "task_id": task_id,
+# #         "username": username,
+# #         "status": "queued",
+# #         "message": "Stock recalculation queued",
+# #         "progress": {
+# #             "total": 0,
+# #             "processed": 0
+# #         },
+# #         "created_at": datetime.utcnow().isoformat()
+# #     }
+# #
+# #     try:
+# #         db.insert("recalculation_tasks", initial_status)
+# #         logger.info(f"Created recalculation task {task_id} in database")
+# #     except Exception as e:
+# #         logger.error(f"Failed to create recalculation task in DB: {e}")
+# #         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+# #
+# #     # Submit to thread pool (non-blocking)
+# #     try:
+# #         loop = asyncio.get_event_loop()
+# #         loop.run_in_executor(
+# #             stock_executor,
+# #             recalculate_stock_wrapper,
+# #             task_id,
+# #             username
+# #         )
+# #         logger.info(f"Submitted recalculation task {task_id} to thread pool")
+# #     except Exception as e:
+# #         logger.error(f"Failed to submit recalculation task: {e}")
+# #         try:
+# #             db.update("recalculation_tasks", 
+# #                      {"status": "failed", "message": f"Failed to start: {str(e)}"}, 
+# #                      {"task_id": task_id})
+# #         except:
+# #             pass
+# #         raise HTTPException(status_code=500, detail=f"Failed to start recalculation: {str(e)}")
+# #
+# #     return {
+# #         "success": True,
+# #         "task_id": task_id,
+# #         "message": "Stock recalculation started in background"
+# #     }
+# #
+# #
+# # @router.get("/calculate/status/{task_id}")
+# # def get_recalculation_status(
+# #     task_id: str,
+# #     current_user: Dict[str, Any] = Depends(get_current_user)
+# # ):
+# #     """
+# #     Get status of a stock recalculation task.
+# #     """
+# #     username = current_user.get("username")
+# #     db = get_database_client()
+# #
+# #     try:
+# #         # Query task status from database
+# #         response = db.query("recalculation_tasks").eq("task_id", task_id).execute()
+# #
+# #         if not response.data or len(response.data) == 0:
+# #             raise HTTPException(status_code=404, detail="Task not found")
+# #
+# #         task = response.data[0]
+# #
+# #         # Verify ownership
+# #         if task.get("username") != username:
+# #             raise HTTPException(status_code=403, detail="Access denied")
+# #
+# #         return {
+# #             "success": True,
+# #             "task_id": task.get("task_id"),
+# #             "status": task.get("status"),
+# #             "message": task.get("message"),
+# #             "progress": task.get("progress", {}),
+# #             "started_at": task.get("started_at"),
+# #             "completed_at": task.get("completed_at")
+# #         }
+# #
+# #     except HTTPException:
+# #         raise
+# #     except Exception as e:
+# #         logger.error(f"Error fetching recalculation status: {e}")
+# #         raise HTTPException(status_code=500, detail=str(e))
+# #
+# #
+# # @router.get("/needs-recalculation")
+# # def check_needs_recalculation(
+# #     current_user: Dict[str, Any] = Depends(get_current_user)
+# # ):
+# #     """
+# #     Check if stock levels need recalculation.
+# #     Returns true if stock_levels table is empty or potentially stale.
+# #     """
+# #     username = current_user.get("username")
+# #     db = get_database_client()
+# #
+# #     try:
+# #         # Check if stock_levels table has any records for this user
+# #         response = db.client.table("stock_levels")\
+# #             .select("part_number", count="exact")\
+# #             .eq("username", username)\
+# #             .limit(1)\
+# #             .execute()
+# #
+# #         # If no stock levels exist, recalculation is needed
+# #         needs_recalc = not response.data or len(response.data) == 0
+# #
+# #         return {
+# #             "success": True,
+# #             "needs_recalculation": needs_recalc,
+# #             "reason": "No stock levels found" if needs_recalc else "Stock levels exist"
+# #         }
+# #
+# #     except Exception as e:
+# #         logger.error(f"Error checking recalculation need: {e}")
+# #         # If error, assume recalculation is needed to be safe
+# #         return {
+# #             "success": True,
+# #             "needs_recalculation": True,
+# #             "reason": f"Error checking status: {str(e)}"
+# #         }
+# #
+# #
+# # def recalculate_stock_wrapper(task_id: str, username: str):
+# #     """
+# #     Wrapper function to run recalculate_stock_for_user in background thread.
+# #     Updates task status in database during execution.
+# #     """
+# #     db = get_database_client()
+# #
+# #     def update_task_status(status_update: Dict[str, Any]):
+# #         """Helper to update task status in database"""
+# #         try:
+# #             status_update["updated_at"] = datetime.utcnow().isoformat()
+# #             db.update("recalculation_tasks", status_update, {"task_id": task_id})
+# #         except Exception as e:
+# #             logger.error(f"Failed to update recalculation task status: {e}")
+# #
+# #     logger.info(f"========== RECALCULATION BACKGROUND TASK STARTED ==========")
+# #     logger.info(f"Task ID: {task_id}, Username: {username}")
+# #
+# #     try:
+# #         # Update status to processing
+# #         update_task_status({
+# #             "status": "processing",
+# #             "message": "Recalculating stock levels...",
+# #             "started_at": datetime.utcnow().isoformat()
+# #         })
+# #
+# #         # Run the actual recalculation (blocking operation, but in thread pool)
+# #         recalculate_stock_for_user(username, current_task_id=task_id)
+# #
+# #         # Update status to completed
+# #         update_task_status({
+# #             "status": "completed",
+# #             "message": "Stock levels recalculated successfully",
+# #             "completed_at": datetime.utcnow().isoformat()
+# #         })
+# #
+# #         logger.info(f"✅ Recalculation task {task_id} completed successfully")
+# #
+# #     except Exception as e:
+# #         logger.error(f"❌ Recalculation task {task_id} failed: {e}")
+# #         logger.error(f"Error type: {type(e).__name__}")
+# #         import traceback
+# #         logger.error(f"Traceback: {traceback.format_exc()}")
+# #
+# #         update_task_status({
+# #             "status": "failed",
+# #             "message": f"Recalculation failed: {str(e)}",
+# #             "completed_at": datetime.utcnow().isoformat()
+# #         })
+# #
+# #         raise HTTPException(status_code=500, detail=str(e))
+# #
+# #
+# # def recalculate_stock_for_user(username: str, current_task_id: Optional[str] = None):
+# #     """
+# #     Core logic to recalculate stock levels for a user.
+# #     Can be called from other routes after invoice processing.
+# #
+# #     CONCURRENCY CONTROL:
+# #     Instead of PostgreSQL advisory locks (which are session-bound and flaky with 
+# #     stateless HTTP clients), we check the 'recalculation_tasks' table for 
+# #     other running tasks.
+# #     """
+# #     db = get_database_client()
+# #
+# #     logger.info(f"Starting stock recalculation for {username} (Task: {current_task_id})")
+# #
+# #     # 1. Check for concurrent tasks in progress
+# #     try:
+# #         # Get tasks that are 'processing' for this user
+# #         # We need to filter out the current task if provided
+# #         query = db.client.table("recalculation_tasks")\
+# #             .select("task_id, created_at")\
+# #             .eq("username", username)\
+# #             .eq("status", "processing")
+# #
+# #         if current_task_id:
+# #             query = query.neq("task_id", current_task_id)
+# #
+# #         running_tasks = query.execute()
+# #
+# #         if running_tasks.data and len(running_tasks.data) > 0:
+# #             # Check if they are stale (older than 5 minutes)
+# #             # This is a fail-safe in case a worker died without updating status
+# #             active_collision = False
+# #
+# #             for task in running_tasks.data:
+# #                 created_at_str = task.get("created_at")
+# #                 if created_at_str:
+# #                     try:
+# #                         # Parse simplified ISO format
+# #                         created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+# #                         age = (datetime.utcnow() - created_at.replace(tzinfo=None)).total_seconds()
+# #
+# #                         if age < 300:  # 5 minutes
+# #                             active_collision = True
+# #                             logger.warning(f"⚠️ Found active concurrent task: {task.get('task_id')} (started {int(age)}s ago)")
+# #                             break
+# #                         else:
+# #                             logger.warning(f"⚠️ Found STALE concurrent task: {task.get('task_id')} (started {int(age)}s ago) - Ignoring")
+# #                     except Exception as e:
+# #                         logger.warning(f"Error parsing task date: {e} - Assuming active")
+# #                         active_collision = True
+# #                         break
+# #
+# #             if active_collision:
+# #                 logger.warning(f"❌ Stock recalculation already in progress for {username}")
+# #                 raise HTTPException(
+# #                     status_code=409,
+# #                     detail="Stock recalculation already in progress for this user. Please wait for it to complete."
+# #                 )
+# #
+# #         logger.info(f"✓ Concurrency check passed for {username}")
+# #
+# #     except HTTPException:
+# #         raise
+# #     except Exception as e:
+# #         logger.error(f"Error checking concurrency for {username}: {e}")
+# #         # Proceed cautiously even if check fails, to avoid blockage
+# #         pass
+# #
+# #     try:
+# #         # Perform the actual recalculation
+# #         _perform_stock_recalculation(username, db)
+# #
+# #     except Exception as e:
+# #         logger.error(f"Error during stock recalculation for {username}: {e}")
+# #         raise
+# #
+# #
+# # def _perform_stock_recalculation(username: str, db):
+# #     """
+# #     Internal helper that performs the actual stock recalculation.
+# #     This is separated so the lock logic is clear in the parent function.
+# #
+# #     Args:
+# #         username: Username to recalculate stock for
+# #         db: Database client instance
+# #     """
+# #     logger.info(f"Performing stock recalculation for {username}")
+# #
+# #     # 1. Get all vendor invoice items (IN transactions) - EXCLUDING items marked as deleted
+# #     vendor_items = db.client.table("inventory_items")\
+# #         .select("part_number, description, qty, rate, invoice_date")\
+# #         .eq("username", username)\
+# #         .eq("excluded_from_stock", False)\
+# #         .execute()
+# #
+# #     vendor_data = vendor_items.data or []
+# #     logger.info(f"Found {len(vendor_data)} vendor invoice items")
+# #
+# #     # 2. Get ALL customer sales items (OUT transactions) using pagination
+# #     sales_data = []
+# #     batch_size = 1000
+# #     current_offset = 0
+# #
+# #     logger.info(f"Fetching ALL sales records for {username} with pagination...")
+# #
+# #     while True:
+# #         sales_batch = db.client.table("verified_invoices")\
+# #             .select("description, quantity, rate, date")\
+# #             .eq("username", username)\
+# #             .eq("type", "Part")\
+# #             .limit(batch_size)\
+# #             .offset(current_offset)\
+# #             .execute()
+# #
+# #         if not sales_batch.data or len(sales_batch.data) == 0:
+# #             break
+# #
+# #         sales_data.extend(sales_batch.data)
+# #
+# #         # If we got less than batch_size records, we've reached the end
+# #         if len(sales_batch.data) < batch_size:
+# #             break
+# #
+# #         current_offset += batch_size
+# #
+# #     logger.info(f"Found {len(sales_data)} sales invoice items")
+# #
+# #     # 3. Get inventory mappings (customer item, part, vendor desc, priority, reorder)
+# #     mappings = db.client.table("vendor_mapping_entries")\
+# #         .select("customer_item_name, part_number, vendor_description, priority, reorder_point")\
+# #         .eq("username", username)\
+# #         .eq("status", "Added")\
+# #         .execute()
+# #
+# #     mapping_data = mappings.data or []
+# #     logger.info(f"Found {len(mapping_data)} inventory mappings")
+# #
+# #     # 4. GET EXISTING STOCK LEVELS TO PRESERVE MANUAL EDITS (Old Stock only)
+# #     # Priority and Reorder are now sourced from vendor_mapping_entries
+# #     existing_stock_levels = db.client.table("stock_levels")\
+# #         .select("part_number, internal_item_name, old_stock, manual_adjustment")\
+# #         .eq("username", username)\
+# #         .execute()
+# #
+# #     # Build lookup dict: (part_number, internal_item_name) -> {old_stock}
+# #     existing_values = {}
+# #     for stock in (existing_stock_levels.data or []):
+# #         key = (stock.get("part_number"), stock.get("internal_item_name"))
+# #         existing_values[key] = {
+# #             # "old_stock": stock.get("old_stock"),  # Deprecated
+# #             "manual_adjustment": stock.get("manual_adjustment")
+# #         }
+# #
+# #     logger.info(f"Found {len(existing_values)} existing stock levels to preserve")
+# #
+# #     # Create mapping lookup
+# #     # key: part_number -> {customer_item, priority, reorder_point}
+# #     mapping_lookup = {}
+# #     for mapping in mapping_data:
+# #         part = mapping.get("part_number")
+# #         if part:
+# #             mapping_lookup[part] = {
+# #                 "customer_item_name": mapping.get("customer_item_name"),
+# #                 "priority": mapping.get("priority"),
+# #                 "reorder_point": mapping.get("reorder_point")
+# #             }
+# #
+# #
+# #     # 4. Initialize stock_by_part with MAPPINGS FIRST (map once, use forever)
+# #     # This ensures mappings persist even when vendor invoices are deleted
+# #     stock_by_part = {}
+# #
+# #     logger.info(f"🔷 Step 1: Initializing stock_by_part with {len(mapping_data)} mappings")
+# #
+# #     for mapping in mapping_data:
+# #         part_number = mapping.get("part_number")
+# #         vendor_desc = mapping.get("vendor_description")
+# #         customer_item = mapping.get("customer_item_name")
+# #
+# #         if not part_number or not vendor_desc:
+# #             continue
+# #
+# #         # Find existing group with fuzzy match (same logic as before)
+# #         matched_group = None
+# #         for existing_part in stock_by_part.keys():
+# #             if fuzzy_match_part_numbers(part_number, existing_part, threshold=99):
+# #                 matched_group = existing_part
+# #                 break
+# #
+# #         group_key = matched_group or part_number
+# #
+# #         if group_key not in stock_by_part:
+# #             # Create entry with mapping data, zero transactional data
+# #             stock_by_part[group_key] = {
+# #                 "part_number": group_key,
+# #                 "internal_item_name": vendor_desc,
+# #                 "vendor_description": vendor_desc,
+# #                 "total_in": 0.0,  # Will be filled from vendor invoices
+# #                 "total_out": 0.0,  # Will be filled from sales
+# #                 "customer_items": [],
+# #                 "vendor_rate": None,  # Will be filled from vendor invoices
+# #                 "customer_rate": None,
+# #                 "last_vendor_invoice_date": None,
+# #                 "last_customer_invoice_date": None,
+# #                 "reorder_point": DEFAULT_REORDER_POINT
+# #             }
+# #
+# #         # Add customer item if not already in list
+# #         if customer_item and customer_item not in stock_by_part[group_key]["customer_items"]:
+# #             stock_by_part[group_key]["customer_items"].append(customer_item)
+# #
+# #     logger.info(f"🔷 Step 2: Filling IN transactions from {len(vendor_data)} vendor invoices")
+# #
+# #     # 5. Fill IN transactions from vendor invoices (if any exist)
+# #     for item in vendor_data:
+# #         part_number = item.get("part_number", "")
+# #         internal_item_name = item.get("description", "")
+# #
+# #         if not part_number:
+# #             continue
+# #
+# #         # Find existing group with fuzzy match
+# #         matched_group = None
+# #         for existing_part in stock_by_part.keys():
+# #             if fuzzy_match_part_numbers(part_number, existing_part, threshold=99):
+# #                 matched_group = existing_part
+# #                 break
+# #
+# #         group_key = matched_group or part_number
+# #
+# #         # If this part doesn't have a mapping, create entry from vendor invoice
+# #         if group_key not in stock_by_part:
+# #             stock_by_part[group_key] = {
+# #                 "part_number": group_key,
+# #                 "internal_item_name": internal_item_name,
+# #                 "vendor_description": internal_item_name,
+# #                 "total_in": 0.0,
+# #                 "total_out": 0.0,
+# #                 "customer_items": [],
+# #                 "vendor_rate": item.get("rate"),
+# #                 "customer_rate": None,
+# #                 "last_vendor_invoice_date": item.get("invoice_date"),
+# #                 "last_customer_invoice_date": None,
+# #                 "reorder_point": DEFAULT_REORDER_POINT
+# #             }
+# #
+# #         # Fill in transactional data
+# #         stock_by_part[group_key]["total_in"] += float(item.get("qty", 0) or 0)
+# #
+# #         # Update vendor_description if it was created from mapping without invoice
+# #         if not stock_by_part[group_key].get("internal_item_name"):
+# #             stock_by_part[group_key]["internal_item_name"] = internal_item_name
+# #             stock_by_part[group_key]["vendor_description"] = internal_item_name
+# #
+# #         # Update latest rate and date
+# #         if item.get("invoice_date"):
+# #             existing_date = stock_by_part[group_key]["last_vendor_invoice_date"]
+# #             if not existing_date or item["invoice_date"] > existing_date:
+# #                 stock_by_part[group_key]["last_vendor_invoice_date"] = item["invoice_date"]
+# #                 stock_by_part[group_key]["vendor_rate"] = item.get("rate")
+# #
+# #     # 6. Build part_to_customer_items mapping ONCE (optimize from O(n²) to O(n))
+# #     # For each part_number in stock_by_part, find customer_items via 98% fuzzy match
+# #     part_to_customer_items = {}  # part_number -> [customer_items]
+# #
+# #     logger.info(f"🔷 Step 3: Building part-to-customer mapping for {len(stock_by_part)} parts")
+# #
+# #     for part_number in stock_by_part.keys():
+# #         customer_items_for_part = []
+# #
+# #         # Find mappings where part_number fuzzy matches this part (98% threshold)
+# #         for mapping in mapping_data:
+# #             vendor_part = mapping.get("part_number")
+# #             customer_item = mapping.get("customer_item_name")
+# #
+# #             if vendor_part and customer_item:
+# #                 # Use 98% threshold for part number matching
+# #                 if fuzzy_match_part_numbers(part_number, vendor_part, threshold=98):
+# #                     customer_items_for_part.append(customer_item)
+# #
+# #         if customer_items_for_part:
+# #             part_to_customer_items[part_number] = customer_items_for_part
+# #
+# #     logger.info(f"🔷 Step 4: Processing {len(sales_data)} sales transactions")
+# #
+# #     # Now process each sales transaction
+# #     for item in sales_data:
+# #         customer_desc = item.get("description")
+# #         if not customer_desc:
+# #             continue
+# #
+# #         qty = float(item.get("quantity", 0) or 0)
+# #
+# #         # For each part, check if this sale matches any of its mapped customer_items
+# #         for part_number, mapped_customer_items in part_to_customer_items.items():
+# #             matched = False
+# #             matched_customer_item = None
+# #
+# #             # Check fuzzy match (90% threshold) against all mapped customer items
+# #             for customer_item in mapped_customer_items:
+# #                 similarity = fuzz.ratio(customer_desc.lower(), customer_item.lower())
+# #                 if similarity >= 90:
+# #                     matched = True
+# #                     matched_customer_item = customer_item
+# #                     break
+# #
+# #             if matched:
+# #                 # Add to total_out
+# #                 stock_by_part[part_number]["total_out"] += qty
+# #
+# #                 # Track customer items that were actually sold
+# #                 if "customer_items" not in stock_by_part[part_number]:
+# #                     stock_by_part[part_number]["customer_items"] = []
+# #
+# #                 # Only add if not already in list (distinct customer items)
+# #                 if matched_customer_item not in stock_by_part[part_number]["customer_items"]:
+# #                     stock_by_part[part_number]["customer_items"].append(matched_customer_item)
+# #
+# #                 # Update customer rate and date
+# #                 if item.get("date"):
+# #                     existing_date = stock_by_part[part_number]["last_customer_invoice_date"]
+# #                     if not existing_date or item["date"] > existing_date:
+# #                         stock_by_part[part_number]["last_customer_invoice_date"] = item["date"]
+# #                         stock_by_part[part_number]["customer_rate"] = item.get("rate")
+# #
+# #
+# #     # 7. Calculate current stock and values
+# #     stock_records = []
+# #     now = datetime.now().isoformat()
+# #
+# #     for part, data in stock_by_part.items():
+# #         current_stock = data["total_in"] - data["total_out"]
+# #
+# #         # Check if this item has existing manual edits to preserve
+# #         lookup_key = (part, data["internal_item_name"])
+# #         preserved = existing_values.get(lookup_key, {})
+# #
+# #         # Use preserved values if they exist, otherwise use defaults
+# #         # CHANGED: Reorder Point and Priority now come from MAPPING TABLE (mapping_lookup)
+# #
+# #         mapping_info = mapping_lookup.get(part, {})
+# #
+# #         # Priority: From mapping > existing preserved (fallback) > None
+# #         priority = mapping_info.get("priority") 
+# #
+# #         # Reorder Point: From mapping > default
+# #         # Note: We prioritize the mapping Reorder Point. 
+# #         reorder_point = mapping_info.get("reorder_point")
+# #         if reorder_point is None:
+# #              reorder_point = DEFAULT_REORDER_POINT
+# #
+# #         # Old Stock: Deprecated/Unused
+# #         old_stock = 0 
+# #
+# #         # Manual Adjustment: Preserve existing value
+# #         manual_adjustment = preserved.get("manual_adjustment") or 0
+# #
+# #         # customer_items comes ONLY from vendor_mapping_entries (single source of truth)
+# #         # Already populated in data["customer_items"] from Step 1 (initialization with mappings)
+# #         customer_items_str = ", ".join(data.get("customer_items", [])) if data.get("customer_items") else None
+# #
+# #         # Calculate ACTUAL ON HAND (including manual_adjustment, ignoring old_stock)
+# #         stock_on_hand = current_stock + manual_adjustment
+# #
+# #         # Calculate value using ON HAND (not just current_stock)
+# #         unit_value = data.get("vendor_rate") or 0
+# #         total_value = stock_on_hand * unit_value
+# #
+# #         stock_records.append({
+# #             "username": username,
+# #             "part_number": part,
+# #             "internal_item_name": data["internal_item_name"],
+# #             "vendor_description": data["vendor_description"],
+# #             "customer_items": customer_items_str, 
+# #             "current_stock": round(current_stock, 2),
+# #             "total_in": round(data["total_in"], 2),
+# #             "total_out": round(data["total_out"], 2),
+# #             "reorder_point": reorder_point,  
+# #             "old_stock": old_stock,  
+# #             "manual_adjustment": manual_adjustment,
+# #             "priority": priority,
+# #             "vendor_rate": data.get("vendor_rate"),
+# #             "customer_rate": data.get("customer_rate"),
+# #             "unit_value": unit_value,
+# #             "total_value": round(total_value, 2),  # Now includes old_stock
+# #             "last_vendor_invoice_date": data.get("last_vendor_invoice_date"),
+# #             "last_customer_invoice_date": data.get("last_customer_invoice_date"),
+# #             "updated_at": now
+# #         })
+# #
+# #     # 8. Add orphaned items (exist in stock_levels but have no transactions)
+# #     # These are items uploaded from mapping sheets that haven't been purchased/sold yet
+# #     processed_parts = set(stock_by_part.keys())
+# #
+# #     for existing_item in (existing_stock_levels.data or []):
+# #         part_num = existing_item.get("part_number")
+# #         internal_name = existing_item.get("internal_item_name")
+# #
+# #         # If this part wasn't processed (no transactions), preserve it
+# #         if part_num and part_num not in processed_parts:
+# #             stock_records.append({
+# #                 "username": username,
+# #                 "part_number": part_num,
+# #                 "internal_item_name": internal_name or "Unknown Item",
+# #                 "vendor_description": existing_item.get("vendor_description") or internal_name or "Unknown Item",
+# #                 "customer_items": existing_item.get("customer_items"),
+# #                 "current_stock": 0,  # No transactions yet
+# #                 "total_in": 0,
+# #                 "total_out": 0,
+# #                 "reorder_point": existing_item.get("reorder_point") or DEFAULT_REORDER_POINT,
+# #                 "old_stock": existing_item.get("old_stock"),
+# #                 "manual_adjustment": existing_item.get("manual_adjustment") or 0,
+# #                 "priority": existing_item.get("priority"),
+# #                 "vendor_rate": None,
+# #                 "customer_rate": None,
+# #                 "unit_value": 0,
+# #                 "total_value": 0,
+# #                 "last_vendor_invoice_date": None,
+# #                 "last_customer_invoice_date": None,
+# #                 "updated_at": now
+# #             })
+# #             logger.info(f"🔄 Preserved orphaned item: {part_num} (no transactions)")
+# #
+# #     # 9. Clear existing stock levels and insert new ones
+# #     # NOTE: This delete-then-insert is now protected by advisory lock (see recalculate_stock_for_user)
+# #     if stock_records:
+# #         logger.info(f"🔒 [LOCKED] Deleting existing stock_levels for {username}...")
+# #         # Delete existing
 
+# ══════════════════════════════════════════════════════════════════════════
+# END v1 DISABLED: Stock Recalculation Block
+# ══════════════════════════════════════════════════════════════════════════
 
-@router.get("/needs-recalculation")
-def check_needs_recalculation(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Check if stock levels need recalculation.
-    Returns true if stock_levels table is empty or potentially stale.
-    """
-    username = current_user.get("username")
-    db = get_database_client()
-    
-    try:
-        # Check if stock_levels table has any records for this user
-        response = db.client.table("stock_levels")\
-            .select("part_number", count="exact")\
-            .eq("username", username)\
-            .limit(1)\
-            .execute()
-        
-        # If no stock levels exist, recalculation is needed
-        needs_recalc = not response.data or len(response.data) == 0
-        
-        return {
-            "success": True,
-            "needs_recalculation": needs_recalc,
-            "reason": "No stock levels found" if needs_recalc else "Stock levels exist"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error checking recalculation need: {e}")
-        # If error, assume recalculation is needed to be safe
-        return {
-            "success": True,
-            "needs_recalculation": True,
-            "reason": f"Error checking status: {str(e)}"
-        }
+#         delete_result = db.client.table("stock_levels").delete().eq("username", username).execute()
+#         deleted_count = len(delete_result.data) if delete_result.data else 0
+#         logger.info(f"🔒 [LOCKED] Deleted {deleted_count} old records")
+#
+#         logger.info(f"🔒 [LOCKED] Inserting {len(stock_records)} new stock records...")
+#         # Batch insert new records
+#         db.batch_upsert("stock_levels", stock_records, batch_size=500)
+#
+#         logger.info(f"✅ Recalculated {len(stock_records)} stock levels for {username}")
+#     else:
+#         logger.warning(f"No stock records calculated for {username}")
+#
+#
+# @router.patch("/levels/{stock_id}")
 
+# ══════════════════════════════════════════════════════════════════════════
+# END v1 DISABLED: Stock Recalculation Block
+# ══════════════════════════════════════════════════════════════════════════
 
-def recalculate_stock_wrapper(task_id: str, username: str):
-    """
-    Wrapper function to run recalculate_stock_for_user in background thread.
-    Updates task status in database during execution.
-    """
-    db = get_database_client()
-    
-    def update_task_status(status_update: Dict[str, Any]):
-        """Helper to update task status in database"""
-        try:
-            status_update["updated_at"] = datetime.utcnow().isoformat()
-            db.update("recalculation_tasks", status_update, {"task_id": task_id})
-        except Exception as e:
-            logger.error(f"Failed to update recalculation task status: {e}")
-    
-    logger.info(f"========== RECALCULATION BACKGROUND TASK STARTED ==========")
-    logger.info(f"Task ID: {task_id}, Username: {username}")
-    
-    try:
-        # Update status to processing
-        update_task_status({
-            "status": "processing",
-            "message": "Recalculating stock levels...",
-            "started_at": datetime.utcnow().isoformat()
-        })
-        
-        # Run the actual recalculation (blocking operation, but in thread pool)
-        recalculate_stock_for_user(username, current_task_id=task_id)
-        
-        # Update status to completed
-        update_task_status({
-            "status": "completed",
-            "message": "Stock levels recalculated successfully",
-            "completed_at": datetime.utcnow().isoformat()
-        })
-        
-        logger.info(f"✅ Recalculation task {task_id} completed successfully")
-        
-    except Exception as e:
-        logger.error(f"❌ Recalculation task {task_id} failed: {e}")
-        logger.error(f"Error type: {type(e).__name__}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        update_task_status({
-            "status": "failed",
-            "message": f"Recalculation failed: {str(e)}",
-            "completed_at": datetime.utcnow().isoformat()
-        })
-
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def recalculate_stock_for_user(username: str, current_task_id: Optional[str] = None):
-    """
-    Core logic to recalculate stock levels for a user.
-    Can be called from other routes after invoice processing.
-    
-    CONCURRENCY CONTROL:
-    Instead of PostgreSQL advisory locks (which are session-bound and flaky with 
-    stateless HTTP clients), we check the 'recalculation_tasks' table for 
-    other running tasks.
-    """
-    db = get_database_client()
-    
-    logger.info(f"Starting stock recalculation for {username} (Task: {current_task_id})")
-    
-    # 1. Check for concurrent tasks in progress
-    try:
-        # Get tasks that are 'processing' for this user
-        # We need to filter out the current task if provided
-        query = db.client.table("recalculation_tasks")\
-            .select("task_id, created_at")\
-            .eq("username", username)\
-            .eq("status", "processing")
-            
-        if current_task_id:
-            query = query.neq("task_id", current_task_id)
-            
-        running_tasks = query.execute()
-        
-        if running_tasks.data and len(running_tasks.data) > 0:
-            # Check if they are stale (older than 5 minutes)
-            # This is a fail-safe in case a worker died without updating status
-            active_collision = False
-            
-            for task in running_tasks.data:
-                created_at_str = task.get("created_at")
-                if created_at_str:
-                    try:
-                        # Parse simplified ISO format
-                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                        age = (datetime.utcnow() - created_at.replace(tzinfo=None)).total_seconds()
-                        
-                        if age < 300:  # 5 minutes
-                            active_collision = True
-                            logger.warning(f"⚠️ Found active concurrent task: {task.get('task_id')} (started {int(age)}s ago)")
-                            break
-                        else:
-                            logger.warning(f"⚠️ Found STALE concurrent task: {task.get('task_id')} (started {int(age)}s ago) - Ignoring")
-                    except Exception as e:
-                        logger.warning(f"Error parsing task date: {e} - Assuming active")
-                        active_collision = True
-                        break
-            
-            if active_collision:
-                logger.warning(f"❌ Stock recalculation already in progress for {username}")
-                raise HTTPException(
-                    status_code=409,
-                    detail="Stock recalculation already in progress for this user. Please wait for it to complete."
-                )
-        
-        logger.info(f"✓ Concurrency check passed for {username}")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error checking concurrency for {username}: {e}")
-        # Proceed cautiously even if check fails, to avoid blockage
-        pass
-    
-    try:
-        # Perform the actual recalculation
-        _perform_stock_recalculation(username, db)
-        
-    except Exception as e:
-        logger.error(f"Error during stock recalculation for {username}: {e}")
-        raise
-
-
-def _perform_stock_recalculation(username: str, db):
-    """
-    Internal helper that performs the actual stock recalculation.
-    This is separated so the lock logic is clear in the parent function.
-    
-    Args:
-        username: Username to recalculate stock for
-        db: Database client instance
-    """
-    logger.info(f"Performing stock recalculation for {username}")
-    
-    # 1. Get all vendor invoice items (IN transactions) - EXCLUDING items marked as deleted
-    vendor_items = db.client.table("inventory_items")\
-        .select("part_number, description, qty, rate, invoice_date")\
-        .eq("username", username)\
-        .eq("excluded_from_stock", False)\
-        .execute()
-    
-    vendor_data = vendor_items.data or []
-    logger.info(f"Found {len(vendor_data)} vendor invoice items")
-    
-    # 2. Get ALL customer sales items (OUT transactions) using pagination
-    sales_data = []
-    batch_size = 1000
-    current_offset = 0
-    
-    logger.info(f"Fetching ALL sales records for {username} with pagination...")
-    
-    while True:
-        sales_batch = db.client.table("verified_invoices")\
-            .select("description, quantity, rate, date")\
-            .eq("username", username)\
-            .eq("type", "Part")\
-            .limit(batch_size)\
-            .offset(current_offset)\
-            .execute()
-        
-        if not sales_batch.data or len(sales_batch.data) == 0:
-            break
-        
-        sales_data.extend(sales_batch.data)
-        
-        # If we got less than batch_size records, we've reached the end
-        if len(sales_batch.data) < batch_size:
-            break
-        
-        current_offset += batch_size
-    
-    logger.info(f"Found {len(sales_data)} sales invoice items")
-    
-    # 3. Get inventory mappings (customer item, part, vendor desc, priority, reorder)
-    mappings = db.client.table("vendor_mapping_entries")\
-        .select("customer_item_name, part_number, vendor_description, priority, reorder_point")\
-        .eq("username", username)\
-        .eq("status", "Added")\
-        .execute()
-    
-    mapping_data = mappings.data or []
-    logger.info(f"Found {len(mapping_data)} inventory mappings")
-    
-    # 4. GET EXISTING STOCK LEVELS TO PRESERVE MANUAL EDITS (Old Stock only)
-    # Priority and Reorder are now sourced from vendor_mapping_entries
-    existing_stock_levels = db.client.table("stock_levels")\
-        .select("part_number, internal_item_name, old_stock, manual_adjustment")\
-        .eq("username", username)\
-        .execute()
-    
-    # Build lookup dict: (part_number, internal_item_name) -> {old_stock}
-    existing_values = {}
-    for stock in (existing_stock_levels.data or []):
-        key = (stock.get("part_number"), stock.get("internal_item_name"))
-        existing_values[key] = {
-            # "old_stock": stock.get("old_stock"),  # Deprecated
-            "manual_adjustment": stock.get("manual_adjustment")
-        }
-    
-    logger.info(f"Found {len(existing_values)} existing stock levels to preserve")
-    
-    # Create mapping lookup
-    # key: part_number -> {customer_item, priority, reorder_point}
-    mapping_lookup = {}
-    for mapping in mapping_data:
-        part = mapping.get("part_number")
-        if part:
-            mapping_lookup[part] = {
-                "customer_item_name": mapping.get("customer_item_name"),
-                "priority": mapping.get("priority"),
-                "reorder_point": mapping.get("reorder_point")
-            }
-    
-    
-    # 4. Initialize stock_by_part with MAPPINGS FIRST (map once, use forever)
-    # This ensures mappings persist even when vendor invoices are deleted
-    stock_by_part = {}
-    
-    logger.info(f"🔷 Step 1: Initializing stock_by_part with {len(mapping_data)} mappings")
-    
-    for mapping in mapping_data:
-        part_number = mapping.get("part_number")
-        vendor_desc = mapping.get("vendor_description")
-        customer_item = mapping.get("customer_item_name")
-        
-        if not part_number or not vendor_desc:
-            continue
-        
-        # Find existing group with fuzzy match (same logic as before)
-        matched_group = None
-        for existing_part in stock_by_part.keys():
-            if fuzzy_match_part_numbers(part_number, existing_part, threshold=99):
-                matched_group = existing_part
-                break
-        
-        group_key = matched_group or part_number
-        
-        if group_key not in stock_by_part:
-            # Create entry with mapping data, zero transactional data
-            stock_by_part[group_key] = {
-                "part_number": group_key,
-                "internal_item_name": vendor_desc,
-                "vendor_description": vendor_desc,
-                "total_in": 0.0,  # Will be filled from vendor invoices
-                "total_out": 0.0,  # Will be filled from sales
-                "customer_items": [],
-                "vendor_rate": None,  # Will be filled from vendor invoices
-                "customer_rate": None,
-                "last_vendor_invoice_date": None,
-                "last_customer_invoice_date": None,
-                "reorder_point": DEFAULT_REORDER_POINT
-            }
-        
-        # Add customer item if not already in list
-        if customer_item and customer_item not in stock_by_part[group_key]["customer_items"]:
-            stock_by_part[group_key]["customer_items"].append(customer_item)
-    
-    logger.info(f"🔷 Step 2: Filling IN transactions from {len(vendor_data)} vendor invoices")
-    
-    # 5. Fill IN transactions from vendor invoices (if any exist)
-    for item in vendor_data:
-        part_number = item.get("part_number", "")
-        internal_item_name = item.get("description", "")
-        
-        if not part_number:
-            continue
-        
-        # Find existing group with fuzzy match
-        matched_group = None
-        for existing_part in stock_by_part.keys():
-            if fuzzy_match_part_numbers(part_number, existing_part, threshold=99):
-                matched_group = existing_part
-                break
-        
-        group_key = matched_group or part_number
-        
-        # If this part doesn't have a mapping, create entry from vendor invoice
-        if group_key not in stock_by_part:
-            stock_by_part[group_key] = {
-                "part_number": group_key,
-                "internal_item_name": internal_item_name,
-                "vendor_description": internal_item_name,
-                "total_in": 0.0,
-                "total_out": 0.0,
-                "customer_items": [],
-                "vendor_rate": item.get("rate"),
-                "customer_rate": None,
-                "last_vendor_invoice_date": item.get("invoice_date"),
-                "last_customer_invoice_date": None,
-                "reorder_point": DEFAULT_REORDER_POINT
-            }
-        
-        # Fill in transactional data
-        stock_by_part[group_key]["total_in"] += float(item.get("qty", 0) or 0)
-        
-        # Update vendor_description if it was created from mapping without invoice
-        if not stock_by_part[group_key].get("internal_item_name"):
-            stock_by_part[group_key]["internal_item_name"] = internal_item_name
-            stock_by_part[group_key]["vendor_description"] = internal_item_name
-        
-        # Update latest rate and date
-        if item.get("invoice_date"):
-            existing_date = stock_by_part[group_key]["last_vendor_invoice_date"]
-            if not existing_date or item["invoice_date"] > existing_date:
-                stock_by_part[group_key]["last_vendor_invoice_date"] = item["invoice_date"]
-                stock_by_part[group_key]["vendor_rate"] = item.get("rate")
-    
-    # 6. Build part_to_customer_items mapping ONCE (optimize from O(n²) to O(n))
-    # For each part_number in stock_by_part, find customer_items via 98% fuzzy match
-    part_to_customer_items = {}  # part_number -> [customer_items]
-    
-    logger.info(f"🔷 Step 3: Building part-to-customer mapping for {len(stock_by_part)} parts")
-    
-    for part_number in stock_by_part.keys():
-        customer_items_for_part = []
-        
-        # Find mappings where part_number fuzzy matches this part (98% threshold)
-        for mapping in mapping_data:
-            vendor_part = mapping.get("part_number")
-            customer_item = mapping.get("customer_item_name")
-            
-            if vendor_part and customer_item:
-                # Use 98% threshold for part number matching
-                if fuzzy_match_part_numbers(part_number, vendor_part, threshold=98):
-                    customer_items_for_part.append(customer_item)
-        
-        if customer_items_for_part:
-            part_to_customer_items[part_number] = customer_items_for_part
-    
-    logger.info(f"🔷 Step 4: Processing {len(sales_data)} sales transactions")
-    
-    # Now process each sales transaction
-    for item in sales_data:
-        customer_desc = item.get("description")
-        if not customer_desc:
-            continue
-        
-        qty = float(item.get("quantity", 0) or 0)
-        
-        # For each part, check if this sale matches any of its mapped customer_items
-        for part_number, mapped_customer_items in part_to_customer_items.items():
-            matched = False
-            matched_customer_item = None
-            
-            # Check fuzzy match (90% threshold) against all mapped customer items
-            for customer_item in mapped_customer_items:
-                similarity = fuzz.ratio(customer_desc.lower(), customer_item.lower())
-                if similarity >= 90:
-                    matched = True
-                    matched_customer_item = customer_item
-                    break
-            
-            if matched:
-                # Add to total_out
-                stock_by_part[part_number]["total_out"] += qty
-                
-                # Track customer items that were actually sold
-                if "customer_items" not in stock_by_part[part_number]:
-                    stock_by_part[part_number]["customer_items"] = []
-                
-                # Only add if not already in list (distinct customer items)
-                if matched_customer_item not in stock_by_part[part_number]["customer_items"]:
-                    stock_by_part[part_number]["customer_items"].append(matched_customer_item)
-                
-                # Update customer rate and date
-                if item.get("date"):
-                    existing_date = stock_by_part[part_number]["last_customer_invoice_date"]
-                    if not existing_date or item["date"] > existing_date:
-                        stock_by_part[part_number]["last_customer_invoice_date"] = item["date"]
-                        stock_by_part[part_number]["customer_rate"] = item.get("rate")
-
-    
-    # 7. Calculate current stock and values
-    stock_records = []
-    now = datetime.now().isoformat()
-    
-    for part, data in stock_by_part.items():
-        current_stock = data["total_in"] - data["total_out"]
-        
-        # Check if this item has existing manual edits to preserve
-        lookup_key = (part, data["internal_item_name"])
-        preserved = existing_values.get(lookup_key, {})
-        
-        # Use preserved values if they exist, otherwise use defaults
-        # CHANGED: Reorder Point and Priority now come from MAPPING TABLE (mapping_lookup)
-        
-        mapping_info = mapping_lookup.get(part, {})
-        
-        # Priority: From mapping > existing preserved (fallback) > None
-        priority = mapping_info.get("priority") 
-        
-        # Reorder Point: From mapping > default
-        # Note: We prioritize the mapping Reorder Point. 
-        reorder_point = mapping_info.get("reorder_point")
-        if reorder_point is None:
-             reorder_point = DEFAULT_REORDER_POINT
-
-        # Old Stock: Deprecated/Unused
-        old_stock = 0 
-
-        # Manual Adjustment: Preserve existing value
-        manual_adjustment = preserved.get("manual_adjustment") or 0
-        
-        # customer_items comes ONLY from vendor_mapping_entries (single source of truth)
-        # Already populated in data["customer_items"] from Step 1 (initialization with mappings)
-        customer_items_str = ", ".join(data.get("customer_items", [])) if data.get("customer_items") else None
-        
-        # Calculate ACTUAL ON HAND (including manual_adjustment, ignoring old_stock)
-        stock_on_hand = current_stock + manual_adjustment
-        
-        # Calculate value using ON HAND (not just current_stock)
-        unit_value = data.get("vendor_rate") or 0
-        total_value = stock_on_hand * unit_value
-        
-        stock_records.append({
-            "username": username,
-            "part_number": part,
-            "internal_item_name": data["internal_item_name"],
-            "vendor_description": data["vendor_description"],
-            "customer_items": customer_items_str, 
-            "current_stock": round(current_stock, 2),
-            "total_in": round(data["total_in"], 2),
-            "total_out": round(data["total_out"], 2),
-            "reorder_point": reorder_point,  
-            "old_stock": old_stock,  
-            "manual_adjustment": manual_adjustment,
-            "priority": priority,
-            "vendor_rate": data.get("vendor_rate"),
-            "customer_rate": data.get("customer_rate"),
-            "unit_value": unit_value,
-            "total_value": round(total_value, 2),  # Now includes old_stock
-            "last_vendor_invoice_date": data.get("last_vendor_invoice_date"),
-            "last_customer_invoice_date": data.get("last_customer_invoice_date"),
-            "updated_at": now
-        })
-    
-    # 8. Add orphaned items (exist in stock_levels but have no transactions)
-    # These are items uploaded from mapping sheets that haven't been purchased/sold yet
-    processed_parts = set(stock_by_part.keys())
-    
-    for existing_item in (existing_stock_levels.data or []):
-        part_num = existing_item.get("part_number")
-        internal_name = existing_item.get("internal_item_name")
-        
-        # If this part wasn't processed (no transactions), preserve it
-        if part_num and part_num not in processed_parts:
-            stock_records.append({
-                "username": username,
-                "part_number": part_num,
-                "internal_item_name": internal_name or "Unknown Item",
-                "vendor_description": existing_item.get("vendor_description") or internal_name or "Unknown Item",
-                "customer_items": existing_item.get("customer_items"),
-                "current_stock": 0,  # No transactions yet
-                "total_in": 0,
-                "total_out": 0,
-                "reorder_point": existing_item.get("reorder_point") or DEFAULT_REORDER_POINT,
-                "old_stock": existing_item.get("old_stock"),
-                "manual_adjustment": existing_item.get("manual_adjustment") or 0,
-                "priority": existing_item.get("priority"),
-                "vendor_rate": None,
-                "customer_rate": None,
-                "unit_value": 0,
-                "total_value": 0,
-                "last_vendor_invoice_date": None,
-                "last_customer_invoice_date": None,
-                "updated_at": now
-            })
-            logger.info(f"🔄 Preserved orphaned item: {part_num} (no transactions)")
-    
-    # 9. Clear existing stock levels and insert new ones
-    # NOTE: This delete-then-insert is now protected by advisory lock (see recalculate_stock_for_user)
-    if stock_records:
-        logger.info(f"🔒 [LOCKED] Deleting existing stock_levels for {username}...")
-        # Delete existing
-        delete_result = db.client.table("stock_levels").delete().eq("username", username).execute()
-        deleted_count = len(delete_result.data) if delete_result.data else 0
-        logger.info(f"🔒 [LOCKED] Deleted {deleted_count} old records")
-        
-        logger.info(f"🔒 [LOCKED] Inserting {len(stock_records)} new stock records...")
-        # Batch insert new records
-        db.batch_upsert("stock_levels", stock_records, batch_size=500)
-        
-        logger.info(f"✅ Recalculated {len(stock_records)} stock levels for {username}")
-    else:
-        logger.warning(f"No stock records calculated for {username}")
-
-
-@router.patch("/levels/{stock_id}")
 async def update_stock_level(
     stock_id: int,
     updates: StockUpdateRequest,

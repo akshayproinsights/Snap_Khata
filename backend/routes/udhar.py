@@ -24,6 +24,8 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     OPTIMIZED: Pre-fetches all ledgers and existing transactions in 2 bulk queries
     instead of 2 sequential queries per record, reducing DB round-trips from O(N) to O(1).
     """
+    return # DISABLED FOR NOW: Party Details hidden
+    
     if not final_records:
         return
 
@@ -113,6 +115,9 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
             if receipt_number and (ledger_id, str(receipt_number)) in existing_tx_set:
                 logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
                 continue
+                
+            if receipt_number:
+                existing_tx_set.add((ledger_id, str(receipt_number)))
 
             # Accumulate balance delta (in case multiple records for same ledger)
             ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(existing_ledger.get('balance_due', 0))) + balance_due_float
@@ -131,7 +136,15 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                 pending_new_ledgers[customer_name_clean] = {
                     'balance_due': 0.0,
                     'transactions': [],
+                    'receipts_processed': set()
                 }
+            
+            # Dedup for new ledgers
+            if receipt_number:
+                if receipt_number in pending_new_ledgers[customer_name_clean]['receipts_processed']:
+                    continue
+                pending_new_ledgers[customer_name_clean]['receipts_processed'].add(receipt_number)
+
             pending_new_ledgers[customer_name_clean]['balance_due'] += balance_due_float
             pending_new_ledgers[customer_name_clean]['transactions'].append({
                 'receipt_number': receipt_number,
@@ -181,7 +194,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
         except Exception as e:
             logger.error(f"Error batch-inserting ledger transactions: {e}")
 
-@router.get("/ledgers")
+# @router.get("/ledgers")
 async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
     """Get all customer ledgers for the current user."""
     username = current_user.get("username")
@@ -206,7 +219,7 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         logger.error(f"Error fetching ledgers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/ledgers/{ledger_id}/transactions")
+# @router.get("/ledgers/{ledger_id}/transactions")
 async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(get_current_user)):
     """Get transaction history for a specific ledger."""
     username = current_user.get("username")
@@ -237,7 +250,19 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             .order('created_at', desc=True) \
             .execute()
             
-        transactions = tx_resp.data
+        raw_transactions = tx_resp.data
+        
+        # Deduplicate INVOICE transactions (to handle any existing duplicate data)
+        transactions = []
+        seen_receipts = set()
+        for tx in raw_transactions:
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number'):
+                rn = tx['receipt_number']
+                if rn in seen_receipts:
+                    continue
+                seen_receipts.add(rn)
+            transactions.append(tx)
+            
         enriched_transactions = []
         
         # Enrich INVOICE transactions with true grand_total and received_amount
@@ -303,7 +328,7 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         logger.error(f"Error fetching transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/ledgers/{ledger_id}")
+# @router.delete("/ledgers/{ledger_id}")
 async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(get_current_user)):
     """Delete a customer ledger and its transactions."""
     username = current_user.get("username")
@@ -366,7 +391,7 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
         logger.error(f"Error deleting ledger: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ledgers/{ledger_id}/pay")
+# @router.post("/ledgers/{ledger_id}/pay")
 async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: Dict = Depends(get_current_user)):
     """Record a payment from the customer, reducing their balance."""
     username = current_user.get("username")
@@ -427,7 +452,7 @@ class ManualUdharEntry(BaseModel):
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
 
-@router.get("/dashboard-summary")
+# @router.get("/dashboard-summary")
 async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     """Get the top-level summary for the Udhar dashboard."""
     username = current_user.get("username")
@@ -509,7 +534,7 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
         logger.error(f"Error fetching dashboard summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/manual-entry")
+# @router.post("/manual-entry")
 async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depends(get_current_user)):
     """Create a manual Udhar entry for a customer or vendor."""
     username = current_user.get("username")
@@ -630,7 +655,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
 class TogglePaidStatusRequest(BaseModel):
     is_paid: bool
 
-@router.post("/ledgers/{ledger_id}/transactions/{transaction_id}/toggle-paid")
+# @router.post("/ledgers/{ledger_id}/transactions/{transaction_id}/toggle-paid")
 async def toggle_transaction_paid_status(
     ledger_id: int,
     transaction_id: int,

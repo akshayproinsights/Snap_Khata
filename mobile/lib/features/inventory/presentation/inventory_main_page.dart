@@ -5,15 +5,17 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
+// v1 DISABLED: purchaseOrderProvider used only by Quick Links card — uncomment to restore
+// import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
-import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
+
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/dashboard/presentation/customers_tab.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -35,6 +37,11 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {}); // Rebuild for FAB switch
+      }
+    });
   }
 
   @override
@@ -122,7 +129,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
 
   @override
   Widget build(BuildContext context) {
-    final poState = ref.watch(purchaseOrderProvider);
+    // v1 DISABLED: poState used only by Quick Links card — uncomment to restore
+    // final poState = ref.watch(purchaseOrderProvider);
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
     final pendingCount = itemsAsync.maybeWhen(
@@ -175,8 +183,20 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
             ),
           ],
         ),
-        actions: const [
-          SizedBox(width: 8),
+        actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: pendingCount > 0,
+              label: Text(pendingCount > 99 ? '99+' : pendingCount.toString()),
+              backgroundColor: const Color(0xFFEF4444),
+              child: const Icon(LucideIcons.clipboardCheck),
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.push('/inventory-review');
+            },
+          ),
+          const SizedBox(width: 8),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -193,7 +213,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           unselectedLabelColor: AppTheme.textSecondary,
           tabs: const [
             Tab(text: 'Recent Deliveries'),
-            Tab(text: 'Items'),
+            Tab(text: 'CUSTOMERS'),
             Tab(text: 'Party Details'),
           ],
         ),
@@ -201,43 +221,73 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildRecentDeliveriesTab(context, itemsAsync, pendingCount, poState),
-          _buildItemsCatalogTab(context, itemsAsync),
+          _buildRecentDeliveriesTab(context, itemsAsync, pendingCount),
+          const CustomersTab(),
           _buildPartyDetailsTab(context, itemsAsync),
         ],
       ),
-      floatingActionButton: SizedBox(
-        height: 54,
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            HapticFeedback.mediumImpact();
-            context.push('/inventory-upload');
-          },
-          backgroundColor: const Color(0xFFEF4444), // red-500 — matches Outgoing/Due
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.camera_alt_rounded, size: 22),
-          label: Text(
-            'Add New Items',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                  color: Colors.white,
-                ),
-          ),
-          elevation: 6,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-      ),
+      floatingActionButton: _tabController.index == 1
+          ? _buildSnapNewOrderFab(context)
+          : _buildAddNewItemsFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildAddNewItemsFab(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.push('/inventory-upload');
+        },
+        backgroundColor: const Color(0xFFEF4444), // red-500
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22),
+        label: Text(
+          'Add New Items',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+                color: Colors.white,
+              ),
+        ),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+  }
+
+  Widget _buildSnapNewOrderFab(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.pushNamed('upload');
+        },
+        backgroundColor: const Color(0xFF16A34A), // green-700
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22),
+        label: Text(
+          'Snap New Order',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+                color: Colors.white,
+              ),
+        ),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
     );
   }
 
   Widget _buildRecentDeliveriesTab(
       BuildContext context,
       AsyncValue<List<InventoryItem>> itemsAsync,
-      int pendingCount,
-      PurchaseOrderState poState) {
+      int pendingCount) {
+    // v1 DISABLED: PurchaseOrderState poState parameter removed (Quick Links hidden)
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(inventoryItemsProvider),
       child: SingleChildScrollView(
@@ -246,8 +296,9 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildQuickLinksCard(context, pendingCount, poState),
-            const SizedBox(height: 28),
+            // ── v1 DISABLED: Quick Links card (uncomment to restore) ─────────────
+            // _buildQuickLinksCard(context, pendingCount, poState),
+            // const SizedBox(height: 28),
             Row(
               children: [
                 const Text(
@@ -325,161 +376,103 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   }
 
 
-  Widget _buildQuickLinksCard(
-      BuildContext context, int pendingCount, PurchaseOrderState poState) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Links',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.clipboardCheck,
-                color: pendingCount > 0
-                    ? const Color(0xFFEF4444)
-                    : Colors.grey.shade400,
-                title: 'Review',
-                badgeCount: pendingCount,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/inventory-review');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.box,
-                color: const Color(0xFFF59E0B),
-                title: 'Stock',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/current-stock');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.shoppingCart,
-                color: const Color(0xFFEA580C),
-                title: 'PO',
-                badgeCount: poState.draftCount,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/purchase-orders');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.gitMerge,
-                color: const Color(0xFF3B82F6),
-                title: 'Link Items',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/inventory-item-mapping');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionItem({
-    required BuildContext context,
-    required IconData icon,
-    required Color color,
-    required String title,
-    int badgeCount = 0,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: color, size: 24),
-                  ),
-                  if (badgeCount > 0)
-                    Positioned(
-                      top: -6,
-                      right: -6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        constraints:
-                            const BoxConstraints(minWidth: 20, minHeight: 20),
-                        child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // ───────────────────────────────────────────────────────────────────
+  // v1 DISABLED: Quick Links card & action item methods
+  // Uncomment the two methods below to restore the Quick Links section.
+  // Also restore: import, poState watch, _buildRecentDeliveriesTab param, and card call.
+  // ───────────────────────────────────────────────────────────────────
+  //
+  // Widget _buildQuickLinksCard(
+  //     BuildContext context, int pendingCount, PurchaseOrderState poState) {
+  //   return Container(
+  //     padding: const EdgeInsets.all(16),
+  //     decoration: BoxDecoration(
+  //       color: AppTheme.surface,
+  //       borderRadius: BorderRadius.circular(16),
+  //       border: Border.all(color: AppTheme.border),
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: Colors.black.withValues(alpha: 0.02),
+  //           blurRadius: 8,
+  //           offset: const Offset(0, 2),
+  //         ),
+  //       ],
+  //     ),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Text('Quick Links',
+  //             style: Theme.of(context).textTheme.titleMedium?.copyWith(
+  //                   fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+  //         const SizedBox(height: 16),
+  //         Row(
+  //           crossAxisAlignment: CrossAxisAlignment.start,
+  //           children: [
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.box,
+  //               color: const Color(0xFFF59E0B), title: 'Stock',
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/current-stock'); },
+  //             ),
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.shoppingCart,
+  //               color: const Color(0xFFEA580C), title: 'PO',
+  //               badgeCount: poState.draftCount,
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/purchase-orders'); },
+  //             ),
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.gitMerge,
+  //               color: const Color(0xFF3B82F6), title: 'Link Items',
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/inventory-item-mapping'); },
+  //             ),
+  //           ],
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+  //
+  // Widget _buildActionItem({
+  //   required BuildContext context, required IconData icon,
+  //   required Color color, required String title,
+  //   int badgeCount = 0, required VoidCallback onTap,
+  // }) {
+  //   return Expanded(
+  //     child: InkWell(
+  //       onTap: onTap, borderRadius: BorderRadius.circular(12),
+  //       child: Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             Stack(clipBehavior: Clip.none, children: [
+  //               Container(width: 48, height: 48,
+  //                 decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+  //                   borderRadius: BorderRadius.circular(14)),
+  //                 child: Icon(icon, color: color, size: 24)),
+  //               if (badgeCount > 0)
+  //                 Positioned(top: -6, right: -6,
+  //                   child: Container(
+  //                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  //                     decoration: BoxDecoration(color: const Color(0xFFEF4444),
+  //                       borderRadius: BorderRadius.circular(10),
+  //                       border: Border.all(color: Colors.white, width: 2)),
+  //                     constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+  //                     child: Text(badgeCount > 99 ? '99+' : '$badgeCount',
+  //                       style: const TextStyle(color: Colors.white, fontSize: 10,
+  //                         fontWeight: FontWeight.bold, height: 1.1),
+  //                       textAlign: TextAlign.center))),
+  //             ]),
+  //             const SizedBox(height: 8),
+  //             Text(title, textAlign: TextAlign.center,
+  //               style: Theme.of(context).textTheme.labelSmall?.copyWith(
+  //                 fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+  //               maxLines: 2, overflow: TextOverflow.ellipsis),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildDeliveriesList(
       BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
@@ -814,266 +807,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                 ),
         ),
       ],
-    );
-  }
-  Widget _buildItemsCatalogTab(
-      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
-    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (itemsAsync.hasError) {
-      return Center(
-        child: Text('Error: ${itemsAsync.error}',
-            style: const TextStyle(color: AppTheme.error)),
-      );
-    }
-
-    final allItems = itemsAsync.value ?? [];
-    
-    // Filter to verified only
-    final verifiedItems = allItems.where((i) => i.verificationStatus == 'Done').toList();
-    
-    // Deduplicate by description
-    final Map<String, InventoryItem> latestItemMap = {};
-    final Map<String, int> orderCountMap = {};
-    
-    for (var item in verifiedItems) {
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchesDesc = item.description.toLowerCase().contains(query);
-        final matchesPart = item.partNumber.toLowerCase().contains(query);
-        final matchesVendor = (item.vendorName ?? '').toLowerCase().contains(query);
-        if (!matchesDesc && !matchesPart && !matchesVendor) continue;
-      }
-      
-      final key = item.description.trim().toLowerCase();
-      if (key.isEmpty) continue;
-      
-      orderCountMap[key] = (orderCountMap[key] ?? 0) + 1;
-      
-      if (!latestItemMap.containsKey(key)) {
-        latestItemMap[key] = item;
-      } else {
-        // Compare dates, keep most recent
-        final currentLatest = latestItemMap[key]!;
-        final currentDate = DateTime.tryParse(currentLatest.invoiceDate) ?? DateTime(0);
-        final newDate = DateTime.tryParse(item.invoiceDate) ?? DateTime(0);
-        
-        if (newDate.isAfter(currentDate)) {
-          latestItemMap[key] = item;
-        }
-      }
-    }
-
-    final uniqueItems = latestItemMap.values.toList()
-      ..sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate)); // sort by most recently ordered
-
-    return Column(
-      children: [
-        if (verifiedItems.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: _buildSearchBox(),
-          ),
-        Expanded(
-          child: uniqueItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.box,
-                          size: 48, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No items found matching "$_searchQuery"'
-                            : 'No verified items logged yet.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: uniqueItems.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = uniqueItems[index];
-                    final orderCount = orderCountMap[item.description.trim().toLowerCase()] ?? 1;
-                    return _buildItemCatalogCard(context, item, orderCount);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-
-    // Determine price trend
-    Color trendColor = Colors.grey.shade500;
-    IconData trendIcon = LucideIcons.minus; // stable
-    String trendText = 'Stable';
-    
-    if ((item.priceHikeAmount ?? 0) > 0) {
-      trendColor = const Color(0xFFEF4444); // red
-      trendIcon = LucideIcons.trendingUp;
-      trendText = 'Going Up';
-    } else if ((item.priceHikeAmount ?? 0) < 0) {
-      trendColor = const Color(0xFF22C55E); // green
-      trendIcon = LucideIcons.trendingDown;
-      trendText = 'Going Down';
-    }
-
-    String dateLabel = '';
-    try {
-      final dt = DateTime.parse(item.invoiceDate);
-      dateLabel = DateFormat('dd MMM yy').format(dt);
-    } catch (_) {
-      dateLabel = item.invoiceDate.split('T').first;
-    }
-
-    return Material(
-      color: AppTheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppTheme.border),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => ItemPriceHistorySheet(
-              description: item.description,
-              partNumber: item.partNumber,
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.description,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (item.vendorName != null) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            item.vendorName!,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.primary.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        if (item.partNumber.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            item.partNumber,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ]
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Price block
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        currencyFormat.format(item.rate),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(trendIcon, size: 14, color: trendColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            trendText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: trendColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(LucideIcons.history, size: 14, color: Colors.grey.shade500),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Last: $dateLabel',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

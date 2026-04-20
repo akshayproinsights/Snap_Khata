@@ -81,22 +81,22 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                 ),
             ],
           ),
-          // Recalculate button
-          if (state.isCalculating)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else
-            IconButton(
-              icon: const Icon(LucideIcons.refreshCw),
-              onPressed: () => ref
-                  .read(currentStockProvider.notifier)
-                  .triggerRecalculation(),
-            ),
+          // ── v1 DISABLED: Recalculate button (uncomment to restore) ──────────
+          // if (state.isCalculating)
+          //   const Padding(
+          //     padding: EdgeInsets.symmetric(horizontal: 16.0),
+          //     child: SizedBox(
+          //         width: 20,
+          //         height: 20,
+          //         child: CircularProgressIndicator(strokeWidth: 2)),
+          //   )
+          // else
+          //   IconButton(
+          //     icon: const Icon(LucideIcons.refreshCw),
+          //     onPressed: () => ref
+          //         .read(currentStockProvider.notifier)
+          //         .triggerRecalculation(),
+          //   ),
         ],
       ),
       body: RefreshIndicator(
