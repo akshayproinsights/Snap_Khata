@@ -74,18 +74,18 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/items',
-                name: 'items',
-                builder: (context, state) => const ItemsPage(),
+                path: '/udhar-dashboard',
+                name: 'udhar-dashboard',
+                builder: (context, state) => const UdharDashboardPage(),
               ),
             ],
           ),
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/udhar-dashboard',
-                name: 'udhar-dashboard',
-                builder: (context, state) => const UdharDashboardPage(),
+                path: '/items',
+                name: 'items',
+                builder: (context, state) => const ItemsPage(),
               ),
             ],
           ),

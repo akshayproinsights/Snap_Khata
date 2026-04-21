@@ -955,17 +955,32 @@ async def verify_inventory_invoice(
                 
                 # Reverse old_balance from old vendor's ledger
                 if old_balance > 0 and old_vendor:
-                    old_ld_resp = db.client.table("vendor_ledgers").select("*").eq("username", username).eq("vendor_name", old_vendor).execute()
-                    if old_ld_resp.data:
-                        old_ld = old_ld_resp.data[0]
-                        new_old_balance = float(old_ld.get("balance_due", 0)) - old_balance
-                        db.client.table("vendor_ledgers").update({
-                            "balance_due": new_old_balance,
-                            "updated_at": datetime.utcnow().isoformat()
-                        }).eq("id", old_ld["id"]).execute()
+                    # Fetch the transaction to properly handle its state (e.g. linked payments)
+                    tx_resp = db.client.table("vendor_ledger_transactions").select("*").eq("invoice_number", existing_invoice.get("invoice_number")).eq("transaction_type", "INVOICE").eq("username", username).execute()
+                    if tx_resp.data:
+                        tx = tx_resp.data[0]
+                        tx_id = tx["id"]
+                        is_paid = tx.get("is_paid", False)
+                        old_ld_id = tx.get("ledger_id")
                         
-                    # Delete the old transaction completely
-                    db.client.table("vendor_ledger_transactions").delete().eq("invoice_number", existing_invoice.get("invoice_number")).eq("transaction_type", "INVOICE").execute()
+                        # If paid, delete the linked auto-payment transaction first to avoid leaving orphaned payments
+                        if is_paid:
+                            db.client.table("vendor_ledger_transactions").delete().eq("linked_transaction_id", tx_id).eq("username", username).execute()
+                        
+                        old_ld_resp = db.client.table("vendor_ledgers").select("*").eq("id", old_ld_id).execute()
+                        if old_ld_resp.data:
+                            old_ld = old_ld_resp.data[0]
+                            # Net change to balance: If INVOICE was unpaid, it contributed +amount. So we subtract it.
+                            # If INVOICE was paid, it contributed +amount and the PAYMENT contributed -amount (Net = 0). So we don't subtract.
+                            if not is_paid:
+                                new_old_balance = float(old_ld.get("balance_due", 0)) - float(tx.get("amount", 0))
+                                db.client.table("vendor_ledgers").update({
+                                    "balance_due": new_old_balance,
+                                    "updated_at": datetime.utcnow().isoformat()
+                                }).eq("id", old_ld_id).execute()
+                        
+                        # Finally, delete the old INVOICE transaction completely
+                        db.client.table("vendor_ledger_transactions").delete().eq("id", tx_id).execute()
         else:
             invoice_response = db.client.table("inventory_invoices").insert(invoice_data).execute()
             if not invoice_response.data:

@@ -632,10 +632,22 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
                     .eq('username', username) \
                     .execute()
 
-        # 4. Delete the transaction
+        # 4. Prevent "resurrection" by updating the source inventory_invoices
+        if tx_type == 'INVOICE':
+            invoice_num = transaction.get('invoice_number')
+            vendor_name = ledger.get('vendor_name')
+            if invoice_num and vendor_name:
+                db.client.table('inventory_invoices') \
+                    .update({'payment_mode': 'Cash', 'balance_owed': 0}) \
+                    .eq('username', username) \
+                    .eq('vendor_name', vendor_name) \
+                    .eq('invoice_number', invoice_num) \
+                    .execute()
+
+        # 5. Delete the transaction
         db.client.table('vendor_ledger_transactions').delete().eq('id', transaction_id).execute()
         
-        # 5. Update ledger balance
+        # 6. Update ledger balance
         db.client.table('vendor_ledgers').update({
             'balance_due': new_balance,
             'updated_at': datetime.utcnow().isoformat()
@@ -735,8 +747,24 @@ async def batch_delete_transactions(request: BatchActionRequest, current_user: D
             .eq('username', username) \
             .execute()
 
+        # Prevent "resurrection" by updating the source inventory_invoices for all deleted INVOICE transactions
+        for tx_id, tx in tx_map.items():
+            if tx.get('transaction_type') == 'INVOICE':
+                invoice_num = tx.get('invoice_number')
+                ledger_id = tx.get('ledger_id')
+                vendor_name = ledger_map.get(ledger_id, {}).get('vendor_name')
+                if invoice_num and vendor_name:
+                    try:
+                        db.client.table('inventory_invoices') \
+                            .update({'payment_mode': 'Cash', 'balance_owed': 0}) \
+                            .eq('username', username) \
+                            .eq('vendor_name', vendor_name) \
+                            .eq('invoice_number', invoice_num) \
+                            .execute()
+                    except Exception as e:
+                        logger.error(f"Failed to update inventory_invoice for {vendor_name} {invoice_num}: {e}")
+
         # Apply balance deltas — one UPDATE per affected ledger
-        last_balance = 0
         for ledger_id, delta in balance_deltas.items():
             if delta == 0:
                 continue
@@ -760,4 +788,223 @@ async def batch_delete_transactions(request: BatchActionRequest, current_user: D
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+@router.post("/vendor-ledgers/sync-from-invoices")
+async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_current_user)):
+    """
+    Reconcile vendor_ledgers against inventory_invoices.
+    Scans all Credit inventory_invoices with balance_owed > 0 and ensures
+    a matching vendor_ledger + INVOICE transaction exists.
+    Already-synced invoices are skipped (idempotent).
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all Credit invoices with outstanding balance
+        invoices_resp = db.client.table("inventory_invoices") \
+            .select("id, invoice_number, vendor_name, balance_owed, invoice_date") \
+            .eq("username", username) \
+            .eq("payment_mode", "Credit") \
+            .gt("balance_owed", 0) \
+            .execute()
+
+        invoices = invoices_resp.data or []
+        if not invoices:
+            return {
+                "status": "success",
+                "message": "No Credit invoices found to sync",
+                "ledgers_created": 0,
+                "transactions_created": 0,
+            }
+
+        invoice_numbers = [inv["invoice_number"] for inv in invoices if inv.get("invoice_number")]
+
+        # 2. Fetch existing INVOICE transactions for these invoice numbers
+        existing_tx_resp = db.client.table("vendor_ledger_transactions") \
+            .select("invoice_number") \
+            .eq("username", username) \
+            .eq("transaction_type", "INVOICE") \
+            .in_("invoice_number", invoice_numbers) \
+            .execute()
+
+        already_synced = {tx["invoice_number"] for tx in (existing_tx_resp.data or [])}
+
+        # 3. Only process invoices not yet in vendor_ledger_transactions
+        missing_invoices = [
+            inv for inv in invoices
+            if inv.get("invoice_number") and inv["invoice_number"] not in already_synced
+        ]
+
+        if not missing_invoices:
+            return {
+                "status": "success",
+                "message": "All Credit invoices already synced",
+                "ledgers_created": 0,
+                "transactions_created": 0,
+            }
+
+        # 4. Fetch existing vendor ledgers for this user
+        ledgers_resp = db.client.table("vendor_ledgers") \
+            .select("id, vendor_name, balance_due") \
+            .eq("username", username) \
+            .execute()
+
+        ledger_map: Dict[str, Dict] = {}
+        for row in (ledgers_resp.data or []):
+            ledger_map[str(row["vendor_name"]).strip().lower()] = row
+
+        now = datetime.utcnow().isoformat()
+        ledgers_created = 0
+        transactions_created = 0
+
+        for inv in missing_invoices:
+            vendor_name_raw = str(inv.get("vendor_name") or "").strip()
+            if not vendor_name_raw:
+                logger.warning(f"Skipping invoice {inv.get('invoice_number')} - no vendor name")
+                continue
+
+            vendor_key = vendor_name_raw.lower()
+            balance_owed = float(inv.get("balance_owed") or 0)
+
+            if vendor_key in ledger_map:
+                ledger = ledger_map[vendor_key]
+                ledger_id = ledger["id"]
+                new_balance = float(ledger.get("balance_due") or 0) + balance_owed
+                db.client.table("vendor_ledgers").update({
+                    "balance_due": new_balance,
+                    "updated_at": now,
+                }).eq("id", ledger_id).execute()
+                ledger_map[vendor_key]["balance_due"] = new_balance
+            else:
+                new_ledger_resp = db.client.table("vendor_ledgers").insert({
+                    "username": username,
+                    "vendor_name": vendor_name_raw,
+                    "balance_due": balance_owed,
+                }).execute()
+
+                if not new_ledger_resp.data:
+                    logger.error(f"Failed to create ledger for {vendor_name_raw}")
+                    continue
+
+                ledger_id = new_ledger_resp.data[0]["id"]
+                ledger_map[vendor_key] = {
+                    "id": ledger_id,
+                    "vendor_name": vendor_name_raw,
+                    "balance_due": balance_owed,
+                }
+                ledgers_created += 1
+
+            db.client.table("vendor_ledger_transactions").insert({
+                "username": username,
+                "ledger_id": ledger_id,
+                "transaction_type": "INVOICE",
+                "amount": balance_owed,
+                "invoice_number": inv["invoice_number"],
+                "is_paid": False,
+                "created_at": inv.get("invoice_date") or now,
+            }).execute()
+            transactions_created += 1
+
+        logger.info(
+            f"Sync complete for {username}: "
+            f"{ledgers_created} ledgers created, {transactions_created} transactions created"
+        )
+
+        return {
+            "status": "success",
+            "message": (
+                f"Sync complete: {ledgers_created} new ledger(s), "
+                f"{transactions_created} transaction(s) backfilled"
+            ),
+            "ledgers_created": ledgers_created,
+            "transactions_created": transactions_created,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing vendor ledgers from invoices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/vendor-ledgers/reconcile-balances")
+async def reconcile_all_ledger_balances(current_user: Dict = Depends(get_current_user)):
+    """
+    Recalculates the balance_due for all vendor ledgers based on the sum of their transactions.
+    INVOICE adds to the balance.
+    PAYMENT subtracts from the balance.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all ledgers
+        ledgers_resp = db.client.table("vendor_ledgers") \
+            .select("id, balance_due") \
+            .eq("username", username) \
+            .execute()
+            
+        if not ledgers_resp.data:
+            return {"status": "success", "message": "No ledgers found to reconcile", "updated_count": 0}
+
+        # 2. Fetch all transactions
+        tx_resp = db.client.table("vendor_ledger_transactions") \
+            .select("ledger_id, amount, transaction_type") \
+            .eq("username", username) \
+            .execute()
+
+        # 3. Calculate expected balances
+        expected_balances = {ld["id"]: 0.0 for ld in ledgers_resp.data}
+        
+        for tx in (tx_resp.data or []):
+            lid = tx["ledger_id"]
+            if lid in expected_balances:
+                amt = float(tx.get("amount", 0))
+                ttype = tx.get("transaction_type")
+                if ttype == "INVOICE":
+                    expected_balances[lid] += amt
+                elif ttype == "PAYMENT":
+                    expected_balances[lid] -= amt
+
+        # 4. Identify drifts and update
+        updated_count = 0
+        drifts_found = []
+        now = datetime.utcnow().isoformat()
+        
+        for ld in ledgers_resp.data:
+            lid = ld["id"]
+            current_bal = float(ld.get("balance_due", 0))
+            expected_bal = float(expected_balances[lid])
+            
+            # Use small epsilon for float comparison
+            if abs(current_bal - expected_bal) > 0.01:
+                db.client.table("vendor_ledgers").update({
+                    "balance_due": expected_bal,
+                    "updated_at": now
+                }).eq("id", lid).execute()
+                updated_count += 1
+                drifts_found.append({"ledger_id": lid, "old": current_bal, "new": expected_bal})
+
+        return {
+            "status": "success",
+            "message": f"Reconciliation complete. Updated {updated_count} ledgers.",
+            "updated_count": updated_count,
+            "drifts_resolved": drifts_found
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reconciling balances: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 

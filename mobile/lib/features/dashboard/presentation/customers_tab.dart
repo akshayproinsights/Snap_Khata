@@ -134,15 +134,15 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.8),
+            width: 0.5),
+        boxShadow: AppTheme.premiumShadow,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -150,8 +150,8 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
             InkWell(
               borderRadius:
                   group.receiptLink.isNotEmpty || group.receiptNumber.isNotEmpty
-                      ? const BorderRadius.vertical(top: Radius.circular(16))
-                      : BorderRadius.circular(16),
+                      ? const BorderRadius.vertical(top: Radius.circular(18))
+                      : BorderRadius.circular(18),
               onTap: () {
                 HapticFeedback.lightImpact();
                 context.pushNamed('order-detail', extra: group);

@@ -10,9 +10,6 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
-import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/dashboard/presentation/customers_tab.dart';
@@ -172,22 +169,24 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         backgroundColor: AppTheme.surface,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'HOME',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
-              ),
-            ),
             Text(
               greeting,
               style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.8,
+              ),
+            ),
+            const Text(
+              'Here is what’s happening in your shop today',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 color: AppTheme.textSecondary,
-                letterSpacing: 0.5,
+                letterSpacing: 0.1,
               ),
             ),
           ],
@@ -207,23 +206,38 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           ),
           const SizedBox(width: 8),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-          labelStyle: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
-          unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
-          indicatorSize: TabBarIndicatorSize.label,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [
-            Tab(text: 'Recent Deliveries'),
-            Tab(text: 'CUSTOMERS'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800, letterSpacing: 0.1),
+                unselectedLabelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorWeight: 3,
+                indicator: UnderlineTabIndicator(
+                  borderSide: const BorderSide(width: 3.5, color: AppTheme.primary),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                indicatorColor: AppTheme.primary,
+                labelColor: AppTheme.primary,
+                unselectedLabelColor: AppTheme.textSecondary,
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'SUPPLIERS'),
+                  Tab(text: 'CUSTOMERS'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: TabBarView(
@@ -241,51 +255,89 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   }
 
   Widget _buildAddNewItemsFab(BuildContext context) {
-    return SizedBox(
-      height: 54,
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: FloatingActionButton.extended(
         onPressed: () {
           HapticFeedback.mediumImpact();
           context.push('/inventory-upload');
         },
-        backgroundColor: const Color(0xFFEF4444), // red-500
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.camera_alt_rounded, size: 22),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        extendedIconLabelSpacing: 10,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
         label: Text(
           'Scan Purchase Bill',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.3,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
                 color: Colors.white,
+                fontSize: 15,
               ),
         ),
-        elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
 
   Widget _buildSnapNewOrderFab(BuildContext context) {
-    return SizedBox(
-      height: 54,
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF16A34A).withValues(alpha: 0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: FloatingActionButton.extended(
         onPressed: () {
           HapticFeedback.mediumImpact();
           context.pushNamed('upload');
         },
-        backgroundColor: const Color(0xFF16A34A), // green-700
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.camera_alt_rounded, size: 22),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        extendedIconLabelSpacing: 10,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
         label: Text(
           'Snap New Order',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.3,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
                 color: Colors.white,
+                fontSize: 15,
               ),
         ),
-        elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
@@ -309,7 +361,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
             Row(
               children: [
                 const Text(
-                  'Recent Vendor Deliveries',
+                  'Recent Supplier Deliveries',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -340,14 +392,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   Widget _buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        color: const Color(0xFFF1F5F9), // slate-100
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -357,17 +408,21 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         style: const TextStyle(
           fontSize: 14,
           color: AppTheme.textPrimary,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
           hintText: 'Search by vendor, invoice ID or item…',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13.5),
+          hintStyle: const TextStyle(
+            color: Color(0xFF94A3B8), // slate-400
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
           prefixIcon:
-              Icon(LucideIcons.search, size: 18, color: Colors.grey.shade400),
+              const Icon(LucideIcons.search, size: 18, color: Color(0xFF94A3B8)),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: Icon(LucideIcons.x,
-                      size: 16, color: Colors.grey.shade400),
+                  icon: const Icon(LucideIcons.x,
+                      size: 16, color: Color(0xFF94A3B8)),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -375,8 +430,10 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                 )
               : null,
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         ),
       ),
     );
@@ -526,7 +583,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'No vendor deliveries yet',
+                    'No supplier deliveries yet',
                     style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontWeight: FontWeight.bold,
@@ -610,228 +667,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       },
     );
   }
-  Widget _buildPartyDetailsTab(
-      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
-    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (itemsAsync.hasError) {
-      return Center(
-        child: Text('Error: ${itemsAsync.error}',
-            style: const TextStyle(color: AppTheme.error)),
-      );
-    }
-
-    final items = itemsAsync.value ?? [];
-    final Map<String, _VendorSummary> summaries = {};
-
-    for (var item in items) {
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchesName = (item.vendorName ?? '').toLowerCase().contains(query);
-        final matchesInvoice = item.invoiceNumber.toLowerCase().contains(query);
-        if (!matchesName && !matchesInvoice) continue;
-      }
-
-      final String vendorName = item.vendorName ?? 'Unknown';
-      if (!summaries.containsKey(vendorName)) {
-        summaries[vendorName] = _VendorSummary(
-          vendorName: vendorName,
-          latestInvoice: item.invoiceNumber,
-          totalAmount: 0,
-        );
-      }
-
-      summaries[vendorName]!.totalAmount += item.netBill;
-      summaries[vendorName]!.itemIds.add(item.id);
-
-      final String uniqueInvoice = item.invoiceNumber.isNotEmpty
-          ? '${item.invoiceNumber}_$vendorName'
-          : '${item.invoiceDate}_$vendorName';
-
-      summaries[vendorName]!.invoices.add(uniqueInvoice);
-    }
-
-    final vendorList = summaries.values.toList()
-      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
-
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-
-    return Column(
-      children: [
-        if (items.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: _buildSearchBox(),
-          ),
-        Expanded(
-          child: summaries.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.users,
-                          size: 48, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No vendors found matching "$_searchQuery"'
-                            : 'No specific vendor deliveries logged yet.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: vendorList.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final vendor = vendorList[index];
-
-                    return Material(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: AppTheme.border),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          // Navigate to Vendor Ledger Detail page to see complete vendor history
-                          final ledgerState = ref.read(vendorLedgerProvider);
-                          // Try to find an existing ledger for this vendor
-                          final existingLedger = ledgerState.ledgers.where(
-                            (l) => l.vendorName.toLowerCase() == vendor.vendorName.toLowerCase(),
-                          ).firstOrNull;
-
-                          final ledger = existingLedger ?? VendorLedger(
-                            id: -1, // Negative ID indicates view-only mode (no ledger exists yet)
-                            vendorName: vendor.vendorName,
-                            balanceDue: 0,
-                          );
-
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => VendorLedgerDetailPage(ledger: ledger),
-                            ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.primary.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.local_shipping,
-                                  size: 22,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      vendor.vendorName,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w700),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${vendor.orderCount} Delivery(s)',
-                                      style: const TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    currencyFormat.format(vendor.totalAmount),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w900,
-                                          color: AppTheme.textPrimary,
-                                          letterSpacing: -0.3,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      'Supplier',
-                                      style: TextStyle(
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 10,
-                                        letterSpacing: 0.2,
-                                      ),
-                                    ),
-                                  )
-                                ],
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-
-class _VendorSummary {
-  String vendorName;
-  String latestInvoice;
-  double totalAmount;
-  Set<int> itemIds = {};
-  Set<String> invoices = {};
-  int get orderCount => invoices.length;
-
-  _VendorSummary({
-    required this.vendorName,
-    required this.latestInvoice,
-    required this.totalAmount,
-  });
 }
 
 // ─── Vendor Delivery Card ─────────────────────────────────────────────────────
@@ -853,7 +688,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Delete Invoice?',
             style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
@@ -909,27 +744,19 @@ class _VendorDeliveryCard extends ConsumerWidget {
         HapticFeedback.heavyImpact();
         _confirmDelete(context, ref, bundle);
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: hasChori
-                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-                : Colors.grey.shade200,
+                ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                : AppTheme.border.withValues(alpha: 0.8),
             width: hasChori ? 1.5 : 1.0,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: hasChori
-                  ? const Color(0xFFEF4444).withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: AppTheme.premiumShadow,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,9 +883,9 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       Text(
                         '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
                         style: const TextStyle(
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textPrimary,
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const Text(' · ',
@@ -1068,9 +895,10 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       Text(
                         currencyFormat.format(bundle.totalAmount),
                         style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
                         ),
                       ),
                     ],

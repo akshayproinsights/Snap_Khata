@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from auth import get_current_user
 from database import get_database_client
+from routes.vendor_ledgers import sync_vendor_ledgers_from_invoices
 
 logger = logging.getLogger(__name__)
 
@@ -463,6 +464,9 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     db.set_user_context(username)
     
     try:
+        # Trigger sync from inventory invoices to ensure vendor ledgers are up to date
+        await sync_vendor_ledgers_from_invoices(current_user)
+
         # Calculate Total Receivable (customer ledgers balance > 0)
         receivable_resp = db.client.table('customer_ledgers') \
             .select('balance_due') \

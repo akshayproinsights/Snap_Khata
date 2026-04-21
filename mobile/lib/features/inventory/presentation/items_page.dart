@@ -81,7 +81,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
         title: const Text(
-          'ITEM STOCK',
+          'Track Items',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,

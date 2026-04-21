@@ -308,11 +308,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('ORDER DETAILS',
+        title: const Text('Order Details',
             style: TextStyle(
-              fontSize: 22, // Slightly smaller for detail pages but still prominent
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
             )),
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
