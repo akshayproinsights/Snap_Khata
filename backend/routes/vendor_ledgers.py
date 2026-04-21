@@ -835,11 +835,16 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
 
         already_synced = {tx["invoice_number"] for tx in (existing_tx_resp.data or [])}
 
-        # 3. Only process invoices not yet in vendor_ledger_transactions
-        missing_invoices = [
-            inv for inv in invoices
-            if inv.get("invoice_number") and inv["invoice_number"] not in already_synced
-        ]
+        # 3. Only process invoices not yet fully synced, deduplicated by invoice number
+        unique_missing = {}
+        for inv in invoices:
+            inv_num = inv.get("invoice_number")
+            if inv_num and inv_num not in already_synced:
+                # Store the invoice, ensuring we only process one entry per invoice_number
+                if inv_num not in unique_missing:
+                    unique_missing[inv_num] = inv
+        
+        missing_invoices = list(unique_missing.values())
 
         if not missing_invoices:
             return {

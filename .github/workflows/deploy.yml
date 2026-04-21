@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - main
+      - stable
 
 jobs:
   # ── BUILD JOB: Build all frontend assets on GitHub Actions ───────────────
@@ -128,8 +129,8 @@ jobs:
             # Ensure safe directory to avoid Git 128 errors
             git config --global --add safe.directory /home/deploy/Snap_Khata
 
-            # Pull latest code (backend changes, configs, etc.)
-            git pull origin main
+            # Pull latest code (the branch that triggered this workflow)
+            git pull origin ${{ github.ref_name }}
 
 
             # Update .env file with secrets from GitHub
