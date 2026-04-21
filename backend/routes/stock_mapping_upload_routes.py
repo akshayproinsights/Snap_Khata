@@ -538,11 +538,12 @@ async def upload_mapping_sheet(
             processed_count += 1
 
         # Final Recalculation (Background Task)
+        logger.info(f"✅ Mapping sheet upload complete for {username}. Auto-recalculation enabled.")
         logger.info(f"🔄 Queuing stock recalculation for {username}...")
         try:
             # Create a task_id for tracking
             recalc_task_id = str(uuid.uuid4())
-            
+        
             # Initialize task in DB (required for wrapper updates)
             db.insert("recalculation_tasks", {
                 "task_id": recalc_task_id,
@@ -552,11 +553,11 @@ async def upload_mapping_sheet(
                 "progress": {"total": 0, "processed": 0},
                 "created_at": datetime.utcnow().isoformat()
             })
-            
+        
             # Run in background (uses stock_executor thread pool)
             background_tasks.add_task(recalculate_stock_wrapper, recalc_task_id, username)
             logger.info(f"✅ Stock recalculation queued (Task: {recalc_task_id})")
-            
+        
         except Exception as e:
             logger.error(f"Failed to queue stock recalculation: {e}")
             # Don't fail the upload just because auto-recalc failed

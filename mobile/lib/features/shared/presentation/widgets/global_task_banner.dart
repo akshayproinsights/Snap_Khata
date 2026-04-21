@@ -231,14 +231,21 @@ class _LegacyTaskBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
+          if (taskState.actionLabel != null)
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 18,
+              color: Color(0xFF00AA44),
+            )
+          else
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0066FF)),
+              ),
             ),
-          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

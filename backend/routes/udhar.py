@@ -194,7 +194,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
         except Exception as e:
             logger.error(f"Error batch-inserting ledger transactions: {e}")
 
-# @router.get("/ledgers")
+@router.get("/ledgers")
 async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
     """Get all customer ledgers for the current user."""
     username = current_user.get("username")
@@ -219,7 +219,7 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         logger.error(f"Error fetching ledgers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# @router.get("/ledgers/{ledger_id}/transactions")
+@router.get("/ledgers/{ledger_id}/transactions")
 async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(get_current_user)):
     """Get transaction history for a specific ledger."""
     username = current_user.get("username")
@@ -328,7 +328,7 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         logger.error(f"Error fetching transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# @router.delete("/ledgers/{ledger_id}")
+@router.delete("/ledgers/{ledger_id}")
 async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(get_current_user)):
     """Delete a customer ledger and its transactions."""
     username = current_user.get("username")
@@ -391,7 +391,7 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
         logger.error(f"Error deleting ledger: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# @router.post("/ledgers/{ledger_id}/pay")
+@router.post("/ledgers/{ledger_id}/pay")
 async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: Dict = Depends(get_current_user)):
     """Record a payment from the customer, reducing their balance."""
     username = current_user.get("username")
@@ -452,7 +452,7 @@ class ManualUdharEntry(BaseModel):
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
 
-# @router.get("/dashboard-summary")
+@router.get("/dashboard-summary")
 async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     """Get the top-level summary for the Udhar dashboard."""
     username = current_user.get("username")
@@ -534,7 +534,7 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
         logger.error(f"Error fetching dashboard summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# @router.post("/manual-entry")
+@router.post("/manual-entry")
 async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depends(get_current_user)):
     """Create a manual Udhar entry for a customer or vendor."""
     username = current_user.get("username")
@@ -655,7 +655,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
 class TogglePaidStatusRequest(BaseModel):
     is_paid: bool
 
-# @router.post("/ledgers/{ledger_id}/transactions/{transaction_id}/toggle-paid")
+@router.post("/ledgers/{ledger_id}/transactions/{transaction_id}/toggle-paid")
 async def toggle_transaction_paid_status(
     ledger_id: int,
     transaction_id: int,

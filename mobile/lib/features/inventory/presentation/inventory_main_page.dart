@@ -16,6 +16,7 @@ import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledg
 
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/dashboard/presentation/customers_tab.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -36,10 +37,18 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {}); // Rebuild for FAB switch
+      }
+    });
+    // Fetch verified orders so the CUSTOMERS tab shows all processed orders
+    // (paid, partial, credit) as soon as the Home page is opened.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(verifiedProvider);
+      if (state.records.isEmpty && !state.isLoading) {
+        ref.read(verifiedProvider.notifier).fetchRecords();
       }
     });
   }
@@ -214,7 +223,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           tabs: const [
             Tab(text: 'Recent Deliveries'),
             Tab(text: 'CUSTOMERS'),
-            Tab(text: 'Party Details'),
           ],
         ),
       ),
@@ -223,7 +231,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         children: [
           _buildRecentDeliveriesTab(context, itemsAsync, pendingCount),
           const CustomersTab(),
-          _buildPartyDetailsTab(context, itemsAsync),
         ],
       ),
       floatingActionButton: _tabController.index == 1
@@ -245,7 +252,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         foregroundColor: Colors.white,
         icon: const Icon(Icons.camera_alt_rounded, size: 22),
         label: Text(
-          'Add New Items',
+          'Scan Purchase Bill',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.3,
@@ -527,7 +534,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap "Add New Items" to snap\na vendor bill or purchase order',
+                    'Tap "Scan Purchase Bill" to snap\na vendor bill or purchase order',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                   ),
@@ -1069,7 +1076,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
                     ],
                   ),
 
-                  // Row 4: Chori Catcher alert (only if triggered)
+                  // Row 4: Rate Hike alert (only if triggered)
                   if (hasChori)
                     Padding(
                       padding: const EdgeInsets.only(top: 5),

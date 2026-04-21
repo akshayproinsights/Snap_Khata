@@ -59,6 +59,20 @@ class InventoryReviewPage extends ConsumerStatefulWidget {
 }
 
 class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Always fetch fresh data when this page mounts.
+    // The inventoryProvider build() only runs once (on first creation), so
+    // navigating here after AI processing completes would show stale/empty
+    // state without this explicit refresh.
+    Future.microtask(() {
+      if (mounted) {
+        ref.read(inventoryProvider.notifier).fetchItems();
+      }
+    });
+  }
+
   List<InventoryInvoiceBundle> _groupItems(List<InventoryItem> items) {
     final Map<String, InventoryInvoiceBundle> groups = {};
     for (final item in items) {
@@ -244,7 +258,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => context.go('/dashboard'),
+          onPressed: () => context.go('/inventory'),
         ),
         title: const Text('PENDING REVIEW',
             style: TextStyle(

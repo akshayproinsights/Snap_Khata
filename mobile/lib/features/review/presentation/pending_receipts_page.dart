@@ -127,7 +127,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (state.error == null) {
       AppToast.showSuccess(context, 'Invoices synced successfully!',
           title: 'Sync Complete');
-      context.go('/dashboard');
+      context.go('/inventory');
     } else {
       AppToast.showError(context, state.error!, title: 'Sync Failed');
     }
@@ -157,7 +157,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft, size: 20),
-          onPressed: () => context.go('/dashboard'),
+          onPressed: () => context.go('/inventory'),
         ),
         title: const Text('PENDING REVIEW',
             style: TextStyle(

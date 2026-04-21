@@ -92,8 +92,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 120),
         child: Column(
           children: [
-            // ── Chori Catcher Alert banner ──────────────────────────
-            if (hasChori) _buildChoriCatcherBanner(context),
+            // ── Rate Hike Alert banner ──────────────────────────
+            if (hasChori) _buildRateHikeBanner(context),
             _buildHeader(context),
             const SizedBox(height: 12),
             _buildVendorCard(context),
@@ -106,8 +106,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  // ── Chori Catcher banner ────────────────────────────────────────────────────
-  Widget _buildChoriCatcherBanner(BuildContext context) {
+  // ── Rate Hike banner ────────────────────────────────────────────────────
+  Widget _buildRateHikeBanner(BuildContext context) {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
@@ -149,7 +149,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '🔴 Chori Catcher Alert',
+                  '🔴 Rate Hike Alert',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,

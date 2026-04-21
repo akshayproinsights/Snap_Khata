@@ -60,8 +60,8 @@ class UdharDashboardPage extends ConsumerWidget {
                       // Tabs
                       TabBar(
                         tabs: [
-                          Tab(icon: Icon(Icons.person), text: 'Customers'),
                           Tab(icon: Icon(Icons.local_shipping), text: 'Suppliers'),
+                          Tab(icon: Icon(Icons.person), text: 'Customers'),
                         ],
                         labelColor: Theme.of(context).colorScheme.primary,
                         unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -154,8 +154,8 @@ class UdharDashboardPage extends ConsumerWidget {
                       const Expanded(
                         child: TabBarView(
                           children: [
-                            UdharListPage(),
                             VendorLedgerListPage(),
+                            UdharListPage(),
                           ],
                         ),
                       ),

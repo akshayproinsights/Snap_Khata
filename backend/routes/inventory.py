@@ -1022,11 +1022,11 @@ async def verify_inventory_invoice(
             vendor_name_clean = str(request.vendor_name).strip()
             balance_owed_float = float(balance_owed_val)
             
-            # Fetch existing ledger
+            # Fetch existing ledger (case-insensitive to prevent duplicate ledgers)
             ledger_resp = db.client.table('vendor_ledgers') \
                 .select('*') \
                 .eq('username', username) \
-                .eq('vendor_name', vendor_name_clean) \
+                .ilike('vendor_name', vendor_name_clean) \
                 .execute()
                 
             if ledger_resp.data:
