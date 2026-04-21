@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from auth import get_current_user
 from database import get_database_client
+from routes.vendor_ledgers import sync_vendor_ledgers_from_invoices
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,8 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     OPTIMIZED: Pre-fetches all ledgers and existing transactions in 2 bulk queries
     instead of 2 sequential queries per record, reducing DB round-trips from O(N) to O(1).
     """
+    return # DISABLED FOR NOW: Party Details hidden
+    
     if not final_records:
         return
 
@@ -113,6 +116,9 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
             if receipt_number and (ledger_id, str(receipt_number)) in existing_tx_set:
                 logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
                 continue
+                
+            if receipt_number:
+                existing_tx_set.add((ledger_id, str(receipt_number)))
 
             # Accumulate balance delta (in case multiple records for same ledger)
             ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(existing_ledger.get('balance_due', 0))) + balance_due_float
@@ -131,7 +137,15 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                 pending_new_ledgers[customer_name_clean] = {
                     'balance_due': 0.0,
                     'transactions': [],
+                    'receipts_processed': set()
                 }
+            
+            # Dedup for new ledgers
+            if receipt_number:
+                if receipt_number in pending_new_ledgers[customer_name_clean]['receipts_processed']:
+                    continue
+                pending_new_ledgers[customer_name_clean]['receipts_processed'].add(receipt_number)
+
             pending_new_ledgers[customer_name_clean]['balance_due'] += balance_due_float
             pending_new_ledgers[customer_name_clean]['transactions'].append({
                 'receipt_number': receipt_number,
@@ -237,7 +251,19 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             .order('created_at', desc=True) \
             .execute()
             
-        transactions = tx_resp.data
+        raw_transactions = tx_resp.data
+        
+        # Deduplicate INVOICE transactions (to handle any existing duplicate data)
+        transactions = []
+        seen_receipts = set()
+        for tx in raw_transactions:
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number'):
+                rn = tx['receipt_number']
+                if rn in seen_receipts:
+                    continue
+                seen_receipts.add(rn)
+            transactions.append(tx)
+            
         enriched_transactions = []
         
         # Enrich INVOICE transactions with true grand_total and received_amount
@@ -438,6 +464,9 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     db.set_user_context(username)
     
     try:
+        # Trigger sync from inventory invoices to ensure vendor ledgers are up to date
+        await sync_vendor_ledgers_from_invoices(current_user)
+
         # Calculate Total Receivable (customer ledgers balance > 0)
         receivable_resp = db.client.table('customer_ledgers') \
             .select('balance_due') \

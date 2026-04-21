@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:mobile/core/theme/app_theme.dart';
 
 import '../providers/vendor_ledger_provider.dart';
 import '../../domain/models/vendor_ledger_models.dart';
@@ -177,13 +178,17 @@ class _LedgerCard extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.red.shade50,
-              radius: 24,
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
               child: Icon(
                 Icons.local_shipping,
-                size: 24,
-                color: Colors.red.shade800,
+                size: 20,
+                color: Theme.of(context).colorScheme.error,
               ),
             ),
             const SizedBox(width: 16),
@@ -223,16 +228,19 @@ class _LedgerCard extends ConsumerWidget {
                     currencyFormatter.format(ledger.balanceDue),
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
+                      fontWeight: FontWeight.w800,
+                      color: Theme.of(context).colorScheme.error,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    'You will give',
+                    'YOU WILL GIVE',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile/core/theme/app_theme.dart';
 
 
 import 'package:mobile/features/udhar/presentation/udhar_list_page.dart';
@@ -24,8 +25,8 @@ class UdharDashboardPage extends ConsumerWidget {
           title: const Text(
             'CREDIT',
             style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
             ),
           ),
@@ -59,12 +60,23 @@ class UdharDashboardPage extends ConsumerWidget {
                       // Tabs
                       TabBar(
                         tabs: [
-                          Tab(icon: Icon(Icons.person), text: 'Customers'),
-                          Tab(icon: Icon(Icons.local_shipping), text: 'Suppliers'),
+                          const Tab(icon: Icon(Icons.local_shipping), text: 'Suppliers'),
+                          const Tab(icon: Icon(Icons.person), text: 'Customers'),
                         ],
+                        indicator: UnderlineTabIndicator(
+                          borderSide: BorderSide(
+                            width: 3,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(3),
+                            topRight: Radius.circular(3),
+                          ),
+                        ),
+                        labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
                         labelColor: Theme.of(context).colorScheme.primary,
                         unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                        indicatorColor: Theme.of(context).colorScheme.primary,
                       ),
                       
                       // Search Bar
@@ -86,8 +98,8 @@ class UdharDashboardPage extends ConsumerWidget {
                                     borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                                   ),
                                   filled: true,
-                                  fillColor: Theme.of(context).colorScheme.surface,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 ),
                                 onChanged: (value) {
                                   ref.read(udharSearchQueryProvider.notifier).setQuery(value);
@@ -153,8 +165,8 @@ class UdharDashboardPage extends ConsumerWidget {
                       const Expanded(
                         child: TabBarView(
                           children: [
-                            UdharListPage(),
                             VendorLedgerListPage(),
+                            UdharListPage(),
                           ],
                         ),
                       ),
@@ -221,7 +233,7 @@ class UdharDashboardPage extends ConsumerWidget {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -232,67 +244,89 @@ class UdharDashboardPage extends ConsumerWidget {
       ),
       child: Row(
         children: [
+          // PAYABLE (YOU WILL GIVE)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.person, color: Colors.green, size: 16),
-                    SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.local_shipping, color: Theme.of(context).colorScheme.error, size: 14),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'YOU WILL GET',
+                      'YOU WILL GIVE',
                       style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        letterSpacing: 1.0,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  currencyFormatter.format(receivable),
-                  style: const TextStyle(
-                    color: Colors.green,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
+                  currencyFormatter.format(payable),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 24,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ],
             ),
           ),
+          
           Container(
             width: 1,
-            height: 50,
-            color: Theme.of(context).colorScheme.outlineVariant,
+            height: 48,
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
+          
+          // RECEIVABLE (YOU WILL GET)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.local_shipping, color: Colors.red, size: 16),
-                    SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.person, color: Theme.of(context).colorScheme.primary, size: 14),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'YOU WILL GIVE',
+                      'YOU WILL GET',
                       style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        letterSpacing: 1.0,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  currencyFormatter.format(payable),
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
+                  currencyFormatter.format(receivable),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 24,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ],
@@ -302,5 +336,4 @@ class UdharDashboardPage extends ConsumerWidget {
       ),
     );
   }
-
 }

@@ -22,7 +22,7 @@ class InventoryHubPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'ITEM STOCK',
+              'Track Items',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,

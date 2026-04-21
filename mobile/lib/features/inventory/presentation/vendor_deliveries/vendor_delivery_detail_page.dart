@@ -6,6 +6,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 
 class VendorDeliveryDetailPage extends StatelessWidget {
   final InventoryInvoiceBundle bundle;
@@ -49,96 +53,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  /// Shows the centralized payment recording flow dialog.
-  void _showAddPaymentDialog(BuildContext context) {
-    // TODO: Connect to your centralized payment recording flow
-    // For now, shows a placeholder dialog - replace with your actual payment flow
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Icon(
-                LucideIcons.wallet,
-                size: 48,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Record Payment',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Bill: ${bundle.invoiceNumber}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Amount Due: ${_formatCurrency(bundle.totalAmount)}',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // TODO: Implement actual payment recording
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF97316),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Confirm Payment',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -177,8 +92,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 120),
         child: Column(
           children: [
-            // ── Chori Catcher Alert banner ──────────────────────────
-            if (hasChori) _buildChoriCatcherBanner(context),
+            // ── Rate Hike Alert banner ──────────────────────────
+            if (hasChori) _buildRateHikeBanner(context),
             _buildHeader(context),
             const SizedBox(height: 12),
             _buildVendorCard(context),
@@ -191,8 +106,8 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  // ── Chori Catcher banner ────────────────────────────────────────────────────
-  Widget _buildChoriCatcherBanner(BuildContext context) {
+  // ── Rate Hike banner ────────────────────────────────────────────────────
+  Widget _buildRateHikeBanner(BuildContext context) {
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
@@ -234,7 +149,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '🔴 Chori Catcher Alert',
+                  '🔴 Rate Hike Alert',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -325,29 +240,36 @@ class VendorDeliveryDetailPage extends StatelessWidget {
                                 color: Theme.of(context).colorScheme.onSurface,
                                 letterSpacing: -0.5)),
                         const SizedBox(height: 10),
-                        // ── Add Payment Button (replaces passive status badge) ──────────────
+                        // ── Credit Status Badge ──────────────
                         if (!isPaid)
-                          SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _showAddPaymentDialog(context),
-                              icon: const Icon(LucideIcons.wallet, size: 18),
-                              label: const Text(
-                                'Add Payment',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.red.withValues(alpha: 0.4),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFF97316), // Energetic orange
-                                foregroundColor: Colors.white,
-                                elevation: 2,
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.alertCircle,
+                                  size: 13,
+                                  color: Theme.of(context).colorScheme.error,
                                 ),
-                              ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Credit (Due)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         else
@@ -557,6 +479,14 @@ class VendorDeliveryDetailPage extends StatelessWidget {
               ],
             ),
           ),
+          if (!bundle.isPaid) ...[
+            const SizedBox(height: 14),
+            _VendorCreditBookButton(
+              vendorName: bundle.vendorName.isNotEmpty
+                  ? bundle.vendorName
+                  : 'Unknown Vendor',
+            ),
+          ],
         ],
       ),
     );
@@ -722,6 +652,117 @@ class _ItemRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 10)),
+      ),
+    );
+  }
+}
+
+class _VendorCreditBookButton extends ConsumerWidget {
+  final String vendorName;
+
+  const _VendorCreditBookButton({
+    required this.vendorName,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () async {
+        HapticFeedback.lightImpact();
+
+        VendorLedger? findMatch(List<VendorLedger> ledgers) {
+          final sName = vendorName.toLowerCase().trim();
+          if (sName.isEmpty) return null;
+
+          // 1. Try exact match on Name
+          if (sName != 'unknown' && sName != 'unknown vendor') {
+            final matches = ledgers.where((l) => l.vendorName.toLowerCase().trim() == sName);
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          // 2. Try partial match on Name
+          if (sName != 'unknown' && sName != 'unknown vendor') {
+            final matches = ledgers.where((l) => l.vendorName.toLowerCase().contains(sName));
+            if (matches.isNotEmpty) return matches.first;
+          }
+
+          return null;
+        }
+
+        final state = ref.read(vendorLedgerProvider);
+        VendorLedger? match = findMatch(state.ledgers);
+
+        // If no match found, try refreshing data once
+        if (match == null) {
+          await ref.read(vendorLedgerProvider.notifier).fetchLedgers();
+          final newState = ref.read(vendorLedgerProvider);
+          match = findMatch(newState.ledgers);
+        }
+
+        if (!context.mounted) return;
+
+        if (match == null) {
+          // If still no match, go to vendor ledger list
+          context.push('/inventory/vendor-ledger');
+          return;
+        }
+
+        context.push('/inventory/vendor-ledger/${match.id}', extra: match);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.orange.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(LucideIcons.bookOpen, size: 18, color: Colors.orange),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'View in Credit Book',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  Text(
+                    'Check previous balances & history',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(LucideIcons.chevronRight, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+          ],
+        ),
       ),
     );
   }

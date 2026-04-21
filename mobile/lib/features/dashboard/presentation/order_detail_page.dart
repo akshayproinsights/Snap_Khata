@@ -16,6 +16,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -307,11 +308,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('ORDER DETAILS',
+        title: const Text('Order Details',
             style: TextStyle(
-              fontSize: 22, // Slightly smaller for detail pages but still prominent
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
             )),
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
@@ -1544,6 +1545,8 @@ class _CreditBookButton extends ConsumerWidget {
           final newState = ref.read(udharProvider);
           match = findMatch(newState.ledgers);
         }
+
+        if (!context.mounted) return;
 
         if (match == null) {
           // If still no match, go to dashboard

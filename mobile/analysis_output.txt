@@ -1,0 +1,101 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+Analyzing mobile...                                             
+
+warning • The value of the local variable 'shopName' isn't used • lib/features/dashboard/presentation/dashboard_page.dart:48:18 • unused_local_variable
+  error • Undefined class 'CustomerLedger' • lib/features/dashboard/presentation/order_detail_page.dart:1505:9 • undefined_class
+  error • The name 'CustomerLedger' isn't a type, so it can't be used as a type argument • lib/features/dashboard/presentation/order_detail_page.dart:1505:40 • non_type_as_type_argument
+  error • The property 'customerName' can't be unconditionally accessed because the receiver can be 'null' • lib/features/dashboard/presentation/order_detail_page.dart:1513:52 • unchecked_use_of_nullable_value
+  error • The property 'customerName' can't be unconditionally accessed because the receiver can be 'null' • lib/features/dashboard/presentation/order_detail_page.dart:1519:52 • unchecked_use_of_nullable_value
+  error • The property 'customerName' can't be unconditionally accessed because the receiver can be 'null' • lib/features/dashboard/presentation/order_detail_page.dart:1525:52 • unchecked_use_of_nullable_value
+  error • The property 'customerName' can't be unconditionally accessed because the receiver can be 'null' • lib/features/dashboard/presentation/order_detail_page.dart:1531:52 • unchecked_use_of_nullable_value
+  error • Undefined class 'CustomerLedger' • lib/features/dashboard/presentation/order_detail_page.dart:1539:9 • undefined_class
+   info • Don't use 'BuildContext's across async gaps • lib/features/dashboard/presentation/order_detail_page.dart:1550:11 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/features/dashboard/presentation/order_detail_page.dart:1554:9 • use_build_context_synchronously
+  error • The named parameter 'style' isn't defined • lib/features/inventory/presentation/inventory_item_mapping_page.dart:75:15 • undefined_named_parameter
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:80:11 • missing_identifier
+  error • Expected to find ')' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:80:11 • expected_token
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:81:9 • expected_token
+warning • Dead code • lib/features/inventory/presentation/inventory_item_mapping_page.dart:81:10 • dead_code
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:81:10 • missing_identifier
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:81:10 • unexpected_token
+warning • The label 'actions' isn't used • lib/features/inventory/presentation/inventory_item_mapping_page.dart:82:9 • unused_label
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:99:9 • expected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:99:10 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:99:10 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:99:10 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:100:7 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:100:7 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:100:7 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:100:8 • missing_identifier
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:100:8 • unexpected_token
+warning • The label 'body' isn't used • lib/features/inventory/presentation/inventory_item_mapping_page.dart:101:7 • unused_label
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:178:7 • expected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:178:8 • missing_identifier
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:178:8 • unexpected_token
+warning • The label 'floatingActionButton' isn't used • lib/features/inventory/presentation/inventory_item_mapping_page.dart:180:7 • unused_label
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:202:7 • expected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:202:8 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:202:8 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:202:8 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/inventory_item_mapping_page.dart:203:5 • missing_identifier
+  error • Unexpected text ';' • lib/features/inventory/presentation/inventory_item_mapping_page.dart:203:5 • unexpected_token
+   info • Unnecessary empty statement • lib/features/inventory/presentation/inventory_item_mapping_page.dart:203:6 • empty_statements
+  error • The method '_togglePaidStatus' isn't defined for the type '_VendorLedgerDetailPageState' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:356:27 • undefined_method
+  error • The method '_togglePaidStatus' isn't defined for the type '_VendorLedgerDetailPageState' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1106:59 • undefined_method
+  error • The method '_togglePaidStatus' isn't defined for the type '_VendorLedgerDetailPageState' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1130:50 • undefined_method
+  error • Expected a method, getter, setter or operator declaration • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1197:3 • expected_executable
+warning • The declaration '_markPurchaseAsPaid' isn't referenced • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1199:16 • unused_element
+  error • Undefined name 'widget' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1202:62 • undefined_identifier
+  error • Undefined name 'ref' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1205:27 • undefined_identifier
+  error • Undefined name 'mounted' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1212:20 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1213:28 • undefined_identifier
+  error • The function '_loadData' isn't defined • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1216:7 • undefined_function
+  error • Undefined name 'mounted' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1217:16 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1218:28 • undefined_identifier
+warning • The value of the local variable 'totalAmount' isn't used • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1228:11 • unused_local_variable
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1239:25 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1242:27 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1245:29 • undefined_identifier
+  error • The function '_navigateToBillDetails' isn't defined • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1252:13 • undefined_function
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1290:53 • undefined_identifier
+  error • Undefined name 'dateFormatter' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1301:33 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1305:45 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1313:78 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1322:50 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1329:72 • undefined_identifier
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1335:44 • undefined_identifier
+  error • Expected to find ']' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1341:21 • expected_token
+  error • Expected to find ']' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1342:19 • expected_token
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1343:17 • missing_identifier
+  error • Expected to find ')' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1343:17 • expected_token
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1345:15 • missing_identifier
+  error • Expected to find ')' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1345:15 • expected_token
+  error • Expected to find ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1371:9 • expected_token
+warning • Dead code • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1371:10 • dead_code
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1371:10 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1371:10 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1371:10 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:7 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:7 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:7 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:8 • missing_identifier
+  error • Expected to find ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:8 • expected_token
+  error • Unexpected text ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1372:8 • unexpected_token
+  error • Expected an identifier • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1373:5 • missing_identifier
+  error • Unexpected text ';' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1373:5 • unexpected_token
+   info • Unnecessary empty statement • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1373:6 • empty_statements
+  error • Undefined name 'context' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1379:16 • undefined_identifier
+  error • Expected a method, getter, setter or operator declaration • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart:1469:1 • expected_executable
+  error • Undefined name 'AppTheme' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart:175:17 • undefined_identifier
+  error • Undefined name 'AppTheme' • lib/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart:176:17 • undefined_identifier
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/review/presentation/receipt_review_page.dart:425:55 • deprecated_member_use
+  error • Undefined name 'AppTheme' • lib/features/shared/presentation/widgets/payment_summary_card.dart:50:15 • undefined_identifier
+  error • Undefined name 'AppTheme' • lib/features/shared/presentation/widgets/payment_summary_card.dart:51:15 • undefined_identifier
+  error • Undefined name 'AppTheme' • lib/features/udhar/presentation/udhar_dashboard_page.dart:229:15 • undefined_identifier
+  error • Undefined name 'AppTheme' • lib/features/udhar/presentation/udhar_dashboard_page.dart:230:15 • undefined_identifier
+warning • The value of the local variable 'borderColor' isn't used • lib/shared/widgets/metric_card.dart:91:11 • unused_local_variable
+
+93 issues found. (ran in 4.0s)

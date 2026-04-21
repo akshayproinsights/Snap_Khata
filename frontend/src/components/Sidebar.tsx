@@ -31,7 +31,7 @@ const Sidebar: React.FC = () => {
     const { inventory, sales } = useGlobalStatus();
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [expandedSections, setExpandedSections] = useState<string[]>(['Sales', 'Inventory', 'Credit']);
+    const [expandedSections, setExpandedSections] = useState<string[]>(['Sales', 'Inventory']);
 
     const toggleSection = (sectionName: string) => {
         setExpandedSections(prev =>
@@ -42,8 +42,8 @@ const Sidebar: React.FC = () => {
     };
 
     const navigation: NavItem[] = [
-        { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-        { name: 'Credit / Ledger', path: '/credit', icon: Wallet },
+        // { name: 'Dashboard', path: '/', icon: LayoutDashboard }, // HIDDEN: HOME page
+        // { name: 'Credit / Ledger', path: '/credit', icon: Wallet }, // HIDDEN: Party Details
         {
             name: 'Sales',
             icon: ShoppingCart,
@@ -223,7 +223,7 @@ const Sidebar: React.FC = () => {
             <div className={`h-20 border-b border-gray-200 flex items-center ${isSidebarOpen ? 'px-5 justify-between' : 'justify-center'}`}>
                 {isSidebarOpen ? (
                     <>
-                        <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+                        <Link to="/sales/upload" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
                             <img
                                 src="/snapkhata-icon.png"
                                 alt="SnapKhata Icon"
@@ -244,7 +244,7 @@ const Sidebar: React.FC = () => {
                     </>
                 ) : (
                     <div className="flex items-center justify-center">
-                        <Link to="/" className="flex items-center justify-center p-1" title="SnapKhata Home">
+                        <Link to="/sales/upload" className="flex items-center justify-center p-1" title="SnapKhata Home">
                             <img
                                 src="/snapkhata-icon.png"
                                 alt="SnapKhata"

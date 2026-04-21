@@ -226,22 +226,28 @@ class _LedgerCard extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            // Avatar circle — subtle teal for normal, amber for overdue
-            CircleAvatar(
-              backgroundColor: isOverdue
-                  ? Colors.red.shade50
-                  : const Color(0xFFE8F5E9),
-              radius: 22,
-              child: Text(
-                ledger.customerName.isNotEmpty
-                    ? ledger.customerName[0].toUpperCase()
-                    : 'C',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isOverdue
-                      ? Colors.red.shade700
-                      : const Color(0xFF2E7D32),
+            // Avatar circle — subtle primary for normal, error for overdue
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isOverdue
+                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.08)
+                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  ledger.customerName.isNotEmpty
+                      ? ledger.customerName[0].toUpperCase()
+                      : 'C',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isOverdue
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -313,11 +319,12 @@ class _LedgerCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isOverdue ? 'Overdue' : 'To collect',
+                  isOverdue ? 'OVERDUE' : 'TO COLLECT',
                   style: TextStyle(
-                    fontSize: 11,
-                    color: isOverdue ? Colors.red.shade400 : AppTheme.textSecondary,
-                    fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 10,
+                    color: isOverdue ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],

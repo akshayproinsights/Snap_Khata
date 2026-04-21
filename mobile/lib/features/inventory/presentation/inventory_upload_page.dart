@@ -1491,7 +1491,7 @@ class _InventoryLoadingOverlayState
                     onPressed: isUploading
                         ? null
                         : () {
-                            if (context.mounted) context.go('/dashboard');
+                            if (context.mounted) context.go('/inventory');
                           },
                   ),
                   const Expanded(
@@ -1760,7 +1760,7 @@ class _InventoryLoadingOverlayState
                     // ── Go to Home card ──
                     GestureDetector(
                       onTap: () {
-                        if (context.mounted) context.go('/dashboard');
+                        if (context.mounted) context.go('/inventory');
                       },
                       child: Container(
                         width: double.infinity,

@@ -3,6 +3,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/domain/models/user_model.dart';
+import 'package:mobile/core/routing/app_router.dart';
 
 // Provides the AuthRepository instance
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -53,6 +54,8 @@ class AuthNotifier extends Notifier<AuthState> {
       if (state.isAuthenticated) {
         logout();
       }
+      // Ensure we navigate to the login page when unauthorized
+      AppRouter.router.go('/login');
     };
     
     Future.microtask(() => _checkInitialAuth());

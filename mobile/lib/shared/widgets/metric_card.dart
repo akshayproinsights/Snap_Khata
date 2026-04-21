@@ -26,20 +26,6 @@ class MetricCard extends StatelessWidget {
     this.trendValue,
   });
 
-  Color _getBorderColor() {
-    switch (theme) {
-      case MetricTheme.blue:
-        return const Color(0xFFBFDBFE);
-      case MetricTheme.amber:
-        return const Color(0xFFFDE68A);
-      case MetricTheme.red:
-        return const Color(0xFFFECACA);
-      case MetricTheme.green:
-        return const Color(0xFFBBF7D0);
-      case MetricTheme.defaultTheme:
-        return AppTheme.border;
-    }
-  }
 
   Color _getSoftBorderColor() {
     switch (theme) {
@@ -88,8 +74,8 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = _getBorderColor();
     final iconBgColor = _getIconBgColor();
+
     final accentColor = _getAccentColor();
 
     return Container(

@@ -5,15 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
+// v1 DISABLED: purchaseOrderProvider used only by Quick Links card — uncomment to restore
+// import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
-import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
-import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
+
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/dashboard/presentation/customers_tab.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -34,7 +34,20 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {}); // Rebuild for FAB switch
+      }
+    });
+    // Fetch verified orders so the CUSTOMERS tab shows all processed orders
+    // (paid, partial, credit) as soon as the Home page is opened.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(verifiedProvider);
+      if (state.records.isEmpty && !state.isLoading) {
+        ref.read(verifiedProvider.notifier).fetchRecords();
+      }
+    });
   }
 
   @override
@@ -122,7 +135,8 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
 
   @override
   Widget build(BuildContext context) {
-    final poState = ref.watch(purchaseOrderProvider);
+    // v1 DISABLED: poState used only by Quick Links card — uncomment to restore
+    // final poState = ref.watch(purchaseOrderProvider);
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
     final pendingCount = itemsAsync.maybeWhen(
@@ -155,87 +169,184 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         backgroundColor: AppTheme.surface,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'HOME',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
-              ),
-            ),
             Text(
               greeting,
               style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.8,
+              ),
+            ),
+            const Text(
+              'Here is what’s happening in your shop today',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 color: AppTheme.textSecondary,
-                letterSpacing: 0.5,
+                letterSpacing: 0.1,
               ),
             ),
           ],
         ),
-        actions: const [
-          SizedBox(width: 8),
+        actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: pendingCount > 0,
+              label: Text(pendingCount > 99 ? '99+' : pendingCount.toString()),
+              backgroundColor: const Color(0xFFEF4444),
+              child: const Icon(LucideIcons.clipboardCheck),
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.push('/inventory-review');
+            },
+          ),
+          const SizedBox(width: 8),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelStyle: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
-          unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
-          indicatorSize: TabBarIndicatorSize.label,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [
-            Tab(text: 'Recent Deliveries'),
-            Tab(text: 'Items'),
-            Tab(text: 'Party Details'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800, letterSpacing: 0.1),
+                unselectedLabelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorWeight: 3,
+                indicator: UnderlineTabIndicator(
+                  borderSide: const BorderSide(width: 3.5, color: AppTheme.primary),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                indicatorColor: AppTheme.primary,
+                labelColor: AppTheme.primary,
+                unselectedLabelColor: AppTheme.textSecondary,
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'SUPPLIERS'),
+                  Tab(text: 'CUSTOMERS'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildRecentDeliveriesTab(context, itemsAsync, pendingCount, poState),
-          _buildItemsCatalogTab(context, itemsAsync),
-          _buildPartyDetailsTab(context, itemsAsync),
+          _buildRecentDeliveriesTab(context, itemsAsync, pendingCount),
+          const CustomersTab(),
         ],
       ),
-      floatingActionButton: SizedBox(
-        height: 54,
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            HapticFeedback.mediumImpact();
-            context.push('/inventory-upload');
-          },
-          backgroundColor: const Color(0xFFEF4444), // red-500 — matches Outgoing/Due
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.camera_alt_rounded, size: 22),
-          label: Text(
-            'Add New Items',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                  color: Colors.white,
-                ),
-          ),
-          elevation: 6,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-      ),
+      floatingActionButton: _tabController.index == 1
+          ? _buildSnapNewOrderFab(context)
+          : _buildAddNewItemsFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildAddNewItemsFab(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.push('/inventory-upload');
+        },
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        extendedIconLabelSpacing: 10,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
+        label: Text(
+          'Scan Purchase Bill',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+                color: Colors.white,
+                fontSize: 15,
+              ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+    );
+  }
+
+  Widget _buildSnapNewOrderFab(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF16A34A).withValues(alpha: 0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.pushNamed('upload');
+        },
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        extendedIconLabelSpacing: 10,
+        icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
+        label: Text(
+          'Snap New Order',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+                color: Colors.white,
+                fontSize: 15,
+              ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
     );
   }
 
   Widget _buildRecentDeliveriesTab(
       BuildContext context,
       AsyncValue<List<InventoryItem>> itemsAsync,
-      int pendingCount,
-      PurchaseOrderState poState) {
+      int pendingCount) {
+    // v1 DISABLED: PurchaseOrderState poState parameter removed (Quick Links hidden)
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(inventoryItemsProvider),
       child: SingleChildScrollView(
@@ -244,12 +355,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildQuickLinksCard(context, pendingCount, poState),
-            const SizedBox(height: 28),
+            // ── v1 DISABLED: Quick Links card (uncomment to restore) ─────────────
+            // _buildQuickLinksCard(context, pendingCount, poState),
+            // const SizedBox(height: 28),
             Row(
               children: [
                 const Text(
-                  'Recent Vendor Deliveries',
+                  'Recent Supplier Deliveries',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -280,14 +392,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   Widget _buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        color: const Color(0xFFF1F5F9), // slate-100
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -297,17 +408,21 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         style: const TextStyle(
           fontSize: 14,
           color: AppTheme.textPrimary,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
           hintText: 'Search by vendor, invoice ID or item…',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13.5),
+          hintStyle: const TextStyle(
+            color: Color(0xFF94A3B8), // slate-400
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
           prefixIcon:
-              Icon(LucideIcons.search, size: 18, color: Colors.grey.shade400),
+              const Icon(LucideIcons.search, size: 18, color: Color(0xFF94A3B8)),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: Icon(LucideIcons.x,
-                      size: 16, color: Colors.grey.shade400),
+                  icon: const Icon(LucideIcons.x,
+                      size: 16, color: Color(0xFF94A3B8)),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -315,169 +430,113 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                 )
               : null,
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         ),
       ),
     );
   }
 
 
-  Widget _buildQuickLinksCard(
-      BuildContext context, int pendingCount, PurchaseOrderState poState) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Links',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.clipboardCheck,
-                color: pendingCount > 0
-                    ? const Color(0xFFEF4444)
-                    : Colors.grey.shade400,
-                title: 'Review',
-                badgeCount: pendingCount,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/inventory-review');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.box,
-                color: const Color(0xFFF59E0B),
-                title: 'Stock',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/current-stock');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.shoppingCart,
-                color: const Color(0xFFEA580C),
-                title: 'PO',
-                badgeCount: poState.draftCount,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/purchase-orders');
-                },
-              ),
-              _buildActionItem(
-                context: context,
-                icon: LucideIcons.gitMerge,
-                color: const Color(0xFF3B82F6),
-                title: 'Link Items',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  context.push('/inventory-item-mapping');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionItem({
-    required BuildContext context,
-    required IconData icon,
-    required Color color,
-    required String title,
-    int badgeCount = 0,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: color, size: 24),
-                  ),
-                  if (badgeCount > 0)
-                    Positioned(
-                      top: -6,
-                      right: -6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        constraints:
-                            const BoxConstraints(minWidth: 20, minHeight: 20),
-                        child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // ───────────────────────────────────────────────────────────────────
+  // v1 DISABLED: Quick Links card & action item methods
+  // Uncomment the two methods below to restore the Quick Links section.
+  // Also restore: import, poState watch, _buildRecentDeliveriesTab param, and card call.
+  // ───────────────────────────────────────────────────────────────────
+  //
+  // Widget _buildQuickLinksCard(
+  //     BuildContext context, int pendingCount, PurchaseOrderState poState) {
+  //   return Container(
+  //     padding: const EdgeInsets.all(16),
+  //     decoration: BoxDecoration(
+  //       color: AppTheme.surface,
+  //       borderRadius: BorderRadius.circular(16),
+  //       border: Border.all(color: AppTheme.border),
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: Colors.black.withValues(alpha: 0.02),
+  //           blurRadius: 8,
+  //           offset: const Offset(0, 2),
+  //         ),
+  //       ],
+  //     ),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Text('Quick Links',
+  //             style: Theme.of(context).textTheme.titleMedium?.copyWith(
+  //                   fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+  //         const SizedBox(height: 16),
+  //         Row(
+  //           crossAxisAlignment: CrossAxisAlignment.start,
+  //           children: [
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.box,
+  //               color: const Color(0xFFF59E0B), title: 'Stock',
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/current-stock'); },
+  //             ),
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.shoppingCart,
+  //               color: const Color(0xFFEA580C), title: 'PO',
+  //               badgeCount: poState.draftCount,
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/purchase-orders'); },
+  //             ),
+  //             _buildActionItem(
+  //               context: context, icon: LucideIcons.gitMerge,
+  //               color: const Color(0xFF3B82F6), title: 'Link Items',
+  //               onTap: () { HapticFeedback.lightImpact(); context.push('/inventory-item-mapping'); },
+  //             ),
+  //           ],
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+  //
+  // Widget _buildActionItem({
+  //   required BuildContext context, required IconData icon,
+  //   required Color color, required String title,
+  //   int badgeCount = 0, required VoidCallback onTap,
+  // }) {
+  //   return Expanded(
+  //     child: InkWell(
+  //       onTap: onTap, borderRadius: BorderRadius.circular(12),
+  //       child: Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             Stack(clipBehavior: Clip.none, children: [
+  //               Container(width: 48, height: 48,
+  //                 decoration: BoxDecoration(color: color.withValues(alpha: 0.1),
+  //                   borderRadius: BorderRadius.circular(14)),
+  //                 child: Icon(icon, color: color, size: 24)),
+  //               if (badgeCount > 0)
+  //                 Positioned(top: -6, right: -6,
+  //                   child: Container(
+  //                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  //                     decoration: BoxDecoration(color: const Color(0xFFEF4444),
+  //                       borderRadius: BorderRadius.circular(10),
+  //                       border: Border.all(color: Colors.white, width: 2)),
+  //                     constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+  //                     child: Text(badgeCount > 99 ? '99+' : '$badgeCount',
+  //                       style: const TextStyle(color: Colors.white, fontSize: 10,
+  //                         fontWeight: FontWeight.bold, height: 1.1),
+  //                       textAlign: TextAlign.center))),
+  //             ]),
+  //             const SizedBox(height: 8),
+  //             Text(title, textAlign: TextAlign.center,
+  //               style: Theme.of(context).textTheme.labelSmall?.copyWith(
+  //                 fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+  //               maxLines: 2, overflow: TextOverflow.ellipsis),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildDeliveriesList(
       BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
@@ -524,7 +583,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'No vendor deliveries yet',
+                    'No supplier deliveries yet',
                     style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontWeight: FontWeight.bold,
@@ -532,7 +591,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap "Add New Items" to snap\na vendor bill or purchase order',
+                    'Tap "Scan Purchase Bill" to snap\na vendor bill or purchase order',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                   ),
@@ -608,488 +667,6 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       },
     );
   }
-  Widget _buildPartyDetailsTab(
-      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
-    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (itemsAsync.hasError) {
-      return Center(
-        child: Text('Error: ${itemsAsync.error}',
-            style: const TextStyle(color: AppTheme.error)),
-      );
-    }
-
-    final items = itemsAsync.value ?? [];
-    final Map<String, _VendorSummary> summaries = {};
-
-    for (var item in items) {
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchesName = (item.vendorName ?? '').toLowerCase().contains(query);
-        final matchesInvoice = item.invoiceNumber.toLowerCase().contains(query);
-        if (!matchesName && !matchesInvoice) continue;
-      }
-
-      final String vendorName = item.vendorName ?? 'Unknown';
-      if (!summaries.containsKey(vendorName)) {
-        summaries[vendorName] = _VendorSummary(
-          vendorName: vendorName,
-          latestInvoice: item.invoiceNumber,
-          totalAmount: 0,
-        );
-      }
-
-      summaries[vendorName]!.totalAmount += item.netBill;
-      summaries[vendorName]!.itemIds.add(item.id);
-
-      final String uniqueInvoice = item.invoiceNumber.isNotEmpty
-          ? '${item.invoiceNumber}_$vendorName'
-          : '${item.invoiceDate}_$vendorName';
-
-      summaries[vendorName]!.invoices.add(uniqueInvoice);
-    }
-
-    final vendorList = summaries.values.toList()
-      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
-
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-
-    return Column(
-      children: [
-        if (items.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: _buildSearchBox(),
-          ),
-        Expanded(
-          child: summaries.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.users,
-                          size: 48, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No vendors found matching "$_searchQuery"'
-                            : 'No specific vendor deliveries logged yet.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: vendorList.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final vendor = vendorList[index];
-
-                    return Material(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: AppTheme.border),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          // Navigate to Vendor Ledger Detail page to see complete vendor history
-                          final ledgerState = ref.read(vendorLedgerProvider);
-                          // Try to find an existing ledger for this vendor
-                          final existingLedger = ledgerState.ledgers.where(
-                            (l) => l.vendorName.toLowerCase() == vendor.vendorName.toLowerCase(),
-                          ).firstOrNull;
-
-                          final ledger = existingLedger ?? VendorLedger(
-                            id: -1, // Negative ID indicates view-only mode (no ledger exists yet)
-                            vendorName: vendor.vendorName,
-                            balanceDue: 0,
-                          );
-
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => VendorLedgerDetailPage(ledger: ledger),
-                            ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color:
-                                      AppTheme.primary.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.local_shipping,
-                                  size: 22,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      vendor.vendorName,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w700),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${vendor.orderCount} Delivery(s)',
-                                      style: const TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    currencyFormat.format(vendor.totalAmount),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w900,
-                                          color: AppTheme.textPrimary,
-                                          letterSpacing: -0.3,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      'Supplier',
-                                      style: TextStyle(
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 10,
-                                        letterSpacing: 0.2,
-                                      ),
-                                    ),
-                                  )
-                                ],
-                              )
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-  Widget _buildItemsCatalogTab(
-      BuildContext context, AsyncValue<List<InventoryItem>> itemsAsync) {
-    if (itemsAsync.isLoading && !itemsAsync.hasValue) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (itemsAsync.hasError) {
-      return Center(
-        child: Text('Error: ${itemsAsync.error}',
-            style: const TextStyle(color: AppTheme.error)),
-      );
-    }
-
-    final allItems = itemsAsync.value ?? [];
-    
-    // Filter to verified only
-    final verifiedItems = allItems.where((i) => i.verificationStatus == 'Done').toList();
-    
-    // Deduplicate by description
-    final Map<String, InventoryItem> latestItemMap = {};
-    final Map<String, int> orderCountMap = {};
-    
-    for (var item in verifiedItems) {
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchesDesc = item.description.toLowerCase().contains(query);
-        final matchesPart = item.partNumber.toLowerCase().contains(query);
-        final matchesVendor = (item.vendorName ?? '').toLowerCase().contains(query);
-        if (!matchesDesc && !matchesPart && !matchesVendor) continue;
-      }
-      
-      final key = item.description.trim().toLowerCase();
-      if (key.isEmpty) continue;
-      
-      orderCountMap[key] = (orderCountMap[key] ?? 0) + 1;
-      
-      if (!latestItemMap.containsKey(key)) {
-        latestItemMap[key] = item;
-      } else {
-        // Compare dates, keep most recent
-        final currentLatest = latestItemMap[key]!;
-        final currentDate = DateTime.tryParse(currentLatest.invoiceDate) ?? DateTime(0);
-        final newDate = DateTime.tryParse(item.invoiceDate) ?? DateTime(0);
-        
-        if (newDate.isAfter(currentDate)) {
-          latestItemMap[key] = item;
-        }
-      }
-    }
-
-    final uniqueItems = latestItemMap.values.toList()
-      ..sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate)); // sort by most recently ordered
-
-    return Column(
-      children: [
-        if (verifiedItems.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: _buildSearchBox(),
-          ),
-        Expanded(
-          child: uniqueItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.box,
-                          size: 48, color: Colors.grey.shade400),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No items found matching "$_searchQuery"'
-                            : 'No verified items logged yet.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: uniqueItems.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = uniqueItems[index];
-                    final orderCount = orderCountMap[item.description.trim().toLowerCase()] ?? 1;
-                    return _buildItemCatalogCard(context, item, orderCount);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-
-    // Determine price trend
-    Color trendColor = Colors.grey.shade500;
-    IconData trendIcon = LucideIcons.minus; // stable
-    String trendText = 'Stable';
-    
-    if ((item.priceHikeAmount ?? 0) > 0) {
-      trendColor = const Color(0xFFEF4444); // red
-      trendIcon = LucideIcons.trendingUp;
-      trendText = 'Going Up';
-    } else if ((item.priceHikeAmount ?? 0) < 0) {
-      trendColor = const Color(0xFF22C55E); // green
-      trendIcon = LucideIcons.trendingDown;
-      trendText = 'Going Down';
-    }
-
-    String dateLabel = '';
-    try {
-      final dt = DateTime.parse(item.invoiceDate);
-      dateLabel = DateFormat('dd MMM yy').format(dt);
-    } catch (_) {
-      dateLabel = item.invoiceDate.split('T').first;
-    }
-
-    return Material(
-      color: AppTheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppTheme.border),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => ItemPriceHistorySheet(
-              description: item.description,
-              partNumber: item.partNumber,
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.description,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (item.vendorName != null) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            item.vendorName!,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.primary.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        if (item.partNumber.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            item.partNumber,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ]
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Price block
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        currencyFormat.format(item.rate),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(trendIcon, size: 14, color: trendColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            trendText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: trendColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(LucideIcons.history, size: 14, color: Colors.grey.shade500),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Last: $dateLabel',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-class _VendorSummary {
-  String vendorName;
-  String latestInvoice;
-  double totalAmount;
-  Set<int> itemIds = {};
-  Set<String> invoices = {};
-  int get orderCount => invoices.length;
-
-  _VendorSummary({
-    required this.vendorName,
-    required this.latestInvoice,
-    required this.totalAmount,
-  });
 }
 
 // ─── Vendor Delivery Card ─────────────────────────────────────────────────────
@@ -1111,7 +688,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Delete Invoice?',
             style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
@@ -1167,27 +744,19 @@ class _VendorDeliveryCard extends ConsumerWidget {
         HapticFeedback.heavyImpact();
         _confirmDelete(context, ref, bundle);
       },
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: hasChori
-                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-                : Colors.grey.shade200,
+                ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                : AppTheme.border.withValues(alpha: 0.8),
             width: hasChori ? 1.5 : 1.0,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: hasChori
-                  ? const Color(0xFFEF4444).withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: AppTheme.premiumShadow,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1314,9 +883,9 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       Text(
                         '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
                         style: const TextStyle(
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textPrimary,
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const Text(' · ',
@@ -1326,15 +895,16 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       Text(
                         currencyFormat.format(bundle.totalAmount),
                         style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
                         ),
                       ),
                     ],
                   ),
 
-                  // Row 4: Chori Catcher alert (only if triggered)
+                  // Row 4: Rate Hike alert (only if triggered)
                   if (hasChori)
                     Padding(
                       padding: const EdgeInsets.only(top: 5),

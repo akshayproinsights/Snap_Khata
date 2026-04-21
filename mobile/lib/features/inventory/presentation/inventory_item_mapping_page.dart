@@ -72,13 +72,6 @@ class _InventoryItemMappingPageState
             ),
           ],
         ),
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.normal),
-            ),
-          ],
-        ),
         actions: [
           if (state.isRecalculating)
             const Padding(
@@ -143,30 +136,30 @@ class _InventoryItemMappingPageState
             ),
           ),
 
-          // ── Recalculation banner ─────────────────────────────────────
-          if (state.isRecalculating && state.recalcMessage != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.blue.shade50,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.blue.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    state.recalcMessage!,
-                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
-                  ),
-                ],
-              ),
-            ),
+          // ── v1 DISABLED: Recalculation banner (uncomment to restore) ────────
+          // if (state.isRecalculating && state.recalcMessage != null)
+          //   Container(
+          //     width: double.infinity,
+          //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          //     color: Colors.blue.shade50,
+          //     child: Row(
+          //       children: [
+          //         SizedBox(
+          //           width: 14,
+          //           height: 14,
+          //           child: CircularProgressIndicator(
+          //             strokeWidth: 2,
+          //             color: Colors.blue.shade700,
+          //           ),
+          //         ),
+          //         const SizedBox(width: 8),
+          //         Text(
+          //           state.recalcMessage!,
+          //           style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+          //         ),
+          //       ],
+          //     ),
+          //   ),
 
           // ── Content ──────────────────────────────────────────────────
           Expanded(
@@ -176,30 +169,30 @@ class _InventoryItemMappingPageState
           ),
         ],
       ),
-      // ── Recalculate FAB ─────────────────────────────────────────────
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: state.isRecalculating
-            ? null
-            : () {
-                HapticFeedback.lightImpact();
-                ref
-                    .read(inventoryItemMappingProvider.notifier)
-                    .triggerRecalculation();
-              },
-        icon: Icon(
-          LucideIcons.refreshCw,
-          size: 18,
-          color: state.isRecalculating ? Colors.grey : Colors.white,
-        ),
-        label: Text(
-          state.isRecalculating ? 'Recalculating...' : 'Recalculate Stock',
-          style: TextStyle(
-            color: state.isRecalculating ? Colors.grey : Colors.white,
-          ),
-        ),
-        backgroundColor:
-            state.isRecalculating ? Colors.grey.shade200 : AppTheme.primary,
-      ),
+      // ── v1 DISABLED: Recalculate FAB (uncomment to restore) ─────────────
+      // floatingActionButton: FloatingActionButton.extended(
+      //   onPressed: state.isRecalculating
+      //       ? null
+      //       : () {
+      //           HapticFeedback.lightImpact();
+      //           ref
+      //               .read(inventoryItemMappingProvider.notifier)
+      //               .triggerRecalculation();
+      //         },
+      //   icon: Icon(
+      //     LucideIcons.refreshCw,
+      //     size: 18,
+      //     color: state.isRecalculating ? Colors.grey : Colors.white,
+      //   ),
+      //   label: Text(
+      //     state.isRecalculating ? 'Recalculating...' : 'Recalculate Stock',
+      //     style: TextStyle(
+      //       color: state.isRecalculating ? Colors.grey : Colors.white,
+      //     ),
+      //   ),
+      //   backgroundColor:
+      //       state.isRecalculating ? Colors.grey.shade200 : AppTheme.primary,
+      // ),
     );
   }
 

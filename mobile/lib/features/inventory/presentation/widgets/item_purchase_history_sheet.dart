@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 
-class ItemPurchaseHistorySheet extends StatefulWidget {
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+
+class ItemPurchaseHistorySheet extends ConsumerStatefulWidget {
   final String itemDescription;
   final String itemPartNumber;
   final List<InventoryItem> allItems;
@@ -18,11 +23,11 @@ class ItemPurchaseHistorySheet extends StatefulWidget {
   });
 
   @override
-  State<ItemPurchaseHistorySheet> createState() =>
+  ConsumerState<ItemPurchaseHistorySheet> createState() =>
       _ItemPurchaseHistorySheetState();
 }
 
-class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
+class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySheet> {
   DateTime? _startDate;
   DateTime? _endDate;
   double? _minPrice;
@@ -459,6 +464,7 @@ class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
                         child: InkWell(
                           onTap: () {
                             HapticFeedback.lightImpact();
+                            _navigateToBillDetails(item);
                           },
                           borderRadius: BorderRadius.circular(16),
                           child: Padding(
@@ -669,5 +675,60 @@ class _ItemPurchaseHistorySheetState extends State<ItemPurchaseHistorySheet> {
         ),
       ),
     );
+  }
+
+  Future<void> _navigateToBillDetails(InventoryItem item) async {
+    if (item.invoiceNumber.isEmpty) return;
+
+    // Show a loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final repo = ref.read(verifiedRepositoryProvider);
+      final records = await repo.getVerifiedInvoices(receiptNumber: item.invoiceNumber);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (records.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not find bill details.')),
+        );
+        return;
+      }
+
+      // Construct InvoiceGroup
+      final first = records.first;
+      final group = InvoiceGroup(
+        receiptNumber: first.receiptNumber,
+        date: first.date.isNotEmpty ? first.date : first.uploadDate,
+        receiptLink: first.receiptLink,
+        customerName: first.customerName,
+        mobileNumber: first.mobileNumber,
+        extraFields: first.extraFields,
+        uploadDate: first.uploadDate,
+        paymentMode: first.paymentMode,
+        receivedAmount: first.receivedAmount,
+        balanceDue: first.balanceDue,
+        customerDetails: first.customerDetails,
+      );
+      group.items = records;
+      group.totalAmount = records.fold(0, (sum, i) => sum + i.amount);
+
+      if (mounted) {
+        context.pushNamed('order-detail', extra: group);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 }
