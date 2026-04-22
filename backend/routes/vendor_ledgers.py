@@ -263,6 +263,20 @@ async def onboard_invoice_paid(request: OnboardInvoicePaidRequest, current_user:
         # 3. Mark as paid
         final_balance = await _toggle_transaction_paid_status_internal(db, username, transaction_id, True)
         
+        # 4. Handle initial sync to inventory_invoices (marking it as paid)
+        invoice_num = request.invoice_number
+        vendor_name = request.vendor_name
+        if invoice_num and vendor_name:
+            try:
+                db.client.table('inventory_invoices') \
+                    .update({'payment_mode': 'Cash', 'balance_owed': 0}) \
+                    .eq('username', username) \
+                    .eq('vendor_name', vendor_name) \
+                    .eq('invoice_number', invoice_num) \
+                    .execute()
+            except Exception as sync_err:
+                logger.warning(f"Failed to sync payment_mode in onboard_invoice_paid: {sync_err}")
+
         return {
             "status": "success",
             "message": "Invoice onboarded and marked as paid",
@@ -418,7 +432,7 @@ async def _toggle_transaction_paid_status_internal(db, username: str, transactio
             'updated_at': now
         }).eq('id', ledger_id).execute()
         
-    # 4. Handle Mark as Unpaid
+        # 4. Handle Mark as Unpaid
     elif not is_paid and currently_paid:
         # We are marking it as UNPAID
         # delete the linked PAYMENT
@@ -439,6 +453,25 @@ async def _toggle_transaction_paid_status_internal(db, username: str, transactio
             'balance_due': new_balance,
             'updated_at': now
         }).eq('id', ledger_id).execute()
+
+    # ─── SYNC TO INVENTORY INVOICES ───────────────────────────────────────────
+    # If this transaction has an invoice number, we should sync the payment_mode
+    # back to inventory_invoices so the inventory dashboard is reactive.
+    invoice_num = transaction.get('invoice_number')
+    vendor_name = ledger.get('vendor_name')
+    if invoice_num and vendor_name:
+        mode = 'Cash' if is_paid else 'Credit'
+        bal = 0 if is_paid else amount
+        try:
+            db.client.table('inventory_invoices') \
+                .update({'payment_mode': mode, 'balance_owed': bal}) \
+                .eq('username', username) \
+                .eq('vendor_name', vendor_name) \
+                .eq('invoice_number', invoice_num) \
+                .execute()
+        except Exception as sync_err:
+            logger.warning(f"Failed to sync payment_mode to inventory_invoices: {sync_err}")
+    # ──────────────────────────────────────────────────────────────────────────
         
     return new_balance
 
@@ -835,11 +868,16 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
 
         already_synced = {tx["invoice_number"] for tx in (existing_tx_resp.data or [])}
 
-        # 3. Only process invoices not yet in vendor_ledger_transactions
-        missing_invoices = [
-            inv for inv in invoices
-            if inv.get("invoice_number") and inv["invoice_number"] not in already_synced
-        ]
+        # 3. Only process invoices not yet fully synced, deduplicated by invoice number
+        unique_missing = {}
+        for inv in invoices:
+            inv_num = inv.get("invoice_number")
+            if inv_num and inv_num not in already_synced:
+                # Store the invoice, ensuring we only process one entry per invoice_number
+                if inv_num not in unique_missing:
+                    unique_missing[inv_num] = inv
+        
+        missing_invoices = list(unique_missing.values())
 
         if not missing_invoices:
             return {

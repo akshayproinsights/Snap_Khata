@@ -805,8 +805,8 @@ async def get_inventory_items(
     db = get_database_client()
     
     try:
-        # Base query
-        query = db.client.table("inventory_items").select("*").eq("username", username)
+        # Base query - join with inventory_invoices to get payment_mode
+        query = db.client.table("inventory_items").select("*, inventory_invoices(payment_mode)").eq("username", username)
         
         # CRITICAL: Apply filtering for reviews - exclude verified items
         if not show_all:

@@ -25,8 +25,6 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     OPTIMIZED: Pre-fetches all ledgers and existing transactions in 2 bulk queries
     instead of 2 sequential queries per record, reducing DB round-trips from O(N) to O(1).
     """
-    return # DISABLED FOR NOW: Party Details hidden
-    
     if not final_records:
         return
 
@@ -453,6 +451,125 @@ class ManualUdharEntry(BaseModel):
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
 
+async def sync_customer_ledgers_from_invoices(current_user: Dict):
+    """
+    Reconcile customer_ledgers against verified_invoices.
+    Scans all Credit verified_invoices with balance_due > 0 and ensures
+    a matching customer_ledger + INVOICE transaction exists.
+    """
+    username = current_user.get("username")
+    if not username:
+        return
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all Credit invoices with outstanding balance
+        invoices_resp = db.client.table("verified_invoices") \
+            .select("id, receipt_number, customer_name, customer_details, balance_due, verification_date") \
+            .eq("username", username) \
+            .eq("payment_mode", "Credit") \
+            .gt("balance_due", 0) \
+            .execute()
+
+        invoices = invoices_resp.data or []
+        if not invoices:
+            return
+
+        receipt_numbers = [inv["receipt_number"] for inv in invoices if inv.get("receipt_number")]
+
+        # 2. Fetch existing INVOICE transactions
+        existing_tx_resp = db.client.table("ledger_transactions") \
+            .select("receipt_number") \
+            .eq("username", username) \
+            .eq("transaction_type", "INVOICE") \
+            .in_("receipt_number", receipt_numbers) \
+            .execute()
+
+        already_synced = {tx["receipt_number"] for tx in (existing_tx_resp.data or []) if tx.get("receipt_number")}
+
+        # 3. Only process invoices not yet fully synced, deduplicated by receipt number
+        unique_missing = {}
+        for inv in invoices:
+            rn = inv.get("receipt_number")
+            if rn and rn not in already_synced:
+                # Store the invoice, ensuring we only process one entry per receipt_number
+                if rn not in unique_missing:
+                    unique_missing[rn] = inv
+        
+        missing_invoices = list(unique_missing.values())
+
+        if not missing_invoices:
+            return
+
+        # 4. Fetch existing customer ledgers
+        ledgers_resp = db.client.table("customer_ledgers") \
+            .select("id, customer_name, balance_due") \
+            .eq("username", username) \
+            .execute()
+
+        ledger_map: Dict[str, Dict] = {}
+        for row in (ledgers_resp.data or []):
+            ledger_map[str(row["customer_name"]).strip().lower()] = row
+
+        now = datetime.utcnow().isoformat()
+        
+        for inv in missing_invoices:
+            raw_name = str(inv.get("customer_name") or "").strip()
+            raw_details = str(inv.get("customer_details") or "").strip()
+            
+            if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
+                customer_name_raw = raw_details if raw_details else raw_name
+            else:
+                customer_name_raw = raw_name
+
+            if not customer_name_raw:
+                continue
+
+            customer_key = customer_name_raw.lower()
+            balance_due = float(inv.get("balance_due") or 0)
+
+            if customer_key in ledger_map:
+                ledger = ledger_map[customer_key]
+                ledger_id = ledger["id"]
+                new_balance = float(ledger.get("balance_due") or 0) + balance_due
+                db.client.table("customer_ledgers").update({
+                    "balance_due": new_balance,
+                    "updated_at": now,
+                }).eq("id", ledger_id).execute()
+                ledger_map[customer_key]["balance_due"] = new_balance
+            else:
+                new_ledger_resp = db.client.table("customer_ledgers").insert({
+                    "username": username,
+                    "customer_name": customer_name_raw,
+                    "balance_due": balance_due,
+                }).execute()
+
+                if not new_ledger_resp.data:
+                    continue
+
+                ledger_id = new_ledger_resp.data[0]["id"]
+                ledger_map[customer_key] = {
+                    "id": ledger_id,
+                    "customer_name": customer_name_raw,
+                    "balance_due": balance_due,
+                }
+
+            db.client.table("ledger_transactions").insert({
+                "username": username,
+                "ledger_id": ledger_id,
+                "transaction_type": "INVOICE",
+                "amount": balance_due,
+                "receipt_number": inv["receipt_number"],
+                "is_paid": False,
+                "created_at": inv.get("verification_date") or now,
+                "notes": raw_details,
+            }).execute()
+
+    except Exception as e:
+        logger.error(f"Error syncing customer ledgers from invoices: {e}")
+
 @router.get("/dashboard-summary")
 async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     """Get the top-level summary for the Udhar dashboard."""
@@ -466,6 +583,8 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     try:
         # Trigger sync from inventory invoices to ensure vendor ledgers are up to date
         await sync_vendor_ledgers_from_invoices(current_user)
+        # Trigger sync from verified invoices to ensure customer ledgers are up to date
+        await sync_customer_ledgers_from_invoices(current_user)
 
         # Calculate Total Receivable (customer ledgers balance > 0)
         receivable_resp = db.client.table('customer_ledgers') \
@@ -536,6 +655,81 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
         }
     except Exception as e:
         logger.error(f"Error fetching dashboard summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/reconcile-balances")
+async def reconcile_all_customer_ledger_balances(current_user: Dict = Depends(get_current_user)):
+    """
+    Recalculates the balance_due for all customer ledgers based on the sum of their transactions.
+    INVOICE adds to the balance.
+    PAYMENT subtracts from the balance.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all ledgers
+        ledgers_resp = db.client.table("customer_ledgers") \
+            .select("id, balance_due") \
+            .eq("username", username) \
+            .execute()
+            
+        if not ledgers_resp.data:
+            return {"status": "success", "message": "No ledgers found to reconcile", "updated_count": 0}
+
+        # 2. Fetch all transactions
+        tx_resp = db.client.table("ledger_transactions") \
+            .select("ledger_id, amount, transaction_type") \
+            .eq("username", username) \
+            .execute()
+
+        # 3. Calculate expected balances
+        expected_balances = {ld["id"]: 0.0 for ld in ledgers_resp.data}
+        
+        for tx in (tx_resp.data or []):
+            lid = tx["ledger_id"]
+            if lid in expected_balances:
+                amt = float(tx.get("amount", 0))
+                ttype = tx.get("transaction_type")
+                if ttype in ["INVOICE", "MANUAL_CREDIT"]:
+                    expected_balances[lid] += ttype == "INVOICE" and amt or amt # Correct for both
+                elif ttype == "PAYMENT":
+                    expected_balances[lid] -= amt
+
+        # 4. Identify drifts and update
+        updated_count = 0
+        drifts_found = []
+        now = datetime.utcnow().isoformat()
+        
+        for ld in ledgers_resp.data:
+            lid = ld["id"]
+            current_bal = float(ld.get("balance_due", 0))
+            expected_bal = float(expected_balances[lid])
+            
+            # Use small epsilon for float comparison
+            if abs(current_bal - expected_bal) > 0.01:
+                db.client.table("customer_ledgers").update({
+                    "balance_due": expected_bal,
+                    "updated_at": now
+                }).eq("id", lid).execute()
+                updated_count += 1
+                drifts_found.append({"ledger_id": lid, "old": current_bal, "new": expected_bal})
+
+        return {
+            "status": "success",
+            "message": f"Reconciliation complete. Updated {updated_count} ledgers.",
+            "updated_count": updated_count,
+            "drifts_resolved": drifts_found
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reconciling customer balances: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/manual-entry")
@@ -866,3 +1060,123 @@ async def toggle_transaction_paid_status(
     except Exception as e:
         logger.error(f"Error toggling transaction paid status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+from datetime import datetime
+from typing import Dict, Any
+import logging
+from database import get_database_client
+
+logger = logging.getLogger(__name__)
+
+async def sync_customer_ledgers_from_invoices(current_user: Dict):
+    """
+    Reconcile customer_ledgers against verified_invoices.
+    Scans all Credit verified_invoices with balance_due > 0 and ensures
+    a matching customer_ledger + INVOICE transaction exists.
+    """
+    username = current_user.get("username")
+    if not username:
+        return
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all Credit invoices with outstanding balance
+        invoices_resp = db.client.table("verified_invoices") \
+            .select("id, receipt_number, customer_name, customer_details, balance_due, created_at") \
+            .eq("username", username) \
+            .eq("payment_mode", "Credit") \
+            .gt("balance_due", 0) \
+            .execute()
+
+        invoices = invoices_resp.data or []
+        if not invoices:
+            return
+
+        receipt_numbers = [inv["receipt_number"] for inv in invoices if inv.get("receipt_number")]
+
+        # 2. Fetch existing INVOICE transactions
+        existing_tx_resp = db.client.table("ledger_transactions") \
+            .select("receipt_number") \
+            .eq("username", username) \
+            .eq("transaction_type", "INVOICE") \
+            .in_("receipt_number", receipt_numbers) \
+            .execute()
+
+        already_synced = {tx["receipt_number"] for tx in (existing_tx_resp.data or []) if tx.get("receipt_number")}
+
+        # 3. Only process invoices not yet fully synced
+        missing_invoices = [
+            inv for inv in invoices
+            if inv.get("receipt_number") and inv["receipt_number"] not in already_synced
+        ]
+
+        if not missing_invoices:
+            return
+
+        # 4. Fetch existing customer ledgers
+        ledgers_resp = db.client.table("customer_ledgers") \
+            .select("id, customer_name, balance_due") \
+            .eq("username", username) \
+            .execute()
+
+        ledger_map: Dict[str, Dict] = {}
+        for row in (ledgers_resp.data or []):
+            ledger_map[str(row["customer_name"]).strip().lower()] = row
+
+        now = datetime.utcnow().isoformat()
+        
+        for inv in missing_invoices:
+            raw_name = str(inv.get("customer_name") or "").strip()
+            raw_details = str(inv.get("customer_details") or "").strip()
+            
+            if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
+                customer_name_raw = raw_details if raw_details else raw_name
+            else:
+                customer_name_raw = raw_name
+
+            if not customer_name_raw:
+                continue
+
+            customer_key = customer_name_raw.lower()
+            balance_due = float(inv.get("balance_due") or 0)
+
+            if customer_key in ledger_map:
+                ledger = ledger_map[customer_key]
+                ledger_id = ledger["id"]
+                new_balance = float(ledger.get("balance_due") or 0) + balance_due
+                db.client.table("customer_ledgers").update({
+                    "balance_due": new_balance,
+                    "updated_at": now,
+                }).eq("id", ledger_id).execute()
+                ledger_map[customer_key]["balance_due"] = new_balance
+            else:
+                new_ledger_resp = db.client.table("customer_ledgers").insert({
+                    "username": username,
+                    "customer_name": customer_name_raw,
+                    "balance_due": balance_due,
+                }).execute()
+
+                if not new_ledger_resp.data:
+                    continue
+
+                ledger_id = new_ledger_resp.data[0]["id"]
+                ledger_map[customer_key] = {
+                    "id": ledger_id,
+                    "customer_name": customer_name_raw,
+                    "balance_due": balance_due,
+                }
+
+            db.client.table("ledger_transactions").insert({
+                "username": username,
+                "ledger_id": ledger_id,
+                "transaction_type": "INVOICE",
+                "amount": balance_due,
+                "receipt_number": inv["receipt_number"],
+                "is_paid": False,
+                "created_at": inv.get("created_at") or now,
+                "notes": raw_details,
+            }).execute()
+
+    except Exception as e:
+        logger.error(f"Error syncing customer ledgers from invoices: {e}")

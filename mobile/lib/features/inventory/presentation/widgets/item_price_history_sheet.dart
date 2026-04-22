@@ -1,14 +1,15 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/item_price_history_provider.dart';
-import 'package:mobile/features/shared/domain/models/invoice_group.dart';
-import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 
 class ItemPriceHistorySheet extends ConsumerWidget {
   final String description;
@@ -325,59 +326,45 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _navigateToBillDetails(BuildContext context, WidgetRef ref, InventoryItem item) async {
-    if (item.invoiceNumber.isEmpty) return;
+  void _navigateToBillDetails(BuildContext context, WidgetRef ref, InventoryItem item, List<InventoryItem> historyItems) {
+    if (item.invoiceNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No invoice number available for this item.')),
+      );
+      return;
+    }
 
-    // Show a loading overlay
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+    HapticFeedback.lightImpact();
+
+    // Use all items from inventoryItemsProvider to get the full invoice
+    final allInventoryItems = ref.read(inventoryItemsProvider).value ?? historyItems;
+
+    // Group all items belonging to the same invoice
+    final invoiceItems = allInventoryItems
+        .where((i) => i.invoiceNumber == item.invoiceNumber)
+        .toList();
+
+    if (invoiceItems.isEmpty) {
+      invoiceItems.add(item);
+    }
+
+    final totalAmount = invoiceItems.fold<double>(0, (sum, i) => sum + i.netBill);
+
+    final bundle = InventoryInvoiceBundle(
+      invoiceNumber: item.invoiceNumber,
+      date: item.invoiceDate,
+      vendorName: item.vendorName?.isNotEmpty == true ? item.vendorName! : 'Unknown Vendor',
+      receiptLink: item.receiptLink,
+      items: invoiceItems,
+      totalAmount: totalAmount,
+      hasMismatch: invoiceItems.any((i) => i.amountMismatch.abs() > 1.0),
+      isVerified: invoiceItems.every((i) => i.verificationStatus == 'Done'),
+      createdAt: item.createdAt ?? '',
+      headerAdjustments: item.headerAdjustments ?? [],
+      paymentMode: item.paymentMode ?? 'Credit',
     );
 
-    try {
-      final repo = ref.read(verifiedRepositoryProvider);
-      final records = await repo.getVerifiedInvoices(receiptNumber: item.invoiceNumber);
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      if (records.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not find bill details.')),
-        );
-        return;
-      }
-
-      // Construct InvoiceGroup
-      final first = records.first;
-      final group = InvoiceGroup(
-        receiptNumber: first.receiptNumber,
-        date: first.date.isNotEmpty ? first.date : first.uploadDate,
-        receiptLink: first.receiptLink,
-        customerName: first.customerName,
-        mobileNumber: first.mobileNumber,
-        extraFields: first.extraFields,
-        uploadDate: first.uploadDate,
-        paymentMode: first.paymentMode,
-        receivedAmount: first.receivedAmount,
-        balanceDue: first.balanceDue,
-        customerDetails: first.customerDetails,
-      );
-      group.items = records;
-      group.totalAmount = records.fold(0, (sum, i) => sum + i.amount);
-
-      if (context.mounted) {
-        context.pushNamed('order-detail', extra: group);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Close loading dialog if still open
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
-      }
-    }
+    context.push('/inventory-invoice-review', extra: bundle);
   }
 }
 
