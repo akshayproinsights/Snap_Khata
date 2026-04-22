@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:dio/dio.dart';
-import '../../domain/models/udhar_models.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 class UdharState {
   final bool isLoading;
@@ -75,6 +77,8 @@ class UdharNotifier extends Notifier<UdharState> {
         'notes': notes,
       });
       // Refresh list after successful payment
+      ref.invalidate(verifiedProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -85,6 +89,8 @@ class UdharNotifier extends Notifier<UdharState> {
   Future<bool> deleteLedger(int ledgerId) async {
     try {
       await _dio.delete('/api/udhar/ledgers/$ledgerId');
+      ref.invalidate(verifiedProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -98,6 +104,8 @@ class UdharNotifier extends Notifier<UdharState> {
         '/api/udhar/ledgers/$ledgerId/transactions/$transactionId/toggle-paid',
         data: {'is_paid': isPaid},
       );
+      ref.invalidate(verifiedProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {

@@ -262,8 +262,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         ),
         title: const Text('PENDING REVIEW',
             style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
             )),
         centerTitle: false,

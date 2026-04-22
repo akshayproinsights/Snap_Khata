@@ -6,9 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
-import 'package:mobile/features/shared/domain/models/invoice_group.dart';
-
-import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
 class ItemPurchaseHistorySheet extends ConsumerStatefulWidget {
   final String itemDescription;
@@ -677,58 +675,41 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
     );
   }
 
-  Future<void> _navigateToBillDetails(InventoryItem item) async {
-    if (item.invoiceNumber.isEmpty) return;
+  void _navigateToBillDetails(InventoryItem item) {
+    if (item.invoiceNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No invoice number available for this item.')),
+      );
+      return;
+    }
 
-    // Show a loading overlay
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+    HapticFeedback.lightImpact();
+
+    // Group all items from allItems belonging to the same invoice
+    final invoiceItems = widget.allItems
+        .where((i) => i.invoiceNumber == item.invoiceNumber)
+        .toList();
+
+    if (invoiceItems.isEmpty) {
+      invoiceItems.add(item);
+    }
+
+    final totalAmount = invoiceItems.fold<double>(0, (sum, i) => sum + i.netBill);
+
+    final bundle = InventoryInvoiceBundle(
+      invoiceNumber: item.invoiceNumber,
+      date: item.invoiceDate,
+      vendorName: item.vendorName?.isNotEmpty == true ? item.vendorName! : 'Unknown Vendor',
+      receiptLink: item.receiptLink,
+      items: invoiceItems,
+      totalAmount: totalAmount,
+      hasMismatch: invoiceItems.any((i) => i.amountMismatch.abs() > 1.0),
+      isVerified: invoiceItems.every((i) => i.verificationStatus == 'Done'),
+      createdAt: item.createdAt ?? '',
+      headerAdjustments: item.headerAdjustments ?? [],
+      paymentMode: item.paymentMode ?? 'Credit',
     );
 
-    try {
-      final repo = ref.read(verifiedRepositoryProvider);
-      final records = await repo.getVerifiedInvoices(receiptNumber: item.invoiceNumber);
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      if (records.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not find bill details.')),
-        );
-        return;
-      }
-
-      // Construct InvoiceGroup
-      final first = records.first;
-      final group = InvoiceGroup(
-        receiptNumber: first.receiptNumber,
-        date: first.date.isNotEmpty ? first.date : first.uploadDate,
-        receiptLink: first.receiptLink,
-        customerName: first.customerName,
-        mobileNumber: first.mobileNumber,
-        extraFields: first.extraFields,
-        uploadDate: first.uploadDate,
-        paymentMode: first.paymentMode,
-        receivedAmount: first.receivedAmount,
-        balanceDue: first.balanceDue,
-        customerDetails: first.customerDetails,
-      );
-      group.items = records;
-      group.totalAmount = records.fold(0, (sum, i) => sum + i.amount);
-
-      if (mounted) {
-        context.pushNamed('order-detail', extra: group);
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // Close loading dialog if still open
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
-      }
-    }
+    context.push('/inventory-invoice-review', extra: bundle);
   }
 }

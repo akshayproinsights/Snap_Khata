@@ -7,15 +7,31 @@ import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 const _kGreen = Color(0xFF1B8A2A);
 const _kGreenBg = Color(0xFFE8F5E9);
 
-class CustomersTab extends ConsumerWidget {
+class CustomersTab extends ConsumerStatefulWidget {
   const CustomersTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CustomersTab> createState() => _CustomersTabState();
+}
+
+class _CustomersTabState extends ConsumerState<CustomersTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(verifiedProvider);
 
     if (state.isLoading && state.records.isEmpty) {
@@ -51,7 +67,8 @@ class CustomersTab extends ConsumerWidget {
           customerDetails: record.customerDetails,
         );
       } else {
-        final existingDt = DateTime.tryParse(groups[safeId]!.uploadDate) ?? DateTime(0);
+        final existingDt =
+            DateTime.tryParse(groups[safeId]!.uploadDate) ?? DateTime(0);
         final newDt = DateTime.tryParse(record.uploadDate) ?? DateTime(0);
         if (newDt.isAfter(existingDt)) {
           groups[safeId]!.uploadDate = record.uploadDate;
@@ -61,39 +78,123 @@ class CustomersTab extends ConsumerWidget {
       groups[safeId]!.totalAmount += record.amount;
     }
 
-    final sortedGroups = groups.values.toList()
+    var sortedGroups = groups.values.toList()
       ..sort((a, b) {
         final dA = DateTime.tryParse(a.uploadDate) ?? DateTime(0);
         final dB = DateTime.tryParse(b.uploadDate) ?? DateTime(0);
         return dB.compareTo(dA);
       });
 
-    final itemCount = sortedGroups.isEmpty ? 1 : sortedGroups.length;
+    // Apply filtering
+    if (_searchQuery.isNotEmpty) {
+      sortedGroups = sortedGroups.where((group) {
+        final name = group.customerName.toLowerCase();
+        return name.contains(_searchQuery);
+      }).toList();
+    }
 
-    return RefreshIndicator(
-      onRefresh: () async => ref.read(verifiedProvider.notifier).fetchRecords(),
-      child: ListView.separated(
-        padding:
-            const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 90),
-        itemCount: itemCount,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          if (sortedGroups.isEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 24.0),
-              child: Text(
-                'No verified orders yet.\nSnap a new order to get started!',
-                textAlign: TextAlign.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              const Text(
+                'Recent Customer Orders',
                 style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 16),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
               ),
-            );
-          }
+              const Spacer(),
+              if (sortedGroups.isNotEmpty && _searchQuery.isEmpty)
+                Text(
+                  '${sortedGroups.length} total',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant
+                        .withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildSearchBox(),
+        const SizedBox(height: 12),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async =>
+                ref.read(verifiedProvider.notifier).fetchRecords(),
+            child: ListView.separated(
+              padding: const EdgeInsets.only(
+                  left: 12, right: 12, top: 12, bottom: 90),
+              itemCount: sortedGroups.isEmpty ? 1 : sortedGroups.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                if (sortedGroups.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 24.0),
+                    child: Text(
+                      _searchQuery.isEmpty
+                          ? 'No verified orders yet.\nSnap a new order to get started!'
+                          : 'No orders found matching "$_searchQuery"',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 16),
+                    ),
+                  );
+                }
 
-          final group = sortedGroups[index];
-          return _DashboardInvoiceGroupTile(group: group);
-        },
+                final group = sortedGroups[index];
+                return _DashboardInvoiceGroupTile(group: group);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBox() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          onChanged: (v) =>
+              setState(() => _searchQuery = v.trim().toLowerCase()),
+          decoration: InputDecoration(
+            hintText: 'Search customers...',
+            prefixIcon: const Icon(LucideIcons.search, size: 20),
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            hintStyle: TextStyle(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurfaceVariant
+                    .withValues(alpha: 0.5)),
+          ),
+        ),
       ),
     );
   }
@@ -178,6 +279,9 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                             ref
                                 .read(verifiedProvider.notifier)
                                 .deleteBulk(rowIds);
+                            // Invalidate udhar providers to refresh credit balances
+                            ref.invalidate(udharProvider);
+                            ref.invalidate(udharDashboardProvider);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Text('Order deleted successfully.'),

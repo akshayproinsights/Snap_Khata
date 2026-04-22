@@ -16,6 +16,7 @@ import 'package:mobile/features/dashboard/presentation/customers_tab.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
+import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 class InventoryMainPage extends ConsumerStatefulWidget {
@@ -110,6 +111,12 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       if (item.createdAt != null && (bundle.createdAt.isEmpty || item.createdAt!.compareTo(bundle.createdAt) > 0)) {
         bundle.createdAt = item.createdAt!;
       }
+      // Sync payment mode
+      if (item.paymentMode == 'Cash') {
+        bundle.paymentMode = 'Cash';
+      } else if (item.paymentMode == 'Credit' && bundle.paymentMode != 'Cash') {
+        bundle.paymentMode = 'Credit';
+      }
     }
 
     return groups.values.toList()
@@ -156,6 +163,9 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       orElse: () => 0,
     );
 
+    final customerReviewState = ref.watch(reviewProvider);
+    final customerPendingCount = customerReviewState.groups.length;
+
     final userState = ref.watch(authProvider);
     final String shopName =
         userState.user?.name ?? userState.user?.username ?? 'My Shop';
@@ -167,43 +177,44 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              greeting,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.8,
-              ),
-            ),
-            const Text(
-              'Here is what’s happening in your shop today',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ],
+        title: Text(
+          greeting,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.textPrimary,
+            letterSpacing: -0.5,
+          ),
         ),
         actions: [
-          IconButton(
-            icon: Badge(
-              isLabelVisible: pendingCount > 0,
-              label: Text(pendingCount > 99 ? '99+' : pendingCount.toString()),
-              backgroundColor: const Color(0xFFEF4444),
-              child: const Icon(LucideIcons.clipboardCheck),
-            ),
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              context.push('/inventory-review');
-            },
-          ),
+          _tabController.index == 0
+              ? IconButton(
+                  icon: Badge(
+                    isLabelVisible: pendingCount > 0,
+                    label: Text(
+                        pendingCount > 99 ? '99+' : pendingCount.toString()),
+                    backgroundColor: const Color(0xFFEF4444),
+                    child: const Icon(LucideIcons.clipboardCheck),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    context.push('/inventory-review');
+                  },
+                )
+              : IconButton(
+                  icon: Badge(
+                    isLabelVisible: customerPendingCount > 0,
+                    label: Text(customerPendingCount > 99
+                        ? '99+'
+                        : customerPendingCount.toString()),
+                    backgroundColor: const Color(0xFFEF4444),
+                    child: const Icon(LucideIcons.clipboardCheck),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    context.push('/review');
+                  },
+                ),
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
@@ -360,13 +371,13 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
             // const SizedBox(height: 28),
             Row(
               children: [
-                const Text(
+                Text(
                   'Recent Supplier Deliveries',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                    letterSpacing: -0.3,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 const Spacer(),

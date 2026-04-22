@@ -16,6 +16,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
@@ -273,6 +274,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     if (updatedItems.isNotEmpty) {
       await notifier.updateRecordsBulk(updatedItems);
+      // Invalidate udhar providers to refresh credit ledger and dashboard totals
+      ref.invalidate(udharProvider);
+      ref.invalidate(udharDashboardProvider);
     }
 
     widget.group.receiptNumber = receiptCtrl.text;

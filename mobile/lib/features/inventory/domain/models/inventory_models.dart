@@ -41,6 +41,7 @@ class InventoryItem {
   final List<HeaderAdjustment>? headerAdjustments;
   final double? previousRate;
   final double? priceHikeAmount;
+  final String? paymentMode;
 
   InventoryItem({
     required this.id,
@@ -80,6 +81,7 @@ class InventoryItem {
     this.headerAdjustments,
     this.previousRate,
     this.priceHikeAmount,
+    this.paymentMode,
   });
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
@@ -174,6 +176,10 @@ class InventoryItem {
       priceHikeAmount: json['price_hike_amount'] != null
           ? double.tryParse(json['price_hike_amount'].toString())
           : null,
+      paymentMode: json['inventory_invoices'] != null &&
+              json['inventory_invoices']['payment_mode'] != null
+          ? json['inventory_invoices']['payment_mode'].toString()
+          : json['payment_mode']?.toString(),
     );
   }
 
@@ -216,6 +222,7 @@ class InventoryItem {
       'header_adjustments': headerAdjustments?.map((e) => e.toJson()).toList(),
       'previous_rate': previousRate,
       'price_hike_amount': priceHikeAmount,
+      'payment_mode': paymentMode,
     };
   }
 
@@ -257,6 +264,7 @@ class InventoryItem {
     List<HeaderAdjustment>? headerAdjustments,
     double? previousRate,
     double? priceHikeAmount,
+    String? paymentMode,
   }) {
     return InventoryItem(
       id: id ?? this.id,
@@ -296,6 +304,7 @@ class InventoryItem {
       headerAdjustments: headerAdjustments ?? this.headerAdjustments,
       previousRate: previousRate ?? this.previousRate,
       priceHikeAmount: priceHikeAmount ?? this.priceHikeAmount,
+      paymentMode: paymentMode ?? this.paymentMode,
     );
   }
 }

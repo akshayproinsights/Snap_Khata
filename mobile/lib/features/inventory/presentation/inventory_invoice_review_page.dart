@@ -15,6 +15,9 @@ import 'package:mobile/features/inventory/presentation/widgets/invoice_item_card
 import 'package:mobile/features/inventory/presentation/widgets/validation_save_button.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:intl/intl.dart';
+import 'providers/vendor_ledger_provider.dart';
+import 'providers/inventory_items_provider.dart';
+import '../../udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
   final InventoryInvoiceBundle bundle;
@@ -84,6 +87,9 @@ class _InventoryInvoiceReviewPageState
 
     try {
       await ref.read(inventoryProvider.notifier).deleteItem(item.id);
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(vendorLedgerProvider);
+      ref.invalidate(udharDashboardProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -136,6 +142,9 @@ class _InventoryInvoiceReviewPageState
     try {
       final ids = items.map((i) => i.id).toList();
       await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(vendorLedgerProvider);
+      ref.invalidate(udharDashboardProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice deleted')),
@@ -375,6 +384,10 @@ class _InventoryInvoiceReviewPageState
       };
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
+      
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(vendorLedgerProvider);
+      ref.invalidate(udharDashboardProvider);
 
       // Persist payment mode on the bundle so downstream pages reflect it
       widget.bundle.paymentMode = _paymentMode;

@@ -8,6 +8,7 @@ import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
+import 'providers/udhar_dashboard_provider.dart';
 
 
 class UdharDetailPage extends ConsumerStatefulWidget {
@@ -207,6 +208,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                                       notesController.text);
 
                               if (success && context.mounted) {
+                                ref.invalidate(verifiedProvider);
+                                ref.invalidate(udharDashboardProvider);
                                 Navigator.pop(context);
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -599,6 +602,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       Navigator.pop(context); // Close dialog
 
       if (success) {
+        // Invalidate providers to refresh invoice list and dashboard totals
+        ref.invalidate(verifiedProvider);
+        ref.invalidate(udharDashboardProvider);
         _loadTransactions();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

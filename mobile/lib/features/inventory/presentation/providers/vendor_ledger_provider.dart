@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:dio/dio.dart';
-import '../../domain/models/vendor_ledger_models.dart';
+import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 class VendorLedgerState {
   final bool isLoading;
@@ -93,6 +95,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'notes': notes,
       });
       // Refresh list after successful payment
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -106,6 +110,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'is_paid': markAsPaid,
       });
       // Refresh list after successful toggle
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -116,6 +122,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   Future<bool> deleteTransaction(int transactionId) async {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId');
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -129,6 +137,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'transaction_ids': transactionIds,
         'is_paid': markAsPaid,
       });
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -141,6 +151,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/batch-delete', data: {
         'transaction_ids': transactionIds,
       });
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -161,6 +173,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'amount': amount,
         'date': date,
       });
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -201,6 +215,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   Future<bool> deleteLedger(int ledgerId) async {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');
+      ref.invalidate(inventoryItemsProvider);
+      ref.invalidate(udharDashboardProvider);
       await fetchLedgers();
       return true;
     } catch (e) {

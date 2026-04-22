@@ -10,8 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 
-class VendorDeliveryDetailPage extends StatelessWidget {
+class VendorDeliveryDetailPage extends ConsumerWidget {
   final InventoryInvoiceBundle bundle;
 
   const VendorDeliveryDetailPage({super.key, required this.bundle});
@@ -53,14 +54,37 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasLink = bundle.receiptLink.isNotEmpty && bundle.receiptLink != 'null';
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final totalAmount = bundle.totalAmount;
     final hasChori = bundle.hasChoriCatcherAlert;
+
+    // Watch inventory items to get the latest payment status (reactive sync)
+    final inventoryItemsAsync = ref.watch(inventoryItemsProvider);
+    
+    // Determine effective payment mode by joining with latest items
+    String effectivePaymentMode = bundle.paymentMode;
+    inventoryItemsAsync.whenData((items) {
+      final key = bundle.invoiceNumber.isNotEmpty
+          ? bundle.invoiceNumber
+          : '${bundle.date}_${bundle.vendorName}';
+          
+      final matchingItems = items.where((item) {
+        final itemKey = item.invoiceNumber.isNotEmpty
+            ? item.invoiceNumber
+            : '${item.invoiceDate}_${item.vendorName ?? ''}';
+        return itemKey == key;
+      }).toList();
+      
+      if (matchingItems.isNotEmpty) {
+        bool hasCash = matchingItems.any((i) => i.paymentMode == 'Cash');
+        effectivePaymentMode = hasCash ? 'Cash' : 'Credit';
+      }
+    });
+
+    final isPaid = effectivePaymentMode == 'Cash';
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -96,13 +120,13 @@ class VendorDeliveryDetailPage extends StatelessWidget {
             if (hasChori) _buildRateHikeBanner(context),
             _buildHeader(context),
             const SizedBox(height: 12),
-            _buildVendorCard(context),
+            _buildVendorCard(context, isPaid),
             const SizedBox(height: 12),
             _buildItemsSection(context),
           ],
         ),
       ),
-      bottomNavigationBar: _buildStickyBottomBar(context, totalAmount, keyboardInset),
+      bottomNavigationBar: _buildStickyBottomBar(context, totalAmount, keyboardInset, isPaid),
     );
   }
 
@@ -193,8 +217,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStickyBottomBar(BuildContext context, double grandTotal, double keyboardInset) {
-    final isPaid = bundle.isPaid;
+  Widget _buildStickyBottomBar(BuildContext context, double grandTotal, double keyboardInset, bool isPaid) {
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
@@ -414,7 +437,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildVendorCard(BuildContext context) {
+  Widget _buildVendorCard(BuildContext context, bool isPaid) {
     return Container(
       color: Theme.of(context).colorScheme.surface,
       width: double.infinity,
@@ -479,7 +502,7 @@ class VendorDeliveryDetailPage extends StatelessWidget {
               ],
             ),
           ),
-          if (!bundle.isPaid) ...[
+          if (!isPaid) ...[
             const SizedBox(height: 14),
             _VendorCreditBookButton(
               vendorName: bundle.vendorName.isNotEmpty
