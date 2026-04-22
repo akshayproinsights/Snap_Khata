@@ -259,7 +259,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         ],
       ),
       floatingActionButton: _tabController.index == 1
-          ? _buildSnapNewOrderFab(context)
+          ? _buildSnapNewReceiptFab(context)
           : _buildAddNewItemsFab(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
@@ -309,7 +309,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
     );
   }
 
-  Widget _buildSnapNewOrderFab(BuildContext context) {
+  Widget _buildSnapNewReceiptFab(BuildContext context) {
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -340,7 +340,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         extendedIconLabelSpacing: 10,
         icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
         label: Text(
-          'Snap New Order',
+          'Snap New Receipt',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.5,

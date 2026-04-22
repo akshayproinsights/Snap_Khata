@@ -143,7 +143,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
                     padding: const EdgeInsets.only(top: 24.0),
                     child: Text(
                       _searchQuery.isEmpty
-                          ? 'No verified orders yet.\nSnap a new order to get started!'
+                          ? 'No verified receipts yet.\nSnap a new receipt to get started!'
                           : 'No orders found matching "$_searchQuery"',
                       textAlign: TextAlign.center,
                       style: TextStyle(
