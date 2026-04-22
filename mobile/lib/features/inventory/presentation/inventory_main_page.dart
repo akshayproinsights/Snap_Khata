@@ -177,13 +177,17 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
         backgroundColor: AppTheme.surface,
-        title: Text(
-          greeting,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppTheme.textPrimary,
-            letterSpacing: -0.5,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            greeting,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+              letterSpacing: -0.5,
+            ),
           ),
         ),
         actions: [

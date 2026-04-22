@@ -121,7 +121,7 @@ jobs:
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          groups: ${{ github.ref_name == 'stable' && 'snapkhata' || 'internal-development' }}
+          groups: ${{ github.ref_name == 'stable' && 'snapkhata_users' || 'internal-development' }}
           releaseNotes: ${{ steps.notes.outputs.notes }}
           file: ${{ env.WORKING_DIR }}/build/app/outputs/flutter-apk/SnapKhata-v1.0.${{ github.run_number }}.apk
 
@@ -137,7 +137,7 @@ jobs:
       - name: 📊 Write job summary
         if: always()
         run: |
-          DIST_GROUP="${{ github.ref_name == 'stable' && 'Snapkhata' || 'internal-development' }}"
+          DIST_GROUP="${{ github.ref_name == 'stable' && 'snapkhata_users' || 'internal-development' }}"
           echo "## 🚀 SnapKhata Build for $DIST_GROUP" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
