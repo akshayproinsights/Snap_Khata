@@ -194,7 +194,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                 // Read from end to beginning
                 final reversedIndex = items.length - 1 - index;
                 final item = items[reversedIndex];
-                return _buildHistoryCard(context, ref, item, reversedIndex > 0 ? items[reversedIndex - 1] : null);
+                return _buildHistoryCard(context, ref, item, reversedIndex > 0 ? items[reversedIndex - 1] : null, items);
               },
               childCount: items.length,
             ),
@@ -204,7 +204,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildHistoryCard(BuildContext context, WidgetRef ref, InventoryItem item, InventoryItem? previousItem) {
+  Widget _buildHistoryCard(BuildContext context, WidgetRef ref, InventoryItem item, InventoryItem? previousItem, List<InventoryItem> historyItems) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     
     // Parse date
@@ -232,7 +232,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
         ],
       ),
       child: InkWell(
-        onTap: () => _navigateToBillDetails(context, ref, item),
+        onTap: () => _navigateToBillDetails(context, ref, item, historyItems),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
