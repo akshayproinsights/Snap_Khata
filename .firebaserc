@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "snapkhata"
-  }
+  },
+  "targets": {
+    "snapkhata": {
+      "hosting": {
+        "dashboard": [
+          "snapkhata"
+        ],
+        "mobile-app": [
+          "snapkhata-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

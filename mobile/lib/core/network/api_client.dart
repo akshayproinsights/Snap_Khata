@@ -12,7 +12,7 @@ class ApiClient {
   // Uses PC's LAN IP for physical device testing.
   // For emulator/simulator use 'http://10.0.2.2:8000' (Android) or 'http://127.0.0.1:8000' (iOS sim).
   // For production, set to your deployed API URL.
-  static final String _defaultBaseUrl = 'http://77.42.26.79:8000';
+  static final String _defaultBaseUrl = 'https://mydigientry.com';
   
   // Callback for unauthorized access (401)
   static VoidCallback? onUnauthorized;
