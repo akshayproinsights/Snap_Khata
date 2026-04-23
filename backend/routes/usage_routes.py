@@ -45,8 +45,12 @@ async def get_usage_stats(
 
             for log in logs_filtered:
                 order_type = log.get("order_type")
+                processed_at = log.get("processed_at")
+                if not processed_at:
+                    continue
+                
                 try:
-                    date_str = log.get("processed_at", "")[:10]  # YYYY-MM-DD
+                    date_str = str(processed_at)[:10]  # YYYY-MM-DD
                     if order_type == "customer":
                         total_customer += 1
                         if date_str:
@@ -56,7 +60,7 @@ async def get_usage_stats(
                         if date_str:
                             supplier_by_date[date_str] += 1
                 except:
-                    pass
+                    continue
 
             # Sort dates and build chart data
             sorted_dates = sorted(set(customer_by_date.keys()) | set(supplier_by_date.keys()))
@@ -98,9 +102,29 @@ async def get_usage_stats(
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
-        # Filter logs for each period
-        week_logs = [log for log in logs if log.get("processed_at", "") >= week_ago.isoformat()]
-        month_logs = [log for log in logs if log.get("processed_at", "") >= month_ago.isoformat()]
+        # Helper to get comparable date string
+        def get_log_date(log):
+            val = log.get("processed_at")
+            if not val:
+                # Fallback to created_at or other fields if needed, but for now we skip invalid ones
+                return None
+            return val
+
+        # Filter logs for each period safely
+        week_logs = []
+        month_logs = []
+        for log in logs:
+            log_date = get_log_date(log)
+            if not log_date:
+                continue
+            
+            try:
+                if log_date >= week_ago.isoformat():
+                    week_logs.append(log)
+                if log_date >= month_ago.isoformat():
+                    month_logs.append(log)
+            except:
+                continue
 
         return {
             "1 Week": build_period_data(week_logs, "1 Week"),

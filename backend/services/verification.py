@@ -4,6 +4,7 @@ Contains build_verified() and run_sync_verified_logic_supabase() for Supabase.
 """
 import pandas as pd
 import logging
+import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -927,9 +928,21 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             new_receipts = [r for r in final_records if r.get('receipt_number') and r.get('receipt_number') not in existing_receipts]
             
             if new_receipts:
-                usage_records = [{"username": username, "order_type": "customer"} for _ in new_receipts]
-                db.client.table('usage_logs').insert(usage_records).execute()
-                logger.info(f"Logged {len(new_receipts)} new customer orders to usage_logs")
+                usage_records = []
+                for r in new_receipts:
+                    receipt_number = r.get('receipt_number')
+                    # Use a deterministic UUID to prevent double-counting of the same receipt
+                    log_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"customer-{username}-{receipt_number}"))
+                    usage_records.append({
+                        "id": log_id,
+                        "username": username,
+                        "order_type": "customer"
+                    })
+                
+                # Using upsert to handle cases where the log already exists (e.g. from a previous partial success)
+                # This ensures we never count the same receipt twice.
+                db.client.table('usage_logs').upsert(usage_records).execute()
+                logger.info(f"Logged {len(new_receipts)} unique customer orders to usage_logs")
         except Exception as e:
             logger.error(f"Failed to log customer usage metrics: {e}")
             

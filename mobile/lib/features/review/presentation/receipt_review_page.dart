@@ -227,7 +227,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     return formatted;
   }
 
-  Future<void> _saveCurrentState() async {
+  Future<void> _saveCurrentState({String? updatePhoneNumber}) async {
+    final notifier = ref.read(reviewProvider.notifier);
     // Read the LIVE group from provider state (not widget.group which is the
     // original navigation argument and may be stale after user edits).
     final liveState = ref.read(reviewProvider);
@@ -242,7 +243,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final grandTotal = _totalAfterGst(group);
       final balanceDue = _paymentMode == 'Credit' ? grandTotal - _receivedAmount : 0.0;
       
-      final newRecord = header.copyWith(
+      var newRecord = header.copyWith(
           verificationStatus: 'Done',
           paymentMode: _paymentMode,
           receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : null,
@@ -250,7 +251,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
       );
-      await ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+
+      if (updatePhoneNumber != null && updatePhoneNumber.isNotEmpty) {
+        final newExtra = Map<String, dynamic>.from(newRecord.extraFields);
+        newExtra['mobile_number'] = updatePhoneNumber;
+        newRecord = newRecord.copyWith(
+          extraFields: newExtra,
+          mobileNumber: updatePhoneNumber,
+        );
+      }
+
+      await notifier.updateDateRecord(newRecord);
     }
 
     final recordsToUpdate = <ReviewRecord>[];
@@ -261,7 +272,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     }
     
     if (recordsToUpdate.isNotEmpty) {
-      await ref.read(reviewProvider.notifier).updateAmountRecordsBulk(recordsToUpdate);
+      await notifier.updateAmountRecordsBulk(recordsToUpdate);
     }
   }
 
@@ -639,94 +650,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   );
                   final freshHeader = freshGroup.header;
 
-                  // ── Step 3: Background-save all edits ─────────────────────
-                  final saveFuture = _saveCurrentState();
-
-                  // ── Step 4: Build the WhatsApp message ────────────────────
-                  double totalAmount = _totalAfterGst(freshGroup);
-                  if (totalAmount == 0.0 && freshGroup.header != null) {
-                    totalAmount = freshGroup.header!.amount;
-                  }
-
-                  final authState = ref.read(authProvider);
-                  final usernameParam = authState.user?.username != null
-                      ? '&u=${authState.user!.username}'
-                      : '';
-
-                  final double balanceDue =
-                      _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
-
-                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
-                  final shareUrl =
-                      'https://mydigientry.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
-
-                  final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
-
-                  OrderPaymentStatus status;
-                  if (_paymentMode == 'Cash') {
-                    status = OrderPaymentStatus.fullyPaid;
-                  } else {
-                    if (_receivedAmount >= totalAmount) {
-                      status = OrderPaymentStatus.fullyPaid;
-                    } else if (_receivedAmount > 0) {
-                      status = OrderPaymentStatus.partiallyPaid;
-                    } else {
-                      status = OrderPaymentStatus.unpaid;
-                    }
-                  }
-
-                  final Set<String> ignoredExtraFields = {
-                    'total_bill_amount', 'total bill amount', 'amount',
-                    'calculated_amount', 'amount_mismatch', 'receipt_number',
-                    'date', 'customer_name', 'mobile_number', 'mobile number',
-                    'mobile', 'receipt_link', 'audit_findings',
-                    'taxable_row_ids', 'gst_mode',
-                  };
-
-                  final Map<String, String> resolvedExtraFields = {};
-                  if (freshHeader?.extraFields != null) {
-                    freshHeader!.extraFields.forEach((key, value) {
-                      final configLabel = invoiceColumns.firstWhere(
-                        (c) => c['db_column'] == key,
-                        orElse: () => {'label': key},
-                      )['label'].toString();
-                      final lowerKey = key.toString().toLowerCase();
-                      final lowerLabel = configLabel.toLowerCase();
-                      if (value != null && value.toString().isNotEmpty &&
-                          !ignoredExtraFields.contains(lowerKey) &&
-                          !ignoredExtraFields.contains(lowerLabel)) {
-                        resolvedExtraFields[configLabel] = value.toString();
-                      }
-                    });
-                  }
-
-                  final caption = WhatsAppUtils.getWhatsAppCaption(
-                    status: status,
-                    customerName: freshHeader?.customerName?.isNotEmpty == true
-                        ? freshHeader!.customerName!
-                        : 'Customer',
-                    businessName: shopName,
-                    orderNumber: freshGroup.receiptNumber,
-                    totalAmount: totalAmount,
-                    paidAmount: _receivedAmount,
-                    pendingAmount: balanceDue,
-                    extraFields: resolvedExtraFields,
-                  );
-                  final message =
-                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
-
-                  // ── Step 5: Wait for the save to finish ───────────────────
-                  await saveFuture;
-                  if (!context.mounted) return;
-
-                  // ── Step 6: Determine phone number ────────────────────────
+                  // ── Step 3: Determine phone number & Ask if missing ────────
                   String phoneNumber = freshHeader
                           ?.extraFields['mobile_number']
                           ?.toString()
                           .trim() ??
                       '';
+                  String? updatedPhoneNumber;
 
-                  // ── Step 7: If no number, show Ask / Skip dialog ──────────
                   if (phoneNumber.isEmpty) {
                     final phoneController = TextEditingController();
                     // null → Cancelled | '' → Skip | '<digits>' → entered
@@ -844,23 +775,86 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
                     if (result.isNotEmpty) {
                       phoneNumber = result;
-                      // Save entered number back to record
-                      if (freshHeader != null) {
-                        final newExtra = Map<String, dynamic>.from(
-                            freshHeader.extraFields);
-                        newExtra['mobile_number'] = result;
-                        final updatedHeader =
-                            freshHeader.copyWith(extraFields: newExtra);
-                        await ref
-                            .read(reviewProvider.notifier)
-                            .updateDateRecord(updatedHeader);
-                      }
+                      updatedPhoneNumber = result;
                     }
                     // result == '' → Skip: phoneNumber stays '' so WhatsApp
                     // opens the contact/share picker instead of a direct chat.
                   }
 
-                  // ── Step 8: Open WhatsApp ──────────────────────────────────
+                  // ── Step 4: Build the WhatsApp message ────────────────────
+                  double totalAmount = _totalAfterGst(freshGroup);
+                  if (totalAmount == 0.0 && freshGroup.header != null) {
+                    totalAmount = freshGroup.header!.amount;
+                  }
+
+                  final authState = ref.read(authProvider);
+                  final usernameParam = authState.user?.username != null
+                      ? '&u=${authState.user!.username}'
+                      : '';
+
+                  final double balanceDue =
+                      _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
+
+                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
+                  final shareUrl =
+                      'https://mydigientry.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
+
+                  final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+
+                  OrderPaymentStatus status;
+                  if (_paymentMode == 'Cash') {
+                    status = OrderPaymentStatus.fullyPaid;
+                  } else {
+                    if (_receivedAmount >= totalAmount) {
+                      status = OrderPaymentStatus.fullyPaid;
+                    } else if (_receivedAmount > 0) {
+                      status = OrderPaymentStatus.partiallyPaid;
+                    } else {
+                      status = OrderPaymentStatus.unpaid;
+                    }
+                  }
+
+                  final Set<String> ignoredExtraFields = {
+                    'total_bill_amount', 'total bill amount', 'amount',
+                    'calculated_amount', 'amount_mismatch', 'receipt_number',
+                    'date', 'customer_name', 'mobile_number', 'mobile number',
+                    'mobile', 'receipt_link', 'audit_findings',
+                    'taxable_row_ids', 'gst_mode',
+                  };
+
+                  final Map<String, String> resolvedExtraFields = {};
+                  if (freshHeader?.extraFields != null) {
+                    freshHeader!.extraFields.forEach((key, value) {
+                      final configLabel = invoiceColumns.firstWhere(
+                        (c) => c['db_column'] == key,
+                        orElse: () => {'label': key},
+                      )['label'].toString();
+                      final lowerKey = key.toString().toLowerCase();
+                      final lowerLabel = configLabel.toLowerCase();
+                      if (value != null && value.toString().isNotEmpty &&
+                          !ignoredExtraFields.contains(lowerKey) &&
+                          !ignoredExtraFields.contains(lowerLabel)) {
+                        resolvedExtraFields[configLabel] = value.toString();
+                      }
+                    });
+                  }
+
+                  final caption = WhatsAppUtils.getWhatsAppCaption(
+                    status: status,
+                    customerName: freshHeader?.customerName?.isNotEmpty == true
+                        ? freshHeader!.customerName!
+                        : 'Customer',
+                    businessName: shopName,
+                    orderNumber: freshGroup.receiptNumber,
+                    totalAmount: totalAmount,
+                    paidAmount: _receivedAmount,
+                    pendingAmount: balanceDue,
+                    extraFields: resolvedExtraFields,
+                  );
+                  final message =
+                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
+
+                  // ── Step 5: Open WhatsApp ──────────────────────────────────
                   if (!context.mounted) return;
                   final opened = await WhatsAppUtils.openWhatsAppChat(
                     phone: phoneNumber,
@@ -872,6 +866,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           content: Text(
                               'Could not open WhatsApp. Please ensure it is installed.')),
                     );
+                  }
+
+                  // ── Step 6: Sync & Finish (Save in background & Pop) ────────
+                  _saveCurrentState(updatePhoneNumber: updatedPhoneNumber);
+                  
+                  if (context.mounted) {
+                    if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
+                      _goToNextReceipt();
+                    } else {
+                      context.pop();
+                    }
                   }
                 },
               ),
@@ -1267,6 +1272,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       ReviewRecord newRecord;
                       if (dbCol == 'customer_name') {
                         newRecord = header.copyWith(customerName: val);
+                      } else if (dbCol == 'mobile_number') {
+                        final newExtra = Map<String, dynamic>.from(header.extraFields);
+                        newExtra[dbCol] = val;
+                        newRecord = header.copyWith(
+                          extraFields: newExtra,
+                          mobileNumber: val, // Sync top-level field
+                        );
                       } else {
                         final newExtra = Map<String, dynamic>.from(header.extraFields);
                         newExtra[dbCol] = val;

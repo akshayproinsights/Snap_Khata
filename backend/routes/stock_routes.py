@@ -555,7 +555,7 @@ def update_transaction(
             raise HTTPException(status_code=400, detail="Invalid transaction type. Must be 'IN' or 'OUT'")
         
         # ── v1: Stock recalculation enabled ──
-        recalculate_stock_for_user(username)
+        # recalculate_stock_for_user(username)
         
         return {
             "success": True,
@@ -612,7 +612,7 @@ def delete_transaction(
             raise HTTPException(status_code=400, detail="Invalid transaction type. Must be 'IN' or 'OUT'")
         
         # ── v1: Stock recalculation enabled ──
-        recalculate_stock_for_user(username)
+        # recalculate_stock_for_user(username)
         
         return {
             "success": True,
@@ -940,7 +940,8 @@ def recalculate_stock_wrapper(task_id: str, username: str):
     Wrapper function to run recalculate_stock_for_user in background thread.
     Updates task status in database during execution.
     """
-    db = get_database_client()
+    from database import create_fresh_database_client
+    db = create_fresh_database_client()
 
     def update_task_status(status_update: Dict[str, Any]):
         """Helper to update task status in database"""
@@ -962,7 +963,7 @@ def recalculate_stock_wrapper(task_id: str, username: str):
         })
 
         # Run the actual recalculation (blocking operation, but in thread pool)
-        recalculate_stock_for_user(username, current_task_id=task_id)
+        recalculate_stock_for_user(username, current_task_id=task_id, db_client=db)
 
         # Update status to completed
         update_task_status({
@@ -988,7 +989,7 @@ def recalculate_stock_wrapper(task_id: str, username: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def recalculate_stock_for_user(username: str, current_task_id: Optional[str] = None):
+def recalculate_stock_for_user(username: str, current_task_id: Optional[str] = None, db_client=None):
     """
     Core logic to recalculate stock levels for a user.
     Can be called from other routes after invoice processing.
@@ -998,7 +999,7 @@ def recalculate_stock_for_user(username: str, current_task_id: Optional[str] = N
     stateless HTTP clients), we check the 'recalculation_tasks' table for 
     other running tasks.
     """
-    db = get_database_client()
+    db = db_client if db_client is not None else get_database_client()
 
     logger.info(f"Starting stock recalculation for {username} (Task: {current_task_id})")
 
@@ -1094,13 +1095,26 @@ def _perform_stock_recalculation(username: str, db):
     logger.info(f"Fetching ALL sales records for {username} with pagination...")
 
     while True:
-        sales_batch = db.client.table("verified_invoices")\
-            .select("description, quantity, rate, date")\
-            .eq("username", username)\
-            .eq("type", "Part")\
-            .limit(batch_size)\
-            .offset(current_offset)\
-            .execute()
+        try:
+            sales_batch = db.client.table("verified_invoices")\
+                .select("description, quantity, rate, date")\
+                .eq("username", username)\
+                .eq("type", "Part")\
+                .limit(batch_size)\
+                .offset(current_offset)\
+                .execute()
+        except Exception as e:
+            logger.error(f"Error fetching sales batch offset {current_offset}: {e}")
+            import time
+            time.sleep(2)
+            logger.info("Retrying sales batch fetch...")
+            sales_batch = db.client.table("verified_invoices")\
+                .select("description, quantity, rate, date")\
+                .eq("username", username)\
+                .eq("type", "Part")\
+                .limit(batch_size)\
+                .offset(current_offset)\
+                .execute()
 
         if not sales_batch.data or len(sales_batch.data) == 0:
             break

@@ -179,7 +179,7 @@ async def get_invoice(
     }
 
 
-@router.get("/receipt/{receipt_number}/items")
+@router.get("/receipt/{receipt_number:path}/items")
 async def get_receipt_items(
     receipt_number: str,
     current_user: Dict[str, Any] = Depends(get_current_user)

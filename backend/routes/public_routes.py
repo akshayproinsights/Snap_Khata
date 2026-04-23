@@ -5,7 +5,7 @@ from config_loader import get_user_config
 
 router = APIRouter()
 
-@router.get("/receipts/{receipt_number}")
+@router.get("/receipts/{receipt_number:path}")
 async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
     """
     Fetch basic public info for a receipt given its receipt_number.

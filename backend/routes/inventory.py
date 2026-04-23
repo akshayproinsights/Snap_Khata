@@ -989,7 +989,10 @@ async def verify_inventory_invoice(
             
             # Log usage for the new supplier order
             try:
-                db.client.table('usage_logs').insert([{
+                # Use a deterministic UUID to prevent double-counting if this invoice is re-processed
+                log_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"supplier-{username}-{new_invoice_id}"))
+                db.client.table('usage_logs').upsert([{
+                    "id": log_id,
                     "username": username,
                     "order_type": "supplier"
                 }]).execute()

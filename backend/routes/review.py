@@ -157,6 +157,14 @@ async def update_single_review_date(
         from database_helpers import convert_numeric_types
         record = convert_numeric_types(record)
         
+        # Handle extra_fields: if any keys in extra_fields are valid top-level columns,
+        # promote them so they get picked up by the update filter below.
+        extra_fields = record.get('extra_fields', {})
+        if isinstance(extra_fields, dict):
+            for k, v in extra_fields.items():
+                if k not in record or record[k] is None:
+                    record[k] = v
+        
         # Filter to only columns that exist in verification_dates (exclude row_id and id from update data)
         # CRITICAL: Never include 'id' in update_data as it's the primary key and causes constraint violations
         valid_cols = {
@@ -282,7 +290,7 @@ async def delete_verification_record(
         raise HTTPException(status_code=500, detail=f"Failed to delete record: {str(e)}")
 
 
-@router.delete("/receipt/{receipt_number}")
+@router.delete("/receipt/{receipt_number:path}")
 async def delete_receipt(
     receipt_number: str,
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -511,6 +519,14 @@ async def update_single_review_amount(
         # Convert numeric types
         from database_helpers import convert_numeric_types
         record = convert_numeric_types(record)
+
+        # Handle extra_fields: if any keys in extra_fields are valid top-level columns,
+        # promote them so they get picked up by the update filter below.
+        extra_fields = record.get('extra_fields', {})
+        if isinstance(extra_fields, dict):
+            for k, v in extra_fields.items():
+                if k not in record or record[k] is None:
+                    record[k] = v
         
         # Filter to only columns that exist in verification_amounts (exclude row_id and id from update data)
         # CRITICAL: Never include 'id' in update_data as it's the primary key and causes constraint violations
