@@ -99,30 +99,13 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
         const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              const Text(
-                'Recent Customer Orders',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const Spacer(),
-              if (sortedGroups.isNotEmpty && _searchQuery.isEmpty)
-                Text(
-                  '${sortedGroups.length} total',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-            ],
+          child: const Text(
+            'Recent Customer Orders',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -143,7 +126,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
                     padding: const EdgeInsets.only(top: 24.0),
                     child: Text(
                       _searchQuery.isEmpty
-                          ? 'No verified orders yet.\nSnap a new order to get started!'
+                          ? 'No verified receipts yet.\nSnap a new receipt to get started!'
                           : 'No orders found matching "$_searchQuery"',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -373,6 +356,17 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                                     letterSpacing: -0.3,
                                   ),
                         ),
+                        if (group.paymentMode == 'Credit' && (group.balanceDue ?? 0) > 0) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Due: ${currencyFormat.format(group.balanceDue)}',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
