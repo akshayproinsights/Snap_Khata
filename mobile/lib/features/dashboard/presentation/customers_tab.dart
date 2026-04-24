@@ -356,7 +356,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                                     letterSpacing: -0.3,
                                   ),
                         ),
-                        if (group.paymentMode == 'Credit' && (group.balanceDue ?? 0) > 0) ...[
+                        if ((group.balanceDue ?? 0) > 0) ...[
                           const SizedBox(height: 2),
                           Text(
                             'Due: ${currencyFormat.format(group.balanceDue)}',

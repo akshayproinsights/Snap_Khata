@@ -160,8 +160,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           TextEditingController(text: entry.value?.toString() ?? '');
     }
 
-    _paymentMode = widget.group.paymentMode ?? 'Cash';
-    _receivedAmount = widget.group.receivedAmount ?? widget.group.totalAmount;
+    // If paymentMode is null but balanceDue > 0, the order was created as credit
+    // (e.g., via the ledger flow). Infer 'Credit' so UI reflects the actual state.
+    final hasDue = (widget.group.balanceDue ?? 0) > 0;
+    _paymentMode = widget.group.paymentMode ?? (hasDue ? 'Credit' : 'Cash');
+    _receivedAmount = widget.group.receivedAmount ?? (hasDue ? (widget.group.totalAmount - (widget.group.balanceDue ?? 0)) : widget.group.totalAmount);
     _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
     _receivedAmountController = TextEditingController(
         text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _receivedAmount.toStringAsFixed(0) : '') : '');
