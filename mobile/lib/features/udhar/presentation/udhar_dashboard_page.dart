@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-
-
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/udhar_list_page.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
@@ -228,9 +226,6 @@ class UdharDashboardPage extends ConsumerWidget {
   }
 
   Widget _buildSummaryCard(BuildContext context, double receivable, double payable) {
-    final currencyFormatter =
-        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -273,7 +268,7 @@ class UdharDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  currencyFormatter.format(payable),
+                  CurrencyFormatter.format(payable),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
                     fontWeight: FontWeight.w800,
@@ -321,7 +316,7 @@ class UdharDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  currencyFormatter.format(receivable),
+                  CurrencyFormatter.format(receivable),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w800,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/invoice_item_v2_model.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -20,11 +21,6 @@ class HeaderAdjustmentsSection extends StatelessWidget {
     this.onEdit,
   });
 
-  String _fmt(double? v) {
-    if (v == null) return '0.00';
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
-  }
 
   /// Whether a HEADER_DISCOUNT/SCHEME adjustment is already baked into items.
   /// In Scenario A (per-item discount): treat as informational / greyed out.
@@ -144,8 +140,8 @@ class HeaderAdjustmentsSection extends StatelessWidget {
                           Text(
                             alreadyInItems
                                 // Greyed display — show the stored value but muted
-                                ? '-₹${_fmt(adj.amount.abs())}'
-                                : '${isDeduction ? '-' : '+'}₹${_fmt(effective.abs())}',
+                                ? '-${CurrencyFormatter.format(adj.amount.abs())}'
+                                : '${isDeduction ? '-' : '+'}${CurrencyFormatter.format(effective.abs())}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -185,8 +181,8 @@ class HeaderAdjustmentsSection extends StatelessWidget {
               ),
               Text(
                 displayedTotal == 0.0
-                    ? '₹0'
-                    : '${displayedTotal < 0 ? '-' : '+'}₹${_fmt(displayedTotal.abs())}',
+                    ? CurrencyFormatter.format(0)
+                    : '${displayedTotal < 0 ? '-' : '+'}${CurrencyFormatter.format(displayedTotal.abs())}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,

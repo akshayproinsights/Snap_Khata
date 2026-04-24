@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
@@ -193,8 +194,6 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
   }
 
   Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     // Determine price trend
     Color trendColor = Colors.grey.shade500;
@@ -297,7 +296,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        currencyFormat.format(item.rate),
+                        CurrencyFormatter.format(item.rate),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,

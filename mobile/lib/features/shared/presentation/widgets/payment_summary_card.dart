@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 enum GstMode { included, excluded, none }
 
@@ -27,10 +28,6 @@ class PaymentSummaryCard extends StatelessWidget {
     required this.onGstModeChanged,
   });
 
-  String _fmt(double v) {
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +165,7 @@ class PaymentSummaryCard extends StatelessWidget {
               children: [
                 _AmountRow(
                   label: isAutomobile ? 'Parts Subtotal' : 'Subtotal',
-                  value: '₹${_fmt(partsSubtotal + (isAutomobile ? 0 : laborSubtotal))}',
+                  value: CurrencyFormatter.format(partsSubtotal + (isAutomobile ? 0 : laborSubtotal)),
                   labelColor: Colors.white.withValues(alpha: 0.7),
                   valueColor: Colors.white.withValues(alpha: 0.9),
                 ),
@@ -176,7 +173,7 @@ class PaymentSummaryCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   _AmountRow(
                     label: 'Labor / Service (no GST)',
-                    value: '₹${_fmt(laborSubtotal)}',
+                    value: CurrencyFormatter.format(laborSubtotal),
                     labelColor: Colors.white.withValues(alpha: 0.45),
                     valueColor: Colors.white.withValues(alpha: 0.5),
                   ),
@@ -188,8 +185,8 @@ class PaymentSummaryCard extends StatelessWidget {
                         ? 'GST @18% (included within)'
                         : 'GST @18% (excluded, added on top)',
                     value: gstMode == GstMode.included
-                        ? '₹${_fmt(gstAmount)} ✓'
-                        : '+ ₹${_fmt(gstAmount)}',
+                        ? '${CurrencyFormatter.format(gstAmount)} ✓'
+                        : '+ ${CurrencyFormatter.format(gstAmount)}',
                     labelColor: const Color(0xFFFBBF24),
                     valueColor: const Color(0xFFFBBF24),
                   ),
@@ -208,7 +205,7 @@ class PaymentSummaryCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         )),
                     Text(
-                      '₹${_fmt(grandTotal)}',
+                      CurrencyFormatter.format(grandTotal),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -237,9 +234,9 @@ class PaymentSummaryCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Excluded GST adds ₹${_fmt(gstAmount)} — '
-                            'new total ₹${_fmt(grandTotal)} '
-                            '(original: ₹${_fmt(originalTotal)})',
+                            'Excluded GST adds ${CurrencyFormatter.format(gstAmount)} — '
+                            'new total ${CurrencyFormatter.format(grandTotal)} '
+                            '(original: ${CurrencyFormatter.format(originalTotal)})',
                             style: const TextStyle(
                               color: Color(0xFFFBBF24),
                               fontSize: 11,

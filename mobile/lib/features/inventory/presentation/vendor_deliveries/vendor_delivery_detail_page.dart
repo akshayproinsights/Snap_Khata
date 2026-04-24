@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
@@ -11,18 +10,13 @@ import 'package:flutter/services.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 class VendorDeliveryDetailPage extends ConsumerWidget {
   final InventoryInvoiceBundle bundle;
 
   const VendorDeliveryDetailPage({super.key, required this.bundle});
 
-  /// Formats amount as Indian Rupee with zero decimals and comma separation.
-  /// Always rounds to nearest whole number. e.g., ₹18,103
-  String _formatCurrency(double amount) {
-    final rounded = amount.round();
-    return '₹${NumberFormat('#,##0', 'en_IN').format(rounded)}';
-  }
 
   void _showReceiptDialog(BuildContext context) {
     if (bundle.receiptLink.isEmpty || bundle.receiptLink == 'null') return;
@@ -132,8 +126,6 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
 
   // ── Rate Hike banner ────────────────────────────────────────────────────
   Widget _buildRateHikeBanner(BuildContext context) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
     final priceHike = bundle.totalPriceHike;
 
@@ -144,7 +136,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
     }
     if (priceHike > 0) {
       alerts.add(
-          'Price went up by ${currencyFormat.format(priceHike)} compared to last purchase.');
+          'Price went up by ${CurrencyFormatter.format(priceHike)} compared to last purchase.');
     }
 
     return Container(
@@ -256,7 +248,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5)),
                         const SizedBox(height: 4),
-                        Text(_formatCurrency(grandTotal),
+                        Text(CurrencyFormatter.format(grandTotal),
                             style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w800,
@@ -568,11 +560,6 @@ class _ItemRow extends StatelessWidget {
     this.isLast = false,
   });
 
-  /// Formats amount as Indian Rupee with zero decimals and comma separation.
-  String _formatCurrency(double amount) {
-    final rounded = amount.round();
-    return '₹${NumberFormat('#,##0', 'en_IN').format(rounded)}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -610,7 +597,7 @@ class _ItemRow extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_formatCurrency(item.netBill),
+                  Text(CurrencyFormatter.format(item.netBill),
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
@@ -629,7 +616,7 @@ class _ItemRow extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  '$qtyStr  x  ${_formatCurrency(item.rate)}',
+                  '$qtyStr  x  ${CurrencyFormatter.format(item.rate)}',
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 13,

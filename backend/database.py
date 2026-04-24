@@ -36,8 +36,8 @@ def get_supabase_client() -> Client:
 class DatabaseClient:
     """Wrapper for Supabase database operations"""
     
-    def __init__(self):
-        self.client = get_supabase_client()
+    def __init__(self, client: Optional[Client] = None):
+        self.client = client or get_supabase_client()
     
     def set_user_context(self, username: str):
         """Set user context for Row-Level Security"""
@@ -149,6 +149,4 @@ def create_fresh_database_client() -> DatabaseClient:
         raise ValueError("Supabase configuration not found")
     from supabase import create_client
     fresh_client = create_client(config["url"], config["service_role_key"])
-    db = DatabaseClient.__new__(DatabaseClient)
-    db.client = fresh_client
-    return db
+    return DatabaseClient(client=fresh_client)

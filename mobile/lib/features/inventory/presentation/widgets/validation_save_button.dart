@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 class ValidationSaveButton extends StatelessWidget {
   final double totalAmount;
@@ -20,12 +21,6 @@ class ValidationSaveButton extends StatelessWidget {
     this.isUpdate = false,
   });
 
-  String _fmt(double? v) {
-    if (v == null) return '0.00';
-    final s = v.toStringAsFixed(2);
-    // Keep 2 decimal places for money, but if user wants shorter, we can keep it
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +71,7 @@ class ValidationSaveButton extends StatelessWidget {
                       ],
                     ),
                     Text(
-                      '₹${_fmt(totalAmount)}',
+                      CurrencyFormatter.format(totalAmount),
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

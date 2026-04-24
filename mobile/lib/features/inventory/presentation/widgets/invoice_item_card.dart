@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 
 class InvoiceItemCard extends StatelessWidget {
@@ -15,11 +16,6 @@ class InvoiceItemCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  String _fmt(double? v) {
-    if (v == null) return '0.00';
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +148,7 @@ class InvoiceItemCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Last paid ₹${item.previousRate?.toStringAsFixed(0)}. Increased by ₹${item.priceHikeAmount?.toStringAsFixed(0)}.',
+                      'Last paid ${item.previousRate != null ? CurrencyFormatter.format(item.previousRate!) : '—'}. Increased by ${item.priceHikeAmount != null ? CurrencyFormatter.format(item.priceHikeAmount!) : '—'}.',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: Colors.red.shade800,
@@ -171,11 +167,11 @@ class InvoiceItemCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric('Qty', _fmt(item.qty)),
+              _buildMetric('Qty', item.qty.round().toString()),
               const Text('×', style: TextStyle(color: AppTheme.textSecondary)),
-              _buildMetric('Rate', '₹${_fmt(item.rate)}'),
+              _buildMetric('Rate', CurrencyFormatter.format(item.rate)),
               const Text('=', style: TextStyle(color: AppTheme.textSecondary)),
-              _buildMetric('Gross', '₹${_fmt(item.grossAmount ?? (item.qty * item.rate))}', isBold: true),
+              _buildMetric('Gross', CurrencyFormatter.format(item.grossAmount ?? (item.qty * item.rate)), isBold: true),
             ],
           ),
           
@@ -185,10 +181,10 @@ class InvoiceItemCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric('Discount', '-₹${_fmt(item.discAmount ?? 0)}', color: Colors.green.shade700),
-              _buildMetric('Taxable', '₹${_fmt(item.taxableAmount ?? item.grossAmount)}'),
-              _buildMetric('Tax', '+₹${_fmt((item.cgstAmount ?? 0) + (item.sgstAmount ?? 0) + (item.igstAmount ?? 0))}', color: Colors.orange.shade700),
-              _buildMetric('Net', '₹${_fmt(item.netAmount ?? item.netBill)}', isBold: true, color: AppTheme.primary),
+              _buildMetric('Discount', '-${CurrencyFormatter.format(item.discAmount ?? 0)}', color: Colors.green.shade700),
+              _buildMetric('Taxable', CurrencyFormatter.format(item.taxableAmount ?? item.grossAmount ?? 0.0)),
+              _buildMetric('Tax', '+${CurrencyFormatter.format((item.cgstAmount ?? 0) + (item.sgstAmount ?? 0) + (item.igstAmount ?? 0))}', color: Colors.orange.shade700),
+              _buildMetric('Net', CurrencyFormatter.format(item.netAmount ?? item.netBill), isBold: true, color: AppTheme.primary),
             ],
           ),
 
@@ -207,7 +203,7 @@ class InvoiceItemCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Calculated Net (₹${_fmt(item.netAmount)}) does not match Printed Total (₹${_fmt(item.printedTotal)}). Difference: ₹${_fmt(item.amountMismatch)}',
+                      'Calculated Net (${CurrencyFormatter.format(item.netAmount ?? 0)}) does not match Printed Total (${CurrencyFormatter.format(item.printedTotal ?? 0)}). Difference: ${CurrencyFormatter.format(item.amountMismatch)}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.red.shade700,

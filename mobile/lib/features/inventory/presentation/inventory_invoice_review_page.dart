@@ -170,7 +170,7 @@ class _InventoryInvoiceReviewPageState
   }
 
   void _showEditAdjustmentDialog(int index, HeaderAdjustment adj) {
-    final controller = TextEditingController(text: adj.amount.abs().toStringAsFixed(2));
+    final controller = TextEditingController(text: adj.amount.abs().round().toString());
     final type = adj.adjustmentType;
     final isDeduction = adj.amount < 0 || type == 'HEADER_DISCOUNT' || type == 'SCHEME';
 
@@ -216,7 +216,7 @@ class _InventoryInvoiceReviewPageState
   }
 
   void _showEditTotalDialog(double currentCalculatedTotal) {
-    final controller = TextEditingController(text: (_targetTotal ?? currentCalculatedTotal).toStringAsFixed(2));
+    final controller = TextEditingController(text: (_targetTotal ?? currentCalculatedTotal).round().toString());
     
     showDialog(
       context: context,

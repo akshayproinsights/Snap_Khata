@@ -4,14 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../domain/models/vendor_ledger_models.dart';
 import '../providers/vendor_ledger_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
 import '../../domain/models/inventory_models.dart';
 import '../inventory_review_page.dart';
 import '../providers/inventory_items_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import '../../../udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 class VendorLedgerDetailPage extends ConsumerStatefulWidget {
@@ -40,8 +39,6 @@ class ActivityItem {
 
 class _VendorLedgerDetailPageState
     extends ConsumerState<VendorLedgerDetailPage> {
-  final currencyFormatter =
-      NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
   final dateFormatter = DateFormat('dd MMM yyyy');
 
   List<VendorLedgerTransaction>? _transactions;
@@ -453,7 +450,7 @@ class _VendorLedgerDetailPageState
                           ),
                         ),
                         Text(
-                          currencyFormatter.format(widget.ledger.balanceDue),
+                          CurrencyFormatter.format(widget.ledger.balanceDue),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -690,10 +687,10 @@ class _VendorLedgerDetailPageState
                   children: [
                     _buildMetricCard(
                       'Total Spend',
-                      currencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
+                      CurrencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
                     ),
                     _buildMetricCard('Orders', '$ordersCount'),
-                    _buildMetricCard('Pending Due', currencyFormatter.format(currentLedger.balanceDue)),
+                    _buildMetricCard('Pending Due', CurrencyFormatter.format(currentLedger.balanceDue)),
                     _buildMetricCard(
                       'Last Order',
                       lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
@@ -1089,7 +1086,7 @@ class _VendorLedgerDetailPageState
                                ),
                             const SizedBox(width: 8),
                             Text(
-                              '${isPayment ? '-' : ''}${currencyFormatter.format(tx.amount)}',
+                              '${isPayment ? '-' : ''}${CurrencyFormatter.format(tx.amount)}',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,

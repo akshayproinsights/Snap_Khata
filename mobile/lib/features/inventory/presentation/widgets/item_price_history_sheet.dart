@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
@@ -205,7 +206,6 @@ class ItemPriceHistorySheet extends ConsumerWidget {
   }
 
   Widget _buildHistoryCard(BuildContext context, WidgetRef ref, InventoryItem item, InventoryItem? previousItem, List<InventoryItem> historyItems) {
-    final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     
     // Parse date
     final dt = DateTime.tryParse(item.invoiceDate);
@@ -268,7 +268,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${delta > 0 ? '+' : ''}${currencyFormat.format(delta)}',
+                          '${delta > 0 ? '+' : ''}${CurrencyFormatter.format(delta)}',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -301,7 +301,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                   ),
                   const Text(' @ ', style: TextStyle(color: Colors.grey, fontSize: 13)),
                   Text(
-                    currencyFormat.format(item.rate),
+                    CurrencyFormatter.format(item.rate),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -310,7 +310,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                   ),
                   const Spacer(),
                   Text(
-                    currencyFormat.format(item.netBill),
+                    CurrencyFormatter.format(item.netBill),
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -438,7 +438,7 @@ class _SparklinePainter extends CustomPainter {
       }
 
       // 2. Draw Data Label (Price) - Above point
-      final priceLabel = rates[i].toInt().toString();
+      final priceLabel = CurrencyFormatter.formatPlain(rates[i]);
       _drawText(
         canvas,
         priceLabel,

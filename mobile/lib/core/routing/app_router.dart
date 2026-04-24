@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
 import 'package:mobile/features/auth/presentation/registration_page.dart';
-import 'package:mobile/features/inventory/presentation/items_page.dart';
 import 'package:mobile/features/udhar/presentation/udhar_dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
 import 'package:mobile/features/review/presentation/pending_receipts_page.dart';
@@ -13,7 +12,6 @@ import 'package:mobile/features/review/presentation/verify_parts_page.dart';
 import 'package:mobile/features/verified/presentation/verified_invoices_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_upload_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_mapping_page.dart';
-import 'package:mobile/features/inventory/presentation/inventory_main_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_item_mapping_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_mapped_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
@@ -38,6 +36,7 @@ import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
+import 'package:mobile/features/dashboard/presentation/pages/home_dashboard_page.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -65,9 +64,9 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/inventory',
-                name: 'inventory',
-                builder: (context, state) => const InventoryMainPage(),
+                path: '/',
+                name: 'home',
+                builder: (context, state) => const HomeDashboardPage(),
               ),
             ],
           ),
@@ -83,9 +82,9 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/items',
-                name: 'items',
-                builder: (context, state) => const ItemsPage(),
+                path: '/bills',
+                name: 'bills',
+                builder: (context, state) => const VerifiedInvoicesPage(),
               ),
             ],
           ),
@@ -152,12 +151,7 @@ class AppRouter {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const VerifyPartsPage(),
       ),
-      GoRoute(
-        path: '/verified-invoices',
-        name: 'verified-invoices',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const VerifiedInvoicesPage(),
-      ),
+
       GoRoute(
         path: '/inventory-mapping',
         name: 'inventory-mapping',

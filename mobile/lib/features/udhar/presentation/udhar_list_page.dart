@@ -6,11 +6,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'providers/udhar_provider.dart';
 import '../domain/models/udhar_models.dart';
-import 'package:intl/intl.dart';
 import 'providers/udhar_search_provider.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 class UdharListPage extends ConsumerWidget {
   const UdharListPage({super.key});
@@ -121,7 +121,7 @@ class _LedgerCard extends ConsumerWidget {
     final shopName =
         shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 
-    final pendingFmt = WhatsAppUtils.formatIndianCurrency(ledger.balanceDue);
+    final pendingFmt = CurrencyFormatter.format(ledger.balanceDue);
 
     final message = 'Hi $customerNameMsg,\n\n'
         'This is a gentle reminder from *${shopName.trim()}* regarding your pending balance.\n\n'
@@ -139,8 +139,6 @@ class _LedgerCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormatter =
-        NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
 
     // Calculate days since last activity and urgency flag
     // Only mark as overdue when there IS a recorded payment date AND it's 30+ days old.
@@ -308,7 +306,7 @@ class _LedgerCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  currencyFormatter.format(ledger.balanceDue),
+                  CurrencyFormatter.format(ledger.balanceDue),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

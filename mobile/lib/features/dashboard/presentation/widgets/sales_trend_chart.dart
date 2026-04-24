@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
 import 'package:mobile/shared/widgets/shimmer_placeholders.dart';
 
@@ -65,9 +66,6 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
 
     maxY = maxY > 0 ? maxY * 1.25 : 100;
 
-    final compact = NumberFormat.compactCurrency(symbol: '₹', decimalDigits: 0);
-    final fullFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -188,7 +186,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                       getTitlesWidget: (value, meta) {
                         if (value == 0) return const SizedBox.shrink();
                         return Text(
-                          compact.format(value),
+                          CurrencyFormatter.formatCompact(value),
                           style: const TextStyle(
                               color: AppTheme.textSecondary, fontSize: 9),
                         );
@@ -226,7 +224,7 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                             ? DateFormat('dd-MM-yyyy').format(date)
                             : dateStr;
                         return LineTooltipItem(
-                          '$label\n${fullFormat.format(s.y)}',
+                          '$label\n${CurrencyFormatter.format(s.y)}',
                           const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,

@@ -1,20 +1,16 @@
-"""
-Main FastAPI application.
-Handles routing, middleware, and application lifecycle.
-"""
-print("SnapKhata Backend is starting......Final Doneee..")
-# Final check done yep done yes git yep done api done yesss finally
-# Initial deployment trigger done yeah d addddd
+import logging
+import sys
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-import logging
 
 import config
 
 # Configure logging
-import sys
+# nothing
 
 # Create console handler with explicit flushing
 console_handler = logging.StreamHandler(sys.stdout)
@@ -50,14 +46,50 @@ root_logger.setLevel(logging.INFO)
 # Suppress httpx INFO logs (too verbose - thousands of Supabase API calls)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
-
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager"""
+    logger.info("SnapKhata API starting up...")
+    logger.info(f"CORS origins: {config.settings.cors_origins}")
+
+    # ── Orphaned task cleanup ─────────────────────────────────────────────────
+    # Any task still in 'processing' or 'queued' when the server starts was
+    # killed by a previous reload/crash. Mark them as 'failed' immediately so
+    # clients stop polling and show an error instead of looping forever.
+    try:
+        from database import get_database_client
+        from datetime import datetime, timezone
+        db = get_database_client()
+        failed_update = {
+            "status": "failed",
+            "message": "Processing was interrupted by a server restart. Please re-upload.",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        for table in ("upload_tasks", "recalculation_tasks"):
+            try:
+                # Mark stuck 'processing' tasks
+                db.client.table(table).update(failed_update).eq("status", "processing").execute()
+                # Mark stuck 'queued' tasks
+                db.client.table(table).update(failed_update).eq("status", "queued").execute()
+            except Exception as tbl_err:
+                logger.warning(f"Could not clean orphaned tasks in '{table}': {tbl_err}")
+        logger.info("Orphaned task cleanup complete")
+    except Exception as e:
+        logger.warning(f"Orphaned task cleanup skipped (non-fatal): {e}")
+
+    yield
+    
+    logger.info("SnapKhata API shutting down...")
 
 # Create FastAPI app
 app = FastAPI(
     title="SnapKhata API",
     description="Backend API for Invoice Processing and Management",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -198,42 +230,6 @@ async def db_check():
         }
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup"""
-    logger.info("SnapKhata API starting up...")
-    logger.info(f"CORS origins: {config.settings.cors_origins}")
-
-    # ── Orphaned task cleanup ─────────────────────────────────────────────────
-    # Any task still in 'processing' or 'queued' when the server starts was
-    # killed by a previous reload/crash. Mark them as 'failed' immediately so
-    # clients stop polling and show an error instead of looping forever.
-    try:
-        from database import get_database_client
-        from datetime import datetime, timezone
-        db = get_database_client()
-        failed_update = {
-            "status": "failed",
-            "message": "Processing was interrupted by a server restart. Please re-upload.",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        for table in ("upload_tasks", "recalculation_tasks"):
-            try:
-                # Mark stuck 'processing' tasks
-                db.client.table(table).update(failed_update).eq("status", "processing").execute()
-                # Mark stuck 'queued' tasks
-                db.client.table(table).update(failed_update).eq("status", "queued").execute()
-            except Exception as tbl_err:
-                logger.warning(f"Could not clean orphaned tasks in '{table}': {tbl_err}")
-        logger.info("Orphaned task cleanup complete")
-    except Exception as e:
-        logger.warning(f"Orphaned task cleanup skipped (non-fatal): {e}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown"""
-    logger.info("SnapKhata API shutting down...")
 
 
 if __name__ == "__main__":

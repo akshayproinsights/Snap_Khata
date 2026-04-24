@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/verified/data/verified_repository.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
@@ -337,7 +338,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 1.2)),
                                     const SizedBox(height: 4),
-                                    Text('₹${totalAmount.toStringAsFixed(0)}',
+                                    Text(CurrencyFormatter.format(totalAmount),
                                         style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 24,
@@ -846,7 +847,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('₹${grandTotal.toStringAsFixed(0)}',
+                        Text(CurrencyFormatter.format(grandTotal),
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -913,20 +914,20 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                     fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary)),
                             const SizedBox(height: 12),
                             _buildSummaryRow(
-                                isAutomobile ? 'Taxable Amount (Parts)' : 'Subtotal', '₹${partsBase.toStringAsFixed(2)}'),
+                                isAutomobile ? 'Taxable Amount (Parts)' : 'Subtotal', CurrencyFormatter.format(partsBase)),
                             const SizedBox(height: 4),
-                            _buildSummaryRow('GST (18%)', '₹${gstAmount.toStringAsFixed(2)}',
+                            _buildSummaryRow('GST (18%)', CurrencyFormatter.format(gstAmount),
                                 isIncluded: gstModeStr == 'included'),
                             if (isAutomobile) ...[
                               const SizedBox(height: 4),
                               _buildSummaryRow(
-                                  'Non-Taxable (Labor)', '₹${laborBase.toStringAsFixed(2)}'),
+                                  'Non-Taxable (Labor)', CurrencyFormatter.format(laborBase)),
                             ],
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8),
                               child: Divider(height: 1),
                             ),
-                            _buildSummaryRow('Grand Total', '₹${grandTotal.toStringAsFixed(2)}',
+                            _buildSummaryRow('Grand Total', CurrencyFormatter.format(grandTotal),
                                 isTotal: true),
                           ],
                         ),
@@ -1122,13 +1123,13 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                             _miniStat('Qty', record.quantity.toString()),
                             const SizedBox(width: 16),
                             _miniStat(
-                                'Rate', '₹${record.rate.toStringAsFixed(0)}'),
+                                'Rate', CurrencyFormatter.format(record.rate)),
                           ],
                         ),
                         Row(
                           children: [
                             _miniStat(
-                                'Total', '₹${record.amount.toStringAsFixed(0)}',
+                                'Total', CurrencyFormatter.format(record.amount),
                                 highlight: true),
                             const SizedBox(width: 16),
                             Container(
@@ -1143,7 +1144,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                     'Receipt #: ${record.receiptNumber}\n'
                                     'Customer: ${record.customerName}\n'
                                     'Description: ${record.description}\n'
-                                    'Amount: ₹${record.amount}\n';
+                                    'Amount: ${CurrencyFormatter.format(record.amount)}\n';
                                 
                                 final extraMsg = record.extraFields.entries
                                     .where((e) => e.value != null && e.value.toString().isNotEmpty)

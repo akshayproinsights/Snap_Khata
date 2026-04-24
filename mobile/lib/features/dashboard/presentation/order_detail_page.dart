@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
@@ -167,7 +167,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _receivedAmount = widget.group.receivedAmount ?? (hasDue ? (widget.group.totalAmount - (widget.group.balanceDue ?? 0)) : widget.group.totalAmount);
     _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
     _receivedAmountController = TextEditingController(
-        text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _receivedAmount.toStringAsFixed(0) : '') : '');
+        text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? CurrencyFormatter.formatPlain(_receivedAmount) : '') : '');
     _creditDetailsController = TextEditingController(text: widget.group.customerDetails ?? '');
 
     itemCtrls = widget.group.items.map((item) {
@@ -525,14 +525,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             const Text('Total Bill Amount', 
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             const SizedBox(height: 4),
-            Text('₹${_formatAmount(grandTotal)}', 
+            Text(CurrencyFormatter.format(grandTotal),
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
             if (_paymentMode == 'Credit') ...[
               const SizedBox(height: 4),
               Row(
                 children: [
                    const Text('Balance Due: ', style: TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
-                   Text('₹${_formatAmount(grandTotal - _receivedAmount)}', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
+                   Text(CurrencyFormatter.format(grandTotal - _receivedAmount), style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
                 ],
               )
             ]
@@ -1171,10 +1171,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
 
   String _formatAmount(double amount) {
-    if (amount == amount.roundToDouble()) {
-      return amount.toInt().toString();
-    }
-    return amount.toStringAsFixed(2);
+    return CurrencyFormatter.formatPlain(amount);
   }
 
   void _showReceiptDialog(BuildContext context) {
@@ -1229,8 +1226,6 @@ class _ItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -1240,11 +1235,11 @@ class _ItemRow extends StatelessWidget {
                 color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
                 width: 0.5)),
       ),
-      child: isEditing ? _buildEditMode(context) : _buildViewMode(context, currencyFormat),
+      child: isEditing ? _buildEditMode(context) : _buildViewMode(context),
     );
   }
 
-  Widget _buildViewMode(BuildContext context, NumberFormat currencyFormat) {
+  Widget _buildViewMode(BuildContext context) {
     final qtyStr = item.quantity == item.quantity.roundToDouble()
         ? item.quantity.toInt().toString()
         : item.quantity.toStringAsFixed(1);
@@ -1277,7 +1272,7 @@ class _ItemRow extends StatelessWidget {
                     ),
                   const SizedBox(width: 8),
                   Text(
-                    '$qtyStr  x  ${currencyFormat.format(item.rate)}',
+                    '$qtyStr  x  ${CurrencyFormatter.format(item.rate)}',
                     style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 13,
@@ -1290,7 +1285,7 @@ class _ItemRow extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Text(
-          currencyFormat.format(item.amount),
+          CurrencyFormatter.format(item.amount),
           style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,

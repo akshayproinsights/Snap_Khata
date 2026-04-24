@@ -3,7 +3,6 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
@@ -12,6 +11,7 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:printing/printing.dart';
 import 'package:mobile/features/purchase_orders/utils/pdf_generator.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -42,8 +42,6 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
 
   @override
   Widget build(BuildContext context) {
-    final currency =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final state = ref.watch(purchaseOrderProvider);
 
     // Listen for success and show whatsapp share sheet
@@ -124,8 +122,8 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
       body: TabBarView(
         controller: _tabs,
         children: [
-          _DraftTab(currency: currency),
-          _HistoryTab(currency: currency),
+          _DraftTab(),
+          _HistoryTab(),
         ],
       ),
     );
@@ -144,8 +142,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
 // ─── Draft Tab ────────────────────────────────────────────────────────────────
 
 class _DraftTab extends ConsumerWidget {
-  final NumberFormat currency;
-  const _DraftTab({required this.currency});
+  const _DraftTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -186,7 +183,7 @@ class _DraftTab extends ConsumerWidget {
             itemCount: state.draft.items.length,
             itemBuilder: (context, i) {
               final item = state.draft.items[i];
-              return _DraftItemCard(item: item, currency: currency);
+              return _DraftItemCard(item: item);
             },
           ),
         ),
@@ -194,7 +191,6 @@ class _DraftTab extends ConsumerWidget {
         // Cart Bottom Bar
         if (state.hasDraftItems)
           _CartBottomBar(
-            currency: currency,
             onPlaceOrder: () =>
                 _showProceedSheet(context, ref, state.suppliers),
           ),
@@ -216,11 +212,9 @@ class _DraftTab extends ConsumerWidget {
 // ─── Cart Bottom Bar ──────────────────────────────────────────────────────────
 
 class _CartBottomBar extends ConsumerWidget {
-  final NumberFormat currency;
   final VoidCallback onPlaceOrder;
 
   const _CartBottomBar({
-    required this.currency,
     required this.onPlaceOrder,
   });
 
@@ -252,7 +246,7 @@ class _CartBottomBar extends ConsumerWidget {
                   Text('Total (${state.draft.totalItems} items)',
                       style: const TextStyle(
                           fontSize: 13, color: AppTheme.textSecondary)),
-                  Text(currency.format(state.draft.totalEstimatedCost),
+                  Text(CurrencyFormatter.format(state.draft.totalEstimatedCost),
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
@@ -290,8 +284,7 @@ class _CartBottomBar extends ConsumerWidget {
 
 class _DraftItemCard extends ConsumerWidget {
   final DraftPoItem item;
-  final NumberFormat currency;
-  const _DraftItemCard({required this.item, required this.currency});
+  const _DraftItemCard({required this.item});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -370,8 +363,8 @@ class _DraftItemCard extends ConsumerWidget {
                             fontSize: 11, color: AppTheme.textSecondary)),
                     if (item.unitValue != null)
                       Text(
-                          currency
-                              .format((item.unitValue ?? 0) * item.reorderQty),
+                          CurrencyFormatter.format(
+                              (item.unitValue ?? 0) * item.reorderQty),
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -772,8 +765,7 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
 // ─── History Tab ──────────────────────────────────────────────────────────────
 
 class _HistoryTab extends ConsumerWidget {
-  final NumberFormat currency;
-  const _HistoryTab({required this.currency});
+  const _HistoryTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -802,7 +794,7 @@ class _HistoryTab extends ConsumerWidget {
       itemCount: history.length,
       itemBuilder: (context, i) {
         final po = history[i];
-        return _PoHistoryCard(po: po, currency: currency);
+        return _PoHistoryCard(po: po);
       },
     );
   }
@@ -810,8 +802,7 @@ class _HistoryTab extends ConsumerWidget {
 
 class _PoHistoryCard extends ConsumerStatefulWidget {
   final PurchaseOrder po;
-  final NumberFormat currency;
-  const _PoHistoryCard({required this.po, required this.currency});
+  const _PoHistoryCard({required this.po});
 
   @override
   ConsumerState<_PoHistoryCard> createState() => _PoHistoryCardState();
@@ -983,7 +974,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       if (po.totalEstimatedCost > 0)
-                        Text(widget.currency.format(po.totalEstimatedCost),
+                        Text(CurrencyFormatter.format(po.totalEstimatedCost),
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
@@ -1224,11 +1215,7 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
                                     ),
                                     if (item.unitValue != null)
                                       Text(
-                                        NumberFormat.currency(
-                                                locale: 'en_IN',
-                                                symbol: 'Rs.',
-                                                decimalDigits: 0)
-                                            .format(item.unitValue! *
+                                        CurrencyFormatter.format(item.unitValue! *
                                                 item.orderedQty),
                                         style: const TextStyle(
                                             fontWeight: FontWeight.bold),

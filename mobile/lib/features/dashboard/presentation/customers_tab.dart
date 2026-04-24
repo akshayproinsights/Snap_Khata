@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 
 const _kGreen = Color(0xFF1B8A2A);
@@ -190,8 +190,6 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     final String vehicleNum = group.extraFields['vehicle_number']?.toString() ?? '';
     final String displayName = group.customerName.isNotEmpty
@@ -348,7 +346,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          currencyFormat.format(group.totalAmount),
+                          CurrencyFormatter.format(group.totalAmount),
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
@@ -359,7 +357,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                         if ((group.balanceDue ?? 0) > 0) ...[
                           const SizedBox(height: 2),
                           Text(
-                            'Due: ${currencyFormat.format(group.balanceDue)}',
+                            'Due: ${CurrencyFormatter.format(group.balanceDue ?? 0.0)}',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.error,
                               fontSize: 11,

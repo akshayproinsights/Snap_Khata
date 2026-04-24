@@ -5,11 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
 import 'providers/udhar_dashboard_provider.dart';
-
 
 class UdharDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -21,8 +21,6 @@ class UdharDetailPage extends ConsumerStatefulWidget {
 }
 
 class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
-  final currencyFormatter =
-      NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
   final dateFormatter = DateFormat('dd MMM yyyy, hh:mm a');
 
   List<LedgerTransaction>? _transactions;
@@ -147,7 +145,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          currencyFormatter.format(widget.ledger.balanceDue),
+                          CurrencyFormatter.format(widget.ledger.balanceDue),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -482,7 +480,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  currencyFormatter.format(balance.abs()),
+                  CurrencyFormatter.format(balance.abs()),
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
@@ -524,7 +522,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     Expanded(
                       child: _buildStatItem(
                         label: 'Total Billed',
-                        value: currencyFormatter.format(_totalInvoiced),
+                        value: CurrencyFormatter.format(_totalInvoiced),
                         color: Theme.of(context).colorScheme.onPrimary,
                         iconColor: Colors.orange.shade300,
                         icon: LucideIcons.fileText,
@@ -538,7 +536,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     Expanded(
                       child: _buildStatItem(
                         label: 'Total Paid',
-                        value: currencyFormatter.format(_totalPaid),
+                        value: CurrencyFormatter.format(_totalPaid),
                         color: Theme.of(context).colorScheme.onPrimary,
                         iconColor: Colors.greenAccent.shade400,
                         icon: LucideIcons.checkCircle,
@@ -813,7 +811,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerRight,
                               child: Text(
-                                '${isPayment ? '-' : '+'} ${currencyFormatter.format(tx.amount)}',
+                                '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,

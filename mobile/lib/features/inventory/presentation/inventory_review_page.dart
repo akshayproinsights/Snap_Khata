@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/domain/models/invoice_item_v2_model.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
@@ -436,8 +437,6 @@ class _BundleReviewTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     Color borderColor;
     Color bgColor;
@@ -549,7 +548,7 @@ class _BundleReviewTile extends ConsumerWidget {
                             style: TextStyle(
                                 color: AppTheme.textSecondary, fontSize: 12)),
                         Text(
-                          currencyFormat.format(bundle.totalAmount),
+                          CurrencyFormatter.format(bundle.totalAmount),
                           style: const TextStyle(
                               color: AppTheme.textPrimary,
                               fontSize: 12,

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 // v1 DISABLED: purchaseOrderProvider used only by Quick Links card — uncomment to restore
 // import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
@@ -744,8 +745,6 @@ class _VendorDeliveryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final hasMismatch = bundle.hasMismatch;
     final isPaid = bundle.isPaid;
     final hasChori = bundle.hasChoriCatcherAlert;
@@ -908,7 +907,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
                               color: AppTheme.textSecondary,
                               fontSize: 12)),
                       Text(
-                        currencyFormat.format(bundle.totalAmount),
+                        CurrencyFormatter.format(bundle.totalAmount),
                         style: const TextStyle(
                           color: AppTheme.primary,
                           fontSize: 13,
@@ -945,7 +944,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
                                   ? '🔴 Bill mismatch + price hike detected'
                                   : hasMismatch
                                       ? '🔴 Bill amount mismatch detected'
-                                      : '🔴 Price hike: ${currencyFormat.format(bundle.totalPriceHike)} extra',
+                                      : '🔴 Price hike: ${CurrencyFormatter.format(bundle.totalPriceHike)} extra',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFFDC2626),

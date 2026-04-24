@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 
@@ -31,8 +32,6 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
   double? _minPrice;
   double? _maxPrice;
 
-  final currencyFormat =
-      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   List<InventoryItem> _getItemHistory() {
     return widget.allItems.where((item) {
@@ -294,7 +293,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                 _buildStatCard('Total Qty',
                     totalQty == totalQty.toInt() ? '${totalQty.toInt()}' : totalQty.toStringAsFixed(2)),
                 _buildStatCard('Vendor', '$uniqueVendors'),
-                _buildStatCard('Avg Price', '₹${avgRate.toStringAsFixed(0)}'),
+                _buildStatCard('Avg Price', CurrencyFormatter.format(avgRate)),
               ],
             ),
           ),
@@ -326,7 +325,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                         Text(
                           _minPrice != null || _maxPrice != null
                               ? 'Filtered Price'
-                              : 'Price range: ₹${overallMinRate.toStringAsFixed(0)} - ₹${overallMaxRate.toStringAsFixed(0)}',
+                              : 'Price range: ${CurrencyFormatter.format(overallMinRate)} - ${CurrencyFormatter.format(overallMaxRate)}',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -556,7 +555,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
-                                                '₹${item.rate.toStringAsFixed(0)}/unit',
+                                                '${CurrencyFormatter.format(item.rate)}/unit',
                                                 style: const TextStyle(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,
@@ -581,7 +580,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                         ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            currencyFormat.format(item.netBill),
+                                            CurrencyFormatter.format(item.netBill),
                                             style: const TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,

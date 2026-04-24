@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:intl/intl.dart';
@@ -220,11 +221,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   String _formatAmount(double? amount) {
     if (amount == null) return '';
-    String formatted = amount.toStringAsFixed(2);
-    if (formatted.endsWith('.00')) {
-      return formatted.substring(0, formatted.length - 3);
-    }
-    return formatted;
+    return CurrencyFormatter.format(amount);
   }
 
   Future<void> _saveCurrentState({String? updatePhoneNumber}) async {

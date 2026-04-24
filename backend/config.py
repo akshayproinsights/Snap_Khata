@@ -8,13 +8,6 @@ import os
 # Trigger reload 2
 from pydantic_settings import BaseSettings
 from pydantic import Field
-import sys
-from pathlib import Path
-
-# Add parent directory to path to import configs - REMOVED
-# parent_dir = Path(__file__).parent.parent
-# sys.path.insert(0, str(parent_dir))
-
 import configs
 
 

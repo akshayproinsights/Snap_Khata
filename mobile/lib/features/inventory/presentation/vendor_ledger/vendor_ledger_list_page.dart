@@ -4,10 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-
 import '../providers/vendor_ledger_provider.dart';
 import '../../domain/models/vendor_ledger_models.dart';
-import 'package:intl/intl.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
 
 class VendorLedgerListPage extends ConsumerWidget {
@@ -109,7 +108,6 @@ class _LedgerCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0, locale: 'en_IN');
     
     // Calculate time ago
     String timeAgo = '';
@@ -225,7 +223,7 @@ class _LedgerCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    currencyFormatter.format(ledger.balanceDue),
+                    CurrencyFormatter.format(ledger.balanceDue),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,

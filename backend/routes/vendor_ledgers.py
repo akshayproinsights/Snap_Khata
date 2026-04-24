@@ -144,6 +144,33 @@ async def get_vendor_ledger_transactions(ledger_id: int, current_user: Dict = De
         logger.error(f"Error fetching vendor transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/transactions/all")
+async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depends(get_current_user)):
+    """Get all vendor transactions for the current user across all ledgers."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Fetch transactions with vendor_name from joined ledger table
+        response = db.client.table('vendor_ledger_transactions') \
+            .select('*, vendor_ledgers(vendor_name)') \
+            .eq('username', username) \
+            .order('created_at', desc=True) \
+            .limit(limit) \
+            .execute()
+            
+        return {
+            "status": "success",
+            "data": response.data
+        }
+    except Exception as e:
+        logger.error(f"Error fetching all vendor transactions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/vendor-ledgers/{ledger_id}")
 async def delete_vendor_ledger(ledger_id: int, current_user: Dict = Depends(get_current_user)):
     """Delete a vendor ledger and its transactions."""

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
@@ -12,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
@@ -255,8 +255,6 @@ class _InvoiceGroupTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     // If receiptLink exists, we can show an eye icon to view the real image
     final dt = DateTime.tryParse(group.date) ?? DateTime.now();
@@ -485,7 +483,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
               ),
             ),
             trailing: Text(
-              currencyFormat.format(group.totalAmount),
+              CurrencyFormatter.format(group.totalAmount),
               style: const TextStyle(
                 color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w800,

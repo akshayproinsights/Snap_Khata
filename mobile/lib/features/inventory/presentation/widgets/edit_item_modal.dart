@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/domain/utils/invoice_math_logic.dart';
 
@@ -123,8 +124,7 @@ class _EditItemModalState extends State<EditItemModal> {
 
   String _fmt(double? v) {
     if (v == null) return '';
-    final s = v.toStringAsFixed(2);
-    return s.endsWith('.00') ? s.substring(0, s.length - 3) : s;
+    return v.round().toString();
   }
 
   double _parse(String val) {
@@ -355,7 +355,7 @@ class _EditItemModalState extends State<EditItemModal> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Total differs by ₹${mismatch.toStringAsFixed(2)} from the bill. '
+                                      'Total differs by ${CurrencyFormatter.format(mismatch)} from the bill. '
                                       'Use "Extra Adjustment" below to fix it.',
                                       style: TextStyle(
                                         fontSize: 12,
@@ -519,7 +519,7 @@ class _EditItemModalState extends State<EditItemModal> {
             ),
           ),
           Text(
-            value != null ? '₹${value.toStringAsFixed(2)}' : '₹0.00',
+            value != null ? CurrencyFormatter.format(value) : CurrencyFormatter.format(0),
             style: TextStyle(
               fontSize: isBold ? 16 : 14,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,

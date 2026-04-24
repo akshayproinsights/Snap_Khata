@@ -9,6 +9,7 @@ import 'package:mobile/shared/widgets/shimmer_placeholders.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
+import 'package:mobile/core/utils/currency_formatter.dart';
 
 class CurrentStockPage extends ConsumerStatefulWidget {
   const CurrentStockPage({super.key});
@@ -541,7 +542,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                       context,
                       'Pur. Price',
                       item.unitValue != null
-                          ? '₹${item.unitValue!.toStringAsFixed(0)}'
+                          ? CurrencyFormatter.format(item.unitValue!)
                           : '-',
                       AppTheme.textPrimary,
                       () => _showUpdatePurchasePriceSheet(context, ref, item)),
@@ -949,7 +950,7 @@ class _UpdatePurchasePriceSheetState
     super.initState();
     _controller = TextEditingController(
         text: widget.item.unitValue != null
-            ? widget.item.unitValue!.toStringAsFixed(2)
+            ? widget.item.unitValue!.round().toString()
             : '');
   }
 
