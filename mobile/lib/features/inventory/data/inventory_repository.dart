@@ -17,6 +17,23 @@ class InventoryRepository {
     return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
   }
 
+  /// Reads from inventory_invoices (the actual data source). Each vendor
+  /// is surfaced as a trackable "item" grouped by vendor_name.
+  Future<List<InventoryItem>> getTrackedItems() async {
+    final response = await _dio.get('/api/inventory/tracked-items');
+    final items = response.data['items'] as List?;
+    return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
+  }
+
+  /// Price history for a vendor from inventory_invoices.
+  Future<List<InventoryItem>> getVendorPriceHistory({required String vendorName}) async {
+    final response = await _dio.get('/api/inventory/vendor-price-history', queryParameters: {
+      'vendor_name': vendorName,
+    });
+    final items = response.data['items'] as List?;
+    return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
+  }
+
   Future<List<InventoryItem>> getPriceHistory({String? description, String? partNumber}) async {
     final response = await _dio.get('/api/inventory/items/price-history', queryParameters: {
       if (description != null) 'description': description,

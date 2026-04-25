@@ -30,20 +30,7 @@ class HomeDashboardPage extends ConsumerWidget {
         backgroundColor: context.backgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: false,
-        title: Text(
-          'SNAPKHATA',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2.0,
-            color: context.primaryColor,
-          ),
-        ),
-        actions: [
-          _buildReviewButton(context, ref, currentFilter),
-          const SizedBox(width: 8),
-        ],
+        toolbarHeight: 0,
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -56,15 +43,15 @@ class HomeDashboardPage extends ConsumerWidget {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ── Header & Summary Cards ──
+              // ── Header with Greeting & Actions ──
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildGreeting(context, ref),
-                      const SizedBox(height: 24),
+                      _buildHeaderRow(context, ref, currentFilter),
+                      const SizedBox(height: 20),
                       _buildSummaryCards(context, ref, isDark),
                       const SizedBox(height: 28),
                       _buildSearchBar(context, ref, isDark),
@@ -217,7 +204,7 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildGreeting(BuildContext context, WidgetRef ref) {
+  Widget _buildHeaderRow(BuildContext context, WidgetRef ref, ActivityFilter currentFilter) {
     final authState = ref.watch(authProvider);
     final username = authState.user?.username ?? 'Merchant';
 
@@ -229,35 +216,38 @@ class HomeDashboardPage extends ConsumerWidget {
     return Row(
       children: [
         CircleAvatar(
-          radius: 24,
+          radius: 22,
           backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
-          child: const Icon(LucideIcons.user, color: Colors.white, size: 24),
+          child: const Icon(LucideIcons.user, color: Colors.white, size: 22),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              greeting,
-              style: TextStyle(
-                color: context.textSecondaryColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.0,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                greeting,
+                style: TextStyle(
+                  color: context.textSecondaryColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              username.toUpperCase(),
-              style: TextStyle(
-                color: context.primaryColor,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.5,
+              const SizedBox(height: 2),
+              Text(
+                username.toUpperCase(),
+                style: TextStyle(
+                  color: context.primaryColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        _buildReviewButton(context, ref, currentFilter),
       ],
     );
   }
@@ -313,20 +303,26 @@ class HomeDashboardPage extends ConsumerWidget {
       error: (error, stack) => Row(
         children: [
           Expanded(
-            child: _SummaryCard(
-              label: 'ERROR',
-              amount: '₹ 0',
-              color: context.errorColor,
-              isDark: isDark,
+            child: GestureDetector(
+              onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
+              child: _SummaryCard(
+                label: 'YOU WILL GET',
+                amount: 'Tap to retry',
+                color: context.errorColor,
+                isDark: isDark,
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _SummaryCard(
-              label: 'ERROR',
-              amount: '₹ 0',
-              color: context.errorColor,
-              isDark: isDark,
+            child: GestureDetector(
+              onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
+              child: _SummaryCard(
+                label: 'YOU WILL GIVE',
+                amount: 'Tap to retry',
+                color: context.errorColor,
+                isDark: isDark,
+              ),
             ),
           ),
         ],

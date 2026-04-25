@@ -792,7 +792,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
                   final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
                   final shareUrl =
-                      'https://mydigientry.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
+                      'https://snapkhata.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
 
                   final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 

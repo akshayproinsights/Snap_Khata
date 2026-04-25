@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/dashboard/domain/models/dashboard_totals.dart';
-import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 
 
@@ -25,35 +25,22 @@ final dashboardTotalsProvider = AsyncNotifierProvider<DashboardTotalsNotifier, D
 class DashboardTotalsNotifier extends AsyncNotifier<DashboardTotals> {
   @override
   Future<DashboardTotals> build() async {
-    final supabase = Supabase.instance.client;
+    final dio = ApiClient().dio;
 
     try {
-      // Perform two concurrent Supabase aggregate queries
-      final results = await Future.wait([
-        supabase.from('customer_ledgers').select('balance_due.sum()').single(),
-        supabase.from('vendor_ledgers').select('balance_due.sum()').single(),
-      ]);
-
-      // Handle nulls: If table is empty, sum returns null in some cases, or handle as 0.0
-      // Depending on Supabase return format, we extract the sum.
-      // Usually, with .select('balance_due.sum()').single(), it returns {'sum': value}
-      
-      final totalReceivable = _parseSum(results[0]);
-      final totalPayable = _parseSum(results[1]);
-
-      return DashboardTotals(
-        totalReceivable: totalReceivable,
-        totalPayable: totalPayable,
-      );
+      final response = await dio.get('/api/udhar/dashboard-summary');
+      final data = response.data['data'];
+      if (data != null) {
+        return DashboardTotals(
+          totalReceivable: double.tryParse(data['total_receivable']?.toString() ?? '0') ?? 0.0,
+          totalPayable: double.tryParse(data['total_payable']?.toString() ?? '0') ?? 0.0,
+        );
+      }
+      throw Exception('Invalid response: data is null');
     } catch (e) {
-      // Return 0.0 on error or empty results
-      return DashboardTotals.initial();
+      // Re-throw to allow UI to show error state instead of silently returning 0s
+      throw Exception('Failed to load dashboard totals: $e');
     }
-  }
-
-  double _parseSum(dynamic result) {
-    if (result == null || result['sum'] == null) return 0.0;
-    return (result['sum'] as num).toDouble();
   }
 
   /// Refreshes the dashboard totals.
@@ -65,23 +52,20 @@ class DashboardTotalsNotifier extends AsyncNotifier<DashboardTotals> {
 
 /// Provider for pending supplier reviews count.
 final pendingSupplierReviewsProvider = Provider<int>((ref) {
-  final itemsAsync = ref.watch(inventoryItemsProvider);
-  return itemsAsync.maybeWhen(
-    data: (items) {
-      final Map<String, bool> unverifiedReceipts = {};
-      for (final item in items) {
-        if (item.verificationStatus != 'Done') {
-          final key = item.invoiceNumber.isNotEmpty
-              ? item.invoiceNumber
-              : '${item.invoiceDate}_${item.vendorName ?? ''}';
-          final safeKey = key.isNotEmpty ? key : item.id.toString();
-          unverifiedReceipts[safeKey] = true;
-        }
-      }
-      return unverifiedReceipts.length;
-    },
-    orElse: () => 0,
-  );
+  final inventoryState = ref.watch(inventoryProvider);
+  final items = inventoryState.items;
+  
+  final Map<String, bool> unverifiedReceipts = {};
+  for (final item in items) {
+    if (item.verificationStatus != 'Done') {
+      final key = item.invoiceNumber.isNotEmpty
+          ? item.invoiceNumber
+          : '${item.invoiceDate}_${item.vendorName ?? ''}';
+      final safeKey = key.isNotEmpty ? key : item.id.toString();
+      unverifiedReceipts[safeKey] = true;
+    }
+  }
+  return unverifiedReceipts.length;
 });
 
 /// Provider for pending customer reviews count.
@@ -89,4 +73,3 @@ final pendingCustomerReviewsProvider = Provider<int>((ref) {
   final customerReviewState = ref.watch(reviewProvider);
   return customerReviewState.groups.length;
 });
-

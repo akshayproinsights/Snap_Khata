@@ -265,20 +265,21 @@ def get_verification_amounts(username: str) -> List[Dict[str, Any]]:
     """
     try:
         db = get_database_client()
-        # Sort by receipt_number and row_id to keep items together and in extraction order
-        result = db.query('verification_amounts').eq('username', username).order('receipt_number').order('row_id').execute()
+        # Sort by receipt_number to keep items together
+        result = db.query('verification_amounts').eq('username', username).order('receipt_number').execute()
         records = result.data if result.data else []
         
-        # Deduplicate by row_id — concurrent processing tasks can insert the same
-        # row_id twice if two uploads were kicked off for the same image.
-        # Keep the last occurrence (latest in DB order = most up-to-date).
-        seen_row_ids: dict = {}
+        # Deduplicate by id if needed
+        seen_ids: dict = {}
         for record in records:
-            row_id = record.get('row_id')
-            if row_id is not None:
-                seen_row_ids[row_id] = record
+            # Fallback to a hash if id is missing, though Supabase should return id
+            record_id = record.get('id')
+            if record_id is not None:
+                seen_ids[record_id] = record
+            else:
+                seen_ids[id(record)] = record
         
-        deduplicated = list(seen_row_ids.values())
+        deduplicated = list(seen_ids.values())
         
         if len(deduplicated) < len(records):
             logger.warning(

@@ -146,7 +146,12 @@ async def get_vendor_ledger_transactions(ledger_id: int, current_user: Dict = De
 
 @router.get("/transactions/all")
 async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depends(get_current_user)):
-    """Get all vendor transactions for the current user across all ledgers."""
+    """Get all vendor transactions for the current user across all ledgers.
+    
+    Enriches each INVOICE transaction with `total_price_hike` — the sum of
+    price_hike_amount from inventory_invoices rows matching that invoice number,
+    so the mobile app can display a 'Price hike detected' alert.
+    """
     username = current_user.get("username")
     if not username:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -162,10 +167,42 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
             .order('created_at', desc=True) \
             .limit(limit) \
             .execute()
-            
+
+        transactions = response.data or []
+
+        # Collect unique invoice numbers that have INVOICE type transactions
+        invoice_numbers = list({
+            tx['invoice_number']
+            for tx in transactions
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('invoice_number')
+        })
+
+        # Build a map: invoice_number -> total_price_hike
+        price_hike_map: Dict[str, float] = {}
+        if invoice_numbers:
+            try:
+                inv_resp = db.client.table('inventory_invoices') \
+                    .select('invoice_number, price_hike_amount') \
+                    .eq('username', username) \
+                    .in_('invoice_number', invoice_numbers) \
+                    .execute()
+
+                for row in (inv_resp.data or []):
+                    inv_num = row.get('invoice_number')
+                    hike = float(row.get('price_hike_amount') or 0)
+                    if inv_num:
+                        price_hike_map[inv_num] = price_hike_map.get(inv_num, 0.0) + hike
+            except Exception as hike_err:
+                logger.warning(f"Could not fetch price_hike_amount: {hike_err}")
+
+        # Inject total_price_hike into each transaction
+        for tx in transactions:
+            inv_num = tx.get('invoice_number')
+            tx['total_price_hike'] = price_hike_map.get(inv_num, 0.0) if inv_num else 0.0
+
         return {
             "status": "success",
-            "data": response.data
+            "data": transactions
         }
     except Exception as e:
         logger.error(f"Error fetching all vendor transactions: {e}")

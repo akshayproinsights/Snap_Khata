@@ -397,7 +397,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         : '';
 
                     final link =
-                        'https://mydigientry.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
+                        'https://snapkhata.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
 
                     final customerNameMsg = group.customerName.isNotEmpty &&
                             group.customerName.toLowerCase() != 'unknown'

@@ -1,17 +1,21 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:dio/dio.dart';
+import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 
 class ActivityRepository {
-  final SupabaseClient _supabase;
+  final Dio _dio;
 
-  ActivityRepository(this._supabase);
+  ActivityRepository() : _dio = ApiClient().dio;
 
-  /// Fetches unified activities from both customer and vendor tables.
-  /// 
+  /// Fetches unified activities from both customer and vendor backend endpoints.
+  ///
+  /// Uses the authenticated backend API so results are automatically scoped
+  /// to the currently logged-in merchant (by JWT / username). This prevents
+  /// cross-user data leakage that would occur with un-filtered Supabase queries.
+  ///
   /// Uses [Future.wait] for concurrent fetching and merges/sorts results in-memory.
-  Future<List<ActivityItem>> fetchRecentActivities({int limit = 50}) async {
+  Future<List<ActivityItem>> fetchRecentActivities({int limit = 100}) async {
     try {
-      // 1. Fetch concurrently from both transaction flows
       final results = await Future.wait([
         _fetchCustomerTransactions(limit),
         _fetchVendorTransactions(limit),
@@ -20,26 +24,27 @@ class ActivityRepository {
       final customerActivities = results[0];
       final vendorActivities = results[1];
 
-      // 2. Merge and Sort descending by date
+      // Merge and sort descending by date
       final allActivities = [...customerActivities, ...vendorActivities];
       allActivities.sort((a, b) => b.transactionDate.compareTo(a.transactionDate));
 
-      // 3. Apply final limit and return
+      // Apply final limit and return
       return allActivities.take(limit).toList();
     } catch (e) {
-      // Production-ready error handling - rethrow with context or handle as per app policy
       throw Exception('ActivityRepository Error: $e');
     }
   }
 
+  /// Calls GET /api/udhar/transactions/all — JWT-authenticated, user-scoped.
+  /// Response shape: { status: "success", data: [ { id, transaction_type,
+  ///   amount, receipt_number, created_at, customer_ledgers: { customer_name, balance_due } } ] }
   Future<List<ActivityItem>> _fetchCustomerTransactions(int limit) async {
-    final response = await _supabase
-        .from('ledger_transactions')
-        .select('*, customer_ledgers(customer_name, balance_due)')
-        .order('created_at', ascending: false)
-        .limit(limit);
+    final response = await _dio.get(
+      '/api/udhar/transactions/all',
+      queryParameters: {'limit': limit},
+    );
 
-    final data = response as List<dynamic>;
+    final data = (response.data['data'] as List?) ?? [];
     return data.map((json) {
       final ledger = json['customer_ledgers'] as Map<String, dynamic>?;
       return ActivityItem.customer(
@@ -54,14 +59,16 @@ class ActivityRepository {
     }).toList();
   }
 
+  /// Calls GET /api/vendor-ledgers/transactions/all — JWT-authenticated, user-scoped.
+  /// Response shape: { status: "success", data: [ { id, transaction_type,
+  ///   amount, invoice_number, is_paid, created_at, vendor_ledgers: { vendor_name, balance_due } } ] }
   Future<List<ActivityItem>> _fetchVendorTransactions(int limit) async {
-    final response = await _supabase
-        .from('vendor_ledger_transactions')
-        .select('*, vendor_ledgers(vendor_name, balance_due)')
-        .order('created_at', ascending: false)
-        .limit(limit);
+    final response = await _dio.get(
+      '/api/vendor-ledgers/transactions/all',
+      queryParameters: {'limit': limit},
+    );
 
-    final data = response as List<dynamic>;
+    final data = (response.data['data'] as List?) ?? [];
     return data.map((json) {
       final ledger = json['vendor_ledgers'] as Map<String, dynamic>?;
       return ActivityItem.vendor(
@@ -72,6 +79,7 @@ class ActivityRepository {
         displayId: json['invoice_number']?.toString(),
         isPaid: json['is_paid'] ?? false,
         balanceDue: (ledger?['balance_due'] as num?)?.toDouble() ?? 0.0,
+        totalPriceHike: (json['total_price_hike'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
   }

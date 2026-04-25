@@ -46,12 +46,18 @@ const LoginPage: React.FC = () => {
                 <div className="w-full max-w-md">
                     {/* Logo & Brand */}
                     <div className="text-center mb-8">
-                        <div className="flex items-center justify-center mb-6">
+                        <div className="flex items-center justify-center mb-4">
                             <img
-                                src="/snapkhata_logo.png"
-                                alt="SnapKhata - Smart Digital Munim"
-                                className="w-[200px] h-auto object-contain"
+                                src="/snapkhata-logo-full.png"
+                                alt="SnapKhata - Scan Bill, Send on WhatsApp, Track & Settle"
+                                className="w-[280px] h-auto object-contain"
                             />
+                        </div>
+
+                        {/* Top 1% SMB SaaS Badge */}
+                        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-full px-4 py-1.5 mb-4">
+                            <span className="text-amber-500">🏆</span>
+                            <span className="text-xs font-semibold text-amber-800">Top 1% SaaS for SMBs</span>
                         </div>
 
                         {/* Trust Badge for Indian SMBs */}

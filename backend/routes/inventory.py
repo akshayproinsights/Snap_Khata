@@ -788,6 +788,108 @@ def process_inventory_sync(
         logger.info("=== INVENTORY PROCESSING COMPLETED ===")
 
 
+@router.get("/tracked-items")
+async def get_tracked_items(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Returns verified supplier invoices from inventory_invoices as trackable items.
+    Used by the mobile Track Items page. Groups by vendor_name so each vendor
+    appears as a tracked 'item' with price history.
+    """
+    from database import get_database_client
+
+    username = current_user.get("username")
+    db = get_database_client()
+
+    try:
+        response = db.client.table("inventory_invoices") \
+            .select("*") \
+            .eq("username", username) \
+            .order("invoice_date", desc=True) \
+            .execute()
+
+        items = []
+        for inv in (response.data or []):
+            total = float(inv.get("total_amount") or 0)
+            vendor = inv.get("vendor_name") or inv.get("invoice_number") or "Unknown"
+            items.append({
+                "id": inv.get("id"),
+                "invoice_date": str(inv.get("invoice_date") or ""),
+                "invoice_number": inv.get("invoice_number") or "",
+                "vendor_name": inv.get("vendor_name"),
+                "part_number": "",
+                "description": vendor,
+                "qty": 1.0,
+                "rate": total,
+                "net_bill": total,
+                "amount_mismatch": 0.0,
+                "receipt_link": inv.get("receipt_link") or "",
+                "verification_status": "Done",
+                "created_at": inv.get("created_at"),
+                "payment_mode": inv.get("payment_mode"),
+                "amount_paid": float(inv.get("amount_paid") or 0),
+                "balance_owed": float(inv.get("balance_owed") or 0),
+            })
+
+        return {"success": True, "items": items, "count": len(items)}
+    except Exception as e:
+        logger.error(f"Error fetching tracked items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vendor-price-history")
+async def get_vendor_price_history(
+    vendor_name: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Returns the invoice total history for a specific vendor from inventory_invoices.
+    Used by the price history bottom sheet in Track Items.
+    """
+    from database import get_database_client
+
+    username = current_user.get("username")
+    db = get_database_client()
+
+    if not vendor_name:
+        raise HTTPException(status_code=400, detail="Must provide vendor_name")
+
+    try:
+        query = db.client.table("inventory_invoices") \
+            .select("*") \
+            .eq("username", username) \
+            .ilike("vendor_name", vendor_name) \
+            .order("invoice_date", desc=False)
+
+        response = query.execute()
+
+        items = []
+        for inv in (response.data or []):
+            total = float(inv.get("total_amount") or 0)
+            items.append({
+                "id": inv.get("id"),
+                "invoice_date": str(inv.get("invoice_date") or ""),
+                "invoice_number": inv.get("invoice_number") or "",
+                "vendor_name": inv.get("vendor_name"),
+                "part_number": "",
+                "description": inv.get("vendor_name") or "",
+                "qty": 1.0,
+                "rate": total,
+                "net_bill": total,
+                "amount_mismatch": 0.0,
+                "receipt_link": inv.get("receipt_link") or "",
+                "verification_status": "Done",
+                "created_at": inv.get("created_at"),
+                "payment_mode": inv.get("payment_mode"),
+            })
+
+        return {"success": True, "items": items, "count": len(items)}
+    except Exception as e:
+        logger.error(f"Error fetching vendor price history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/items")
 async def get_inventory_items(
     show_all: bool = False,
@@ -805,8 +907,8 @@ async def get_inventory_items(
     db = get_database_client()
     
     try:
-        # Base query - join with inventory_invoices to get payment_mode
-        query = db.client.table("inventory_items").select("*, inventory_invoices(payment_mode)").eq("username", username)
+        # Base query
+        query = db.client.table("inventory_items").select("*").eq("username", username)
         
         # CRITICAL: Apply filtering for reviews - exclude verified items
         if not show_all:

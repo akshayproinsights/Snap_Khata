@@ -423,7 +423,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   };
 
                   final link =
-                      'https://mydigientry.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
+                      'https://snapkhata.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
 
                   final customerNameMsg = widget
                               .group.customerName.isNotEmpty &&

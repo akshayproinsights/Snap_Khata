@@ -341,6 +341,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Row(
           children: [
             CircleAvatar(

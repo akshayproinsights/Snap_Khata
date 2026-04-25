@@ -39,6 +39,7 @@ _VendorActivity _$VendorActivityFromJson(Map<String, dynamic> json) =>
       displayId: json['displayId'] as String?,
       isPaid: json['isPaid'] as bool,
       balanceDue: (json['balanceDue'] as num?)?.toDouble(),
+      totalPriceHike: (json['totalPriceHike'] as num?)?.toDouble() ?? 0.0,
       $type: json['runtimeType'] as String?,
     );
 
@@ -51,5 +52,6 @@ Map<String, dynamic> _$VendorActivityToJson(_VendorActivity instance) =>
       'displayId': instance.displayId,
       'isPaid': instance.isPaid,
       'balanceDue': instance.balanceDue,
+      'totalPriceHike': instance.totalPriceHike,
       'runtimeType': instance.$type,
     };

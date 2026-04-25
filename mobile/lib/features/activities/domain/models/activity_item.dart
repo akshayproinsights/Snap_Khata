@@ -26,6 +26,7 @@ abstract class ActivityItem with _$ActivityItem {
     String? displayId,
     required bool isPaid,
     double? balanceDue,
+    @Default(0.0) double totalPriceHike,
   }) = _VendorActivity;
 
   factory ActivityItem.fromJson(Map<String, dynamic> json) => _$ActivityItemFromJson(json);

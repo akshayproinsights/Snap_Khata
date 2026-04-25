@@ -25,9 +25,9 @@ jobs:
         working-directory: ./frontend
         env:
           # Firebase Hosting and Hetzner are different origins.
-          # We explicitly point the build at the Hetzner backend URL
+          # We explicitly point the build at the new api.snapkhata.com subdomain
           # so all /api/* calls go to the right place.
-          VITE_API_URL: https://mydigientry.com
+          VITE_API_URL: https://api.snapkhata.com
         run: |
           npm ci
           npm run build

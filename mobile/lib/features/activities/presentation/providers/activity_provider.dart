@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mobile/features/activities/data/repositories/activity_repository.dart';
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 /// Provides the [ActivityRepository] instance.
+/// The repository uses the authenticated [ApiClient] internally, so all
+/// queries are automatically scoped to the logged-in merchant.
 final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
-  return ActivityRepository(Supabase.instance.client);
+  return ActivityRepository();
 });
 
 /// Holds the current string from the search bar.
@@ -45,7 +46,7 @@ class RecentActivitiesNotifier extends AsyncNotifier<List<ActivityItem>> {
 }
 
 /// A derived provider that watches both the raw list, the search query, and the filter,
-/// returning the locally filtered results without re-fetching from Supabase.
+/// returning the locally filtered results without re-fetching from the backend.
 final filteredActivitiesProvider = Provider<AsyncValue<List<ActivityItem>>>((ref) {
   final rawActivitiesAsync = ref.watch(recentActivitiesProvider);
   final searchQuery = ref.watch(activitiesSearchQueryProvider).toLowerCase().trim();

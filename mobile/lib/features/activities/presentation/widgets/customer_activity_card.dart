@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 
 /// Renders a customer (receivable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
-class CustomerActivityCard extends StatelessWidget {
+class CustomerActivityCard extends ConsumerWidget {
   const CustomerActivityCard({super.key, required this.item});
 
   /// The customer variant of [ActivityItem].
   final ActivityItem item;
 
-  static final _dateFormatter = DateFormat('MMM d, h:mm a');
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
       customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue) {
         final initials = _initials(entityName);
@@ -25,63 +28,111 @@ class CustomerActivityCard extends StatelessWidget {
         
         final String badgeText = isPayment 
             ? 'GOT' 
-            : (hasDue ? 'Due: ${CurrencyFormatter.format(balanceDue)}' : 'SETTLED');
+            : (hasDue ? 'DUE' : 'SETTLED');
             
         final Color badgeColor = isPayment 
             ? context.successColor 
             : (hasDue ? context.warningColor : context.successColor);
 
-        return Container(
-          decoration: BoxDecoration(
-            color: context.surfaceColor,
-            border: Border(
-              bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              children: [
-                // ── Avatar ──────────────────────────────────────────────
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: isPayment ? context.successColor.withValues(alpha: 0.12) : context.errorColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      color: isPayment ? context.successColor : context.errorColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
+        return Material(
+          color: context.surfaceColor,
+          child: InkWell(
+            onTap: () async {
+              // Show a loading overlay
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                final repo = ref.read(verifiedRepositoryProvider);
+                if (!isPayment && displayId != null && displayId.isNotEmpty) {
+                  final records = await repo.getVerifiedInvoices(receiptNumber: displayId);
+                  if (context.mounted && records.isNotEmpty) {
+                    final first = records.first;
+                    final group = InvoiceGroup(
+                      receiptNumber: first.receiptNumber,
+                      date: first.date.isNotEmpty ? first.date : first.uploadDate,
+                      receiptLink: first.receiptLink,
+                      customerName: first.customerName,
+                      mobileNumber: first.mobileNumber,
+                      extraFields: first.extraFields,
+                      uploadDate: first.uploadDate,
+                      paymentMode: first.paymentMode,
+                      receivedAmount: first.receivedAmount,
+                      balanceDue: first.balanceDue,
+                      customerDetails: first.customerDetails,
+                    );
+                    group.items = records;
+                    group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
+                    Navigator.pop(context); // hide loading
+                    context.push('/order-detail', extra: group);
+                    return;
+                  }
+                }
+              } catch (_) {}
+
+              if (context.mounted) {
+                Navigator.pop(context); // hide loading
+                // Navigate to Customer Ledger fallback
+                context.push('/udhar-detail', 
+                  extra: CustomerLedger(
+                    id: -1, 
+                    customerName: entityName, 
+                    balanceDue: balanceDue ?? 0.0,
+                  )
+                );
+              }
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
                 ),
-                const SizedBox(width: 14),
-                // ── Entity name + date ───────────────────────────────────
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entityName,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Row(
+                  children: [
+                    // ── Avatar ──────────────────────────────────────────────
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: isPayment ? context.successColor.withValues(alpha: 0.12) : context.errorColor.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initials,
                         style: TextStyle(
-                          color: context.textColor,
+                          color: isPayment ? context.successColor : context.errorColor,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
-                          letterSpacing: -0.2,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
+                    ),
+                    const SizedBox(width: 14),
+                    // ── Entity name + date ───────────────────────────────────
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Customer • ${_dateFormatter.format(transactionDate)}',
+                            entityName,
+                            style: TextStyle(
+                              color: context.textColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Customer',
                             style: TextStyle(
                               color: context.textSecondaryColor,
                               fontSize: 12,
@@ -90,43 +141,32 @@ class CustomerActivityCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (displayId != null) ...[
-                            const SizedBox(width: 4),
-                            Text(
-                              '• #$displayId',
-                              style: TextStyle(
-                                color: context.textSecondaryColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // ── Amount & Badge ───────────────────────────────────────────────
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      CurrencyFormatter.format(amount),
-                      style: TextStyle(
-                        color: context.textColor,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
                     ),
-                    const SizedBox(height: 4),
-                    _TypeChip(
-                      label: badgeText,
-                      color: badgeColor,
+                    const SizedBox(width: 8),
+                    // ── Amount & Badge ───────────────────────────────────────────────
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          CurrencyFormatter.format(amount),
+                          style: TextStyle(
+                            color: context.textColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _TypeChip(
+                          label: badgeText,
+                          color: badgeColor,
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         );

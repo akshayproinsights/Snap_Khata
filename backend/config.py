@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=43200, alias="JWT_EXPIRE_MINUTES")  # 30 days
     
     # CORS
-    cors_origins: list = Field(default=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://snapkhata-prod.web.app", "https://snapkhata-app.web.app", "https://mydigientry.com", "https://www.mydigientry.com", "http://192.168.1.18:8000", "http://192.168.1.18:3000", "http://192.168.1.18:5173", "http://localhost:8080", "http://127.0.0.1:8080"], alias="CORS_ORIGINS")
+    cors_origins: list = Field(default=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://snapkhata-prod.web.app", "https://snapkhata-app.web.app", "https://snapkhata.com", "https://www.snapkhata.com", "https://api.snapkhata.com", "https://mydigientry.com", "https://www.mydigientry.com", "http://192.168.1.18:8000", "http://192.168.1.18:3000", "http://192.168.1.18:5173", "http://localhost:8080", "http://127.0.0.1:8080"], alias="CORS_ORIGINS")
     
     # Google API
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
