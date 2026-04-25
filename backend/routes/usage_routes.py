@@ -82,13 +82,18 @@ async def get_usage_stats(
             # Format labels based on period
             labels = []
             for d in sorted_dates:
-                dt = datetime.strptime(d, "%Y-%m-%d")
-                if period_name == "1 Week":
-                    labels.append(dt.strftime("%a"))  # Mon, Tue, etc.
-                elif period_name == "1 Month":
-                    labels.append(dt.strftime("%d"))  # 01, 02, etc.
+                if period_name == "Today":
+                    # For today, if we had hourly data we'd use it, but currently we use date_str (YYYY-MM-DD)
+                    # So we'll just show the date or "Today"
+                    labels.append("Today")
                 else:
-                    labels.append(dt.strftime("%b %d"))  # Jan 01
+                    dt = datetime.strptime(d, "%Y-%m-%d")
+                    if period_name == "1 Week":
+                        labels.append(dt.strftime("%a"))  # Mon, Tue, etc.
+                    elif period_name == "1 Month":
+                        labels.append(dt.strftime("%d"))  # 01, 02, etc.
+                    else:
+                        labels.append(dt.strftime("%b %d"))  # Jan 01
 
             return {
                 "customer_orders": customer_orders,
@@ -99,6 +104,7 @@ async def get_usage_stats(
             }
 
         # Calculate date ranges
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
@@ -106,11 +112,11 @@ async def get_usage_stats(
         def get_log_date(log):
             val = log.get("processed_at")
             if not val:
-                # Fallback to created_at or other fields if needed, but for now we skip invalid ones
                 return None
             return val
 
         # Filter logs for each period safely
+        today_logs = []
         week_logs = []
         month_logs = []
         for log in logs:
@@ -119,6 +125,8 @@ async def get_usage_stats(
                 continue
             
             try:
+                if log_date >= today_start.isoformat():
+                    today_logs.append(log)
                 if log_date >= week_ago.isoformat():
                     week_logs.append(log)
                 if log_date >= month_ago.isoformat():
@@ -127,6 +135,7 @@ async def get_usage_stats(
                 continue
 
         return {
+            "Today": build_period_data(today_logs, "Today"),
             "1 Week": build_period_data(week_logs, "1 Week"),
             "1 Month": build_period_data(month_logs, "1 Month"),
             "All Time": build_period_data(logs, "All Time")

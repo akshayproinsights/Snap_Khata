@@ -10,6 +10,7 @@ import 'package:mobile/features/review/presentation/review_dates_page.dart';
 import 'package:mobile/features/review/presentation/review_amounts_page.dart';
 import 'package:mobile/features/review/presentation/verify_parts_page.dart';
 import 'package:mobile/features/verified/presentation/verified_invoices_page.dart';
+import 'package:mobile/features/inventory/presentation/items_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_upload_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_mapping_page.dart';
 import 'package:mobile/features/inventory/presentation/inventory_item_mapping_page.dart';
@@ -82,9 +83,9 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/bills',
-                name: 'bills',
-                builder: (context, state) => const VerifiedInvoicesPage(),
+                path: '/items',
+                name: 'items',
+                builder: (context, state) => const ItemsPage(),
               ),
             ],
           ),
@@ -150,6 +151,12 @@ class AppRouter {
         name: 'verify-parts',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const VerifyPartsPage(),
+      ),
+      GoRoute(
+        path: '/verified-invoices',
+        name: 'verified-invoices',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const VerifiedInvoicesPage(),
       ),
 
       GoRoute(

@@ -1,3 +1,4 @@
+import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -84,18 +85,20 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Padding(
+            return Container(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
                 left: 24,
                 right: 24,
                 top: 24,
+              ),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -107,7 +110,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.outlineVariant,
+                        color: context.borderColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -131,9 +134,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                      color: context.primaryColor.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), width: 0.5),
+                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.3), width: 0.5),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -141,13 +144,13 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                         Text(
                           'Balance Due:',
                           style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: context.textSecondaryColor,
                               fontWeight: FontWeight.w600),
                         ),
                         Text(
                           CurrencyFormatter.format(widget.ledger.balanceDue),
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
+                            color: context.primaryColor,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -160,24 +163,28 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     controller: amountController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(color: context.textColor),
                     decoration: InputDecoration(
                       labelText: 'Amount Received (₹)',
+                      labelStyle: TextStyle(color: context.textSecondaryColor),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      prefixIcon: const Icon(LucideIcons.indianRupee),
+                      prefixIcon: Icon(LucideIcons.indianRupee, color: context.primaryColor),
                     ),
                     autofocus: true,
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: notesController,
+                    style: TextStyle(color: context.textColor),
                     decoration: InputDecoration(
                       labelText: 'Notes / Reference',
+                      labelStyle: TextStyle(color: context.textSecondaryColor),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      prefixIcon: const Icon(LucideIcons.edit2),
+                      prefixIcon: Icon(LucideIcons.edit2, color: context.textSecondaryColor),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -226,18 +233,18 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               }
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: context.primaryColor,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: isSubmitting
-                          ? SizedBox(
+                          ? const SizedBox(
                               width: 24,
                               height: 24,
                               child: CircularProgressIndicator(
-                                  color: Theme.of(context).colorScheme.onPrimary, strokeWidth: 2))
+                                  color: Colors.white, strokeWidth: 2))
                           : const Text(
                               'Save Payment',
                               style: TextStyle(
@@ -328,21 +335,21 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         : 'C';
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        backgroundColor: context.primaryColor,
+        foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 0,
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.25),
+              backgroundColor: Colors.white.withValues(alpha: 0.25),
               child: Text(
                 initials,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimary,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
@@ -355,10 +362,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                 children: [
                   Text(
                     currentLedger.customerName.toUpperCase(),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onPrimary,
+                      color: Colors.white,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -368,14 +375,14 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     Text(
                       currentLedger.customerPhone!,
                       style:
-                          TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)),
+                          TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7)),
                     ),
                 ],
               ),
             ),
           ],
         ),
-        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
@@ -391,7 +398,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   width: 3,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: context.primaryColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -401,7 +408,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: context.textSecondaryColor,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -437,12 +444,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddPaymentDialog(context),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        icon: Icon(LucideIcons.indianRupee, color: Theme.of(context).colorScheme.onPrimary),
-        label: Text(
+        backgroundColor: context.primaryColor,
+        icon: const Icon(LucideIcons.indianRupee, color: Colors.white),
+        label: const Text(
           'Add Payment',
           style: TextStyle(
-              color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -456,7 +463,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
+        color: context.primaryColor,
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
@@ -485,7 +492,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color:
-                        isPositive ? Theme.of(context).colorScheme.onPrimary : Colors.greenAccent.shade200,
+                        isPositive ? Colors.white : Colors.greenAccent.shade200,
                   ),
                 ),
                 if (!isPositive)
@@ -523,7 +530,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Billed',
                         value: CurrencyFormatter.format(_totalInvoiced),
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Colors.white,
                         iconColor: Colors.orange.shade300,
                         icon: LucideIcons.fileText,
                       ),
@@ -537,7 +544,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: _buildStatItem(
                         label: 'Total Paid',
                         value: CurrencyFormatter.format(_totalPaid),
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Colors.white,
                         iconColor: Colors.greenAccent.shade400,
                         icon: LucideIcons.checkCircle,
                       ),
@@ -567,7 +574,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7), fontSize: 11),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11),
         ),
         const SizedBox(height: 2),
         Text(
@@ -612,7 +619,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   : 'Invoice marked as Unpaid.',
             ),
             backgroundColor:
-                isPaid ? Colors.green.shade600 : Colors.orange.shade700,
+                isPaid ? context.successColor : context.warningColor,
           ),
         );
       } else {
@@ -620,7 +627,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           SnackBar(
             content: Text(
                 'Failed to mark invoice as ${isPaid ? 'paid' : 'unpaid'}.'),
-            backgroundColor: Colors.red.shade600,
+            backgroundColor: context.errorColor,
           ),
         );
       }
@@ -636,12 +643,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           children: [
             TextButton.icon(
               onPressed: () => _togglePaidStatus(tx, false),
-              icon: const Icon(LucideIcons.xCircle,
-                  color: Colors.orange, size: 18),
-              label: const Text(
+              icon: Icon(LucideIcons.xCircle,
+                  color: context.warningColor, size: 18),
+              label: Text(
                 'Mark as Unpaid',
                 style: TextStyle(
-                    color: Colors.orange, fontWeight: FontWeight.bold),
+                    color: context.warningColor, fontWeight: FontWeight.bold),
               ),
               style: TextButton.styleFrom(
                 padding:
@@ -672,7 +679,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade600,
+              backgroundColor: context.successColor,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -691,9 +698,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     final canTap = isInvoice && tx.receiptNumber != null;
 
     final Color accentColor =
-        isPayment ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error;
+        isPayment ? context.primaryColor : context.errorColor;
     final Color bgColor =
-        isPayment ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : Theme.of(context).colorScheme.error.withValues(alpha: 0.1);
+        isPayment ? context.primaryColor.withValues(alpha: 0.1) : context.errorColor.withValues(alpha: 0.1);
     final IconData txIcon =
         isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
     final String txTitle = isPayment
@@ -704,12 +711,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
-          boxShadow: Theme.of(context).brightness == Brightness.light
-              ? AppTheme.premiumShadow
-              : AppTheme.darkPremiumShadow,
+          border: Border.all(color: context.borderColor, width: 0.5),
+          boxShadow: context.premiumShadow,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -742,7 +747,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: context.textColor,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -754,19 +759,19 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                  color: context.primaryColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
                                   border:
-                                      Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
+                                      Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
                                 ),
-                                child: Text(
-                                  'PAID',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                                  child: Text(
+                                    'PAID',
+                                    style: TextStyle(
+                                      color: context.primaryColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
                               ),
                           ],
                         ),
@@ -777,7 +782,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               : dateFormatter.format(tx.createdAt.toLocal()),
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: context.textSecondaryColor,
                           ),
                         ),
                         if (tx.notes != null && tx.notes!.isNotEmpty) ...[
@@ -786,7 +791,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                             tx.notes!,
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.grey.shade500,
+                              color: context.textSecondaryColor,
                               fontStyle: FontStyle.italic,
                             ),
                             maxLines: 1,
@@ -827,8 +832,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(LucideIcons.eye,
-                              color: AppTheme.textSecondary, size: 24),
+                          icon: Icon(LucideIcons.eye,
+                              color: context.textSecondaryColor, size: 24),
                           onPressed: () => _navigateToOrderDetails(tx),
                           tooltip: 'View Order Details',
                         ),
@@ -850,20 +855,20 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.fileText, size: 52, color: Colors.grey.shade300),
+          Icon(LucideIcons.fileText, size: 52, color: context.borderColor),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No transactions yet',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppTheme.textSecondary,
+              color: context.textSecondaryColor,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Transactions will appear here once\nan invoice or payment is recorded.',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: 13, color: context.textSecondaryColor),
             textAlign: TextAlign.center,
           ),
         ],

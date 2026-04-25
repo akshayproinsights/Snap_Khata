@@ -38,7 +38,7 @@ ActivityItem _$ActivityItemFromJson(
 /// @nodoc
 mixin _$ActivityItem {
 
- String get id; String get entityName; DateTime get transactionDate; double get amount; String? get displayId;
+ String get id; String get entityName; DateTime get transactionDate; double get amount; String? get displayId; double? get balanceDue;
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -51,16 +51,16 @@ $ActivityItemCopyWith<ActivityItem> get copyWith => _$ActivityItemCopyWithImpl<A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ActivityItem&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ActivityItem&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,balanceDue);
 
 @override
 String toString() {
-  return 'ActivityItem(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId)';
+  return 'ActivityItem(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, balanceDue: $balanceDue)';
 }
 
 
@@ -71,7 +71,7 @@ abstract mixin class $ActivityItemCopyWith<$Res>  {
   factory $ActivityItemCopyWith(ActivityItem value, $Res Function(ActivityItem) _then) = _$ActivityItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, double? balanceDue
 });
 
 
@@ -88,14 +88,15 @@ class _$ActivityItemCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? balanceDue = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
 as String,transactionDate: null == transactionDate ? _self.transactionDate : transactionDate // ignore: cast_nullable_to_non_nullable
 as DateTime,amount: null == amount ? _self.amount : amount // ignore: cast_nullable_to_non_nullable
 as double,displayId: freezed == displayId ? _self.displayId : displayId // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
@@ -183,11 +184,11 @@ return vendor(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType)?  customer,TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid)?  vendor,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)?  customer,TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue)?  vendor,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CustomerActivity() when customer != null:
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType);case _VendorActivity() when vendor != null:
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity() when vendor != null:
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue);case _:
   return orElse();
 
 }
@@ -205,11 +206,11 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType)  customer,required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid)  vendor,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)  customer,required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue)  vendor,}) {final _that = this;
 switch (_that) {
 case _CustomerActivity():
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType);case _VendorActivity():
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity():
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -226,11 +227,11 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType)?  customer,TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid)?  vendor,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)?  customer,TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue)?  vendor,}) {final _that = this;
 switch (_that) {
 case _CustomerActivity() when customer != null:
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType);case _VendorActivity() when vendor != null:
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity() when vendor != null:
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue);case _:
   return null;
 
 }
@@ -242,7 +243,7 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 @JsonSerializable()
 
 class _CustomerActivity extends ActivityItem {
-  const _CustomerActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.transactionType, final  String? $type}): $type = $type ?? 'customer',super._();
+  const _CustomerActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.transactionType, this.balanceDue, final  String? $type}): $type = $type ?? 'customer',super._();
   factory _CustomerActivity.fromJson(Map<String, dynamic> json) => _$CustomerActivityFromJson(json);
 
 @override final  String id;
@@ -251,6 +252,7 @@ class _CustomerActivity extends ActivityItem {
 @override final  double amount;
 @override final  String? displayId;
  final  String transactionType;
+@override final  double? balanceDue;
 
 @JsonKey(name: 'runtimeType')
 final String $type;
@@ -269,16 +271,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CustomerActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.transactionType, transactionType) || other.transactionType == transactionType));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CustomerActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.transactionType, transactionType) || other.transactionType == transactionType)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,transactionType);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,transactionType,balanceDue);
 
 @override
 String toString() {
-  return 'ActivityItem.customer(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, transactionType: $transactionType)';
+  return 'ActivityItem.customer(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, transactionType: $transactionType, balanceDue: $balanceDue)';
 }
 
 
@@ -289,7 +291,7 @@ abstract mixin class _$CustomerActivityCopyWith<$Res> implements $ActivityItemCo
   factory _$CustomerActivityCopyWith(_CustomerActivity value, $Res Function(_CustomerActivity) _then) = __$CustomerActivityCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId, String transactionType
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, String transactionType, double? balanceDue
 });
 
 
@@ -306,7 +308,7 @@ class __$CustomerActivityCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? transactionType = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? transactionType = null,Object? balanceDue = freezed,}) {
   return _then(_CustomerActivity(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
@@ -314,7 +316,8 @@ as String,transactionDate: null == transactionDate ? _self.transactionDate : tra
 as DateTime,amount: null == amount ? _self.amount : amount // ignore: cast_nullable_to_non_nullable
 as double,displayId: freezed == displayId ? _self.displayId : displayId // ignore: cast_nullable_to_non_nullable
 as String?,transactionType: null == transactionType ? _self.transactionType : transactionType // ignore: cast_nullable_to_non_nullable
-as String,
+as String,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 
@@ -325,7 +328,7 @@ as String,
 @JsonSerializable()
 
 class _VendorActivity extends ActivityItem {
-  const _VendorActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.isPaid, final  String? $type}): $type = $type ?? 'vendor',super._();
+  const _VendorActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.isPaid, this.balanceDue, final  String? $type}): $type = $type ?? 'vendor',super._();
   factory _VendorActivity.fromJson(Map<String, dynamic> json) => _$VendorActivityFromJson(json);
 
 @override final  String id;
@@ -334,6 +337,7 @@ class _VendorActivity extends ActivityItem {
 @override final  double amount;
 @override final  String? displayId;
  final  bool isPaid;
+@override final  double? balanceDue;
 
 @JsonKey(name: 'runtimeType')
 final String $type;
@@ -352,16 +356,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VendorActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.isPaid, isPaid) || other.isPaid == isPaid));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VendorActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.isPaid, isPaid) || other.isPaid == isPaid)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,isPaid);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,isPaid,balanceDue);
 
 @override
 String toString() {
-  return 'ActivityItem.vendor(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, isPaid: $isPaid)';
+  return 'ActivityItem.vendor(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, isPaid: $isPaid, balanceDue: $balanceDue)';
 }
 
 
@@ -372,7 +376,7 @@ abstract mixin class _$VendorActivityCopyWith<$Res> implements $ActivityItemCopy
   factory _$VendorActivityCopyWith(_VendorActivity value, $Res Function(_VendorActivity) _then) = __$VendorActivityCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId, bool isPaid
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, bool isPaid, double? balanceDue
 });
 
 
@@ -389,7 +393,7 @@ class __$VendorActivityCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? isPaid = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? isPaid = null,Object? balanceDue = freezed,}) {
   return _then(_VendorActivity(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
@@ -397,7 +401,8 @@ as String,transactionDate: null == transactionDate ? _self.transactionDate : tra
 as DateTime,amount: null == amount ? _self.amount : amount // ignore: cast_nullable_to_non_nullable
 as double,displayId: freezed == displayId ? _self.displayId : displayId // ignore: cast_nullable_to_non_nullable
 as String?,isPaid: null == isPaid ? _self.isPaid : isPaid // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
+as double?,
   ));
 }
 

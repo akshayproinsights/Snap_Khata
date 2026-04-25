@@ -1,3 +1,4 @@
+import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
@@ -24,14 +25,14 @@ class InvoiceItemCard extends StatelessWidget {
     final needsReview = hasMismatch || (item.needsReview ?? false);
     final hasPriceHike = item.priceHikeAmount != null && item.priceHikeAmount! > 0;
 
-    Color borderColor = AppTheme.border;
-    Color bgColor = Colors.white;
+    Color borderColor = context.borderColor;
+    Color bgColor = context.surfaceColor;
     if (needsReview) {
-      borderColor = Colors.red.shade200;
-      bgColor = Colors.red.shade50;
+      borderColor = context.errorColor;
+      bgColor = context.errorColor.withValues(alpha: 0.05);
     } else if (hasPriceHike) {
-      borderColor = Colors.orange.shade200;
-      bgColor = Colors.orange.shade50;
+      borderColor = context.warningColor;
+      bgColor = context.warningColor.withValues(alpha: 0.05);
     }
 
     // Determine tax details (omitted, unused)
@@ -42,13 +43,7 @@ class InvoiceItemCard extends StatelessWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor, width: needsReview ? 1.5 : 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: context.premiumShadow,
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -65,10 +60,10 @@ class InvoiceItemCard extends StatelessWidget {
                 ),
                 child: Text(
                   item.partNumber.isNotEmpty ? 'Part: ${item.partNumber}' : 'Item #${item.id}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.primary,
+                    color: context.primaryColor,
                   ),
                 ),
               ),
@@ -83,14 +78,14 @@ class InvoiceItemCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.alertTriangle, size: 10, color: Colors.red.shade700),
+                      Icon(LucideIcons.alertTriangle, size: 10, color: context.errorColor),
                       const SizedBox(width: 4),
                       Text(
                         'Review Needed',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red.shade700,
+                          color: context.errorColor,
                         ),
                       ),
                     ],
@@ -127,10 +122,10 @@ class InvoiceItemCard extends StatelessWidget {
           // Description
           Text(
             item.description,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
+              color: context.textColor,
             ),
           ),
           if (hasPriceHike) ...[
@@ -151,7 +146,7 @@ class InvoiceItemCard extends StatelessWidget {
                       'Last paid ${item.previousRate != null ? CurrencyFormatter.format(item.previousRate!) : '—'}. Increased by ${item.priceHikeAmount != null ? CurrencyFormatter.format(item.priceHikeAmount!) : '—'}.',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: Colors.red.shade800,
+                        color: context.errorColor,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.1,
                       ),
@@ -167,11 +162,11 @@ class InvoiceItemCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric('Qty', item.qty.round().toString()),
-              const Text('×', style: TextStyle(color: AppTheme.textSecondary)),
-              _buildMetric('Rate', CurrencyFormatter.format(item.rate)),
-              const Text('=', style: TextStyle(color: AppTheme.textSecondary)),
-              _buildMetric('Gross', CurrencyFormatter.format(item.grossAmount ?? (item.qty * item.rate)), isBold: true),
+              _buildMetric(context, 'Qty', item.qty.round().toString()),
+              Text('×', style: TextStyle(color: context.textSecondaryColor)),
+              _buildMetric(context, 'Rate', CurrencyFormatter.format(item.rate)),
+              Text('=', style: TextStyle(color: context.textSecondaryColor)),
+              _buildMetric(context, 'Gross', CurrencyFormatter.format(item.grossAmount ?? (item.qty * item.rate)), isBold: true),
             ],
           ),
           
@@ -181,10 +176,10 @@ class InvoiceItemCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric('Discount', '-${CurrencyFormatter.format(item.discAmount ?? 0)}', color: Colors.green.shade700),
-              _buildMetric('Taxable', CurrencyFormatter.format(item.taxableAmount ?? item.grossAmount ?? 0.0)),
-              _buildMetric('Tax', '+${CurrencyFormatter.format((item.cgstAmount ?? 0) + (item.sgstAmount ?? 0) + (item.igstAmount ?? 0))}', color: Colors.orange.shade700),
-              _buildMetric('Net', CurrencyFormatter.format(item.netAmount ?? item.netBill), isBold: true, color: AppTheme.primary),
+              _buildMetric(context, 'Discount', '-${CurrencyFormatter.format(item.discAmount ?? 0)}', color: context.successColor),
+              _buildMetric(context, 'Taxable', CurrencyFormatter.format(item.taxableAmount ?? item.grossAmount ?? 0.0)),
+              _buildMetric(context, 'Tax', '+${CurrencyFormatter.format((item.cgstAmount ?? 0) + (item.sgstAmount ?? 0) + (item.igstAmount ?? 0))}', color: context.warningColor),
+              _buildMetric(context, 'Net', CurrencyFormatter.format(item.netAmount ?? item.netBill), isBold: true, color: context.primaryColor),
             ],
           ),
 
@@ -220,15 +215,15 @@ class InvoiceItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMetric(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _buildMetric(BuildContext context, String label, String value, {bool isBold = false, Color? color}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: AppTheme.textSecondary,
+            color: context.textSecondaryColor,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -236,7 +231,7 @@ class InvoiceItemCard extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 12,
-            color: color ?? AppTheme.textPrimary,
+            color: color ?? context.textColor,
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
           ),
         ),

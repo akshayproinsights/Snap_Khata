@@ -95,28 +95,28 @@ class _MobileTextFieldState extends State<MobileTextField> {
     }
   }
 
-  Color _getBorderColor() {
+  Color _getBorderColor(BuildContext context) {
     switch (widget.state) {
       case InputState.error:
-        return AppTheme.error;
+        return context.errorColor;
       case InputState.saved:
-        return AppTheme.success;
+        return context.successColor;
       case InputState.saving:
-        return AppTheme.primary;
+        return context.primaryColor;
       case InputState.editing:
-        return AppTheme.warning;
+        return context.warningColor;
       case InputState.idle:
-        return AppTheme.border;
+        return context.borderColor;
     }
   }
 
-  Widget? _getSuffixIcon() {
+  Widget? _getSuffixIcon(BuildContext context) {
     switch (widget.state) {
       case InputState.error:
-        return const Icon(Icons.error_outline, color: AppTheme.error, size: 20);
+        return Icon(Icons.error_outline, color: context.errorColor, size: 20);
       case InputState.saved:
-        return const Icon(Icons.check_circle,
-            color: AppTheme.success, size: 20);
+        return Icon(Icons.check_circle,
+            color: context.successColor, size: 20);
       case InputState.saving:
         return const Padding(
           padding: EdgeInsets.all(12.0),
@@ -128,7 +128,7 @@ class _MobileTextFieldState extends State<MobileTextField> {
         );
       case InputState.editing:
         return IconButton(
-          icon: const Icon(Icons.save, color: AppTheme.primary, size: 20),
+          icon: Icon(Icons.save, color: context.primaryColor, size: 20),
           onPressed: _handleSave,
           tooltip: 'Save',
         );
@@ -139,7 +139,7 @@ class _MobileTextFieldState extends State<MobileTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = _getBorderColor();
+    final borderColor = _getBorderColor(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +159,7 @@ class _MobileTextFieldState extends State<MobileTextField> {
           obscureText: widget.obscureText,
           decoration: InputDecoration(
             hintText: widget.placeholder,
-            suffixIcon: _getSuffixIcon(),
+            suffixIcon: _getSuffixIcon(context),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(

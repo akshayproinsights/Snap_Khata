@@ -52,9 +52,9 @@ class _MobileSwitchState extends State<MobileSwitch> {
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: AppTheme.background,
+            color: context.backgroundColor,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppTheme.border),
+            border: Border.all(color: context.borderColor),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -81,10 +81,10 @@ class _MobileSwitchState extends State<MobileSwitch> {
         ),
         if (_showSaved) ...[
           const SizedBox(width: 12),
-          const Text(
+          Text(
             '✓ Saved!',
             style: TextStyle(
-              color: AppTheme.success,
+              color: context.successColor,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -142,7 +142,7 @@ class _SegmentButton extends StatelessWidget {
               Icon(
                 icon,
                 size: 16,
-                color: isSelected ? Colors.white : AppTheme.textSecondary,
+                color: isSelected ? Colors.white : context.textSecondaryColor,
               ),
               const SizedBox(width: 6),
               Text(

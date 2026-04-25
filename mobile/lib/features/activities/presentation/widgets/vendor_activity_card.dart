@@ -16,25 +16,17 @@ class VendorActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? AppTheme.darkSurface : Colors.white;
-    final borderColor = isDark ? AppTheme.darkBorder : AppTheme.border;
-    final textPrimary = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final textSecondary = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
     return item.maybeWhen(
-      vendor: (id, entityName, transactionDate, amount, displayId, isPaid) {
-        final initials = _initials(entityName);
-
+      vendor: (id, entityName, transactionDate, amount, displayId, isPaid, balanceDue) {
         return Container(
           decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: isDark ? AppTheme.darkPremiumShadow : AppTheme.premiumShadow,
+            color: context.surfaceColor,
+            border: Border(
+              bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+            ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
               children: [
                 // ── Avatar ──────────────────────────────────────────────
@@ -42,20 +34,17 @@ class VendorActivityCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.10),
+                    color: context.primaryColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      color: AppTheme.error,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+                  child: Icon(
+                    Icons.inventory_2_outlined, // using material icon or Lucide
+                    color: context.primaryColor,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 // ── Entity name + date ───────────────────────────────────
                 Expanded(
                   child: Column(
@@ -64,55 +53,59 @@ class VendorActivityCard extends StatelessWidget {
                       Text(
                         entityName,
                         style: TextStyle(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w600,
+                          color: context.textColor,
+                          fontWeight: FontWeight.w700,
                           fontSize: 15,
                           letterSpacing: -0.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          // Paid / Unpaid chip
-                          _StatusChip(isPaid: isPaid),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              _dateFormatter.format(transactionDate),
-                              style: TextStyle(
-                                color: textSecondary,
-                                fontSize: 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            'Supplier • ${_dateFormatter.format(transactionDate)}',
+                            style: TextStyle(
+                              color: context.textSecondaryColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                          if (displayId != null) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '• #$displayId',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      if (displayId != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '#$displayId',
-                          style: TextStyle(
-                            color: textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                // ── Amount (always debit/outgoing for vendors) ───────────
-                Text(
-                  '-${CurrencyFormatter.format(amount)}',
-                  style: TextStyle(
-                    color: isPaid ? AppTheme.textSecondary : AppTheme.error,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
+                // ── Amount & Badge ───────────────────────────────────────────────
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      CurrencyFormatter.format(amount),
+                      style: TextStyle(
+                        color: context.textColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _StatusChip(isPaid: isPaid, balanceDue: balanceDue),
+                  ],
                 ),
               ],
             ),
@@ -122,25 +115,20 @@ class VendorActivityCard extends StatelessWidget {
       orElse: () => const SizedBox.shrink(),
     );
   }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
 }
 
-/// Pill chip showing paid/unpaid status for vendor transactions.
+/// Pill chip showing paid/unpaid status or balance due for vendor transactions.
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.isPaid});
+  const _StatusChip({required this.isPaid, this.balanceDue});
   final bool isPaid;
+  final double? balanceDue;
 
   @override
   Widget build(BuildContext context) {
-    final color = isPaid ? AppTheme.success : AppTheme.error;
-    final label = isPaid ? 'PAID' : 'UNPAID';
+    // If there's a positive balance due, we show "Due: ₹X" instead of "UNPAID"
+    final hasDue = balanceDue != null && balanceDue! > 0;
+    final color = hasDue ? context.warningColor : (isPaid ? context.successColor : context.errorColor);
+    final label = hasDue ? 'Due: ${CurrencyFormatter.format(balanceDue!)}' : (isPaid ? 'PAID' : 'SETTLED');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -149,7 +137,7 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        label,
+        label.toUpperCase(),
         style: TextStyle(
           color: color,
           fontSize: 10,

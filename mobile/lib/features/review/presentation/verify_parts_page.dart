@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/theme/context_extension.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 
@@ -60,7 +60,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                     child: const Text('Cancel')),
                 ElevatedButton(
                   style:
-                      ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+                      ElevatedButton.styleFrom(backgroundColor: context.errorColor),
                   onPressed: () => Navigator.pop(context, true),
                   child: const Text('Delete',
                       style: TextStyle(color: Colors.white)),
@@ -118,7 +118,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
         _selectedIds.length == filteredItems.length && filteredItems.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text('Verify Parts'),
         actions: [
@@ -141,21 +141,21 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
           if (_showFilters) _buildFiltersRow(),
           if (_selectedIds.isNotEmpty)
             Container(
-              color: AppTheme.primary.withValues(alpha: 0.1),
+              color: context.primaryColor.withValues(alpha: 0.1),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('${_selectedIds.length} Selected',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.primary)),
+                          color: context.primaryColor)),
                   TextButton.icon(
                       onPressed: _handleBulkDelete,
-                      icon: const Icon(LucideIcons.trash2,
-                          size: 18, color: AppTheme.error),
-                      label: const Text('Delete',
-                          style: TextStyle(color: AppTheme.error)))
+                      icon: Icon(LucideIcons.trash2,
+                          size: 18, color: context.errorColor),
+                      label: Text('Delete',
+                          style: TextStyle(color: context.errorColor)))
                 ],
               ),
             ),
@@ -167,13 +167,13 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                 Checkbox(
                     value: isAllSelected,
                     onChanged: (_) => _handleSelectAll(filteredItems)),
-                const Text('Select All',
+                Text('Select All',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: context.textSecondaryColor,
                         fontWeight: FontWeight.bold)),
                 const Spacer(),
                 Text('${filteredItems.length} items',
-                    style: const TextStyle(color: AppTheme.textSecondary)),
+                    style: TextStyle(color: context.textSecondaryColor)),
               ],
             ),
           ),
@@ -187,12 +187,12 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                     child: filteredItems.isEmpty
                         ? ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
-                            children: const [
+                            children: [
                               SizedBox(height: 100),
                               Center(
                                   child: Text('No items found',
                                       style: TextStyle(
-                                          color: AppTheme.textSecondary))),
+                                          color: context.textSecondaryColor))),
                             ],
                           )
                         : ListView.separated(
@@ -214,9 +214,9 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
   Widget _buildFiltersRow() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppTheme.surface,
-        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border(bottom: BorderSide(color: context.borderColor)),
       ),
       child: Column(
         children: [
@@ -258,17 +258,12 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isSelected ? AppTheme.primary : AppTheme.border,
+            color: isSelected ? context.primaryColor : context.borderColor,
             width: isSelected ? 2 : 1),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 4)),
-        ],
+        boxShadow: context.premiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -277,10 +272,10 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: context.isDark ? context.surfaceColor : context.borderColor.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(15), topRight: Radius.circular(15)),
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              border: Border(bottom: BorderSide(color: context.borderColor)),
             ),
             child: Row(
               children: [
@@ -298,14 +293,14 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                               fontWeight: FontWeight.bold, fontSize: 13)),
                       Text(
                           '${item.invoiceDate} • ${item.vendorName ?? "Unknown Vendor"}',
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 11)),
+                          style: TextStyle(
+                              color: context.textSecondaryColor, fontSize: 11)),
                     ],
                   ),
                 ),
                 if (item.amountMismatch > 0)
-                  const Icon(LucideIcons.alertTriangle,
-                      color: AppTheme.error, size: 16)
+                  Icon(LucideIcons.alertTriangle,
+                      color: context.errorColor, size: 16)
               ],
             ),
           ),
@@ -388,7 +383,7 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey.shade100)),
+              border: Border(top: BorderSide(color: context.borderColor)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -401,8 +396,8 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                           : LucideIcons.clock,
                       size: 16,
                       color: item.verificationStatus == 'Done'
-                          ? AppTheme.success
-                          : AppTheme.primary,
+                          ? context.successColor
+                          : context.primaryColor,
                     ),
                     const SizedBox(width: 4),
                     Text(item.verificationStatus ?? 'Pending',
@@ -410,8 +405,8 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color: item.verificationStatus == 'Done'
-                                ? AppTheme.success
-                                : AppTheme.primary)),
+                                ? context.successColor
+                                : context.primaryColor)),
                   ],
                 ),
                 Row(
@@ -419,12 +414,12 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                     if (item.rowAccuracy != null)
                       Text(
                           'Acc: ${(item.rowAccuracy! * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(
-                              fontSize: 11, color: AppTheme.textSecondary)),
+                          style: TextStyle(
+                              fontSize: 11, color: context.textSecondaryColor)),
                     const SizedBox(width: 12),
                     IconButton(
-                      icon: const Icon(LucideIcons.trash2,
-                          size: 18, color: AppTheme.error),
+                      icon: Icon(LucideIcons.trash2,
+                          size: 18, color: context.errorColor),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () => ref

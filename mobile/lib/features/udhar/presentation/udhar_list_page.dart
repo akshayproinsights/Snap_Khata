@@ -1,3 +1,4 @@
+import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,7 +33,9 @@ class UdharListPage extends ConsumerWidget {
         case UdharFilterMode.pending:
           return ledger.balanceDue > 0;
         case UdharFilterMode.settled:
-          return ledger.balanceDue == 0;
+          return ledger.balanceDue <= 0;
+        case UdharFilterMode.customers:
+        case UdharFilterMode.suppliers:
         case UdharFilterMode.all:
           return true;
       }
@@ -43,7 +46,7 @@ class UdharListPage extends ConsumerWidget {
         : state.error != null && state.ledgers.isEmpty
             ? _buildErrorState(context, ref, state.error!)
             : state.ledgers.isEmpty
-                ? _buildEmptyState()
+                ? _buildEmptyState(context)
                 : _buildLedgerList(filteredLedgers);
   }
 
@@ -52,12 +55,16 @@ class UdharListPage extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.alertCircle, color: Colors.orange, size: 48),
+          Icon(LucideIcons.alertCircle, color: context.warningColor, size: 48),
           const SizedBox(height: 16),
-          Text(error, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(error, style: TextStyle(color: context.textSecondaryColor)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => ref.read(udharProvider.notifier).fetchLedgers(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.primaryColor,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Retry'),
           ),
         ],
@@ -65,25 +72,25 @@ class UdharListPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.wallet, color: Colors.grey.shade400, size: 64),
+          Icon(LucideIcons.wallet, color: context.textSecondaryColor.withValues(alpha: 0.4), size: 64),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'No pending Credit',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: context.textColor,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Amazing! All your customers have paid their dues.',
-            style: TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: context.textSecondaryColor),
             textAlign: TextAlign.center,
           ),
         ],
@@ -123,10 +130,20 @@ class _LedgerCard extends ConsumerWidget {
 
     final pendingFmt = CurrencyFormatter.format(ledger.balanceDue);
 
-    final message = 'Hi $customerNameMsg,\n\n'
+    String message = 'Hi $customerNameMsg,\n\n'
         'This is a gentle reminder from *${shopName.trim()}* regarding your pending balance.\n\n'
-        '⚠️ *Total Amount Due: $pendingFmt*\n\n'
-        'Thank you for your business!\n— *${shopName.trim()}*';
+        '⚠️ *Total Amount Due: $pendingFmt*\n\n';
+
+    if (shopProfile.upiId.isNotEmpty) {
+      // Create UPI pay link
+      // Format: upi://pay?pa=upiid@bank&pn=ShopName&am=100.00&cu=INR
+      final upiLink = 'upi://pay?pa=${shopProfile.upiId}&pn=${Uri.encodeComponent(shopName)}&am=${ledger.balanceDue.toStringAsFixed(2)}&cu=INR';
+      
+      message += '💳 *Pay via UPI:* ${shopProfile.upiId}\n'
+                '🔗 *Payment Link:* $upiLink\n\n';
+    }
+
+    message += 'Thank you for your business!\n— *${shopName.trim()}*';
 
     await WhatsAppUtils.shareReceipt(
       context,
@@ -186,7 +203,7 @@ class _LedgerCard extends ConsumerWidget {
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child:
-                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                    Text('Delete', style: TextStyle(color: context.errorColor)),
               ),
             ],
           ),
@@ -210,17 +227,15 @@ class _LedgerCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isOverdue
-                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.15)
-                : Theme.of(context).colorScheme.outlineVariant,
+                ? context.errorColor.withValues(alpha: 0.15)
+                : context.borderColor,
             width: 0.5,
           ),
-          boxShadow: Theme.of(context).brightness == Brightness.light
-              ? AppTheme.premiumShadow
-              : AppTheme.darkPremiumShadow,
+          boxShadow: context.premiumShadow,
         ),
         child: Row(
           children: [
@@ -230,8 +245,8 @@ class _LedgerCard extends ConsumerWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: isOverdue
-                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.08)
-                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                    ? context.errorColor.withValues(alpha: 0.08)
+                    : context.primaryColor.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -243,8 +258,8 @@ class _LedgerCard extends ConsumerWidget {
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: isOverdue
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).colorScheme.primary,
+                        ? context.errorColor
+                        : context.primaryColor,
                   ),
                 ),
               ),
@@ -259,7 +274,7 @@ class _LedgerCard extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      color: context.textColor,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -272,8 +287,8 @@ class _LedgerCard extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: isOverdue
-                               ? Theme.of(context).colorScheme.error
-                               : Theme.of(context).colorScheme.onSurfaceVariant,
+                               ? context.errorColor
+                               : context.textSecondaryColor,
                           fontWeight: isOverdue ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
@@ -282,7 +297,7 @@ class _LedgerCard extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.red.shade600,
+                            color: context.errorColor,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Text(
@@ -311,8 +326,8 @@ class _LedgerCard extends ConsumerWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: isOverdue
-                        ? Colors.red.shade700
-                        : const Color(0xFF1B5E20),
+                        ? context.errorColor
+                        : context.successColor,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -320,7 +335,7 @@ class _LedgerCard extends ConsumerWidget {
                   isOverdue ? 'OVERDUE' : 'TO COLLECT',
                   style: TextStyle(
                     fontSize: 10,
-                    color: isOverdue ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
+                    color: isOverdue ? context.errorColor : context.primaryColor,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
@@ -347,7 +362,7 @@ class _LedgerCard extends ConsumerWidget {
                       'Remind',
                       style: TextStyle(
                         fontSize: 9,
-                        color: Colors.grey.shade600,
+                        color: context.textSecondaryColor.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w500,
                       ),
                     ),

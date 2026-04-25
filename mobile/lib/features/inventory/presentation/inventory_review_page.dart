@@ -154,7 +154,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     if (state.error == null) {
       AppToast.showSuccess(context, 'Inventory synced successfully!',
           title: 'Sync Complete');
-      context.go('/inventory');
+      context.go('/');
     } else {
       AppToast.showError(context, state.error!, title: 'Sync Failed');
     }
@@ -167,7 +167,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      color: context.surfaceColor,
       child: Column(
         children: [
           Row(
@@ -177,8 +177,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                   style:
                       TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               Text('$done of $total Done',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13)),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13, color: context.textColor)),
             ],
           ),
           const SizedBox(height: 8),
@@ -186,8 +186,8 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: total > 0 ? done / total : 0,
-              backgroundColor: Colors.grey.shade200,
-              color: Colors.green,
+              backgroundColor: context.borderColor.withValues(alpha: 0.3),
+              color: context.successColor,
               minHeight: 8,
             ),
           ),
@@ -197,10 +197,10 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
             children: [
               if (pending > 0)
                 _buildBadge(
-                    LucideIcons.clock, '$pending Pending', Colors.orange),
+                    LucideIcons.clock, '$pending Pending', context.warningColor),
               if (error > 0)
                 _buildBadge(
-                    LucideIcons.alertCircle, '$error Errors', Colors.red),
+                    LucideIcons.alertCircle, '$error Errors', context.errorColor),
             ],
           )
         ],
@@ -253,19 +253,20 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     final bundles = allBundles.where((b) => !b.isVerified).toList();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: context.surfaceColor,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => context.go('/inventory'),
+          onPressed: () => context.go('/'),
         ),
-        title: const Text('PENDING REVIEW',
+        title: Text('PENDING REVIEW',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
+              color: context.textColor,
             )),
         centerTitle: false,
         actions: [
@@ -298,11 +299,11 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(LucideIcons.wifiOff,
-                      size: 48, color: Colors.grey.shade300),
+                      size: 48, color: context.textSecondaryColor.withValues(alpha: 0.3)),
                   const SizedBox(height: 12),
                   Text(state.error!,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade500)),
+                      style: TextStyle(color: context.textSecondaryColor)),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: () =>
@@ -316,21 +317,21 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         }
 
         if (bundles.isEmpty) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(40),
+              padding: const EdgeInsets.all(40),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(LucideIcons.clipboardCheck,
-                      size: 64, color: Colors.green),
+                      size: 64, color: context.successColor),
                   SizedBox(height: 16),
                   Text(
                     'No inventory items to review',
                     style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary),
+                        color: context.textColor),
                   ),
                 ],
               ),
@@ -347,20 +348,20 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
+                  color: context.warningColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade200),
+                  border: Border.all(color: context.warningColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
                     Icon(LucideIcons.info,
-                        color: Colors.orange.shade700, size: 20),
+                        color: context.warningColor, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         '$skippedCount duplicate${skippedCount == 1 ? '' : 's'} skipped from recent upload.',
                         style: TextStyle(
-                          color: Colors.orange.shade800,
+                          color: context.warningColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -399,7 +400,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                 width: double.infinity,
                 child: FloatingActionButton.extended(
                   onPressed: state.isSyncing ? null : _syncAndFinish,
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: context.primaryColor,
                   foregroundColor: Colors.white,
                   elevation: 4,
                   icon: state.isSyncing
@@ -445,22 +446,22 @@ class _BundleReviewTile extends ConsumerWidget {
     IconData statusIcon;
 
     if (bundle.hasMismatch) {
-      borderColor = const Color(0xFFEF4444).withValues(alpha: 0.5);
-      bgColor = Colors.white;
-      iconBg = const Color(0xFFEF4444).withValues(alpha: 0.08);
-      iconColor = const Color(0xFFEF4444);
+      borderColor = context.errorColor.withValues(alpha: 0.5);
+      bgColor = context.surfaceColor;
+      iconBg = context.errorColor.withValues(alpha: 0.08);
+      iconColor = context.errorColor;
       statusIcon = LucideIcons.alertCircle;
     } else if (bundle.isVerified) {
-      borderColor = Colors.green.shade300;
-      bgColor = Colors.green.shade50;
-      iconBg = Colors.green.withValues(alpha: 0.1);
-      iconColor = Colors.green;
+      borderColor = context.successColor.withValues(alpha: 0.5);
+      bgColor = context.successColor.withValues(alpha: 0.05);
+      iconBg = context.successColor.withValues(alpha: 0.1);
+      iconColor = context.successColor;
       statusIcon = LucideIcons.checkCircle2;
     } else {
-      borderColor = Colors.grey.shade200;
-      bgColor = Colors.white;
-      iconBg = AppTheme.primary.withValues(alpha: 0.08);
-      iconColor = AppTheme.primary;
+      borderColor = context.borderColor;
+      bgColor = context.surfaceColor;
+      iconBg = context.primaryColor.withValues(alpha: 0.08);
+      iconColor = context.primaryColor;
       statusIcon = LucideIcons.packageCheck;
     }
 
@@ -494,10 +495,10 @@ class _BundleReviewTile extends ConsumerWidget {
                   children: [
                     Text(
                       bundle.vendorName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 14.5,
-                        color: AppTheme.textPrimary,
+                        color: context.textColor,
                         letterSpacing: -0.2,
                       ),
                       maxLines: 2,
@@ -509,14 +510,14 @@ class _BundleReviewTile extends ConsumerWidget {
                         child: Row(
                           children: [
                             Icon(LucideIcons.hash,
-                                size: 11, color: Colors.grey.shade500),
+                                size: 11, color: context.textSecondaryColor.withValues(alpha: 0.7)),
                             const SizedBox(width: 3),
                             Expanded(
                               child: Text(
                                 bundle.invoiceNumber,
                                 style: TextStyle(
                                   fontSize: 11.5,
-                                  color: Colors.grey.shade600,
+                                  color: context.textSecondaryColor,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 maxLines: 1,
@@ -532,25 +533,25 @@ class _BundleReviewTile extends ConsumerWidget {
                         Text(
                           dateLabel,
                           style: TextStyle(
-                              fontSize: 12, color: Colors.grey.shade500),
+                              fontSize: 12, color: context.textSecondaryColor),
                         ),
-                        const Text(' · ',
+                        Text(' · ',
                             style: TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 12)),
+                                color: context.textSecondaryColor, fontSize: 12)),
                         Text(
                           '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary,
+                          style: TextStyle(
+                              color: context.textSecondaryColor,
                               fontSize: 12,
                               fontWeight: FontWeight.w600),
                         ),
-                        const Text(' · ',
+                        Text(' · ',
                             style: TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 12)),
+                                color: context.textSecondaryColor, fontSize: 12)),
                         Text(
                           CurrencyFormatter.format(bundle.totalAmount),
-                          style: const TextStyle(
-                              color: AppTheme.textPrimary,
+                          style: TextStyle(
+                              color: context.textColor,
                               fontSize: 12,
                               fontWeight: FontWeight.w700),
                         ),
@@ -568,15 +569,15 @@ class _BundleReviewTile extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        color: context.errorColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color:
-                                const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                                context.errorColor.withValues(alpha: 0.3)),
                       ),
-                      child: const Text('⚠ Review',
+                      child: Text('⚠ Review',
                           style: TextStyle(
-                              color: Color(0xFFEF4444),
+                              color: context.errorColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w800)),
                     )
@@ -585,21 +586,21 @@ class _BundleReviewTile extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade50,
+                        color: context.successColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.shade200),
+                        border: Border.all(color: context.successColor.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('Verified',
+                          Text('Verified',
                               style: TextStyle(
-                                  color: Colors.green,
+                                  color: context.successColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800)),
                           const SizedBox(width: 3),
                           Icon(LucideIcons.checkCircle2,
-                              size: 11, color: Colors.green.shade600),
+                              size: 11, color: context.successColor),
                         ],
                       ),
                     )
@@ -608,19 +609,19 @@ class _BundleReviewTile extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: context.warningColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade200),
+                        border: Border.all(color: context.warningColor.withValues(alpha: 0.3)),
                       ),
-                      child: const Text('Pending',
+                      child: Text('Pending',
                           style: TextStyle(
-                              color: Colors.orange,
+                              color: context.warningColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w800)),
                     ),
                   IconButton(
                     icon: Icon(LucideIcons.trash2,
-                        size: 18, color: AppTheme.error.withValues(alpha: 0.7)),
+                        size: 18, color: context.errorColor.withValues(alpha: 0.7)),
                     onPressed: () => _confirmDelete(context, ref, bundle),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -628,7 +629,7 @@ class _BundleReviewTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
                   Icon(LucideIcons.chevronRight,
-                      size: 18, color: Colors.grey.shade400),
+                      size: 18, color: context.textSecondaryColor.withValues(alpha: 0.5)),
                 ],
               ),
             ],
@@ -655,7 +656,7 @@ class _BundleReviewTile extends ConsumerWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.error,
+              backgroundColor: context.errorColor,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -673,9 +674,9 @@ class _BundleReviewTile extends ConsumerWidget {
       await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invoice deleted successfully'),
-            backgroundColor: AppTheme.error,
+          SnackBar(
+            content: const Text('Invoice deleted successfully'),
+            backgroundColor: context.errorColor,
           ),
         );
       }

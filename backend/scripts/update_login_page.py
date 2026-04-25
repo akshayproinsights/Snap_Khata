@@ -1,44 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
-import 'package:mobile/shared/widgets/mobile_text_field.dart';
-import 'package:mobile/shared/widgets/app_toast.dart';
+import re
 
-class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+with open('/root/Snap_Khata/mobile/lib/features/auth/presentation/login_page.dart', 'r') as f:
+    content = f.read()
 
-  @override
-  ConsumerState<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends ConsumerState<LoginPage> {
-  String _username = '';
-  String _password = '';
-
-  void _handleLogin() async {
-    if (_username.isEmpty || _password.isEmpty) return;
-
-    await ref.read(authProvider.notifier).login(_username, _password);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
-    // Listen to changes to route on auth success
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.isAuthenticated) {
-        context.go('/');
-      }
-      if (next.error != null) {
-        AppToast.showError(context, next.error!, title: 'Login Failed');
-      }
-    });
-
-    return Scaffold(
+# Replace everything from "return Scaffold(" to the end of the file.
+pattern = r"return Scaffold\(.*"
+replacement = """return Scaffold(
       backgroundColor: context.backgroundColor,
       body: SafeArea(
         child: LayoutBuilder(
@@ -221,3 +188,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 }
+"""
+
+new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+with open('/root/Snap_Khata/mobile/lib/features/auth/presentation/login_page.dart', 'w') as f:
+    f.write(new_content)

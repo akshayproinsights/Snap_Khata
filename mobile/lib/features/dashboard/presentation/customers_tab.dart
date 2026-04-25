@@ -1,3 +1,4 @@
+import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,8 +11,7 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 
-const _kGreen = Color(0xFF1B8A2A);
-const _kGreenBg = Color(0xFFE8F5E9);
+// Standardized green colors moved to context extensions
 
 class CustomersTab extends ConsumerStatefulWidget {
   const CustomersTab({super.key});
@@ -41,7 +41,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
     if (state.error != null && state.records.isEmpty) {
       return Center(
           child: Text('Error: ${state.error}',
-              style: TextStyle(color: Theme.of(context).colorScheme.error)));
+              style: TextStyle(color: context.errorColor)));
     }
 
     final Map<String, InvoiceGroup> groups = {};
@@ -99,11 +99,12 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
         const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: const Text(
+          child: Text(
             'Recent Customer Orders',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
+              color: context.textColor,
               letterSpacing: -0.5,
             ),
           ),
@@ -130,7 +131,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
                           : 'No orders found matching "$_searchQuery"',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: context.textSecondaryColor,
                           fontSize: 16),
                     ),
                   );
@@ -151,15 +152,9 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: context.premiumShadow,
         ),
         child: TextField(
           controller: _searchController,
@@ -172,10 +167,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             hintStyle: TextStyle(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurfaceVariant
-                    .withValues(alpha: 0.5)),
+                color: context.textSecondaryColor.withValues(alpha: 0.5)),
           ),
         ),
       ),
@@ -204,8 +196,8 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
 
     final dt = DateTime.tryParse(group.date) ?? DateTime.now();
 
-    const Color statusColor = _kGreen;
-    const Color statusBg = _kGreenBg;
+    final Color statusColor = context.successColor;
+    final Color statusBg = context.successColor.withValues(alpha: 0.1);
     final String statusLabel =
         group.receiptNumber.isNotEmpty ? '#${group.receiptNumber}' : 'Verified';
 
@@ -215,12 +207,12 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.8),
+            color: context.borderColor.withValues(alpha: 0.8),
             width: 0.5),
-        boxShadow: AppTheme.premiumShadow,
+        boxShadow: context.premiumShadow,
       ),
       child: Material(
         color: Colors.transparent,
@@ -266,13 +258,13 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Text('Order deleted successfully.'),
-                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                backgroundColor: context.primaryColor,
                               ),
                             );
                           }
                         },
                         style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(context).colorScheme.error),
+                            foregroundColor: context.errorColor),
                         child: const Text('Delete'),
                       ),
                     ],
@@ -288,9 +280,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: isUnknown
-                            ? Colors.blue.withValues(alpha: 0.1)
-                            : Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                        color: context.primaryColor.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -298,7 +288,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                         initial,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: isUnknown ? Colors.blue : Theme.of(context).colorScheme.primary,
+                          color: isUnknown ? context.primaryColor : context.primaryColor,
                           fontSize: 18,
                         ),
                       ),
@@ -310,10 +300,10 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                         children: [
                           Text(
                             '$displayName$vehicleInfo',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                                color: context.textColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -323,18 +313,16 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                               Icon(
                                 LucideIcons.calendar,
                                 size: 12,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                                color: context.textSecondaryColor.withValues(alpha: 0.7),
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 _formatDate(dt),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
@@ -347,19 +335,19 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                       children: [
                         Text(
                           CurrencyFormatter.format(group.totalAmount),
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    letterSpacing: -0.3,
-                                  ),
+                          style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: context.textColor,
+                                letterSpacing: -0.3,
+                              ),
                         ),
                         if ((group.balanceDue ?? 0) > 0) ...[
                           const SizedBox(height: 2),
                           Text(
                             'Due: ${CurrencyFormatter.format(group.balanceDue ?? 0.0)}',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                              color: context.errorColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                             ),

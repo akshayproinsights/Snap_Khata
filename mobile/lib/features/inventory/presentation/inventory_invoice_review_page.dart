@@ -398,7 +398,7 @@ class _InventoryInvoiceReviewPageState
           'Inventory updated successfully. You can continue with your next bill.',
           title: 'Saved',
         );
-        context.go('/inventory');
+        context.go('/');
       }
     } catch (e) {
       if (mounted) {

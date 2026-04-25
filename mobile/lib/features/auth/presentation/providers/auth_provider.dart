@@ -41,13 +41,11 @@ class AuthState {
   }
 }
 
-// StateNotifier for AuthState
 class AuthNotifier extends Notifier<AuthState> {
-  late final AuthRepository _repository;
+  AuthRepository get _repository => ref.read(authRepositoryProvider);
 
   @override
   AuthState build() {
-    _repository = ref.watch(authRepositoryProvider);
     
     // Register global 401 handler
     ApiClient.onUnauthorized = () {

@@ -36,7 +36,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+            style: ElevatedButton.styleFrom(backgroundColor: context.errorColor),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -95,7 +95,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text('Review Dates & Receipts'),
         actions: [
@@ -111,7 +111,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                 Text(_showCompleted ? 'Showing Completed' : 'Show Completed'),
             style: TextButton.styleFrom(
               foregroundColor:
-                  _showCompleted ? AppTheme.primary : AppTheme.textSecondary,
+                  _showCompleted ? context.primaryColor : context.textSecondaryColor,
             ),
           )
         ],
@@ -134,17 +134,17 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                     child: filteredRecords.isEmpty
                         ? ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
-                            children: const [
-                              SizedBox(height: 100),
+                            children: [
+                              const SizedBox(height: 100),
                               Center(
                                 child: Column(
                                   children: [
                                     Icon(LucideIcons.checkCircle2,
-                                        size: 60, color: AppTheme.success),
-                                    SizedBox(height: 16),
+                                        size: 60, color: context.successColor),
+                                    const SizedBox(height: 16),
                                     Text('All caught up! 🎉',
                                         style: TextStyle(
-                                            color: AppTheme.textSecondary,
+                                            color: context.textSecondaryColor,
                                             fontSize: 18)),
                                   ],
                                 ),
@@ -173,7 +173,7 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                 ? null
                 : _syncAndFinish,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
+              backgroundColor: context.primaryColor,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -208,8 +208,8 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12)),
                     child: Text('$completed',
-                        style: const TextStyle(
-                            color: AppTheme.primary,
+                        style: TextStyle(
+                            color: context.primaryColor,
                             fontWeight: FontWeight.bold,
                             fontSize: 12)),
                   )
@@ -229,8 +229,8 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.05),
-        border: const Border(bottom: BorderSide(color: AppTheme.border)),
+        color: context.primaryColor.withValues(alpha: 0.05),
+        border: Border(bottom: BorderSide(color: context.borderColor)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -239,44 +239,44 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               if (pending > 0)
-                _buildStatIndicator('$pending Pending', Colors.amber.shade700,
-                    Colors.amber.shade50),
+                _buildStatIndicator('$pending Pending', context.warningColor,
+                    context.warningColor.withValues(alpha: 0.1)),
               if (completed > 0)
                 _buildStatIndicator('$completed Completed',
-                    Colors.green.shade700, Colors.green.shade50),
+                    context.successColor, context.successColor.withValues(alpha: 0.1)),
               if (duplicates > 0)
                 _buildStatIndicator('$duplicates Duplicate Receipts',
-                    Colors.orange.shade700, Colors.orange.shade50),
+                    context.warningColor, context.warningColor.withValues(alpha: 0.1)),
               if (duplicateImages > 0)
                 _buildStatIndicator('$duplicateImages Duplicate Images',
-                    Colors.red.shade700, Colors.red.shade50),
+                    context.errorColor, context.errorColor.withValues(alpha: 0.1)),
               if (pending == 0 && completed == 0 && duplicates == 0 && duplicateImages == 0)
-                const Text('All caught up! 🎉',
+                Text('All caught up! 🎉',
                     style:
-                        TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                        TextStyle(color: context.textSecondaryColor, fontSize: 14)),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Review Progress',
+              Text('Review Progress',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary)),
+                      color: context.textSecondaryColor)),
               Text('${(completePercent * 100).round()}% Complete',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary)),
+                      color: context.textColor)),
             ],
           ),
           const SizedBox(height: 8),
           LinearProgressIndicator(
             value: completePercent,
-            backgroundColor: Colors.grey.shade300,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.green.shade600),
+            backgroundColor: context.borderColor.withValues(alpha: 0.2),
+            valueColor: AlwaysStoppedAnimation<Color>(context.successColor),
             borderRadius: BorderRadius.circular(4),
             minHeight: 8,
           ),
@@ -285,12 +285,12 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('$completed of $total completed',
-                  style: const TextStyle(
-                      fontSize: 11, color: AppTheme.textSecondary)),
+                  style: TextStyle(
+                      fontSize: 11, color: context.textSecondaryColor)),
               if (pending > 0)
                 Text('$pending remaining',
                     style:
-                        TextStyle(fontSize: 11, color: Colors.amber.shade700)),
+                        TextStyle(fontSize: 11, color: context.warningColor)),
             ],
           )
         ],
@@ -347,9 +347,9 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),
@@ -384,12 +384,12 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                     height: 100,
                     margin: const EdgeInsets.only(right: 16),
                     decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
+                        color: context.isDark ? context.surfaceColor.withValues(alpha: 0.5) : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(8)),
-                    child: const Center(
+                    child: Center(
                         child: Text('No Image',
                             style:
-                                TextStyle(color: Colors.grey, fontSize: 10))),
+                                TextStyle(color: context.textSecondaryColor, fontSize: 10))),
                   ),
 
                 Expanded(
@@ -402,20 +402,20 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: isSuccessReceipt
-                                ? const BorderSide(color: AppTheme.success)
-                                : const BorderSide(),
+                                ? BorderSide(color: context.successColor)
+                                : BorderSide(color: context.borderColor),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: isSuccessReceipt
-                                ? const BorderSide(
-                                    color: AppTheme.success, width: 2)
-                                : const BorderSide(
-                                    color: AppTheme.primary, width: 2),
+                                ? BorderSide(
+                                    color: context.successColor, width: 2)
+                                : BorderSide(
+                                    color: context.primaryColor, width: 2),
                           ),
                           isDense: true,
                           filled: isSuccessReceipt,
-                          fillColor: AppTheme.success.withValues(alpha: 0.05),
+                          fillColor: context.successColor.withValues(alpha: 0.05),
                         ),
                         onFieldSubmitted: (val) {
                           if (val != record.receiptNumber) {
@@ -478,20 +478,20 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: isSuccessDate
-                                    ? const BorderSide(color: AppTheme.success)
-                                    : const BorderSide(),
+                                    ? BorderSide(color: context.successColor)
+                                    : BorderSide(color: context.borderColor),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: isSuccessDate
-                                    ? const BorderSide(
-                                        color: AppTheme.success, width: 2)
-                                    : const BorderSide(
-                                        color: AppTheme.primary, width: 2),
+                                    ? BorderSide(
+                                        color: context.successColor, width: 2)
+                                    : BorderSide(
+                                        color: context.primaryColor, width: 2),
                               ),
                               isDense: true,
                               filled: isSuccessDate,
-                              fillColor: AppTheme.success.withValues(alpha: 0.05),
+                              fillColor: context.successColor.withValues(alpha: 0.05),
                             ),
                           ),
                         ),
@@ -505,19 +505,19 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: context.isDark ? context.surfaceColor.withValues(alpha: 0.5) : Colors.grey.shade50,
               borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16)),
-              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              border: Border(top: BorderSide(color: context.borderColor)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildStatusDropdown(record),
                 IconButton(
-                  icon: const Icon(LucideIcons.trash2,
-                      color: AppTheme.error, size: 20),
+                  icon: Icon(LucideIcons.trash2,
+                      color: context.errorColor, size: 20),
                   onPressed: () => _handleDeleteRow(record.receiptNumber),
                   tooltip: 'Delete Receipt',
                 )
@@ -556,10 +556,10 @@ class _ReviewDatesPageState extends ConsumerState<ReviewDatesPage> {
 
   Widget _buildStatusDropdown(ReviewRecord record) {
     final statusColor = record.verificationStatus.toLowerCase() == 'done'
-        ? Colors.green
+        ? context.successColor
         : record.verificationStatus.toLowerCase() == 'duplicate receipt number'
-            ? Colors.orange
-            : AppTheme.primary;
+            ? context.warningColor
+            : context.primaryColor;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),

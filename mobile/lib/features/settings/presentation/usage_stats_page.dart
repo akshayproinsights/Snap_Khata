@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/settings/presentation/providers/usage_provider.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class UsageStatsPage extends ConsumerStatefulWidget {
   const UsageStatsPage({super.key});
@@ -12,7 +13,7 @@ class UsageStatsPage extends ConsumerStatefulWidget {
 }
 
 class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
-  String _usageFilter = '1 Week';
+  String _usageFilter = 'Today';
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +21,7 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
     final usageAsyncValue = ref.watch(usageStatsProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text('Orders Processed', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
@@ -62,8 +63,6 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
     }
     double maxY = currentMaxY * 1.2; // 20% margin top
 
-    int maxX = (xLabels.isNotEmpty ? xLabels.length - 1 : 0);
-
     final customerColor = const Color(0xFF0EA5E9);
     final supplierColor = const Color(0xFF8B5CF6);
 
@@ -73,12 +72,10 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: context.surfaceColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
-            boxShadow: Theme.of(context).brightness == Brightness.light
-                ? AppTheme.premiumShadow
-                : AppTheme.darkPremiumShadow,
+            border: Border.all(color: context.borderColor, width: 0.5),
+            boxShadow: context.premiumShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,26 +93,60 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      color: context.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Total: $totalProcessed',
-                      style: const TextStyle(
+                      _usageFilter,
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
+                        color: context.primaryColor,
                       ),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              // Summary Cards
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryCard(
+                      context,
+                      'Customer',
+                      totalCustomer.toString(),
+                      customerColor,
+                      LucideIcons.users,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSummaryCard(
+                      context,
+                      'Supplier',
+                      totalSupplier.toString(),
+                      supplierColor,
+                      LucideIcons.package,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
+              _buildSummaryCard(
+                context,
+                'Total Orders Processed',
+                totalProcessed.toString(),
+                context.primaryColor,
+                LucideIcons.barChart3,
+                isFullWidth: true,
+              ),
+              const SizedBox(height: 24),
               // Filter Chips
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: ['1 Week', '1 Month', 'All Time'].map((filter) {
+                  children: ['Today', '1 Week', '1 Month', 'All Time'].map((filter) {
                     final isSelected = _usageFilter == filter;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
@@ -123,14 +154,14 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
                         label: Text(filter, style: const TextStyle(fontSize: 12)),
                         selected: isSelected,
                         showCheckmark: false,
-                        selectedColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                        selectedColor: context.primaryColor.withValues(alpha: 0.2),
                         labelStyle: TextStyle(
-                          color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: isSelected ? context.primaryColor : context.textSecondaryColor,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
-                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        backgroundColor: context.surfaceColor,
                         side: BorderSide(
-                          color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
+                          color: isSelected ? context.primaryColor : context.borderColor,
                         ),
                         onSelected: (selected) {
                           setState(() {
@@ -160,90 +191,112 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
               else
                 SizedBox(
                   height: 250,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        horizontalInterval: maxY / 4 > 0 ? maxY / 4 : 10,
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
-                            strokeWidth: 1,
-                            dashArray: [4, 4],
-                          );
-                        },
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            String type = rodIndex == 0 ? "Customer" : "Supplier";
+                            return BarTooltipItem(
+                              '$type\n',
+                              TextStyle(
+                                color: rod.color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: rod.toY.toInt().toString(),
+                                  style: TextStyle(
+                                    color: context.textColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                       titlesData: FlTitlesData(
                         show: true,
                         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
+                        leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 22,
-                            interval: 1,
+                            reservedSize: 30,
                             getTitlesWidget: (value, meta) {
-                              const style = TextStyle(
-                                fontSize: 10,
-                              );
-                              final color = Theme.of(context).colorScheme.onSurfaceVariant;
-                              final index = value.toInt();
-                              Widget text;
-                              if (index >= 0 && index < xLabels.length) {
-                                if (_usageFilter == '1 Week' || _usageFilter == '1 Month') {
-                                  if (index % 2 == 0) {
-                                    text = Text(xLabels[index], style: style.copyWith(color: color));
-                                  } else {
-                                    text = const Text('', style: style);
-                                  }
-                                } else {
-                                  text = Text(xLabels[index], style: style.copyWith(color: color));
-                                }
-                              } else {
-                                text = const Text('', style: style);
-                              }
-                              
-                              return SideTitleWidget(
-                                meta: meta,
-                                child: text,
+                              return Text(
+                                value.toInt().toString(),
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 10,
+                                ),
                               );
                             },
                           ),
                         ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 32,
+                            getTitlesWidget: (value, meta) {
+                              final index = value.toInt();
+                              if (index >= 0 && index < xLabels.length) {
+                                // For Month, only show every 5th label to avoid crowding
+                                if (_usageFilter == '1 Month') {
+                                  if (index % 5 == 0) {
+                                    return SideTitleWidget(
+                                      meta: meta,
+                                      child: Text(xLabels[index], style: const TextStyle(fontSize: 10)),
+                                    );
+                                  }
+                                } else {
+                                  return SideTitleWidget(
+                                    meta: meta,
+                                    child: Text(xLabels[index], style: const TextStyle(fontSize: 10)),
+                                  );
+                                }
+                              }
+                              return const SizedBox();
+                            },
+                          ),
+                        ),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: maxY / 4 > 0 ? maxY / 4 : 10,
+                        getDrawingHorizontalLine: (value) => FlLine(
+                          color: context.borderColor.withValues(alpha: 0.3),
+                          strokeWidth: 1,
+                        ),
                       ),
                       borderData: FlBorderData(show: false),
-                      minX: 0,
-                      maxX: maxX.toDouble(),
-                      minY: 0,
-                      maxY: maxY,
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: customerOrders.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
-                          isCurved: true,
-                          color: customerColor,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: customerColor.withValues(alpha: 0.1),
-                          ),
-                        ),
-                        LineChartBarData(
-                          spots: supplierOrders.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.toDouble())).toList(),
-                          isCurved: true,
-                          color: supplierColor,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: supplierColor.withValues(alpha: 0.1),
-                          ),
-                        ),
-                      ],
+                      barGroups: customerOrders.asMap().entries.map((e) {
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: e.value.toDouble(),
+                              color: customerColor,
+                              width: 8,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                            BarChartRodData(
+                              toY: (e.key < supplierOrders.length ? supplierOrders[e.key] : 0).toDouble(),
+                              color: supplierColor,
+                              width: 8,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
                     ),
                   ),
                 ),
@@ -272,10 +325,49 @@ class _UsageStatsPageState extends ConsumerState<UsageStatsPage> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurface,
+            color: context.textColor,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSummaryCard(BuildContext context, String title, String value, Color color, IconData icon, {bool isFullWidth = false}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: isFullWidth ? 14 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isFullWidth ? 28 : 24,
+              fontWeight: FontWeight.bold,
+              color: context.textColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

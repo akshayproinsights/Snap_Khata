@@ -22,6 +22,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopAddress = '';
   String _shopPhone = '';
   String _shopGst = '';
+  String _shopUpiId = '';
   final bool _isLoadingProfile = false;
 
   @override
@@ -38,6 +39,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _shopAddress = profile.address;
       _shopPhone = profile.phone;
       _shopGst = profile.gst;
+      _shopUpiId = profile.upiId;
     });
     
     // Trigger a sync in the background
@@ -51,6 +53,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       address: _shopAddress,
       phone: _shopPhone,
       gst: _shopGst,
+      upiId: _shopUpiId,
     );
     await ref.read(shopProvider.notifier).updateProfile(newProfile);
   }
@@ -61,6 +64,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String tempAddress = _shopAddress;
     String tempPhone = _shopPhone;
     String tempGst = _shopGst;
+    String tempUpiId = _shopUpiId;
 
     showModalBottomSheet(
       context: context,
@@ -71,7 +75,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
+            color: context.backgroundColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
@@ -87,7 +91,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Text(
                 'This info appears on your invoices & syncs across devices',
                 style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: context.textSecondaryColor,
                     fontSize: 13),
               ),
               const SizedBox(height: 24),
@@ -114,6 +118,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 placeholder: 'GSTIN (Optional)',
                 onSave: (val) => tempGst = val,
               ),
+              const SizedBox(height: 12),
+              MobileTextField(
+                initialValue: tempUpiId,
+                placeholder: 'UPI ID (Optional)',
+                onSave: (val) => tempUpiId = val,
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -124,6 +134,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       _shopAddress = tempAddress;
                       _shopPhone = tempPhone;
                       _shopGst = tempGst;
+                      _shopUpiId = tempUpiId;
                     });
                     await _saveShopDetails();
                     if (!context.mounted) return;
@@ -135,7 +146,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: AppTheme.primary,
+                    backgroundColor: context.primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
@@ -160,14 +171,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final String userEmail = userState.user?.email ?? '';
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'SETTINGS',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.5,
+            color: context.textColor,
           ),
         ),
       ),
@@ -178,13 +190,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
+              color: context.surfaceColor,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.premiumShadow
-                  : AppTheme.darkPremiumShadow,
+              boxShadow: context.premiumShadow,
               border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
+                color: context.borderColor,
                 width: 0.5,
               ),
             ),
@@ -192,13 +202,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                  backgroundColor: context.primaryColor.withValues(alpha: 0.1),
                   child: Text(
                     userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.primary,
+                      color: context.primaryColor,
                     ),
                   ),
                 ),
@@ -209,9 +219,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     children: [
                       Text(
                         userName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: context.textColor,
                         ),
                       ),
                       if (userEmail.isNotEmpty)
@@ -219,7 +230,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           userEmail,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: context.textSecondaryColor,
                           ),
                         ),
                       if (_shopName.isNotEmpty)
@@ -229,7 +240,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             _isLoadingProfile ? 'Syncing...' : _shopName,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: context.textSecondaryColor,
                             ),
                           ),
                         ),
@@ -243,9 +254,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 8),
 
           // Settings Options
-          const Text(
+          Text(
             'Preferences',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),
           _buildSettingsTile(
@@ -262,7 +273,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onChanged: (val) {
                 ref.read(themeProvider.notifier).toggleDarkMode(enabled: val);
               },
-              activeThumbColor: AppTheme.primary,
+              activeThumbColor: context.primaryColor,
             ),
           ),
           _buildSettingsTile(
@@ -277,16 +288,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // Account Actions
-          const Text(
+          Text(
             'Account',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),
           _buildSettingsTile(
             icon: LucideIcons.logOut,
             title: 'Log Out',
-            iconColor: AppTheme.error,
-            textColor: AppTheme.error,
+            iconColor: context.errorColor,
+            textColor: context.errorColor,
             onTap: () async {
               await ref.read(authProvider.notifier).logout();
               if (context.mounted) {
@@ -297,9 +308,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // About
-          const Text(
+          Text(
             'About',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),
           _buildSettingsTile(
@@ -327,29 +338,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
+        boxShadow: context.premiumShadow,
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
+          color: context.borderColor,
           width: 0.5,
         ),
       ),
       child: ListTile(
         leading: Icon(icon,
-            color: iconColor ?? Theme.of(context).colorScheme.onSurface),
+            color: iconColor ?? context.textColor),
         title: Text(
           title,
           style: TextStyle(
-              color: textColor ?? Theme.of(context).colorScheme.onSurface),
+              color: textColor ?? context.textColor),
         ),
         subtitle: subtitle != null
             ? Text(subtitle,
                 style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant))
+                    color: context.textSecondaryColor))
             : null,
         trailing: trailing ?? const Icon(LucideIcons.chevronRight, size: 20),
         onTap: onTap,

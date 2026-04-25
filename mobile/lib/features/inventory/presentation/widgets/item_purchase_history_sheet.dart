@@ -87,9 +87,9 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
           : null,
       builder: (context, child) {
         return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppTheme.primary,
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: context.primaryColor,
             ),
           ),
           child: child!,
@@ -115,7 +115,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: AppTheme.surface,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           title: const Text('Filter by Price', style: TextStyle(fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -158,7 +158,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                 });
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: context.primaryColor),
               child: const Text('Apply'),
             ),
           ],
@@ -197,9 +197,9 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
         allRates.isNotEmpty ? allRates.reduce((a, b) => a > b ? a : b) : 0.0;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -212,7 +212,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -226,11 +226,11 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    color: context.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(LucideIcons.package,
-                      color: AppTheme.primary, size: 24),
+                      color: context.primaryColor, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -241,10 +241,10 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                         widget.itemDescription.isNotEmpty
                             ? widget.itemDescription
                             : widget.itemPartNumber,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
+                          color: context.textColor,
                           letterSpacing: -0.5,
                         ),
                         maxLines: 2,
@@ -254,9 +254,9 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                           widget.itemPartNumber.isNotEmpty)
                         Text(
                           widget.itemPartNumber,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: AppTheme.textSecondary,
+                            color: context.textSecondaryColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -265,7 +265,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x, color: AppTheme.textSecondary),
+                  icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
                 ),
               ],
             ),
@@ -288,12 +288,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
               childAspectRatio: 2.2,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildStatCard('Purchases', '${history.length}',
-                    valueColor: AppTheme.primary),
-                _buildStatCard('Total Qty',
+                _buildStatCard(context, 'Purchases', '${history.length}',
+                    valueColor: context.primaryColor),
+                _buildStatCard(context, 'Total Qty',
                     totalQty == totalQty.toInt() ? '${totalQty.toInt()}' : totalQty.toStringAsFixed(2)),
-                _buildStatCard('Vendor', '$uniqueVendors'),
-                _buildStatCard('Avg Price', CurrencyFormatter.format(avgRate)),
+                _buildStatCard(context, 'Vendor', '$uniqueVendors'),
+                _buildStatCard(context, 'Avg Price', CurrencyFormatter.format(avgRate)),
               ],
             ),
           ),
@@ -312,24 +312,24 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
-                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+                      color: context.primaryColor.withValues(alpha: 0.1),
+                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(LucideIcons.barChart2,
-                            size: 14, color: AppTheme.primary),
+                            size: 14, color: context.primaryColor),
                         const SizedBox(width: 4),
                         Text(
                           _minPrice != null || _maxPrice != null
                               ? 'Filtered Price'
                               : 'Price range: ${CurrencyFormatter.format(overallMinRate)} - ${CurrencyFormatter.format(overallMaxRate)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
+                            color: context.primaryColor,
                           ),
                         ),
                       ],
@@ -344,12 +344,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: _startDate != null
-                          ? AppTheme.primary.withValues(alpha: 0.1)
-                          : Colors.grey.shade100,
+                          ? context.primaryColor.withValues(alpha: 0.1)
+                          : context.borderColor.withValues(alpha: 0.1),
                       border: Border.all(
                           color: _startDate != null
-                              ? AppTheme.primary.withValues(alpha: 0.2)
-                              : Colors.grey.shade300),
+                              ? context.primaryColor.withValues(alpha: 0.2)
+                              : context.borderColor),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -358,8 +358,8 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                         Icon(LucideIcons.calendar,
                             size: 14,
                             color: _startDate != null
-                                ? AppTheme.primary
-                                : AppTheme.textSecondary),
+                                ? context.primaryColor
+                                : context.textSecondaryColor),
                         const SizedBox(width: 4),
                         Text(
                           _startDate != null
@@ -369,8 +369,8 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: _startDate != null
-                                ? AppTheme.primary
-                                : AppTheme.textSecondary,
+                                ? context.primaryColor
+                                : context.textSecondaryColor,
                           ),
                         ),
                         if (_startDate != null) ...[
@@ -382,7 +382,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                 _endDate = null;
                               });
                             },
-                            child: Icon(LucideIcons.x, size: 14, color: AppTheme.primary),
+                            child: Icon(LucideIcons.x, size: 14, color: context.primaryColor),
                           )
                         ]
                       ],
@@ -403,12 +403,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Purchase History',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: context.textColor,
                   ),
                 ),
                 const Spacer(),
@@ -416,15 +416,15 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: context.textColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${history.length} records',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                 ),
@@ -447,16 +447,10 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: AppTheme.surface,
+                          color: context.surfaceColor,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.border),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          border: Border.all(color: context.borderColor),
+                          boxShadow: context.premiumShadow,
                         ),
                         child: InkWell(
                           onTap: () {
@@ -479,10 +473,10 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                         children: [
                                           Text(
                                             item.vendorName ?? 'Unknown Vendor',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
-                                              color: AppTheme.textPrimary,
+                                              color: context.textColor,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -490,24 +484,24 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                           const SizedBox(height: 4),
                                           Text(
                                             '${_formatDate(item.invoiceDate)} • #${item.invoiceNumber.isNotEmpty ? item.invoiceNumber : 'N/A'}',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12,
-                                              color: AppTheme.textSecondary,
+                                              color: context.textSecondaryColor,
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const Icon(LucideIcons.chevronRight,
-                                        size: 16, color: AppTheme.textSecondary),
+                                    Icon(LucideIcons.chevronRight,
+                                        size: 16, color: context.textSecondaryColor),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.background,
+                                    color: context.surfaceColor,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Row(
@@ -520,12 +514,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'QTY',
                                                 style: TextStyle(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
-                                                  color: AppTheme.textSecondary,
+                                                  color: context.textSecondaryColor,
                                                   letterSpacing: 0.5,
                                                 ),
                                               ),
@@ -544,12 +538,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'RATE',
                                                 style: TextStyle(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
-                                                  color: AppTheme.textSecondary,
+                                                  color: context.textSecondaryColor,
                                                   letterSpacing: 0.5,
                                                 ),
                                               ),
@@ -569,12 +563,12 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                         crossAxisAlignment:
                                             CrossAxisAlignment.end,
                                         children: [
-                                          const Text(
+                                          Text(
                                             'TOTAL',
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
-                                              color: AppTheme.textSecondary,
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                                               letterSpacing: 0.5,
                                             ),
                                         ),
@@ -609,20 +603,14 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
     );
   }
 
-  Widget _buildStatCard(String label, String value, {Color? valueColor}) {
+  Widget _buildStatCard(BuildContext context, String label, String value, {Color? valueColor}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.borderColor),
+        boxShadow: context.premiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -630,10 +618,10 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: AppTheme.textSecondary,
+              color: context.textSecondaryColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -642,7 +630,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: valueColor ?? AppTheme.textPrimary,
+              color: valueColor ?? context.textColor,
             ),
           ),
         ],
@@ -657,14 +645,14 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.inbox, size: 48, color: Colors.grey.shade300),
+            Icon(LucideIcons.inbox, size: 48, color: context.borderColor),
             const SizedBox(height: 12),
             Text(
               'No matching purchase history found',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
+                color: context.textSecondaryColor,
               ),
               textAlign: TextAlign.center,
             ),

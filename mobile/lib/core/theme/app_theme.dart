@@ -52,6 +52,7 @@ class AppTheme {
         error: error,
         onPrimary: Colors.white,
         onSurface: textPrimary,
+        onSurfaceVariant: textSecondary,
         onError: Colors.white,
         outline: border,
         outlineVariant: border,
@@ -126,6 +127,7 @@ class AppTheme {
         error: error,
         onPrimary: Colors.white,
         onSurface: darkTextPrimary,
+        onSurfaceVariant: darkTextSecondary,
         onError: Colors.white,
         outline: darkBorder,
         outlineVariant: darkBorder,
@@ -190,4 +192,23 @@ class AppTheme {
       ),
     );
   }
+}
+
+extension ThemeContext on BuildContext {
+  ThemeData get theme => Theme.of(this);
+  ColorScheme get colorScheme => theme.colorScheme;
+  TextTheme get textTheme => theme.textTheme;
+  bool get isDark => theme.brightness == Brightness.dark;
+
+  Color get primaryColor => colorScheme.primary;
+  Color get backgroundColor => theme.scaffoldBackgroundColor;
+  Color get surfaceColor => colorScheme.surface;
+  Color get textColor => colorScheme.onSurface;
+  Color get textSecondaryColor => colorScheme.onSurfaceVariant;
+  Color get errorColor => colorScheme.error;
+  Color get borderColor => colorScheme.outlineVariant;
+  Color get warningColor => isDark ? Colors.amberAccent : AppTheme.warning;
+  Color get successColor => isDark ? Colors.greenAccent : AppTheme.success;
+  Color get infoColor => isDark ? Colors.blueAccent : Colors.blue.shade700;
+  List<BoxShadow> get premiumShadow => isDark ? AppTheme.darkPremiumShadow : AppTheme.premiumShadow;
 }

@@ -64,11 +64,11 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
         builder: (ctx) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 22),
-              SizedBox(width: 10),
-              Text('Not all receipts reviewed',
+              Icon(LucideIcons.alertTriangle, color: context.warningColor, size: 22),
+              const SizedBox(width: 10),
+              const Text('Not all receipts reviewed',
                   style: TextStyle(fontSize: 17)),
             ],
           ),
@@ -82,9 +82,9 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('• ',
+                      Text('• ',
                           style: TextStyle(
-                              color: Colors.orange,
+                              color: context.warningColor,
                               fontWeight: FontWeight.bold)),
                       Expanded(
                           child: Text(line,
@@ -95,11 +95,11 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Unreviewed receipts will still be synced but may have incorrect data.',
                 style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey,
+                    color: context.textSecondaryColor,
                     height: 1.4),
               ),
             ],
@@ -110,7 +110,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
               child: const Text('Review First'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              style: FilledButton.styleFrom(backgroundColor: context.warningColor),
               onPressed: () => Navigator.of(ctx).pop(true),
               child: const Text('Sync Anyway'),
             ),
@@ -127,7 +127,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (state.error == null) {
       AppToast.showSuccess(context, 'Invoices synced successfully!',
           title: 'Sync Complete');
-      context.go('/inventory');
+      context.go('/');
     } else {
       AppToast.showError(context, state.error!, title: 'Sync Failed');
     }
@@ -153,11 +153,11 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     final showSummaryOverlay = completedStatus != null;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft, size: 20),
-          onPressed: () => context.go('/inventory'),
+          onPressed: () => context.go('/'),
         ),
         title: const Text('PENDING REVIEW',
             style: TextStyle(
@@ -183,10 +183,10 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
+                          color: context.warningColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border:
-                              Border.all(color: const Color(0xFFFDE68A)),
+                              Border.all(color: context.warningColor.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,9 +197,9 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                             Expanded(
                               child: Text(
                                 'We skipped ${widget.skippedCount} image${widget.skippedCount > 1 ? 's' : ''} since they were already uploaded.',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 13,
-                                    color: Color(0xFF92400E),
+                                    color: context.warningColor,
                                     height: 1.4,
                                     fontWeight: FontWeight.w500),
                               ),
@@ -262,7 +262,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                   onPressed: state.isSyncing
                       ? null
                       : () => _syncAndFinish(allDone: allDone),
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: context.primaryColor,
                   foregroundColor: Colors.white,
                   elevation: 4,
                   icon: state.isSyncing
@@ -289,15 +289,15 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (total == 0) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      color: context.surfaceColor,
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Review Progress',
+              Text('Review Progress',
                   style:
-                      TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      TextStyle(color: context.textSecondaryColor, fontSize: 13)),
               Text('$done of $total Done',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 13)),
@@ -308,8 +308,8 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: total > 0 ? done / total : 0,
-              backgroundColor: Colors.grey.shade200,
-              color: Colors.green,
+              backgroundColor: context.borderColor.withValues(alpha: 0.2),
+              color: context.successColor,
               minHeight: 8,
             ),
           ),
@@ -319,10 +319,10 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
             children: [
               if (pending > 0)
                 _buildBadge(
-                    LucideIcons.clock, '$pending Pending', Colors.orange),
+                    LucideIcons.clock, '$pending Pending', context.warningColor),
               if (error > 0)
                 _buildBadge(
-                    LucideIcons.alertCircle, '$error Errors', Colors.red),
+                    LucideIcons.alertCircle, '$error Errors', context.errorColor),
             ],
           )
         ],
@@ -358,15 +358,15 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     IconData statusIcon;
     switch (status) {
       case 'Done':
-        statusColor = Colors.green;
+        statusColor = context.successColor;
         statusIcon = LucideIcons.checkCircle;
         break;
       case 'Error':
-        statusColor = Colors.red;
+        statusColor = context.errorColor;
         statusIcon = LucideIcons.alertTriangle;
         break;
       default:
-        statusColor = Colors.orange;
+        statusColor = context.warningColor;
         statusIcon = LucideIcons.clock;
     }
 
@@ -381,16 +381,11 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: status == 'Error' ? Colors.red.shade200 : AppTheme.border),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
-          ],
+              color: status == 'Error' ? context.errorColor.withValues(alpha: 0.3) : context.borderColor),
+          boxShadow: context.premiumShadow,
         ),
         padding: const EdgeInsets.all(12),
         child: Row(
@@ -400,7 +395,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: context.isDark ? context.surfaceColor : context.borderColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               clipBehavior: Clip.antiAlias,
@@ -409,9 +404,9 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                       imageUrl: header!.receiptLink,
                       fit: BoxFit.cover,
                       errorWidget: (context, url, error) =>
-                          const Icon(LucideIcons.imageOff, color: Colors.grey),
+                          Icon(LucideIcons.imageOff, color: context.textSecondaryColor),
                     )
-                  : const Icon(LucideIcons.fileText, color: Colors.grey),
+                  : Icon(LucideIcons.fileText, color: context.textSecondaryColor),
             ),
             const SizedBox(width: 12),
             // Details
@@ -429,23 +424,23 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(LucideIcons.calendar,
-                          size: 12, color: AppTheme.textSecondary),
+                      Icon(LucideIcons.calendar,
+                          size: 12, color: context.textSecondaryColor),
                       const SizedBox(width: 4),
                       Text(
                         header?.date.isNotEmpty == true
                             ? header!.date
                             : 'No Date',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppTheme.textSecondary),
+                        style: TextStyle(
+                            fontSize: 12, color: context.textSecondaryColor),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${group.lineItems.length} items',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                        fontSize: 12, color: context.textSecondaryColor),
                   ),
                 ],
               ),
@@ -472,8 +467,8 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
             ),
             const SizedBox(width: 4),
             // Chevron
-            const Icon(LucideIcons.chevronRight,
-                color: AppTheme.textSecondary, size: 20),
+            Icon(LucideIcons.chevronRight,
+                color: context.textSecondaryColor, size: 20),
           ],
         ),
       ),

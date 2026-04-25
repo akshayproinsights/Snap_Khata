@@ -20,7 +20,7 @@ class MobileDialog {
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: 8,
-          backgroundColor: AppTheme.surface,
+          backgroundColor: context.surfaceColor,
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -34,15 +34,15 @@ class MobileDialog {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: isDestructive
-                          ? const Color(0xFFFEE2E2)
-                          : const Color(0xFFDBEAFE),
+                          ? context.errorColor.withValues(alpha: 0.1)
+                          : context.primaryColor.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       isDestructive
                           ? Icons.warning_rounded
                           : Icons.info_outline_rounded,
-                      color: isDestructive ? AppTheme.error : AppTheme.primary,
+                      color: isDestructive ? context.errorColor : context.primaryColor,
                       size: 28,
                     ),
                   ),
@@ -52,10 +52,10 @@ class MobileDialog {
                 // Title
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: context.textColor,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -63,9 +63,9 @@ class MobileDialog {
                 // Message
                 Text(
                   message,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
-                    color: AppTheme.textSecondary,
+                    color: context.textSecondaryColor,
                     height: 1.4,
                   ),
                 ),
@@ -76,8 +76,8 @@ class MobileDialog {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEFCE8),
-                      border: Border.all(color: const Color(0xFFFEF08A)),
+                      color: context.warningColor.withValues(alpha: 0.1),
+                      border: Border.all(color: context.warningColor.withValues(alpha: 0.2)),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -88,9 +88,9 @@ class MobileDialog {
                         Expanded(
                           child: Text(
                             warningText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color: Color(0xFF854D0E),
+                              color: context.warningColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -111,9 +111,9 @@ class MobileDialog {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
-                            side: const BorderSide(color: AppTheme.border),
+                            side: BorderSide(color: context.borderColor),
                           ),
-                          foregroundColor: AppTheme.textPrimary,
+                          foregroundColor: context.textColor,
                         ),
                         child: Text(
                           cancelText,
@@ -128,7 +128,7 @@ class MobileDialog {
                         onPressed: () => Navigator.of(context).pop(true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                              isDestructive ? AppTheme.error : AppTheme.primary,
+                              isDestructive ? context.errorColor : context.primaryColor,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),

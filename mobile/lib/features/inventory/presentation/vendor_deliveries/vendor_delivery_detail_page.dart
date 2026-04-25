@@ -11,6 +11,7 @@ import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dar
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/core/theme/context_extension.dart';
 
 class VendorDeliveryDetailPage extends ConsumerWidget {
   final InventoryInvoiceBundle bundle;
@@ -81,17 +82,17 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
     final isPaid = effectivePaymentMode == 'Cash';
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: context.backgroundColor,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Bill Details'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: context.surfaceColor,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(LucideIcons.edit, color: Theme.of(context).colorScheme.primary),
+            icon: Icon(LucideIcons.edit, color: context.primaryColor),
             tooltip: 'Edit Details',
             onPressed: () => context.push('/inventory-invoice-review', extra: bundle),
           ),
@@ -99,7 +100,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: Icon(LucideIcons.eye, color: Theme.of(context).colorScheme.primary),
+                icon: Icon(LucideIcons.eye, color: context.primaryColor),
                 tooltip: 'View Original Receipt',
                 onPressed: () => _showReceiptDialog(context),
               ),
@@ -143,8 +144,8 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
-        border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2)),
+        color: context.errorColor.withValues(alpha: 0.05),
+        border: Border.all(color: context.errorColor.withValues(alpha: 0.2)),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -156,11 +157,11 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                  color: context.errorColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.warning_amber_rounded,
-                    size: 18, color: Theme.of(context).colorScheme.error),
+                    size: 18, color: context.errorColor),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -169,7 +170,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.error,
+                    color: context.errorColor,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -185,13 +186,13 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                   children: [
                     Text('• ',
                         style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                            color: context.errorColor,
                             fontWeight: FontWeight.bold)),
                     Expanded(
                         child: Text(a,
                             style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).colorScheme.onErrorContainer,
+                                color: context.textColor,
                                 fontWeight: FontWeight.w500))),
                   ],
                 ),
@@ -201,7 +202,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
             'Tap Edit (top-right) to review and fix.',
             style: TextStyle(
                 fontSize: 11.5,
-                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
+                color: context.errorColor.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic),
           ),
         ],
@@ -218,10 +219,10 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
               offset: const Offset(0, -4),
               blurRadius: 20,
             )
@@ -243,7 +244,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                       children: [
                         Text('Total Bill Amount',
                             style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: context.textSecondaryColor,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5)),
@@ -252,7 +253,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                             style: TextStyle(
                                 fontSize: 28,
                                 fontWeight: FontWeight.w800,
-                                color: Theme.of(context).colorScheme.onSurface,
+                                color: context.textColor,
                                 letterSpacing: -0.5)),
                         const SizedBox(height: 10),
                         // ── Credit Status Badge ──────────────
@@ -261,10 +262,10 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.1),
+                              color: context.errorColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.red.withValues(alpha: 0.4),
+                                color: context.errorColor.withValues(alpha: 0.4),
                               ),
                             ),
                             child: Row(
@@ -273,7 +274,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                                 Icon(
                                   LucideIcons.alertCircle,
                                   size: 13,
-                                  color: Theme.of(context).colorScheme.error,
+                                  color: context.errorColor,
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
@@ -281,7 +282,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
-                                    color: Theme.of(context).colorScheme.error,
+                                    color: context.errorColor,
                                   ),
                                 ),
                               ],
@@ -292,10 +293,10 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.1),
+                              color: context.successColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.green.withValues(alpha: 0.4),
+                                color: context.successColor.withValues(alpha: 0.4),
                               ),
                             ),
                             child: Row(
@@ -304,7 +305,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                                 Icon(
                                   LucideIcons.checkCircle2,
                                   size: 13,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: context.successColor,
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
@@ -312,7 +313,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: context.successColor,
                                   ),
                                 ),
                               ],
@@ -330,7 +331,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                       icon: const Icon(LucideIcons.checkCircle, size: 18),
                       label: const Text('Verify'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        backgroundColor: context.primaryColor,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 12),
                       ),
@@ -340,10 +341,10 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade50,
+                        color: context.successColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.green.shade200,
+                          color: context.successColor.withValues(alpha: 0.4),
                           width: 1,
                         ),
                       ),
@@ -351,11 +352,11 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(LucideIcons.checkCircle2,
-                              size: 18, color: Colors.green.shade700),
+                              size: 18, color: context.successColor),
                           const SizedBox(width: 8),
                           Text('Verified',
                               style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: context.successColor,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15)),
                         ],
@@ -372,7 +373,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
@@ -383,7 +384,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
               children: [
                 Text('Invoice Number',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -394,7 +395,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                     style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
-                        color: Theme.of(context).colorScheme.onSurface)),
+                        color: context.textColor)),
               ],
             ),
           ),
@@ -402,7 +403,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
           Container(
             width: 1,
             height: 40,
-            color: Theme.of(context).colorScheme.outlineVariant,
+            color: context.borderColor,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           // Date
@@ -412,7 +413,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
               children: [
                 Text('Date',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -420,7 +421,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                     style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
-                        color: Theme.of(context).colorScheme.onSurface)),
+                        color: context.textColor)),
               ],
             ),
           ),
@@ -431,7 +432,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
 
   Widget _buildVendorCard(BuildContext context, bool isPaid) {
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Column(
@@ -441,14 +442,14 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface)),
+                  color: context.textColor)),
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.04),
-              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)),
+              color: context.primaryColor.withValues(alpha: 0.04),
+              border: Border.all(color: context.primaryColor.withValues(alpha: 0.1)),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -457,16 +458,16 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+                    color: context.surfaceColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          color: context.primaryColor.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 4))
                     ],
                   ),
-                  child: Icon(LucideIcons.store, color: Theme.of(context).colorScheme.primary),
+                  child: Icon(LucideIcons.store, color: context.primaryColor),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -486,7 +487,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
                           style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurface),
+                              color: context.textColor),
                           overflow: TextOverflow.ellipsis),
                     ],
                   ),
@@ -509,7 +510,7 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
 
   Widget _buildItemsSection(BuildContext context) {
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,18 +520,18 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)],
+                colors: [context.primaryColor, context.primaryColor.withValues(alpha: 0.7)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.shoppingBag, color: Theme.of(context).colorScheme.onPrimary, size: 18),
+                Icon(LucideIcons.shoppingBag, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Text('Item Details',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
               ],
@@ -573,7 +574,7 @@ class _ItemRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
             bottom: BorderSide(
-                color: isLast ? Colors.transparent : Theme.of(context).colorScheme.outlineVariant)),
+                color: isLast ? Colors.transparent : context.borderColor.withValues(alpha: 0.5))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,7 +592,7 @@ class _ItemRow extends StatelessWidget {
                     style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: Theme.of(context).colorScheme.onSurface)),
+                        color: context.textColor)),
               ),
               const SizedBox(width: 8),
               Column(
@@ -601,10 +602,10 @@ class _ItemRow extends StatelessWidget {
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
-                          color: Theme.of(context).colorScheme.onSurface)),
+                          color: context.textColor)),
                   if (hasMismatch) ...[
                     const SizedBox(height: 2),
-                    Text('+Tax/Fees', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 10, fontWeight: FontWeight.w600)),
+                    Text('+Tax/Fees', style: TextStyle(color: context.errorColor, fontSize: 10, fontWeight: FontWeight.w600)),
                   ]
                 ],
               )
@@ -618,7 +619,7 @@ class _ItemRow extends StatelessWidget {
                 Text(
                   '$qtyStr  x  ${CurrencyFormatter.format(item.rate)}',
                   style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: context.textSecondaryColor,
                       fontSize: 13,
                       fontWeight: FontWeight.w500),
                 ),
@@ -629,14 +630,14 @@ class _ItemRow extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+                        color: context.errorColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text('Mismatch',
                           style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.error)),
+                              color: context.errorColor)),
                     ),
                   ),
               ],
@@ -652,15 +653,15 @@ class _ItemRow extends StatelessWidget {
       width: 24,
       height: 24,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        color: context.borderColor.withValues(alpha: 0.1),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(
         child: Text('#$index',
             style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: context.textSecondaryColor,
                 fontSize: 10)),
       ),
     );
@@ -723,10 +724,10 @@ class _VendorCreditBookButton extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.orange.withValues(alpha: 0.15),
+            color: context.warningColor.withValues(alpha: 0.15),
             width: 0.5,
           ),
           boxShadow: [
@@ -742,35 +743,35 @@ class _VendorCreditBookButton extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: context.warningColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.bookOpen, size: 18, color: Colors.orange),
+              child: Icon(LucideIcons.bookOpen, size: 18, color: context.warningColor),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'View in Credit Book',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Colors.orange,
+                      color: context.warningColor,
                     ),
                   ),
                   Text(
                     'Check previous balances & history',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      color: context.textSecondaryColor.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(LucideIcons.chevronRight, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+            Icon(LucideIcons.chevronRight, size: 18, color: context.textSecondaryColor.withValues(alpha: 0.3)),
           ],
         ),
       ),

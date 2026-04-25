@@ -210,9 +210,9 @@ class _EditItemModalState extends State<EditItemModal> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
         child: Column(
@@ -310,9 +310,9 @@ class _EditItemModalState extends State<EditItemModal> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.background,
+                        color: context.surfaceColor,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Column(
                         children: [
@@ -337,7 +337,7 @@ class _EditItemModalState extends State<EditItemModal> {
                             ),
                             const Divider(),
                             _buildPreviewRow('Final Amount', _adjustedNetAmount, isBold: true,
-                              color: AppTheme.primary),
+                            color: context.primaryColor),
                           ],
 
                           if (mismatch > 0.5 && extraAdj == 0.0) ...[ 
@@ -406,7 +406,7 @@ class _EditItemModalState extends State<EditItemModal> {
                     Text(
                       'If the grand total still doesn\'t match the bill, add a small + or − amount here to fix it. '
                       'For example, enter "-2" to reduce total by ₹2, or "3" to add ₹3.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.5),
+                      style: TextStyle(fontSize: 12, color: context.textSecondaryColor, height: 1.5),
                     ),
                     const SizedBox(height: 10),
                     _buildTextField('Adjustment Amount (₹)', _extraAdjController,
@@ -428,7 +428,7 @@ class _EditItemModalState extends State<EditItemModal> {
               child: ElevatedButton(
                 onPressed: _handleSave,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: context.primaryColor,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
@@ -450,14 +450,14 @@ class _EditItemModalState extends State<EditItemModal> {
   Widget _buildSectionLabel(String label, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: AppTheme.primary),
+        Icon(icon, size: 14, color: context.primaryColor),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: context.textColor,
           ),
         ),
       ],
@@ -484,18 +484,18 @@ class _EditItemModalState extends State<EditItemModal> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+        hintStyle: TextStyle(fontSize: 11, color: context.textSecondaryColor.withValues(alpha: 0.5)),
         labelStyle: const TextStyle(fontSize: 12),
-        prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 16, color: AppTheme.textSecondary) : null,
+        prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 16, color: context.textSecondaryColor) : null,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: context.surfaceColor,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: context.borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: context.borderColor),
         ),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -515,7 +515,7 @@ class _EditItemModalState extends State<EditItemModal> {
             style: TextStyle(
               fontSize: isBold ? 14 : 12,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: AppTheme.textSecondary,
+              color: context.textSecondaryColor,
             ),
           ),
           Text(
@@ -523,7 +523,7 @@ class _EditItemModalState extends State<EditItemModal> {
             style: TextStyle(
               fontSize: isBold ? 16 : 14,
               fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: color ?? AppTheme.textPrimary,
+              color: color ?? context.textColor,
             ),
           )
         ],

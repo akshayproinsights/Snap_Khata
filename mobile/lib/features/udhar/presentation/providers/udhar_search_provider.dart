@@ -2,13 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum UdharFilterMode {
   all,
+  customers,
+  suppliers,
   pending,
   settled,
 }
 
 class UdharFilterNotifier extends Notifier<UdharFilterMode> {
   @override
-  UdharFilterMode build() => UdharFilterMode.pending; // Default to pending as requested
+  UdharFilterMode build() => UdharFilterMode.all; // Default to all as per new design
 
   void setFilter(UdharFilterMode mode) {
     state = mode;

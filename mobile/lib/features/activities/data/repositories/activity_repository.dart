@@ -35,7 +35,7 @@ class ActivityRepository {
   Future<List<ActivityItem>> _fetchCustomerTransactions(int limit) async {
     final response = await _supabase
         .from('ledger_transactions')
-        .select('*, customer_ledgers(customer_name)')
+        .select('*, customer_ledgers(customer_name, balance_due)')
         .order('created_at', ascending: false)
         .limit(limit);
 
@@ -49,6 +49,7 @@ class ActivityRepository {
         amount: (json['amount'] as num).toDouble(),
         displayId: json['receipt_number']?.toString(),
         transactionType: json['transaction_type'] ?? 'INVOICE',
+        balanceDue: (ledger?['balance_due'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
   }
@@ -56,7 +57,7 @@ class ActivityRepository {
   Future<List<ActivityItem>> _fetchVendorTransactions(int limit) async {
     final response = await _supabase
         .from('vendor_ledger_transactions')
-        .select('*, vendor_ledgers(vendor_name)')
+        .select('*, vendor_ledgers(vendor_name, balance_due)')
         .order('created_at', ascending: false)
         .limit(limit);
 
@@ -70,6 +71,7 @@ class ActivityRepository {
         amount: (json['amount'] as num).toDouble(),
         displayId: json['invoice_number']?.toString(),
         isPaid: json['is_paid'] ?? false,
+        balanceDue: (ledger?['balance_due'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
   }

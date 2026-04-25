@@ -18,14 +18,15 @@ class NotificationsPage extends ConsumerWidget {
     final items = state.items;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'ALERTS',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.5,
+            color: context.textColor,
           ),
         ),
         actions: [
@@ -36,15 +37,15 @@ class NotificationsPage extends ConsumerWidget {
                   HapticFeedback.lightImpact();
                   ref.read(notificationProvider.notifier).markAllRead();
                 },
-                child: const Text('Mark all read',
+                child: Text('Mark all read',
                     style: TextStyle(
-                        color: AppTheme.primary,
+                        color: context.primaryColor,
                         fontWeight: FontWeight.w600,
                         fontSize: 13)),
               ),
             IconButton(
-              icon: const Icon(LucideIcons.trash2,
-                  size: 18, color: AppTheme.textSecondary),
+              icon: Icon(LucideIcons.trash2,
+                  size: 18, color: context.textSecondaryColor),
               tooltip: 'Clear all',
               onPressed: () => _confirmClear(context, ref),
             ),
@@ -52,13 +53,13 @@ class NotificationsPage extends ConsumerWidget {
         ],
       ),
       body:
-          items.isEmpty ? _buildEmptyState() : _buildList(context, ref, items),
+          items.isEmpty ? _buildEmptyState(context) : _buildList(context, ref, items),
     );
   }
 
   // ── Empty ─────────────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -66,21 +67,21 @@ class NotificationsPage extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.06),
+              color: context.primaryColor.withValues(alpha: 0.06),
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.bellOff,
-                size: 52, color: AppTheme.textSecondary),
+            child: Icon(LucideIcons.bellOff,
+                size: 52, color: context.textSecondaryColor),
           ),
           const SizedBox(height: 20),
-          const Text('No Notifications',
+          Text('No Notifications',
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary)),
+                  color: context.textColor)),
           const SizedBox(height: 8),
-          const Text('You\'re all caught up!',
-              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+          Text('You\'re all caught up!',
+              style: TextStyle(fontSize: 14, color: context.textSecondaryColor)),
         ],
       )
           .animate()
@@ -122,10 +123,10 @@ class NotificationsPage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Text(entry.key,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.textSecondary,
+                    color: context.textSecondaryColor,
                     letterSpacing: 0.5)),
           ),
           ...entry.value.asMap().entries.map((e) {
@@ -171,7 +172,7 @@ class NotificationsPage extends ConsumerWidget {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.error, foregroundColor: Colors.white),
+                backgroundColor: context.errorColor, foregroundColor: Colors.white),
             child: const Text('Clear All'),
           ),
         ],
@@ -200,7 +201,7 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final typeColor = _typeColor(item.type);
+    final typeColor = _typeColor(context, item.type);
     final typeIcon = _typeIcon(item.type);
     final timeStr = DateFormat('h:mm a').format(item.timestamp);
 
@@ -211,10 +212,10 @@ class _NotificationCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppTheme.error.withValues(alpha: 0.1),
+          color: context.errorColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Icon(LucideIcons.trash2, color: AppTheme.error),
+        child: Icon(LucideIcons.trash2, color: context.errorColor),
       ),
       confirmDismiss: (_) async => true,
       onDismissed: (_) => onDismiss(),
@@ -225,12 +226,12 @@ class _NotificationCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: item.isRead
-                ? AppTheme.surface
-                : AppTheme.primary.withValues(alpha: 0.04),
+                ? context.surfaceColor
+                : context.primaryColor.withValues(alpha: context.isDark ? 0.1 : 0.04),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color:
-                  item.isRead ? AppTheme.border : typeColor.withValues(alpha: 0.25),
+                  item.isRead ? context.borderColor : typeColor.withValues(alpha: 0.25),
               width: item.isRead ? 1 : 1.5,
             ),
           ),
@@ -271,15 +272,15 @@ class _NotificationCard extends StatelessWidget {
                         ),
                         const Spacer(),
                         Text(timeStr,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppTheme.textSecondary)),
+                            style: TextStyle(
+                                fontSize: 11, color: context.textSecondaryColor)),
                         if (!item.isRead) ...[
                           const SizedBox(width: 6),
                           Container(
                             width: 8,
                             height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppTheme.primary,
+                            decoration: BoxDecoration(
+                              color: context.primaryColor,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -292,13 +293,13 @@ class _NotificationCard extends StatelessWidget {
                             fontWeight:
                                 item.isRead ? FontWeight.w500 : FontWeight.w700,
                             fontSize: 14,
-                            color: AppTheme.textPrimary)),
+                            color: context.textColor)),
                     const SizedBox(height: 2),
                     Text(item.body,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, color: AppTheme.textSecondary)),
+                        style: TextStyle(
+                            fontSize: 12, color: context.textSecondaryColor)),
                   ],
                 ),
               ),
@@ -312,18 +313,18 @@ class _NotificationCard extends StatelessWidget {
     );
   }
 
-  Color _typeColor(NotificationType t) {
+  Color _typeColor(BuildContext context, NotificationType t) {
     switch (t) {
       case NotificationType.invoiceReady:
-        return const Color(0xFF22C55E); // green
+        return context.successColor; // Adaptive green
       case NotificationType.lowStock:
-        return AppTheme.warning;
+        return context.warningColor;
       case NotificationType.poCreated:
-        return AppTheme.primary;
+        return context.primaryColor;
       case NotificationType.syncComplete:
         return const Color(0xFF06B6D4); // cyan
       default:
-        return AppTheme.textSecondary;
+        return context.textSecondaryColor;
     }
   }
 

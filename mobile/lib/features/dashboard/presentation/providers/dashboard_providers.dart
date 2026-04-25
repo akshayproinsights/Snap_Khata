@@ -15,7 +15,7 @@ class ActiveFilterNotifier extends Notifier<ActivityFilter> {
   void setFilter(ActivityFilter filter) => state = filter;
 }
 
-enum ActivityFilter { all, customers, suppliers }
+enum ActivityFilter { all, customers, suppliers, items }
 
 /// An [AsyncNotifier] that fetches aggregate totals from Supabase.
 final dashboardTotalsProvider = AsyncNotifierProvider<DashboardTotalsNotifier, DashboardTotals>(

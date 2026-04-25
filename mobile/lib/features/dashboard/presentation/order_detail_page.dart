@@ -312,7 +312,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: context.surfaceColor,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Order Details',
@@ -321,7 +321,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               fontWeight: FontWeight.w600,
               letterSpacing: 0,
             )),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: context.surfaceColor,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         centerTitle: true,
@@ -346,7 +346,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             )
           else
             IconButton(
-              icon: Icon(LucideIcons.edit, color: Theme.of(context).colorScheme.primary),
+              icon: Icon(LucideIcons.edit, color: context.primaryColor),
               tooltip: 'Edit Details',
               onPressed: () => setState(() => isEditing = true),
             ),
@@ -354,7 +354,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
-                icon: Icon(LucideIcons.eye, color: Theme.of(context).colorScheme.primary),
+                icon: Icon(LucideIcons.eye, color: context.primaryColor),
                 tooltip: 'View Original Receipt',
                 onPressed: () => _showReceiptDialog(context),
               ),
@@ -364,7 +364,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
                 icon: FaIcon(FontAwesomeIcons.whatsapp,
-                    color: Theme.of(context).colorScheme.primary),
+                    color: context.primaryColor),
                 tooltip: 'Share Receipt on WhatsApp',
                 onPressed: () async {
                   HapticFeedback.lightImpact();
@@ -493,7 +493,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.surfaceColor,
         boxShadow: [
           BoxShadow(
             // ignore: deprecated_member_use_from_same_package
@@ -526,13 +526,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             const SizedBox(height: 4),
             Text(CurrencyFormatter.format(grandTotal),
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.5)),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: context.textColor, letterSpacing: -0.5)),
             if (_paymentMode == 'Credit') ...[
               const SizedBox(height: 4),
               Row(
                 children: [
                    const Text('Balance Due: ', style: TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
-                   Text(CurrencyFormatter.format(grandTotal - _receivedAmount), style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14, fontWeight: FontWeight.bold)),
+                   Text(CurrencyFormatter.format(grandTotal - _receivedAmount), style: TextStyle(color: context.errorColor, fontSize: 14, fontWeight: FontWeight.bold)),
                 ],
               )
             ]
@@ -554,7 +554,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               Icon(_paymentMode == 'Cash' ? LucideIcons.checkCircle : LucideIcons.alertCircle, 
                    size: 18, color: _paymentMode == 'Cash' ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error),
               const SizedBox(width: 8),
-              Text(_paymentMode == 'Cash' ? 'Cash' : 'Credit (Due)', style: TextStyle(color: _paymentMode == 'Cash' ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error, fontWeight: FontWeight.bold, fontSize: 15)),
+              Text(_paymentMode == 'Cash' ? 'Cash' : 'Credit (Due)', style: TextStyle(color: _paymentMode == 'Cash' ? context.primaryColor : context.errorColor, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           )
         )
@@ -577,7 +577,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     fontWeight: FontWeight.bold)),
             Container(
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: context.isDark ? Colors.grey.shade900 : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
@@ -621,8 +621,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               child: Text(
                 _formatAmount(grandTotal),
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
               ),
             ),
           ],
@@ -652,11 +652,11 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                           ? Icons.check_box
                           : Icons.check_box_outline_blank,
                       color: _isReceivedChecked
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.outlineVariant,
+                          ? context.primaryColor
+                          : context.borderColor,
                     ),
                     const SizedBox(width: 8),
-                    const Text('Received', style: TextStyle(fontSize: 16)),
+                    Text('Received', style: TextStyle(fontSize: 16, color: context.textColor)),
                   ],
                 ),
               ),
@@ -671,7 +671,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 16),
+                  style: TextStyle(fontSize: 16, color: context.textColor),
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding:
@@ -681,7 +681,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     enabledBorder: UnderlineInputBorder(
                         borderSide: BorderSide(color: Colors.grey.shade300)),
                     focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
+                        borderSide: BorderSide(color: context.primaryColor)),
                     fillColor: Colors.transparent,
                   ),
                   onChanged: (val) {
@@ -714,7 +714,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   _formatAmount(grandTotal - _receivedAmount),
                   textAlign: TextAlign.right,
                   style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                      color: context.errorColor,
                       fontSize: 16,
                       fontWeight: FontWeight.bold),
                 ),
@@ -727,14 +727,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             decoration: InputDecoration(
               labelText: 'Customer Details / Notes',
               labelStyle:
-                  TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  TextStyle(fontSize: 14, color: context.textSecondaryColor),
               alignLabelWithHint: true,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                  borderSide: BorderSide(color: context.borderColor)),
               enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                  borderSide: BorderSide(color: context.borderColor)),
             ),
             maxLines: 2,
           ),
@@ -748,7 +748,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   // ─────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
@@ -759,7 +759,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               children: [
                 Text('Receipt Number',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -773,7 +773,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: Theme.of(context).colorScheme.onSurface)),
+                          color: context.textColor)),
               ],
             ),
           ),
@@ -781,7 +781,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           Container(
             width: 1,
             height: 40,
-            color: Theme.of(context).colorScheme.outlineVariant,
+            color: context.borderColor,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           // Date
@@ -791,7 +791,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               children: [
                 Text('Date',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
@@ -802,7 +802,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: Theme.of(context).colorScheme.onSurface)),
+                          color: context.textColor)),
               ],
             ),
           ),
@@ -823,7 +823,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final hasExtraFields = _extraFieldCtrls.isNotEmpty;
 
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Column(
@@ -833,21 +833,15 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface)),
+                  color: context.textColor)),
           const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
-                width: 0.5,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: Theme.of(context).brightness == Brightness.light
-                  ? AppTheme.premiumShadow
-                  : AppTheme.darkPremiumShadow,
+              boxShadow: context.isDark
+                  ? AppTheme.darkPremiumShadow
+                  : AppTheme.premiumShadow,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -855,10 +849,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                    color: context.primaryColor.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(LucideIcons.user, color: Theme.of(context).colorScheme.primary, size: 20),
+                  child: Icon(LucideIcons.user, color: context.primaryColor, size: 20),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -870,7 +864,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: context.textSecondaryColor,
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       if (isEditing)
@@ -883,7 +877,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                             style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface),
+                                color: context.textColor),
                             overflow: TextOverflow.ellipsis),
 
                       const SizedBox(height: 12),
@@ -891,7 +885,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: context.textSecondaryColor,
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       if (isEditing)
@@ -904,13 +898,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                             style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface),
+                                color: context.textColor),
                             overflow: TextOverflow.ellipsis),
 
                       // ── Dynamic extra fields (only if industry provides them) ──
                       if (hasExtraFields) ...[
                         const SizedBox(height: 16),
-                        Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+                        Divider(height: 1, color: context.borderColor),
                         const SizedBox(height: 16),
                         Wrap(
                           spacing: 16,
@@ -924,7 +918,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                 children: [
                                   Text(label,
                                       style: TextStyle(
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          color: context.textSecondaryColor,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           letterSpacing: 0.5)),
@@ -939,7 +933,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                         style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
-                                            color: Theme.of(context).colorScheme.onSurface),
+                                            color: context.textColor),
                                         overflow: TextOverflow.ellipsis),
                                 ],
                               ),
@@ -973,20 +967,20 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       keyboardType: isNumber
           ? const TextInputType.numberWithOptions(decimal: true)
           : TextInputType.text,
-      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface),
+      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.textColor),
       decoration: InputDecoration(
         hintText: hint,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         isDense: true,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5), width: 0.5)),
+            borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 0.5)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5), width: 0.5)),
+            borderSide: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 0.5)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
+            borderSide: BorderSide(color: context.primaryColor, width: 1.5)),
       ),
     );
   }
@@ -997,7 +991,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   Widget _buildItemsSection(bool isAutomobile) {
     if (isEditing) {
       return Container(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.surfaceColor,
         width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1032,7 +1026,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         .toList();
 
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: context.surfaceColor,
       width: double.infinity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1065,7 +1059,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               padding: const EdgeInsets.all(32),
               child: Center(
                   child: Text('No items found',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+                      style: TextStyle(color: context.textSecondaryColor))),
             ),
         ],
       ),
@@ -1078,18 +1072,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)],
+          colors: [context.primaryColor, context.primaryColor.withValues(alpha: 0.7)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: Row(
         children: [
-          Icon(LucideIcons.shoppingBag, color: Theme.of(context).colorScheme.onPrimary, size: 18),
+           Icon(LucideIcons.shoppingBag, color: Colors.white, size: 18),
           const SizedBox(width: 8),
           Text('Ordered Items',
               style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimary,
+                  color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold)),
         ],
@@ -1128,7 +1122,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     borderRadius: BorderRadius.circular(10)),
                 child: Text('${items.length}',
                     style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        fontSize: 12, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
               ),
             ],
           ),
@@ -1256,7 +1250,7 @@ class _ItemRow extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface),
+                    color: context.textColor),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1274,7 +1268,7 @@ class _ItemRow extends StatelessWidget {
                   Text(
                     '$qtyStr  x  ${CurrencyFormatter.format(item.rate)}',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: context.textSecondaryColor,
                         fontSize: 13,
                         fontWeight: FontWeight.w500),
                   ),
@@ -1289,7 +1283,7 @@ class _ItemRow extends StatelessWidget {
           style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Theme.of(context).colorScheme.onSurface),
+              color: context.textColor),
         ),
       ],
     );
@@ -1418,12 +1412,12 @@ class _PaymentToggleBtn extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+          color: isSelected ? context.primaryColor : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    color: context.primaryColor.withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   )
@@ -1433,7 +1427,7 @@ class _PaymentToggleBtn extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
+            color: isSelected ? Colors.white : context.textSecondaryColor,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -1562,15 +1556,15 @@ class _CreditBookButton extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: Colors.orange.withValues(alpha: 0.15),
             width: 0.5,
           ),
-          boxShadow: Theme.of(context).brightness == Brightness.light
-              ? AppTheme.premiumShadow
-              : AppTheme.darkPremiumShadow,
+          boxShadow: context.isDark
+              ? AppTheme.darkPremiumShadow
+              : AppTheme.premiumShadow,
         ),
         child: Row(
           children: [

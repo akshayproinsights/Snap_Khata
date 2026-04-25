@@ -1,3 +1,4 @@
+import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -7,10 +8,12 @@ import 'package:mobile/features/activities/presentation/widgets/customer_activit
 import 'package:mobile/features/activities/presentation/widgets/vendor_activity_card.dart';
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/bill_type_selection_sheet.dart';
+import 'package:mobile/features/dashboard/presentation/widgets/review_center_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 
 class HomeDashboardPage extends ConsumerWidget {
   const HomeDashboardPage({super.key});
@@ -22,19 +25,19 @@ class HomeDashboardPage extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.background,
+        backgroundColor: context.backgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        title: const Text(
+        title: Text(
           'SNAPKHATA',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w900,
             letterSpacing: 2.0,
-            color: AppTheme.primary,
+            color: context.primaryColor,
           ),
         ),
         actions: [
@@ -60,26 +63,49 @@ class HomeDashboardPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildGreeting(),
+                      _buildGreeting(context, ref),
                       const SizedBox(height: 24),
-                      _buildSummaryCards(ref, isDark),
+                      _buildSummaryCards(context, ref, isDark),
                       const SizedBox(height: 28),
-                      _buildSearchBar(ref, isDark),
+                      _buildSearchBar(context, ref, isDark),
                       const SizedBox(height: 16),
-                      _buildFilterChips(ref, currentFilter, isDark),
+                      _buildFilterChips(context, ref, currentFilter, isDark),
                       const SizedBox(height: 24),
-                      Text(
-                        currentFilter == ActivityFilter.all 
-                            ? 'RECENT ACTIVITY' 
-                            : currentFilter == ActivityFilter.customers 
-                                ? 'RECENT SALES' 
-                                : 'RECENT PURCHASES',
-                        style: TextStyle(
-                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            currentFilter == ActivityFilter.all 
+                                ? 'RECENT ACTIVITY' 
+                                : currentFilter == ActivityFilter.customers 
+                                    ? 'RECENT SALES' 
+                                    : currentFilter == ActivityFilter.suppliers
+                                        ? 'RECENT PURCHASES'
+                                        : 'RECENT ITEMS',
+                            style: TextStyle(
+                              color: context.textColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'View All',
+                              style: TextStyle(
+                                color: context.primaryColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                     ],
@@ -101,14 +127,14 @@ class HomeDashboardPage extends ConsumerWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.alertCircle, color: AppTheme.error, size: 48),
+                          Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
                           const SizedBox(height: 16),
                           Text(
                             'Failed to load activities',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                            style: TextStyle(fontWeight: FontWeight.w600, color: context.textColor),
                           ),
                           const SizedBox(height: 8),
-                          Text(error.toString(), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary)),
+                          Text(error.toString(), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondaryColor)),
                           const SizedBox(height: 24),
                           ElevatedButton(
                             onPressed: () => ref.read(recentActivitiesProvider.notifier).refreshData(),
@@ -130,13 +156,13 @@ class HomeDashboardPage extends ConsumerWidget {
                             Container(
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                color: context.primaryColor.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 LucideIcons.scan,
                                 size: 48,
-                                color: AppTheme.primary,
+                                color: context.primaryColor,
                               ),
                             ),
                             const SizedBox(height: 24),
@@ -145,7 +171,7 @@ class HomeDashboardPage extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w900,
-                                color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                                color: context.textColor,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -153,7 +179,7 @@ class HomeDashboardPage extends ConsumerWidget {
                               'Start by scanning your first bill.',
                               style: TextStyle(
                                 fontSize: 16,
-                                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                color: context.textSecondaryColor,
                               ),
                             ),
                           ],
@@ -188,99 +214,55 @@ class HomeDashboardPage extends ConsumerWidget {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _buildScanBillFab(context),
-      bottomNavigationBar: _buildBottomNav(context, ref, isDark),
     );
   }
 
-  Widget _buildBottomNav(BuildContext context, WidgetRef ref, bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: isDark ? AppTheme.darkBorder : AppTheme.border,
-            width: 1,
-          ),
-        ),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: 0, // Home is active
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              context.go('/');
-              break;
-            case 1:
-              context.go('/udhar-dashboard');
-              break;
-            case 2:
-              context.go('/bills');
-              break;
-            case 3:
-              context.go('/settings');
-              break;
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
-        selectedItemColor: AppTheme.primary,
-        unselectedItemColor: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(LucideIcons.home),
-            label: 'HOME',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(LucideIcons.users),
-            label: 'PARTIES',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(LucideIcons.fileText),
-            label: 'BILLS',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(LucideIcons.settings),
-            label: 'SETTINGS',
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildGreeting(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final username = authState.user?.username ?? 'Merchant';
 
-  Widget _buildGreeting() {
     final hour = DateTime.now().hour;
-    String greeting = 'GOOD MORNING';
-    if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON';
-    if (hour >= 17) greeting = 'GOOD EVENING';
+    String greeting = 'GOOD MORNING,';
+    if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON,';
+    if (hour >= 17) greeting = 'GOOD EVENING,';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          greeting,
-          style: const TextStyle(
-            color: AppTheme.primary,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-          ),
+        CircleAvatar(
+          radius: 24,
+          backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
+          child: const Icon(LucideIcons.user, color: Colors.white, size: 24),
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'Welcome back, Merchant',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -1.0,
-            height: 1.1,
-          ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              greeting,
+              style: TextStyle(
+                color: context.textSecondaryColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              username.toUpperCase(),
+              style: TextStyle(
+                color: context.primaryColor,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildSummaryCards(WidgetRef ref, bool isDark) {
+  Widget _buildSummaryCards(BuildContext context, WidgetRef ref, bool isDark) {
     final totalsAsync = ref.watch(dashboardTotalsProvider);
 
     return totalsAsync.when(
@@ -290,8 +272,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: _SummaryCard(
               label: 'YOU WILL GET',
               amount: CurrencyFormatter.format(totals.totalReceivable),
-              color: AppTheme.success,
-              icon: LucideIcons.arrowUpRight,
+              color: context.successColor,
               isDark: isDark,
             ),
           ),
@@ -300,8 +281,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: _SummaryCard(
               label: 'YOU WILL GIVE',
               amount: CurrencyFormatter.format(totals.totalPayable),
-              color: AppTheme.error,
-              icon: LucideIcons.arrowDownLeft,
+              color: context.errorColor,
               isDark: isDark,
             ),
           ),
@@ -314,8 +294,7 @@ class HomeDashboardPage extends ConsumerWidget {
               label: 'YOU WILL GET',
               amount: '...',
               isLoading: true,
-              color: AppTheme.success,
-              icon: LucideIcons.arrowUpRight,
+              color: context.successColor,
               isDark: isDark,
             ),
           ),
@@ -325,8 +304,7 @@ class HomeDashboardPage extends ConsumerWidget {
               label: 'YOU WILL GIVE',
               amount: '...',
               isLoading: true,
-              color: AppTheme.error,
-              icon: LucideIcons.arrowDownLeft,
+              color: context.errorColor,
               isDark: isDark,
             ),
           ),
@@ -338,8 +316,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: _SummaryCard(
               label: 'ERROR',
               amount: '₹ 0',
-              color: AppTheme.error,
-              icon: LucideIcons.alertCircle,
+              color: context.errorColor,
               isDark: isDark,
             ),
           ),
@@ -348,8 +325,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: _SummaryCard(
               label: 'ERROR',
               amount: '₹ 0',
-              color: AppTheme.error,
-              icon: LucideIcons.alertCircle,
+              color: context.errorColor,
               isDark: isDark,
             ),
           ),
@@ -358,39 +334,39 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSearchBar(WidgetRef ref, bool isDark) {
+  Widget _buildSearchBar(BuildContext context, WidgetRef ref, bool isDark) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isDark ? [] : AppTheme.premiumShadow,
+        boxShadow: context.premiumShadow,
       ),
       child: TextField(
         onChanged: (value) => ref.read(activitiesSearchQueryProvider.notifier).updateQuery(value),
         style: const TextStyle(fontWeight: FontWeight.w500),
         decoration: InputDecoration(
-          hintText: 'Search orders, names...',
+          hintText: 'Search Customers, vendors...',
           hintStyle: TextStyle(
-            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+            color: context.textSecondaryColor,
             fontWeight: FontWeight.w400,
           ),
           prefixIcon: Icon(
             LucideIcons.search, 
             size: 20, 
-            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary
+            color: context.textSecondaryColor
           ),
           filled: true,
-          fillColor: isDark ? AppTheme.darkSurface : Colors.white,
+          fillColor: context.surfaceColor,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: isDark ? const BorderSide(color: AppTheme.darkBorder) : BorderSide.none,
+            borderSide: BorderSide(color: context.borderColor),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: isDark ? const BorderSide(color: AppTheme.darkBorder) : BorderSide.none,
+            borderSide: BorderSide(color: context.borderColor),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+            borderSide: BorderSide(color: context.primaryColor, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
@@ -398,7 +374,7 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilterChips(WidgetRef ref, ActivityFilter currentFilter, bool isDark) {
+  Widget _buildFilterChips(BuildContext context, WidgetRef ref, ActivityFilter currentFilter, bool isDark) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -430,16 +406,16 @@ class HomeDashboardPage extends ConsumerWidget {
 
   Widget _buildScanBillFab(BuildContext context) {
     return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: AppTheme.primary,
-        borderRadius: BorderRadius.circular(28),
+        color: context.primaryColor,
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.4),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: context.primaryColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -452,19 +428,18 @@ class HomeDashboardPage extends ConsumerWidget {
             builder: (context) => const BillTypeSelectionSheet(),
           );
         },
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.scan, color: Colors.white, size: 22),
-            SizedBox(width: 12),
+            Icon(LucideIcons.camera, color: Colors.white, size: 20),
+            SizedBox(width: 8),
             Text(
-              'SCAN BILL',
+              'Scan Bill',
               style: TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 fontSize: 15,
-                letterSpacing: 1.0,
               ),
             ),
           ],
@@ -490,7 +465,7 @@ class HomeDashboardPage extends ConsumerWidget {
       icon: Badge(
         isLabelVisible: count > 0,
         label: Text(count > 99 ? '99+' : count.toString()),
-        backgroundColor: AppTheme.error,
+        backgroundColor: context.errorColor,
         child: const Icon(LucideIcons.clipboardCheck),
       ),
       onPressed: () {
@@ -508,29 +483,11 @@ class HomeDashboardPage extends ConsumerWidget {
   }
 
   void _showReviewSelectionDialog(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Review Invoices', style: TextStyle(fontWeight: FontWeight.w900)),
-        content: const Text('Which invoices would you like to review?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              context.push('/inventory-review');
-            },
-            child: const Text('PURCHASES', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.w900)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              context.push('/review');
-            },
-            child: const Text('SALES', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w900)),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const ReviewCenterSheet(),
     );
   }
 }
@@ -540,7 +497,6 @@ class _SummaryCard extends StatelessWidget {
   final String label;
   final String amount;
   final Color color;
-  final IconData icon;
   final bool isDark;
   final bool isLoading;
 
@@ -548,7 +504,6 @@ class _SummaryCard extends StatelessWidget {
     required this.label,
     required this.amount,
     required this.color,
-    required this.icon,
     required this.isDark,
     this.isLoading = false,
   });
@@ -556,41 +511,32 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: context.premiumShadow,
         border: Border.all(
-          color: isDark ? AppTheme.darkBorder : AppTheme.border,
-          width: 1.5,
+          color: context.borderColor,
+          width: 1,
         ),
-        boxShadow: isDark ? [] : AppTheme.premiumShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(height: 16),
           Text(
             label,
             style: TextStyle(
-              color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+              color: context.textSecondaryColor,
               fontSize: 10,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
               letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
           if (isLoading)
             SizedBox(
-              height: 26,
+              height: 32,
               child: Center(
                 child: LinearProgressIndicator(
                   color: color,
@@ -603,7 +549,7 @@ class _SummaryCard extends StatelessWidget {
               amount,
               style: TextStyle(
                 color: color,
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.5,
               ),
@@ -636,31 +582,23 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.primary
-              : (isDark ? AppTheme.darkSurface : Colors.white),
+              ? context.primaryColor
+              : context.surfaceColor,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected
-                ? AppTheme.primary
-                : (isDark ? AppTheme.darkBorder : AppTheme.border),
+                ? context.primaryColor
+                : context.borderColor,
             width: 1.5,
           ),
-          boxShadow: isSelected && !isDark
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : [],
+          boxShadow: isSelected ? context.premiumShadow : [],
         ),
         child: Text(
           label,
           style: TextStyle(
             color: isSelected
                 ? Colors.white
-                : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                : context.textColor,
             fontSize: 14,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
           ),

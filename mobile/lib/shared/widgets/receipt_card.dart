@@ -53,9 +53,9 @@ class ReceiptCard extends StatelessWidget {
           border: Border.all(color: AppTheme.border),
         ),
         alignment: Alignment.center,
-        child: const Text(
+        child: Text(
           'No image',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          style: TextStyle(color: context.textSecondaryColor, fontSize: 12),
         ),
       );
     }
@@ -65,12 +65,10 @@ class ReceiptCard extends StatelessWidget {
       child: Container(
         width: width,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.border, width: 0.5),
-          boxShadow: Theme.of(context).brightness == Brightness.light
-              ? AppTheme.premiumShadow
-              : AppTheme.darkPremiumShadow,
+          border: Border.all(color: context.borderColor, width: 0.5),
+          boxShadow: context.premiumShadow,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),

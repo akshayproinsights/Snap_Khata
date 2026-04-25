@@ -173,20 +173,20 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
     final String greeting = '${_getGreeting()}, $shopName'.toUpperCase();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
-        backgroundColor: AppTheme.surface,
+        backgroundColor: context.surfaceColor,
         title: FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
             greeting,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
+              color: context.textColor,
               letterSpacing: -0.5,
             ),
           ),
@@ -198,7 +198,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                     isLabelVisible: pendingCount > 0,
                     label: Text(
                         pendingCount > 99 ? '99+' : pendingCount.toString()),
-                    backgroundColor: const Color(0xFFEF4444),
+                    backgroundColor: context.errorColor,
                     child: const Icon(LucideIcons.clipboardCheck),
                   ),
                   onPressed: () {
@@ -212,7 +212,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                     label: Text(customerPendingCount > 99
                         ? '99+'
                         : customerPendingCount.toString()),
-                    backgroundColor: const Color(0xFFEF4444),
+                    backgroundColor: context.errorColor,
                     child: const Icon(LucideIcons.clipboardCheck),
                   ),
                   onPressed: () {
@@ -240,12 +240,12 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicatorWeight: 3,
                 indicator: UnderlineTabIndicator(
-                  borderSide: const BorderSide(width: 3.5, color: AppTheme.primary),
+                  borderSide: BorderSide(width: 3.5, color: context.primaryColor),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                indicatorColor: AppTheme.primary,
-                labelColor: AppTheme.primary,
-                unselectedLabelColor: AppTheme.textSecondary,
+                indicatorColor: context.primaryColor,
+                labelColor: context.primaryColor,
+                unselectedLabelColor: context.textSecondaryColor,
                 dividerColor: Colors.transparent,
                 tabs: const [
                   Tab(text: 'SUPPLIERS'),
@@ -275,14 +275,14 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       height: 56,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+        gradient: LinearGradient(
+          colors: [context.errorColor, context.errorColor.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+            color: context.errorColor.withValues(alpha: 0.25),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -319,14 +319,14 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       height: 56,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF16A34A), Color(0xFF15803D)],
+        gradient: LinearGradient(
+          colors: [context.successColor, context.successColor.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF16A34A).withValues(alpha: 0.25),
+            color: context.successColor.withValues(alpha: 0.25),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -381,7 +381,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: context.textColor,
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -408,11 +408,12 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
   Widget _buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9), // slate-100
+        color: context.surfaceColor, // Use adaptive surface color
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: context.isDark ? 0.2 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -421,24 +422,24 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
       child: TextField(
         controller: _searchController,
         onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
-          color: AppTheme.textPrimary,
+          color: context.textColor,
           fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
           hintText: 'Search by vendor, invoice ID or item…',
-          hintStyle: const TextStyle(
-            color: Color(0xFF94A3B8), // slate-400
+          hintStyle: TextStyle(
+            color: context.textSecondaryColor,
             fontSize: 13.5,
             fontWeight: FontWeight.w500,
           ),
           prefixIcon:
-              const Icon(LucideIcons.search, size: 18, color: Color(0xFF94A3B8)),
+              Icon(LucideIcons.search, size: 18, color: context.textSecondaryColor),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(LucideIcons.x,
-                      size: 16, color: Color(0xFF94A3B8)),
+                  icon: Icon(LucideIcons.x,
+                      size: 16, color: context.textSecondaryColor),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -568,15 +569,15 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              Icon(LucideIcons.wifiOff, size: 48, color: Colors.grey.shade300),
+              Icon(LucideIcons.wifiOff, size: 48, color: context.borderColor),
               const SizedBox(height: 12),
               Text('Could not load deliveries',
                   style: TextStyle(
-                      color: Colors.grey.shade500,
+                      color: context.textSecondaryColor,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text('Pull down to retry',
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                  style: TextStyle(color: context.textSecondaryColor.withValues(alpha: 0.7), fontSize: 12)),
             ],
           ),
         ),
@@ -591,17 +592,18 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
+                      color: context.surfaceColor,
                       shape: BoxShape.circle,
+                      border: Border.all(color: context.borderColor),
                     ),
                     child: Icon(LucideIcons.truck,
-                        size: 48, color: Colors.grey.shade300),
+                        size: 48, color: context.borderColor),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     'No supplier deliveries yet',
                     style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: context.textColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 16),
                   ),
@@ -609,7 +611,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   Text(
                     'Tap "Scan Purchase Bill" to snap\na vendor bill or purchase order',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                    style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
                   ),
                 ],
               ),
@@ -643,12 +645,12 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
               child: Column(
                 children: [
                   Icon(LucideIcons.searchX,
-                      size: 48, color: Colors.grey.shade300),
+                      size: 48, color: context.borderColor),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'No results found',
                     style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: context.textColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 15),
                   ),
@@ -657,7 +659,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                     'Try searching by vendor, invoice ID or item name',
                     textAlign: TextAlign.center,
                     style:
-                        TextStyle(color: Colors.grey.shade500, fontSize: 12.5),
+                        TextStyle(color: context.textSecondaryColor, fontSize: 12.5),
                   ),
                 ],
               ),
@@ -712,12 +714,12 @@ class _VendorDeliveryCard extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text('Cancel', style: TextStyle(color: context.textSecondaryColor)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.error,
-              foregroundColor: Colors.white,
+              backgroundColor: context.errorColor,
+              foregroundColor: context.surfaceColor,
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -734,9 +736,9 @@ class _VendorDeliveryCard extends ConsumerWidget {
       await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invoice deleted successfully'),
-            backgroundColor: AppTheme.error,
+          SnackBar(
+            content: const Text('Invoice deleted successfully'),
+            backgroundColor: context.errorColor,
           ),
         );
       }
@@ -762,15 +764,15 @@ class _VendorDeliveryCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: hasChori
-                ? const Color(0xFFEF4444).withValues(alpha: 0.3)
-                : AppTheme.border.withValues(alpha: 0.8),
+                ? context.errorColor.withValues(alpha: 0.3)
+                : context.borderColor.withValues(alpha: 0.8),
             width: hasChori ? 1.5 : 1.0,
           ),
-          boxShadow: AppTheme.premiumShadow,
+          boxShadow: context.premiumShadow,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -782,8 +784,8 @@ class _VendorDeliveryCard extends ConsumerWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: hasChori
-                      ? const Color(0xFFEF4444).withValues(alpha: 0.08)
-                      : AppTheme.primary.withValues(alpha: 0.08),
+                      ? context.errorColor.withValues(alpha: 0.08)
+                      : context.primaryColor.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -791,8 +793,8 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       ? LucideIcons.alertCircle
                       : LucideIcons.packageCheck,
                   color: hasChori
-                      ? const Color(0xFFEF4444)
-                      : AppTheme.primary,
+                      ? context.errorColor
+                      : context.primaryColor,
                   size: 22,
                 ),
               ),
@@ -811,10 +813,10 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           bundle.vendorName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 14.5,
-                            color: AppTheme.textPrimary,
+                            color: context.textColor,
                             letterSpacing: -0.2,
                           ),
                           maxLines: 2,
@@ -828,13 +830,13 @@ class _VendorDeliveryCard extends ConsumerWidget {
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: isPaid
-                              ? Colors.green.withValues(alpha: 0.1)
-                              : Colors.orange.withValues(alpha: 0.12),
+                              ? context.successColor.withValues(alpha: 0.1)
+                              : context.warningColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isPaid
-                                ? Colors.green.withValues(alpha: 0.4)
-                                : Colors.orange.withValues(alpha: 0.4),
+                                ? context.successColor.withValues(alpha: 0.4)
+                                : context.warningColor.withValues(alpha: 0.4),
                           ),
                         ),
                         child: Text(
@@ -843,8 +845,8 @@ class _VendorDeliveryCard extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             color: isPaid
-                                ? Colors.green.shade700
-                                : Colors.orange.shade700,
+                                ? context.successColor
+                                : context.warningColor,
                           ),
                         ),
                       ),
@@ -858,14 +860,14 @@ class _VendorDeliveryCard extends ConsumerWidget {
                       child: Row(
                         children: [
                           Icon(LucideIcons.hash,
-                              size: 11, color: Colors.grey.shade500),
+                              size: 11, color: context.textSecondaryColor),
                           const SizedBox(width: 3),
                           Expanded(
                             child: Text(
                               bundle.invoiceNumber,
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.grey.shade600,
+                                color: context.textSecondaryColor,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.2,
                               ),
@@ -886,30 +888,30 @@ class _VendorDeliveryCard extends ConsumerWidget {
                         dateLabel,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: context.textSecondaryColor,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const Text(' · ',
+                      Text(' · ',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
+                              color: context.textSecondaryColor,
                               fontSize: 12)),
                       Text(
                         '${bundle.items.length} item${bundle.items.length == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: context.textColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const Text(' · ',
+                      Text(' · ',
                           style: TextStyle(
-                              color: AppTheme.textSecondary,
+                              color: context.textSecondaryColor,
                               fontSize: 12)),
                       Text(
                         CurrencyFormatter.format(bundle.totalAmount),
-                        style: const TextStyle(
-                          color: AppTheme.primary,
+                        style: TextStyle(
+                          color: context.primaryColor,
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.2,
@@ -926,18 +928,17 @@ class _VendorDeliveryCard extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444).withValues(alpha: 0.07),
+                          color: context.errorColor.withValues(alpha: 0.07),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: const Color(0xFFEF4444)
-                                .withValues(alpha: 0.25),
+                            color: context.errorColor.withValues(alpha: 0.25),
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.warning_amber_rounded,
-                                size: 13, color: Color(0xFFDC2626)),
+                            Icon(Icons.warning_amber_rounded,
+                                size: 13, color: context.errorColor),
                             const SizedBox(width: 5),
                             Text(
                               hasMismatch && bundle.totalPriceHike > 0
@@ -945,9 +946,9 @@ class _VendorDeliveryCard extends ConsumerWidget {
                                   : hasMismatch
                                       ? '🔴 Bill amount mismatch detected'
                                       : '🔴 Price hike: ${CurrencyFormatter.format(bundle.totalPriceHike)} extra',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFFDC2626),
+                                color: context.errorColor,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -963,7 +964,7 @@ class _VendorDeliveryCard extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Icon(LucideIcons.chevronRight,
-                  size: 20, color: Colors.grey.shade400),
+                  size: 20, color: context.textSecondaryColor.withValues(alpha: 0.5)),
             ),
           ],
         ),

@@ -26,7 +26,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
       height: MediaQuery.of(context).size.height * 0.6,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkBackground : Colors.white,
+        color: context.backgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -88,10 +88,10 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                   type: BillScanType.customer,
                   title: 'Customer',
                   subtitle: '↓ Money In',
-                  subtitleColor: AppTheme.success,
+                  subtitleColor: context.successColor,
                   icon: LucideIcons.user,
                   isSelected: selectedType == BillScanType.customer,
-                  selectedColor: AppTheme.success,
+                  selectedColor: context.successColor,
                   isDark: isDark,
                 ),
                 const SizedBox(height: 16),
@@ -99,10 +99,10 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                   type: BillScanType.supplier,
                   title: 'Supplier',
                   subtitle: '↑ Money Out',
-                  subtitleColor: AppTheme.error,
+                  subtitleColor: context.errorColor,
                   icon: LucideIcons.truck,
                   isSelected: selectedType == BillScanType.supplier,
-                  selectedColor: AppTheme.error,
+                  selectedColor: context.errorColor,
                   isDark: isDark,
                 ),
               ],
@@ -151,12 +151,12 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: selectedType == null
-                        ? Colors.grey
+                        ? context.textSecondaryColor.withValues(alpha: 0.5)
                         : selectedType == BillScanType.customer
-                            ? AppTheme.primary // Primary Blue for customer
-                            : AppTheme.error, // Primary Red for supplier
+                            ? context.primaryColor // Primary Blue for customer
+                            : context.errorColor, // Primary Red for supplier
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.withValues(alpha: 0.3),
+                    disabledBackgroundColor: context.textSecondaryColor.withValues(alpha: 0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -189,12 +189,12 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
         decoration: BoxDecoration(
           color: isSelected
               ? selectedColor.withValues(alpha: isDark ? 0.15 : 0.05)
-              : (isDark ? AppTheme.darkSurface : Colors.white),
+              : context.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? selectedColor
-                : (isDark ? AppTheme.darkBorder : AppTheme.border),
+                : context.borderColor,
             width: isSelected ? 2 : 1.5,
           ),
         ),
@@ -203,13 +203,13 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: (isSelected ? selectedColor : AppTheme.textSecondary)
+                color: (isSelected ? selectedColor : context.textSecondaryColor)
                     .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 icon,
-                color: isSelected ? selectedColor : AppTheme.textSecondary,
+                color: isSelected ? selectedColor : context.textSecondaryColor,
                 size: 24,
               ),
             ),
@@ -223,7 +223,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                      color: context.textColor,
                     ),
                   ),
                   const SizedBox(height: 4),

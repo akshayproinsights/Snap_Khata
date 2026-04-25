@@ -106,7 +106,7 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
         : '?';
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── App Bar ──────────────────────────────────
@@ -114,7 +114,7 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
             expandedHeight: 160,
             pinned: true,
             elevation: 0,
-            backgroundColor: AppTheme.primary,
+            backgroundColor: context.primaryColor,
             iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
@@ -205,7 +205,7 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
                 'Transaction History',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+                  color: context.textColor,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -223,7 +223,7 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
                 child: Text(
                   'No transactions found.',
                   style: TextStyle(
-                    color: AppTheme.textSecondary.withValues(alpha: 0.6),
+                    color: context.textSecondaryColor.withValues(alpha: 0.6),
                   ),
                 ),
               ),
@@ -264,16 +264,10 @@ class _InvoiceGroupTile extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.015),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.borderColor),
+        boxShadow: context.premiumShadow,
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -300,13 +294,11 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Order deleted successfully.'),
-                            backgroundColor: AppTheme.success,
                           ),
                         );
                       }
                     },
-                    style:
-                        TextButton.styleFrom(foregroundColor: AppTheme.error),
+                    style: TextButton.styleFrom(foregroundColor: context.errorColor),
                     child: const Text('Delete'),
                   ),
                 ],
@@ -329,11 +321,11 @@ class _InvoiceGroupTile extends ConsumerWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.1),
+                color: context.primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.receipt,
-                  color: AppTheme.primary, size: 20),
+              child: Icon(LucideIcons.receipt,
+                  color: context.primaryColor, size: 20),
             ),
             title: Row(
               children: [
@@ -365,7 +357,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                                   fit: BoxFit.contain,
                                   errorBuilder: (_, __, ___) => Container(
                                     padding: const EdgeInsets.all(32),
-                                    color: AppTheme.surface,
+                                    color: context.surfaceColor,
                                     child: const Text(
                                         'Failed to load receipt image.'),
                                   ),
@@ -381,10 +373,10 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ),
                       );
                     },
-                    child: const Padding(
-                      padding: EdgeInsets.all(4.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
                       child: Icon(LucideIcons.eye,
-                          size: 18, color: AppTheme.primary),
+                          size: 18, color: context.primaryColor),
                     ),
                   ),
                 InkWell(
@@ -412,9 +404,8 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ? group.customerName
                         : 'Customer';
 
-                    final shopProfile = ref.read(shopProvider);
-                    final shopName = shopProfile.name.isNotEmpty
-                        ? shopProfile.name
+                    final shopName = ref.read(shopProvider).name.isNotEmpty
+                        ? ref.read(shopProvider).name
                         : 'Our Shop';
 
                     OrderPaymentStatus status;
@@ -452,10 +443,10 @@ class _InvoiceGroupTile extends ConsumerWidget {
                       message: message,
                     );
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.all(4.0),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
                     child: FaIcon(FontAwesomeIcons.whatsapp,
-                        size: 18, color: AppTheme.primary),
+                        size: 18, color: context.primaryColor),
                   ),
                 ),
               ],
@@ -467,15 +458,15 @@ class _InvoiceGroupTile extends ConsumerWidget {
                   Text(
                     _formatDate(dt),
                     style: TextStyle(
-                        color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                        color: context.textSecondaryColor.withValues(alpha: 0.8),
                         fontSize: 12,
                         fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     '• ${group.items.length} item(s)',
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary,
+                    style: TextStyle(
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w500),
                   ),
@@ -484,8 +475,8 @@ class _InvoiceGroupTile extends ConsumerWidget {
             ),
             trailing: Text(
               CurrencyFormatter.format(group.totalAmount),
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: TextStyle(
+                color: context.textColor,
                 fontWeight: FontWeight.w800,
                 fontSize: 15,
                 letterSpacing: -0.5,

@@ -32,9 +32,9 @@ class ItemPriceHistorySheet extends ConsumerWidget {
       maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
@@ -45,7 +45,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: context.borderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -58,10 +58,10 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                     Text(
                       description,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
+                        color: context.textColor,
                         height: 1.2,
                       ),
                     ),
@@ -71,7 +71,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                         partNumber,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey.shade500,
+                          color: context.textSecondaryColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -86,7 +86,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                 child: historyAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (err, stack) => Center(
-                    child: Text('Error: $err', style: const TextStyle(color: AppTheme.error)),
+                    child: Text('Error: $err', style: TextStyle(color: context.errorColor)),
                   ),
                   data: (items) {
                     if (items.isEmpty) {
@@ -107,19 +107,19 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     final latestItem = items.last; // Since it's sorted ASC chronologically
 
     // Trend badge
-    Color trendColor = Colors.grey.shade600;
-    Color trendBgColor = Colors.grey.shade100;
+    Color trendColor = context.textSecondaryColor;
+    Color trendBgColor = context.borderColor.withValues(alpha: 0.1);
     IconData trendIcon = LucideIcons.minus;
     String trendText = 'Price varies / Stable';
     
     if ((latestItem.priceHikeAmount ?? 0) > 0) {
-      trendColor = const Color(0xFFDC2626); // red
-      trendBgColor = const Color(0xFFFEE2E2);
+      trendColor = context.errorColor;
+      trendBgColor = context.errorColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingUp;
       trendText = 'Price is Going Up';
     } else if ((latestItem.priceHikeAmount ?? 0) < 0) {
-      trendColor = const Color(0xFF16A34A); // green
-      trendBgColor = const Color(0xFFDCFCE7);
+      trendColor = context.successColor;
+      trendBgColor = context.successColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingDown;
       trendText = 'Price Dropped';
     }
@@ -163,20 +163,26 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                     height: 120, // Increased height for labels
                     width: double.infinity,
                     child: CustomPaint(
-                      painter: _SparklinePainter(items: items),
+                      painter: _SparklinePainter(
+                        items: items,
+                        primaryColor: context.primaryColor,
+                        textColor: context.textColor,
+                        textSecondaryColor: context.textSecondaryColor,
+                        errorColor: context.errorColor,
+                        successColor: context.successColor,
+                      ),
                     ),
                   ),
                 
                 const SizedBox(height: 32),
-                
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Purchase History',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
+                      color: context.textColor,
                     ),
                   ),
                 ),
@@ -220,16 +226,10 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.borderColor),
+        boxShadow: context.premiumShadow,
       ),
       child: InkWell(
         onTap: () => _navigateToBillDetails(context, ref, item, historyItems),
@@ -244,7 +244,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: context.borderColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -252,7 +252,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade600,
+                        color: context.textSecondaryColor,
                       ),
                     ),
                   ),
@@ -264,7 +264,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                         Icon(
                           delta > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
                           size: 14,
-                          color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                          color: delta > 0 ? context.errorColor : context.successColor,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -272,7 +272,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: delta > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                            color: delta > 0 ? context.errorColor : context.successColor,
                           ),
                         ),
                       ],
@@ -282,10 +282,10 @@ class ItemPriceHistorySheet extends ConsumerWidget {
               const SizedBox(height: 12),
               Text(
                 item.vendorName ?? 'Unknown Supplier',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
+                  color: context.textColor,
                 ),
               ),
               const SizedBox(height: 8),
@@ -293,28 +293,28 @@ class ItemPriceHistorySheet extends ConsumerWidget {
                 children: [
                   Text(
                     '×${item.qty.toInt()} units',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
-                  const Text(' @ ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  Text(' @ ', style: TextStyle(color: context.textSecondaryColor, fontSize: 13)),
                   Text(
                     CurrencyFormatter.format(item.rate),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+                      color: context.textColor,
                     ),
                   ),
                   const Spacer(),
                   Text(
                     CurrencyFormatter.format(item.netBill),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.primary,
+                      color: context.primaryColor,
                     ),
                   ),
                 ],
@@ -370,8 +370,20 @@ class ItemPriceHistorySheet extends ConsumerWidget {
 
 class _SparklinePainter extends CustomPainter {
   final List<InventoryItem> items;
+  final Color primaryColor;
+  final Color textColor;
+  final Color textSecondaryColor;
+  final Color errorColor;
+  final Color successColor;
 
-  _SparklinePainter({required this.items});
+  _SparklinePainter({
+    required this.items,
+    required this.primaryColor,
+    required this.textColor,
+    required this.textSecondaryColor,
+    required this.errorColor,
+    required this.successColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -388,13 +400,13 @@ class _SparklinePainter extends CustomPainter {
     final paddedRange = paddedMax - paddedMin;
 
     final linePaint = Paint()
-      ..color = AppTheme.primary.withValues(alpha: 0.3)
+      ..color = primaryColor.withValues(alpha: 0.3)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final pointPaint = Paint()
-      ..color = AppTheme.primary
+      ..color = primaryColor
       ..style = PaintingStyle.fill;
 
     final latestPointPaint = Paint()
@@ -445,7 +457,7 @@ class _SparklinePainter extends CustomPainter {
         points[i] + const Offset(0, -22), // Offset above
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: AppTheme.textPrimary.withValues(alpha: 0.9),
+        color: textColor.withValues(alpha: 0.9),
       );
 
       // 3. Draw Month Label - Below point
@@ -469,7 +481,7 @@ class _SparklinePainter extends CustomPainter {
             points[i] + const Offset(0, 18), // Offset below
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: AppTheme.textSecondary.withValues(alpha: 0.6),
+            color: textSecondaryColor.withValues(alpha: 0.6),
           );
         }
       }
@@ -504,9 +516,9 @@ class _SparklinePainter extends CustomPainter {
   }
 
   Color _getTrendColor(InventoryItem item) {
-    if ((item.priceHikeAmount ?? 0) > 0) return const Color(0xFFDC2626); // red
-    if ((item.priceHikeAmount ?? 0) < 0) return const Color(0xFF16A34A); // green
-    return AppTheme.primary;
+    if ((item.priceHikeAmount ?? 0) > 0) return errorColor;
+    if ((item.priceHikeAmount ?? 0) < 0) return successColor;
+    return primaryColor;
   }
 
   @override

@@ -27,66 +27,63 @@ class MetricCard extends StatelessWidget {
   });
 
 
-  Color _getSoftBorderColor() {
+  Color _getSoftBorderColor(BuildContext context) {
     switch (theme) {
       case MetricTheme.blue:
-        return const Color(0x33BFDBFE);
+        return context.isDark ? const Color(0x3360A5FA) : const Color(0x33BFDBFE);
       case MetricTheme.amber:
-        return const Color(0x33FDE68A);
+        return context.isDark ? const Color(0x33FBBF24) : const Color(0x33FDE68A);
       case MetricTheme.red:
-        return const Color(0x33FECACA);
+        return context.isDark ? const Color(0x33F87171) : const Color(0x33FECACA);
       case MetricTheme.green:
-        return const Color(0x33BBF7D0);
+        return context.isDark ? const Color(0x334ADE80) : const Color(0x33BBF7D0);
       case MetricTheme.defaultTheme:
-        return AppTheme.border;
+        return context.borderColor;
     }
   }
 
-  Color _getIconBgColor() {
+  Color _getIconBgColor(BuildContext context) {
     switch (theme) {
       case MetricTheme.blue:
-        return const Color(0xFFDBEAFE);
+        return context.isDark ? const Color(0x263B82F6) : const Color(0xFFDBEAFE);
       case MetricTheme.amber:
-        return const Color(0xFFFEF3C7);
+        return context.isDark ? const Color(0x26F59E0B) : const Color(0xFFFEF3C7);
       case MetricTheme.red:
-        return const Color(0xFFFEE2E2);
+        return context.isDark ? const Color(0x26EF4444) : const Color(0xFFFEE2E2);
       case MetricTheme.green:
-        return const Color(0xFFDCFCE7);
+        return context.isDark ? const Color(0x2610B981) : const Color(0xFFDCFCE7);
       case MetricTheme.defaultTheme:
-        return const Color(0xFFF3F4F6);
+        return context.isDark ? context.borderColor.withValues(alpha: 0.1) : const Color(0xFFF3F4F6);
     }
   }
 
-  Color _getAccentColor() {
+  Color _getAccentColor(BuildContext context) {
     switch (theme) {
       case MetricTheme.blue:
-        return const Color(0xFF2563EB);
+        return context.isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
       case MetricTheme.amber:
-        return const Color(0xFFD97706);
+        return context.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
       case MetricTheme.red:
-        return const Color(0xFFDC2626);
+        return context.isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
       case MetricTheme.green:
-        return const Color(0xFF16A34A);
+        return context.isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
       case MetricTheme.defaultTheme:
-        return const Color(0xFF4B5563);
+        return context.textSecondaryColor;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final iconBgColor = _getIconBgColor();
-
-    final accentColor = _getAccentColor();
+    final iconBgColor = _getIconBgColor(context);
+    final accentColor = _getAccentColor(context);
 
     return Container(
       height: 90,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _getSoftBorderColor(), width: 0.5),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
+        border: Border.all(color: _getSoftBorderColor(context), width: 0.5),
+        boxShadow: context.premiumShadow,
       ),
       child: Material(
         color: Colors.transparent,
@@ -119,10 +116,10 @@ class MetricCard extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondary,
+                          color: context.textSecondaryColor,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -147,8 +144,8 @@ class MetricCard extends StatelessWidget {
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                             color: trendValue! >= 0
-                                ? const Color(0xFF16A34A)
-                                : AppTheme.error,
+                                ? context.successColor
+                                : context.errorColor,
                           ),
                         ),
                     ],

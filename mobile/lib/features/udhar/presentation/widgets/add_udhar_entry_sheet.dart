@@ -4,7 +4,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-
+import 'package:mobile/core/theme/context_extension.dart';
 class AddUdharEntrySheet extends ConsumerStatefulWidget {
   const AddUdharEntrySheet({super.key});
 
@@ -99,9 +99,9 @@ class _AddUdharEntrySheetState extends ConsumerState<AddUdharEntrySheet> {
         right: 16,
         top: 16,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -199,21 +199,21 @@ class _AddUdharEntrySheetState extends ConsumerState<AddUdharEntrySheet> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: _entryType == 'got' ? Colors.green.shade100 : Colors.grey.shade100,
+                            color: _entryType == 'got' ? context.successColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _entryType == 'got' ? Colors.green : Colors.transparent,
+                              color: _entryType == 'got' ? context.successColor : Colors.transparent,
                               width: 2,
                             ),
                           ),
                           child: Column(
                             children: [
-                              Icon(Icons.arrow_downward, color: _entryType == 'got' ? Colors.green : Colors.grey),
+                              Icon(Icons.arrow_downward, color: _entryType == 'got' ? context.successColor : context.textSecondaryColor),
                               const SizedBox(height: 4),
                               Text(
                                 'You Got',
                                 style: TextStyle(
-                                  color: _entryType == 'got' ? Colors.green : Colors.grey,
+                                  color: _entryType == 'got' ? context.successColor : context.textSecondaryColor,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -229,21 +229,21 @@ class _AddUdharEntrySheetState extends ConsumerState<AddUdharEntrySheet> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: _entryType == 'gave' ? Colors.red.shade100 : Colors.grey.shade100,
+                            color: _entryType == 'gave' ? context.errorColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _entryType == 'gave' ? Colors.red : Colors.transparent,
+                              color: _entryType == 'gave' ? context.errorColor : Colors.transparent,
                               width: 2,
                             ),
                           ),
                           child: Column(
                             children: [
-                              Icon(Icons.arrow_upward, color: _entryType == 'gave' ? Colors.red : Colors.grey),
+                              Icon(Icons.arrow_upward, color: _entryType == 'gave' ? context.errorColor : context.textSecondaryColor),
                               const SizedBox(height: 4),
                               Text(
                                 'You Gave',
                                 style: TextStyle(
-                                  color: _entryType == 'gave' ? Colors.red : Colors.grey,
+                                  color: _entryType == 'gave' ? context.errorColor : context.textSecondaryColor,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

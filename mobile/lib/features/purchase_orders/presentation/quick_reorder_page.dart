@@ -43,12 +43,12 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
     final poState = ref.watch(purchaseOrderProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text('Quick Reorder',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: AppTheme.surface,
-        foregroundColor: AppTheme.textPrimary,
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textColor,
         elevation: 0,
         actions: [
           Stack(
@@ -68,8 +68,8 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                   top: 4,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primary,
+                    decoration: BoxDecoration(
+                      color: context.primaryColor,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -92,23 +92,17 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
           Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
-              color: AppTheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: context.surfaceColor,
+              boxShadow: context.premiumShadow,
             ),
             child: TextField(
               controller: _searchCtrl,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Search by item name or part number...',
-                hintStyle: const TextStyle(color: AppTheme.textSecondary),
-                prefixIcon: const Icon(LucideIcons.search,
-                    color: AppTheme.textSecondary),
+                hintStyle: TextStyle(color: context.textSecondaryColor),
+                prefixIcon: Icon(LucideIcons.search,
+                    color: context.textSecondaryColor),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(LucideIcons.x, size: 18),
@@ -119,7 +113,7 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                       )
                     : null,
                 filled: true,
-                fillColor: AppTheme.background,
+                fillColor: context.backgroundColor,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
@@ -133,7 +127,7 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide:
-                      const BorderSide(color: AppTheme.primary, width: 2),
+                      BorderSide(color: context.primaryColor, width: 2),
                 ),
               ),
             ),
@@ -147,22 +141,22 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                     ? Center(
                         child: Text(
                           'Error loading items: ${state.error}',
-                          style: const TextStyle(color: AppTheme.error),
+                          style: TextStyle(color: context.errorColor),
                         ),
                       )
                     : state.items.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(LucideIcons.packageOpen,
-                                    size: 48, color: AppTheme.textSecondary),
-                                SizedBox(height: 16),
+                                    size: 48, color: context.textSecondaryColor),
+                                const SizedBox(height: 16),
                                 Text(
                                   'No items found',
                                   style: TextStyle(
                                       fontSize: 16,
-                                      color: AppTheme.textSecondary),
+                                      color: context.textSecondaryColor),
                                 ),
                               ],
                             ),
@@ -187,14 +181,8 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: AppTheme.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
+                color: context.surfaceColor,
+                boxShadow: context.premiumShadow,
               ),
               child: SafeArea(
                 top: false,
@@ -203,8 +191,8 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                   children: [
                     Text(
                       'Showing ${(state.currentPage * QuickReorderState.itemsPerPage) + 1} - ${(state.currentPage * QuickReorderState.itemsPerPage) + state.items.length} of ${state.totalItems}',
-                      style: const TextStyle(
-                          fontSize: 13, color: AppTheme.textSecondary),
+                      style: TextStyle(
+                          fontSize: 13, color: context.textSecondaryColor),
                     ),
                     Row(
                       children: [
@@ -216,20 +204,20 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                                   notifier.loadPreviousPage();
                                 }
                               : null,
-                          color: AppTheme.primary,
+                          color: context.primaryColor,
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.1),
+                            color: context.primaryColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             'Page ${state.currentPage + 1}',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.primary),
+                                color: context.primaryColor),
                           ),
                         ),
                         IconButton(
@@ -242,7 +230,7 @@ class _QuickReorderPageState extends ConsumerState<QuickReorderPage> {
                                   notifier.loadNextPage();
                                 }
                               : null,
-                          color: AppTheme.primary,
+                          color: context.primaryColor,
                         ),
                       ],
                     ),
@@ -289,10 +277,10 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
     final isLow = !isOut && stock < reorder;
 
     final statusColor = isOut
-        ? AppTheme.error
+        ? context.errorColor
         : isLow
-            ? AppTheme.warning
-            : AppTheme.success;
+            ? context.warningColor
+            : context.successColor;
     final statusLabel = isOut
         ? 'Out of Stock'
         : isLow
@@ -310,9 +298,9 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -334,25 +322,25 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                color: context.primaryColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 priority,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary,
+                                  color: context.primaryColor,
                                 ),
                               ),
                             ),
                           Expanded(
                             child: Text(
                               itemName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
+                                color: context.textColor,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -361,14 +349,14 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        partNumber,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.textSecondary,
-                          fontWeight: FontWeight.w500,
+                        Text(
+                          partNumber,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.textSecondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -450,10 +438,10 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
                     label: Text(alreadyInDraft ? 'Added' : 'Add to PO'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
-                          alreadyInDraft ? AppTheme.success : AppTheme.primary,
+                          alreadyInDraft ? context.successColor : context.primaryColor,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: alreadyInDraft
-                          ? AppTheme.success.withValues(alpha: 0.5)
+                          ? context.successColor.withValues(alpha: 0.5)
                           : null,
                       disabledForegroundColor:
                           alreadyInDraft ? Colors.white : null,
@@ -479,18 +467,18 @@ class _QuickReorderItemCardState extends ConsumerState<QuickReorderItemCard> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
-            color: AppTheme.textSecondary,
+            color: context.textSecondaryColor,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: context.textColor,
           ),
         ),
       ],

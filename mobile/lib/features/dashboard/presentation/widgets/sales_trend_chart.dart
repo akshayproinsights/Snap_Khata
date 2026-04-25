@@ -36,14 +36,14 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.border),
+          border: Border.all(color: context.borderColor),
         ),
         height: 300,
-        child: const Center(
+        child: Center(
           child: Text('No sales data available for this period',
-              style: TextStyle(color: AppTheme.textSecondary)),
+              style: TextStyle(color: context.textSecondaryColor)),
         ),
       );
     }
@@ -70,9 +70,9 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,12 +91,12 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _showBreakdown
-                        ? AppTheme.primary.withValues(alpha: 0.12)
-                        : AppTheme.background,
+                        ? context.primaryColor.withValues(alpha: 0.12)
+                        : context.backgroundColor,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color:
-                          _showBreakdown ? AppTheme.primary : AppTheme.border,
+                          _showBreakdown ? context.primaryColor : context.borderColor,
                     ),
                   ),
                   child: Text(
@@ -105,8 +105,8 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: _showBreakdown
-                          ? AppTheme.primary
-                          : AppTheme.textSecondary,
+                          ? context.primaryColor
+                          : context.textSecondaryColor,
                     ),
                   ),
                 ),
@@ -117,13 +117,13 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
           // Legend (when breakdown shown)
           if (_showBreakdown) ...[
             const SizedBox(height: 10),
-            const Row(
+            Row(
               children: [
-                _LegendDot(color: AppTheme.primary, label: 'Total'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppTheme.success, label: 'Parts'),
-                SizedBox(width: 16),
-                _LegendDot(color: AppTheme.warning, label: 'Labour'),
+                _LegendDot(color: context.primaryColor, label: 'Total'),
+                const SizedBox(width: 16),
+                _LegendDot(color: context.successColor, label: 'Parts'),
+                const SizedBox(width: 16),
+                _LegendDot(color: context.warningColor, label: 'Labour'),
               ],
             ),
           ],
@@ -138,10 +138,10 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: maxY / 4,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                    color: AppTheme.border,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: context.borderColor,
                     strokeWidth: 1,
-                    dashArray: [5, 5],
+                    dashArray: const [5, 5],
                   ),
                 ),
                 titlesData: FlTitlesData(
@@ -168,8 +168,8 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               DateFormat('dd-MM-yyyy').format(date),
-                              style: const TextStyle(
-                                  color: AppTheme.textSecondary, fontSize: 9),
+                              style: TextStyle(
+                                  color: context.textSecondaryColor, fontSize: 9),
                             ),
                           );
                         } catch (_) {
@@ -187,8 +187,8 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                         if (value == 0) return const SizedBox.shrink();
                         return Text(
                           CurrencyFormatter.formatCompact(value),
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 9),
+                          style: TextStyle(
+                              color: context.textSecondaryColor, fontSize: 9),
                         );
                       },
                     ),
@@ -201,14 +201,14 @@ class _SalesTrendChartState extends State<SalesTrendChart> {
                 maxY: maxY,
                 lineBarsData: [
                   // Total Revenue — bold primary line
-                  _buildLine(totalSpots, AppTheme.primary,
+                  _buildLine(totalSpots, context.primaryColor,
                       barWidth: 3, dashed: false),
                   // Parts — shown only when breakdown active
                   if (_showBreakdown)
-                    _buildLine(partsSpots, AppTheme.success,
+                    _buildLine(partsSpots, context.successColor,
                         barWidth: 2, dashed: true),
                   if (_showBreakdown)
-                    _buildLine(labourSpots, AppTheme.warning,
+                    _buildLine(labourSpots, context.warningColor,
                         barWidth: 2, dashed: true),
                 ],
                 lineTouchData: LineTouchData(
@@ -283,7 +283,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(label,
             style:
-                const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                TextStyle(fontSize: 11, color: context.textSecondaryColor)),
       ],
     );
   }

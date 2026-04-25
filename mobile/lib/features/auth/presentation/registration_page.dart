@@ -75,7 +75,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
     // Listen to changes to route on auth success
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.isAuthenticated) {
-        context.go('/inventory');
+        context.go('/');
       }
       if (next.error != null && previous?.error != next.error) {
         AppToast.showError(context, next.error!, title: 'Registration Failed');
@@ -83,10 +83,10 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
     });
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: AppTheme.textPrimary),
+          icon: Icon(LucideIcons.arrowLeft, color: context.textColor),
           onPressed: () => context.pop(),
         ),
         backgroundColor: Colors.transparent,
@@ -105,14 +105,14 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                     height: 80,
                     width: 200,
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      color: context.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         'SnapKhata',
                         style: TextStyle(
-                          color: AppTheme.primary,
+                          color: context.primaryColor,
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),
@@ -126,12 +126,12 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.surfaceColor,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppTheme.border),
+                    border: Border.all(color: context.borderColor),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
+                        color: Colors.black.withValues(alpha: context.isDark ? 0.2 : 0.05),
                         blurRadius: 24,
                         offset: const Offset(0, 12),
                       ),
@@ -140,21 +140,21 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Center(
+                      Center(
                         child: Text(
                           'Create an Account',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
+                            color: context.textColor,
                           ),
                         ),
                       ),
                       const SizedBox(height: 32),
 
-                      const Text('Shop Name',
+                      Text('Shop Name',
                           style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14)),
+                              fontWeight: FontWeight.w600, fontSize: 14, color: context.textColor)),
                       const SizedBox(height: 8),
                       MobileTextField(
                         initialValue: _shopName,
@@ -168,9 +168,9 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      const Text('User Name',
+                      Text('User Name',
                           style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14)),
+                              fontWeight: FontWeight.w600, fontSize: 14, color: context.textColor)),
                       const SizedBox(height: 8),
                       MobileTextField(
                         initialValue: _username,
@@ -184,9 +184,9 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      const Text('Password',
+                      Text('Password',
                           style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14)),
+                              fontWeight: FontWeight.w600, fontSize: 14, color: context.textColor)),
                       const SizedBox(height: 8),
                       MobileTextField(
                         initialValue: _password,
@@ -198,7 +198,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                             _isPasswordVisible
                                 ? LucideIcons.eyeOff
                                 : LucideIcons.eye,
-                            color: AppTheme.textSecondary,
+                            color: context.textSecondaryColor,
                             size: 20,
                           ),
                           onPressed: () {
@@ -215,9 +215,9 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      const Text('Industry',
+                      Text('Industry',
                           style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14)),
+                              fontWeight: FontWeight.w600, fontSize: 14, color: context.textColor)),
                       const SizedBox(height: 8),
                       
                       _isLoadingIndustries 
@@ -228,7 +228,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                         : Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppTheme.border),
+                            border: Border.all(color: context.borderColor),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: DropdownButtonHideUnderline(
@@ -236,14 +236,15 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                               value: _selectedIndustry,
                               isExpanded: true,
                               icon: const Icon(LucideIcons.chevronDown),
-                              hint: const Text('Select Industry'),
+                              hint: Text('Select Industry', style: TextStyle(color: context.textSecondaryColor)),
+                              dropdownColor: context.surfaceColor,
                               items: _industries.map((Map<String, dynamic> industry) {
                                 return DropdownMenuItem<String>(
                                   value: industry['id'] as String,
                                   child: Row(
                                     children: [
                                       Text('${industry['icon']} '),
-                                      Text(industry['display'] as String),
+                                      Text(industry['display'] as String, style: TextStyle(color: context.textColor)),
                                     ],
                                   ),
                                 );
@@ -265,7 +266,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                         child: ElevatedButton(
                           onPressed: authState.isLoading ? null : _handleRegister,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
+                            backgroundColor: context.primaryColor,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -292,14 +293,14 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
 
                 const SizedBox(height: 24),
                 // Footer
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(LucideIcons.lock, color: AppTheme.success, size: 14),
-                    SizedBox(width: 6),
+                    Icon(LucideIcons.lock, color: context.successColor, size: 14),
+                    const SizedBox(width: 6),
                     Text('Your data is safe & secure',
                         style: TextStyle(
-                            color: AppTheme.textSecondary,
+                            color: context.textSecondaryColor,
                             fontSize: 13,
                             fontWeight: FontWeight.w500)),
                   ],

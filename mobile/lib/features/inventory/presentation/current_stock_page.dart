@@ -35,13 +35,14 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     final poState = ref.watch(purchaseOrderProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Text('CURRENT STOCK',
+        title: Text('CURRENT STOCK',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
+              color: context.textColor,
             )),
         actions: [
           // Cart Button
@@ -59,8 +60,8 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppTheme.error,
+                    decoration: BoxDecoration(
+                      color: context.errorColor,
                       shape: BoxShape.circle,
                     ),
                     constraints: const BoxConstraints(
@@ -142,10 +143,10 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                                 )
                               : null,
                           filled: true,
-                          fillColor: AppTheme.surface,
+                          fillColor: context.surfaceColor,
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
+                              borderSide: BorderSide(color: context.borderColor)),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -159,7 +160,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               label: 'All',
                               value: 'all',
                               current: state.statusFilter,
-                              color: Colors.blueGrey,
+                              color: context.textSecondaryColor,
                               onTap: () => ref
                                   .read(currentStockProvider.notifier)
                                   .setFilters(status: 'all'),
@@ -169,7 +170,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               label: 'In Stock',
                               value: 'in_stock',
                               current: state.statusFilter,
-                              color: Colors.green,
+                              color: context.successColor,
                               icon: LucideIcons.checkCircle2,
                               onTap: () => ref
                                   .read(currentStockProvider.notifier)
@@ -180,7 +181,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               label: 'Low Stock',
                               value: 'low_stock',
                               current: state.statusFilter,
-                              color: Colors.orange,
+                              color: context.warningColor,
                               icon: LucideIcons.alertTriangle,
                               onTap: () => ref
                                   .read(currentStockProvider.notifier)
@@ -191,7 +192,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               label: 'Out of Stock',
                               value: 'out_of_stock',
                               current: state.statusFilter,
-                              color: Colors.red,
+                              color: context.errorColor,
                               icon: LucideIcons.alertCircle,
                               onTap: () => ref
                                   .read(currentStockProvider.notifier)
@@ -263,11 +264,11 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppTheme.surface,
+                              color: context.surfaceColor,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                   color:
-                                      AppTheme.border.withValues(alpha: 0.5)),
+                                      context.borderColor.withValues(alpha: 0.5)),
                             ),
                             child: const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -330,11 +331,11 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.alertCircle,
-                            color: AppTheme.error, size: 48),
+                        Icon(LucideIcons.alertCircle,
+                            color: context.errorColor, size: 48),
                         const SizedBox(height: 16),
                         Text('Error: ${state.error}',
-                            style: const TextStyle(color: AppTheme.error)),
+                            style: TextStyle(color: context.errorColor)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () => ref
@@ -347,10 +348,10 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                   ),
                 )
               else if (state.items.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   child: Center(
                       child: Text('No stock items found',
-                          style: TextStyle(color: AppTheme.textSecondary))),
+                          style: TextStyle(color: context.textSecondaryColor))),
                 )
               else
                 SliverPadding(
@@ -391,13 +392,9 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     final isOnHandLow = isOutOfStock || isLowStock;
 
     Color statusColor =
-        isOutOfStock ? Colors.red : (isLowStock ? Colors.orange : Colors.green);
-    Color statusBg = isOutOfStock
-        ? Colors.red.shade50
-        : (isLowStock ? Colors.orange.shade50 : Colors.green.shade50);
-    Color statusBorder = isOutOfStock
-        ? Colors.red.shade200
-        : (isLowStock ? Colors.orange.shade200 : Colors.green.shade200);
+        isOutOfStock ? context.errorColor : (isLowStock ? context.warningColor : context.successColor);
+    Color statusBg = statusColor.withValues(alpha: 0.1);
+    Color statusBorder = statusColor.withValues(alpha: 0.3);
     IconData statusIcon = isOutOfStock
         ? LucideIcons.alertCircle
         : (isLowStock ? LucideIcons.alertTriangle : LucideIcons.checkCircle2);
@@ -406,10 +403,10 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isOnHandLow ? statusBorder : AppTheme.border),
-        boxShadow: [
+        border: Border.all(color: isOnHandLow ? statusBorder : context.borderColor),
+        boxShadow: context.isDark ? [] : [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
@@ -434,8 +431,8 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                         children: [
                           Expanded(
                             child: Text(item.internalItemName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16)),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16, color: context.textColor)),
                           ),
                           if (item.priority != null &&
                               item.priority!.isNotEmpty)
@@ -444,11 +441,11 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _priorityColor(item.priority!)
+                                color: _priorityColor(context, item.priority!)
                                     .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                    color: _priorityColor(item.priority!)
+                                    color: _priorityColor(context, item.priority!)
                                         .withValues(alpha: 0.5)),
                               ),
                               child: Text(
@@ -456,15 +453,15 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                                 style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: _priorityColor(item.priority!)),
+                                    color: _priorityColor(context, item.priority!)),
                               ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text('Part #: ${item.partNumber}',
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary,
+                          style: TextStyle(
+                              color: context.textSecondaryColor,
                               fontSize: 12,
                               fontFamily: 'monospace')),
                     ],
@@ -503,13 +500,13 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(LucideIcons.link,
-                      size: 14, color: AppTheme.textSecondary),
+                  Icon(LucideIcons.link,
+                      size: 14, color: context.textSecondaryColor),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(item.customerItems!,
-                        style: const TextStyle(
-                            fontSize: 12, color: AppTheme.textSecondary)),
+                        style: TextStyle(
+                            fontSize: 12, color: context.textSecondaryColor)),
                   ),
                 ],
               ),
@@ -524,19 +521,19 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                       context,
                       'On Hand',
                       onHandValue.toString(),
-                      isOnHandLow ? statusColor : AppTheme.textPrimary,
+                      isOnHandLow ? statusColor : context.textColor,
                       () => _showUpdateStockSheet(context, ref, item, true)),
                 ),
-                Container(width: 1, height: 40, color: AppTheme.border),
+                Container(width: 1, height: 40, color: context.borderColor),
                 Expanded(
                   child: _buildEditableValue(
                       context,
                       'Reorder Pt',
                       item.reorderPoint.toString(),
-                      AppTheme.textPrimary,
+                      context.textColor,
                       () => _showUpdateStockSheet(context, ref, item, false)),
                 ),
-                Container(width: 1, height: 40, color: AppTheme.border),
+                Container(width: 1, height: 40, color: context.borderColor),
                 Expanded(
                   child: _buildEditableValue(
                       context,
@@ -544,7 +541,7 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                       item.unitValue != null
                           ? CurrencyFormatter.format(item.unitValue!)
                           : '-',
-                      AppTheme.textPrimary,
+                      context.textColor,
                       () => _showUpdatePurchasePriceSheet(context, ref, item)),
                 ),
               ],
@@ -563,9 +560,9 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
                     label:
                         const Text('Add to PO', style: TextStyle(fontSize: 12)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primary,
+                      foregroundColor: context.primaryColor,
                       side: BorderSide(
-                          color: AppTheme.primary.withValues(alpha: 0.5)),
+                          color: context.primaryColor.withValues(alpha: 0.5)),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -580,16 +577,16 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
     );
   }
 
-  Color _priorityColor(String priority) {
+  Color _priorityColor(BuildContext context, String priority) {
     switch (priority.toUpperCase()) {
       case 'P0':
-        return Colors.red.shade700;
+        return context.errorColor;
       case 'P1':
-        return Colors.orange.shade700;
+        return context.warningColor;
       case 'P2':
-        return Colors.blue.shade700;
+        return Colors.blue;
       default:
-        return Colors.grey.shade600;
+        return context.textSecondaryColor;
     }
   }
 
@@ -606,11 +603,11 @@ class _CurrentStockPageState extends ConsumerState<CurrentStockPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(label,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppTheme.textSecondary)),
+                    style: TextStyle(
+                        fontSize: 11, color: context.textSecondaryColor)),
                 const SizedBox(width: 4),
-                const Icon(LucideIcons.edit2,
-                    size: 10, color: AppTheme.primary),
+                Icon(LucideIcons.edit2,
+                    size: 10, color: context.primaryColor),
               ],
             ),
             const SizedBox(height: 4),
@@ -702,44 +699,44 @@ class _AddToPOSheetState extends ConsumerState<_AddToPOSheet> {
   Widget build(BuildContext context) {
     final item = widget.item;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(LucideIcons.shoppingCart, color: AppTheme.primary, size: 22),
-              SizedBox(width: 10),
-              Text('Add to Purchase Order',
+              Icon(LucideIcons.shoppingCart, color: context.primaryColor, size: 22),
+              const SizedBox(width: 10),
+              const Text('Add to Purchase Order',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 4),
           Text(item.internalItemName,
-              style: const TextStyle(color: AppTheme.textSecondary)),
+              style: TextStyle(color: context.textSecondaryColor)),
           Text('Part #: ${item.partNumber}',
-              style: const TextStyle(
-                  color: AppTheme.textSecondary,
+              style: TextStyle(
+                  color: context.textSecondaryColor,
                   fontSize: 12,
                   fontFamily: 'monospace')),
           const SizedBox(height: 20),
-          const Text('Quantity to Order',
-              style: TextStyle(fontWeight: FontWeight.w600)),
+          Text('Quantity to Order',
+              style: TextStyle(fontWeight: FontWeight.w600, color: context.textColor)),
           const SizedBox(height: 8),
           TextField(
             controller: qtyController,
             keyboardType: TextInputType.number,
             autofocus: true,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: context.textColor),
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppTheme.surface,
+              fillColor: context.surfaceColor,
               contentPadding: const EdgeInsets.symmetric(vertical: 16),
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -808,7 +805,7 @@ class _AddToPOSheetState extends ConsumerState<_AddToPOSheet> {
                       fontSize: 16, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: AppTheme.primary,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
@@ -872,9 +869,9 @@ class _UpdateStockSheetState extends ConsumerState<_UpdateStockSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -885,23 +882,23 @@ class _UpdateStockSheetState extends ConsumerState<_UpdateStockSheet> {
             widget.isPhysicalCount
                 ? 'Update Physical Count'
                 : 'Set Reorder Point',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 8),
           Text(
             widget.item.internalItemName,
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: context.textSecondaryColor),
           ),
           const SizedBox(height: 24),
           TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
             autofocus: true,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: context.textColor),
             textAlign: TextAlign.center,
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppTheme.surface,
+              fillColor: context.surfaceColor,
               contentPadding: const EdgeInsets.symmetric(vertical: 16),
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -915,7 +912,7 @@ class _UpdateStockSheetState extends ConsumerState<_UpdateStockSheet> {
               onPressed: _save,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppTheme.primary,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
@@ -975,34 +972,34 @@ class _UpdatePurchasePriceSheetState
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Set Purchase Price',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 8),
           Text(
             widget.item.internalItemName,
-            style: const TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: context.textSecondaryColor),
           ),
           const SizedBox(height: 24),
           TextField(
             controller: _controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             autofocus: true,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: context.textColor),
             textAlign: TextAlign.center,
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppTheme.surface,
+              fillColor: context.surfaceColor,
               prefixText: '₹ ',
               contentPadding: const EdgeInsets.symmetric(vertical: 16),
               border:
@@ -1017,7 +1014,7 @@ class _UpdatePurchasePriceSheetState
               onPressed: _save,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppTheme.primary,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
@@ -1061,10 +1058,10 @@ class _StatusChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.15) : AppTheme.surface,
+          color: selected ? color.withValues(alpha: 0.15) : context.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: selected ? color : AppTheme.border,
+              color: selected ? color : context.borderColor,
               width: selected ? 1.5 : 1),
         ),
         child: Row(
@@ -1072,15 +1069,17 @@ class _StatusChip extends StatelessWidget {
           children: [
             if (icon != null) ...[
               Icon(icon,
-                  size: 13, color: selected ? color : AppTheme.textSecondary),
-              const SizedBox(width: 5),
+                size: 14,
+                color: selected ? color : context.textSecondaryColor,
+              ),
+              const SizedBox(width: 4),
             ],
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                color: selected ? color : AppTheme.textSecondary,
+                fontWeight: FontWeight.bold,
+                color: selected ? color : context.textSecondaryColor,
               ),
             ),
           ],
@@ -1103,33 +1102,33 @@ class _PriorityChip extends StatelessWidget {
     required this.onTap,
   });
 
-  Color _color() {
+  Color _color(BuildContext context) {
     switch (value.toUpperCase()) {
       case 'P0':
-        return Colors.red.shade700;
+        return context.errorColor;
       case 'P1':
-        return Colors.orange.shade700;
+        return context.warningColor;
       case 'P2':
-        return Colors.blue.shade700;
+        return Colors.blue;
       default:
-        return Colors.blueGrey.shade600;
+        return context.textSecondaryColor;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final selected = current == value;
-    final color = _color();
+    final color = _color(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.15) : AppTheme.surface,
+          color: selected ? color.withValues(alpha: 0.15) : context.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: selected ? color : AppTheme.border,
+              color: selected ? color : context.borderColor,
               width: selected ? 1.5 : 1),
         ),
         child: Text(
@@ -1137,7 +1136,7 @@ class _PriorityChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected ? color : AppTheme.textSecondary,
+            color: selected ? color : context.textSecondaryColor,
           ),
         ),
       ),

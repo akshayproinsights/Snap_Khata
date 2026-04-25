@@ -114,6 +114,7 @@ class ShopProfileRequest(BaseModel):
     shop_address: Optional[str] = None
     shop_phone: Optional[str] = None
     shop_gst: Optional[str] = None
+    shop_upi_id: Optional[str] = None
 
 
 @router.get("/shop-profile")
@@ -132,7 +133,7 @@ async def get_shop_profile(
         db = get_database_client()
         resp = (
             db.client.table("user_profiles")
-            .select("shop_name, shop_address, shop_phone, shop_gst")
+            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id")
             .eq("username", username)
             .limit(1)
             .execute()
@@ -143,6 +144,7 @@ async def get_shop_profile(
             "shop_address": row.get("shop_address", ""),
             "shop_phone": row.get("shop_phone", ""),
             "shop_gst": row.get("shop_gst", ""),
+            "shop_upi_id": row.get("shop_upi_id", ""),
         }
     except Exception as e:
         logger.error(f"Error fetching shop profile for {username}: {e}")
@@ -173,6 +175,7 @@ async def save_shop_profile(
             "shop_address": data.shop_address or "",
             "shop_phone": data.shop_phone or "",
             "shop_gst": data.shop_gst or "",
+            "shop_upi_id": data.shop_upi_id or "",
         }
         db.client.table("user_profiles") \
             .upsert(upsert_data, on_conflict="username") \

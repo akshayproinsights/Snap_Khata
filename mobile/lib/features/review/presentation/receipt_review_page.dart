@@ -344,12 +344,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final hasAnyError = group.hasError;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: Text('Receipt #${group.receiptNumber}'),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.trash2, color: Colors.red),
+            icon: Icon(LucideIcons.trash2, color: context.errorColor),
             tooltip: 'Delete Receipt',
             onPressed: () async {
               final confirmed = await showDialog<bool>(
@@ -365,7 +365,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     ),
                     FilledButton(
                       style:
-                          FilledButton.styleFrom(backgroundColor: Colors.red),
+                          FilledButton.styleFrom(backgroundColor: context.errorColor),
                       onPressed: () => context.pop(true),
                       child: const Text('Delete'),
                     ),
@@ -399,8 +399,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               child: Container(
                 height: MediaQuery.of(context).size.height * 0.25,
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.black,
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
                 ),
                 child: Stack(
                   fit: StackFit.expand,
@@ -418,7 +418,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             child:
                                 CircularProgressIndicator(color: Colors.white)),
                         errorWidget: (context, url, error) => Container(
-                          color: Colors.black,
+                          color: context.surfaceColor,
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -476,32 +476,32 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               children: [
                 if (header != null) _buildHeaderCard(header, invoiceColumns),
                 const SizedBox(height: 16),
-                const Text('Line Items',
+                Text('Line Items',
                     style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textSecondary)),
+                        color: context.textSecondaryColor)),
                 const SizedBox(height: 8),
                 if (sortedLineItems.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
                     child: Center(
                         child: Text('No line items found.',
-                            style: TextStyle(color: AppTheme.textSecondary))),
+                            style: TextStyle(color: context.textSecondaryColor))),
                   ),
                 if (isAutomobile) ...[
                   if (partsItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Spare Parts', LucideIcons.package2, Colors.blue),
+                    _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
                     ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
                     const SizedBox(height: 12),
                   ],
                   if (laborItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, Colors.orange),
+                    _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
                     ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
                     const SizedBox(height: 12),
                   ],
                   if (otherItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Other Items', LucideIcons.box, Colors.grey),
+                    _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
                     ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
                     const SizedBox(height: 12),
                   ],
@@ -535,10 +535,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             top: 12,
             bottom: MediaQuery.of(context).padding.bottom + 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.surfaceColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: context.textColor.withValues(alpha: context.isDark ? 0.3 : 0.05),
               offset: const Offset(0, -4),
               blurRadius: 8,
             ),
@@ -551,14 +551,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total Amount',
+                Text('Total Amount',
                     style: TextStyle(
-                        color: AppTheme.textSecondary,
+                        color: context.textSecondaryColor,
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
                 Text(
                   '₹${_formatAmount(_totalAfterGst(group))}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5),
@@ -576,8 +576,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     child: OutlinedButton.icon(
                       onPressed: _goToNextReceipt,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.textSecondary,
-                        side: BorderSide(color: Colors.grey.shade300),
+                        foregroundColor: context.textSecondaryColor,
+                        side: BorderSide(color: context.borderColor),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -600,8 +600,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     onPressed: _markAllDone,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: hasAnyError
-                          ? Colors.orange
-                          : const Color(0xFF2A7678),
+                          ? context.warningColor
+                          : context.primaryColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
@@ -698,7 +698,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                                 '\nEnter a number to share directly, or skip.',
                                 style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.grey.shade600,
+                                    color: context.textSecondaryColor,
                                     height: 1.5),
                               ),
                               const SizedBox(height: 16),
@@ -728,9 +728,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, null),
-                              child: Text('Cancel',
-                                  style: TextStyle(
-                                      color: Colors.grey.shade600)),
+                              child: const Text('Cancel'),
                             ),
                             OutlinedButton.icon(
                               onPressed: () => Navigator.pop(ctx, ''),
@@ -738,9 +736,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                                   size: 14),
                               label: const Text('Skip'),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.grey.shade700,
+                                foregroundColor: context.textSecondaryColor,
                                 side: BorderSide(
-                                    color: Colors.grey.shade300),
+                                    color: context.borderColor),
                                 shape: RoundedRectangleBorder(
                                     borderRadius:
                                         BorderRadius.circular(8)),
@@ -889,9 +887,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(top: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,14 +897,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Payment Type',
+              Text('Payment Type',
                   style: TextStyle(
-                      color: AppTheme.textSecondary,
+                      color: context.textSecondaryColor,
                       fontSize: 14,
                       fontWeight: FontWeight.bold)),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: context.isDark ? context.primaryColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
@@ -981,8 +979,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             ? Icons.check_box
                             : Icons.check_box_outline_blank,
                         color: _isReceivedChecked
-                            ? AppTheme.primary
-                            : Colors.grey.shade400,
+                            ? context.primaryColor
+                            : context.textSecondaryColor.withValues(alpha: 0.3),
                       ),
                       const SizedBox(width: 8),
                       const Text('Received', style: TextStyle(fontSize: 16)),
@@ -1006,11 +1004,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       contentPadding:
                           const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
                       border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.grey.shade300)),
+                          borderSide: BorderSide(color: context.borderColor)),
                       enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.grey.shade300)),
-                      focusedBorder: const UnderlineInputBorder(
-                          borderSide: BorderSide(color: AppTheme.primary)),
+                          borderSide: BorderSide(color: context.borderColor)),
+                      focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: context.primaryColor)),
                       fillColor: Colors.transparent,
                     ),
                     onChanged: (val) {
@@ -1027,15 +1025,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Text('Balance Due',
+                Text('Balance Due',
                     style: TextStyle(
-                        color: AppTheme.error,
+                        color: context.errorColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
                 const Spacer(),
-                const Text('₹ ',
+                Text('₹ ',
                     style: TextStyle(
-                        color: AppTheme.error,
+                        color: context.errorColor,
                         fontSize: 16,
                         fontWeight: FontWeight.w500)),
                 SizedBox(
@@ -1043,8 +1041,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   child: Text(
                     _formatAmount(grandTotal - _receivedAmount),
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                        color: AppTheme.error,
+                    style: TextStyle(
+                        color: context.errorColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold),
                   ),
@@ -1058,14 +1056,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               decoration: InputDecoration(
                 labelText: 'Customer Details / Notes',
                 labelStyle:
-                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    TextStyle(fontSize: 14, color: context.textSecondaryColor),
                 alignLabelWithHint: true,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                    borderSide: BorderSide(color: context.borderColor)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                    borderSide: BorderSide(color: context.borderColor)),
               ),
               maxLines: 2,
             ),
@@ -1079,14 +1077,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final isError = header.hasError;
     final isDone = header.verificationStatus == 'Done';
 
-    Color borderColor = AppTheme.border;
-    Color bgColor = Colors.white;
+    Color borderColor = context.borderColor;
+    Color bgColor = context.surfaceColor;
     if (isError) {
-      borderColor = Colors.red.shade400;
-      bgColor = Colors.red.shade50;
+      borderColor = context.errorColor;
+      bgColor = context.errorColor.withValues(alpha: 0.1);
     } else if (isDone) {
-      borderColor = Colors.green.shade400;
-      bgColor = Colors.green.shade50;
+      borderColor = context.successColor;
+      bgColor = context.successColor.withValues(alpha: 0.1);
     }
 
     final dynamicColumns = columns.where((c) {
@@ -1110,21 +1108,21 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.fileText,
-                  size: 16, color: AppTheme.textSecondary),
+              Icon(LucideIcons.fileText,
+                  size: 16, color: context.textSecondaryColor),
               const SizedBox(width: 8),
-              const Text('Header Details',
+              Text('Header Details',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: AppTheme.textSecondary)),
+                      color: context.textSecondaryColor)),
               const Spacer(),
               if (isError)
-                const Icon(LucideIcons.alertCircle,
-                    color: Colors.red, size: 16),
+                Icon(LucideIcons.alertCircle,
+                    color: context.errorColor, size: 16),
               if (!isError && isDone)
-                const Icon(LucideIcons.checkCircle,
-                    color: Colors.green, size: 16),
+                Icon(LucideIcons.checkCircle,
+                    color: context.successColor, size: 16),
             ],
           ),
           const SizedBox(height: 12),
@@ -1141,19 +1139,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         ? OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(
-                                color: Colors.red.shade400, width: 1.5),
+                                color: context.errorColor, width: 1.5),
                           )
                         : null,
                     focusedBorder: header.hasReceiptDoubt
                         ? OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(
-                                color: Colors.red.shade400, width: 2),
+                                color: context.errorColor, width: 2),
                           )
                         : null,
                     fillColor: header.hasReceiptDoubt
-                        ? Colors.red.shade50
-                        : Colors.white,
+                        ? context.errorColor.withValues(alpha: 0.1)
+                        : context.surfaceColor,
                   ),
                   onSaved: (val) {
                     if (val != header.receiptNumber) {
@@ -1213,19 +1211,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             ? OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: BorderSide(
-                                    color: Colors.red.shade400, width: 1.5),
+                                    color: context.errorColor, width: 1.5),
                               )
                             : null,
                         focusedBorder: header.hasDateDoubt
                             ? OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: BorderSide(
-                                    color: Colors.red.shade400, width: 2),
+                                    color: context.errorColor, width: 2),
                               )
                             : null,
                         fillColor: header.hasDateDoubt
-                            ? Colors.red.shade50
-                            : Colors.white,
+                            ? context.errorColor.withValues(alpha: 0.1)
+                            : context.surfaceColor,
                       ),
                     ),
                   ),
@@ -1293,7 +1291,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               padding: const EdgeInsets.only(top: 8.0),
               child: Text('Error: Duplicate Receipt Number. Please fix it.',
                   style: TextStyle(
-                      color: Colors.red.shade700,
+                      color: context.errorColor,
                       fontSize: 12,
                       fontWeight: FontWeight.bold)),
             )
@@ -1302,7 +1300,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildCategoryHeader(String title, IconData icon, MaterialColor color) {
+  Widget _buildCategoryHeader(String title, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
       child: Row(
@@ -1310,16 +1308,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-                color: color.shade50,
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6)),
-            child: Icon(icon, size: 14, color: color.shade700),
+            child: Icon(icon, size: 14, color: color),
           ),
           const SizedBox(width: 8),
           Text(title.toUpperCase(),
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: color.shade700,
+                  color: color.withValues(alpha: context.isDark ? 0.9 : 1.0),
                   letterSpacing: 1.0)),
         ],
       ),
@@ -1330,14 +1328,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final isError = item.hasError;
     final isDone = item.verificationStatus == 'Done';
 
-    Color borderColor = AppTheme.border;
-    Color bgColor = Colors.white;
+    Color borderColor = context.borderColor;
+    Color bgColor = context.surfaceColor;
     if (isError) {
-      borderColor = Colors.red.shade400;
-      bgColor = Colors.red.shade50;
+      borderColor = context.errorColor;
+      bgColor = context.errorColor.withValues(alpha: 0.1);
     } else if (isDone) {
-      borderColor = Colors.green.shade400;
-      bgColor = Colors.green.shade50;
+      borderColor = context.successColor;
+      bgColor = context.successColor.withValues(alpha: 0.1);
     }
 
     // Checking if amount mismatch exists
@@ -1350,6 +1348,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor, width: isError ? 2 : 1),
+        boxShadow: context.premiumShadow,
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -1360,15 +1359,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  color: context.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   'Item #${item.rowId}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.primary,
+                    color: context.primaryColor,
                   ),
                 ),
               ),
@@ -1388,7 +1387,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         ),
                         FilledButton(
                           style: FilledButton.styleFrom(
-                              backgroundColor: Colors.red),
+                              backgroundColor: context.errorColor),
                           onPressed: () => context.pop(true),
                           child: const Text('Delete'),
                         ),
@@ -1413,10 +1412,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade50,
+                    color: context.errorColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Icon(LucideIcons.trash2, size: 14, color: Colors.red.shade600),
+                  child: Icon(LucideIcons.trash2, size: 14, color: context.errorColor),
                 ),
               ),
             ],
@@ -1452,8 +1451,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: AppTheme.primary),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: context.primaryColor),
                   decoration: _inputDecoration('Total (₹)'),
                   onSaved: (val) {
                     final newAmount = double.tryParse(val);
@@ -1490,10 +1489,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     }
                   },
                 )),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8.0),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Text('×',
-                      style: TextStyle(color: AppTheme.textSecondary)),
+                      style: TextStyle(color: context.textSecondaryColor)),
                 ),
                 Expanded(
                     child: DebouncedReviewField(
@@ -1521,8 +1520,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(LucideIcons.alertTriangle,
-                    size: 14, color: Colors.red),
+                Icon(LucideIcons.alertTriangle,
+                    size: 14, color: context.errorColor),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
@@ -1530,7 +1529,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           ? 'Math Error: Qty × Rate ≠ Total'
                           : 'Missing required fields',
                       style: TextStyle(
-                          color: Colors.red.shade700,
+                          color: context.errorColor,
                           fontSize: 11,
                           fontWeight: FontWeight.bold)),
                 ),
@@ -1573,16 +1572,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(fontSize: 12),
+      labelStyle: TextStyle(fontSize: 12, color: context.textSecondaryColor),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: context.surfaceColor,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: context.borderColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderSide: BorderSide(color: context.borderColor),
       ),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -1721,12 +1720,12 @@ class _PaymentToggleBtn extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+          color: isSelected ? context.successColor : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    color: context.successColor.withValues(alpha: 0.3),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   )
@@ -1736,7 +1735,7 @@ class _PaymentToggleBtn extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textSecondary,
+            color: isSelected ? Colors.white : context.textSecondaryColor,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -1773,7 +1772,7 @@ class _PartLaborToggle extends StatelessWidget {
               selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? selectedColor : Colors.grey.shade300,
+            color: selected ? selectedColor : context.borderColor,
             width: 1,
           ),
         ),
@@ -1782,7 +1781,7 @@ class _PartLaborToggle extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: selected ? selectedColor : Colors.grey.shade500,
+            color: selected ? selectedColor : context.textSecondaryColor,
           ),
         ),
       ),

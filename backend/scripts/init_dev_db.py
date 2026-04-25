@@ -9,19 +9,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from supabase import create_client
-import configs
+import config
 
 def apply_schema_to_dev():
     print("🚀 Initializing Dev Database...")
     
     # 1. Load Dev Credentials
-    secrets = configs.load_secrets()
-    supabase_dev = secrets.get('supabase', {})
+    supabase_dev = config.get_supabase_config() or {}
     url = supabase_dev.get('url')
     key = supabase_dev.get('service_role_key')
     
     if not url or not key:
-        print("❌ Dev credentials not found in secrets.toml")
+        print("❌ Dev credentials not found")
         return
 
     client = create_client(url, key)

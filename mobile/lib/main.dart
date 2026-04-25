@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/routing/app_router.dart';
 import 'package:mobile/core/theme/app_theme.dart';
@@ -44,6 +45,12 @@ void callbackDispatcher() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase — must happen before any provider accesses Supabase.instance.client
+  await Supabase.initialize(
+    url: 'https://zlqwoexomqggkigjalds.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpscXdvZXhvbXFnZ2tpZ2phbGRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4OTk1ODYsImV4cCI6MjA4MjQ3NTU4Nn0.eUze-cGOkiYCihYXUSI-xguIQp1UEMPCItk8cX1v4Ac',
+  );
 
   // Initialize background tasks (Not supported on Web)
   if (!kIsWeb) {

@@ -29,12 +29,12 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
   Widget _buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: context.isDark ? 0.1 : 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -43,9 +43,9 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
       child: TextField(
         controller: _searchController,
         onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
-          color: AppTheme.textPrimary,
+          color: context.textColor,
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
@@ -76,17 +76,18 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
-        backgroundColor: AppTheme.surface,
-        title: const Text(
+        backgroundColor: context.surfaceColor,
+        title: Text(
           'Track Items',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.5,
+            color: context.textColor,
           ),
         ),
         centerTitle: false,
@@ -140,6 +141,13 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
         
         if (newDate.isAfter(currentDate)) {
           latestItemMap[key] = item;
+        } else if (newDate.isAtSameMomentAs(currentDate)) {
+          // Tie-breaker: use created_at to pick the truly latest item
+          final currentCreated = DateTime.tryParse(currentLatest.createdAt ?? '') ?? DateTime(0);
+          final newCreated = DateTime.tryParse(item.createdAt ?? '') ?? DateTime(0);
+          if (newCreated.isAfter(currentCreated)) {
+            latestItemMap[key] = item;
+          }
         }
       }
     }
@@ -161,14 +169,14 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(LucideIcons.box,
-                          size: 48, color: Colors.grey.shade400),
+                          size: 48, color: context.isDark ? Colors.grey.shade600 : Colors.grey.shade400),
                       const SizedBox(height: 16),
                       Text(
                         _searchQuery.isNotEmpty
                             ? 'No items found matching "$_searchQuery"'
                             : 'No verified items logged yet.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
+                        style: TextStyle(color: context.textSecondaryColor),
                       ),
                     ],
                   ),
@@ -199,15 +207,25 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     Color trendColor = Colors.grey.shade500;
     IconData trendIcon = LucideIcons.minus; // stable
     String trendText = 'Stable';
+
+    double delta = item.priceHikeAmount ?? 0;
+
+    // Fallback: calculate from previousRate if priceHikeAmount is missing or zero
+    if (delta == 0 && item.previousRate != null && item.previousRate! > 0) {
+      delta = item.rate - item.previousRate!;
+    }
     
-    if ((item.priceHikeAmount ?? 0) > 0) {
+    if (delta > 0) {
       trendColor = const Color(0xFFEF4444); // red
       trendIcon = LucideIcons.trendingUp;
-      trendText = 'Going Up';
-    } else if ((item.priceHikeAmount ?? 0) < 0) {
+      trendText = 'Going Up ${CurrencyFormatter.format(delta)}';
+    } else if (delta < 0) {
       trendColor = const Color(0xFF22C55E); // green
       trendIcon = LucideIcons.trendingDown;
-      trendText = 'Going Down';
+      trendText = 'Going Down ${CurrencyFormatter.format(delta)}';
+    } else if (orderCount > 1) {
+      // Multiple orders but no detectable direction → show "Price varies"
+      trendText = 'Price varies';
     }
 
     String dateLabel = '';
@@ -219,12 +237,12 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     }
 
     return Material(
-      color: AppTheme.surface,
+      color: context.surfaceColor,
       borderRadius: BorderRadius.circular(16),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppTheme.border),
+        side: BorderSide(color: context.borderColor),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -254,10 +272,10 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                       children: [
                         Text(
                           item.description,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
+                            color: context.textColor,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -282,7 +300,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                             item.partNumber,
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey.shade600,
+                              color: context.textSecondaryColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -297,10 +315,10 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     children: [
                       Text(
                         CurrencyFormatter.format(item.rate),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.textPrimary,
+                          color: context.textColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -334,7 +352,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: context.textSecondaryColor,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -343,7 +361,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     'Last: $dateLabel',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: context.textSecondaryColor,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

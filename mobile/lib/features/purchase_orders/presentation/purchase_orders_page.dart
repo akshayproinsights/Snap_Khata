@@ -58,30 +58,30 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
     });
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('PURCHASE ORDERS',
+            const Text('PURCHASE ORDERS',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
                 )),
-            Text('DRAFT BASKET & ORDER HISTORY',
+            Text('MANAGE SUPPLIER ORDERS',
                 style: TextStyle(
                     fontSize: 10,
-                    color: AppTheme.textSecondary,
+                    color: context.textSecondaryColor,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5)),
           ],
         ),
         bottom: TabBar(
           controller: _tabs,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
-          indicatorColor: AppTheme.primary,
+          labelColor: context.primaryColor,
+          unselectedLabelColor: context.textSecondaryColor,
+          indicatorColor: context.primaryColor,
           tabs: [
             Tab(
               child: Row(
@@ -94,7 +94,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary,
+                        color: context.primaryColor,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text('${state.draftCount}',
@@ -158,17 +158,18 @@ class _DraftTab extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(LucideIcons.shoppingCart,
-                size: 56, color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+                size: 56,
+                color: context.textSecondaryColor.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
-            const Text('Draft is empty',
+            Text('Draft is empty',
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textSecondary)),
+                    color: context.textSecondaryColor)),
             const SizedBox(height: 8),
-            const Text('Add items from Low Stock Alerts\nor the + button below',
+            Text('Add items from Low Stock Alerts\nor the + button below',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                style: TextStyle(fontSize: 13, color: context.textSecondaryColor)),
           ],
         ),
       );
@@ -225,10 +226,10 @@ class _CartBottomBar extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.05),
             offset: const Offset(0, -4),
             blurRadius: 10,
           )
@@ -244,8 +245,8 @@ class _CartBottomBar extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Total (${state.draft.totalItems} items)',
-                      style: const TextStyle(
-                          fontSize: 13, color: AppTheme.textSecondary)),
+                      style: TextStyle(
+                          fontSize: 13, color: context.textSecondaryColor)),
                   Text(CurrencyFormatter.format(state.draft.totalEstimatedCost),
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
@@ -255,7 +256,7 @@ class _CartBottomBar extends ConsumerWidget {
             ElevatedButton(
               onPressed: state.hasDraftItems ? onPlaceOrder : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -288,7 +289,7 @@ class _DraftItemCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final priorityColor = _priorityColor(item.priority);
+    final priorityColor = _priorityColor(context, item.priority);
 
     return Dismissible(
       key: Key(item.partNumber),
@@ -298,10 +299,10 @@ class _DraftItemCard extends ConsumerWidget {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppTheme.error.withValues(alpha: 0.1),
+          color: context.errorColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(LucideIcons.trash2, color: AppTheme.error),
+        child: Icon(LucideIcons.trash2, color: context.errorColor),
       ),
       confirmDismiss: (_) async {
         HapticFeedback.mediumImpact();
@@ -314,9 +315,9 @@ class _DraftItemCard extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.border),
+          border: Border.all(color: context.borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,8 +349,8 @@ class _DraftItemCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(item.partNumber,
-                style: const TextStyle(
-                    fontSize: 11, color: AppTheme.textSecondary)),
+                style: TextStyle(
+                    fontSize: 11, color: context.textSecondaryColor)),
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -359,24 +360,24 @@ class _DraftItemCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Stock: ${item.currentStock.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppTheme.textSecondary)),
+                        style: TextStyle(
+                            fontSize: 11, color: context.textSecondaryColor)),
                     if (item.unitValue != null)
                       Text(
                           CurrencyFormatter.format(
                               (item.unitValue ?? 0) * item.reorderQty),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.primary)),
+                              color: context.primaryColor)),
                   ],
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(LucideIcons.trash2,
-                          size: 18, color: AppTheme.error),
+                      icon: Icon(LucideIcons.trash2,
+                          size: 18, color: context.errorColor),
                       onPressed: () {
                         HapticFeedback.mediumImpact();
                         ref
@@ -405,16 +406,16 @@ class _DraftItemCard extends ConsumerWidget {
     );
   }
 
-  Color _priorityColor(String p) {
+  Color _priorityColor(BuildContext context, String p) {
     switch (p) {
       case 'P0':
-        return AppTheme.error;
+        return context.errorColor;
       case 'P1':
-        return AppTheme.warning;
+        return context.warningColor;
       case 'P2':
-        return AppTheme.primary;
+        return context.primaryColor;
       default:
-        return AppTheme.textSecondary;
+        return context.textSecondaryColor;
     }
   }
 }
@@ -430,7 +431,7 @@ class _QtyStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: context.borderColor),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -470,7 +471,7 @@ class _StepBtn extends StatelessWidget {
         alignment: Alignment.center,
         child: Icon(icon,
             size: 14,
-            color: onTap != null ? AppTheme.primary : AppTheme.textSecondary),
+            color: onTap != null ? context.primaryColor : context.textSecondaryColor),
       ),
     );
   }
@@ -506,9 +507,9 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: Column(
@@ -518,8 +519,8 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
             const Text('Finalise Purchase Order',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            const Text('This creates a PO and shares it via WhatsApp',
-                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+            Text('This creates a PO and shares it via WhatsApp',
+                style: TextStyle(fontSize: 13, color: context.textSecondaryColor)),
             const SizedBox(height: 20),
 
             // Supplier
@@ -586,7 +587,7 @@ class _ProceedPoSheetState extends ConsumerState<_ProceedPoSheet> {
                 onPressed: isProceeding ? null : _onGenerate,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: context.primaryColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
@@ -701,9 +702,9 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
       child: Column(
@@ -713,26 +714,27 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: AppTheme.success.withValues(alpha: 0.12),
+              color: context.successColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(LucideIcons.checkCircle,
-                color: AppTheme.success, size: 28),
+            child: Icon(LucideIcons.checkCircle,
+                color: context.successColor,
+                size: 28),
           ),
           const SizedBox(height: 16),
           const Text('Purchase Order Created!',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text('PO Number: ${widget.poNumber}',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.primary)),
+                  color: context.primaryColor)),
           const SizedBox(height: 8),
-          const Text(
+          Text(
               'Your PO has been saved. Share it with your supplier as a PDF.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+              style: TextStyle(fontSize: 13, color: context.textSecondaryColor)),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -742,7 +744,7 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: AppTheme.primary,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
@@ -753,8 +755,8 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
           const SizedBox(height: 10),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Later',
-                style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Later',
+                style: TextStyle(color: context.textSecondaryColor)),
           ),
         ],
       ),
@@ -777,13 +779,14 @@ class _HistoryTab extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(LucideIcons.clipboardList,
-                size: 56, color: AppTheme.textSecondary.withValues(alpha: 0.4)),
+                size: 56,
+                color: context.textSecondaryColor.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
-            const Text('No purchase orders yet',
+            Text('No purchase orders yet',
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textSecondary)),
+                    color: context.textSecondaryColor)),
           ],
         ),
       );
@@ -816,9 +819,9 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
       case 'received':
         return AppTheme.success;
       case 'cancelled':
-        return AppTheme.error;
+        return context.errorColor;
       default:
-        return AppTheme.primary;
+        return context.primaryColor;
     }
   }
 
@@ -861,12 +864,12 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Cancel',
+                style: TextStyle(color: context.textSecondaryColor)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.error,
+              backgroundColor: context.errorColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -913,17 +916,17 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _expanded
-              ? AppTheme.primary.withValues(alpha: 0.3)
-              : AppTheme.border,
+              ? context.primaryColor.withValues(alpha: 0.3)
+              : context.borderColor,
         ),
         boxShadow: _expanded
             ? [
                 BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.06),
+                    color: context.primaryColor.withValues(alpha: 0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2))
               ]
@@ -946,11 +949,11 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      color: context.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(LucideIcons.fileText,
-                        color: AppTheme.primary, size: 20),
+                    child: Icon(LucideIcons.fileText,
+                        color: context.primaryColor, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -962,11 +965,11 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                                 fontWeight: FontWeight.bold, fontSize: 14)),
                         Text(
                             '${po.supplierName ?? 'No supplier'} · ${po.totalItems} items',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppTheme.textSecondary)),
+                            style: TextStyle(
+                                fontSize: 12, color: context.textSecondaryColor)),
                         Text(po.poDate,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppTheme.textSecondary)),
+                            style: TextStyle(
+                                fontSize: 11, color: context.textSecondaryColor)),
                       ],
                     ),
                   ),
@@ -975,10 +978,10 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                     children: [
                       if (po.totalEstimatedCost > 0)
                         Text(CurrencyFormatter.format(po.totalEstimatedCost),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: AppTheme.primary)),
+                                color: context.primaryColor)),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -999,7 +1002,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
                             ? LucideIcons.chevronUp
                             : LucideIcons.chevronDown,
                         size: 14,
-                        color: AppTheme.textSecondary,
+                        color: context.textSecondaryColor,
                       ),
                     ],
                   ),
@@ -1131,16 +1134,16 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
     return Container(
       constraints:
           BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: context.borderColor)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1161,14 +1164,14 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _details == null
-                    ? const Center(
+                    ? Center(
                         child: Text('Failed to load details',
-                            style: TextStyle(color: AppTheme.error)))
+                            style: TextStyle(color: context.errorColor)))
                     : _details!.items.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text('No items found.',
                                 style:
-                                    TextStyle(color: AppTheme.textSecondary)))
+                                    TextStyle(color: context.textSecondaryColor)))
                         : ListView.separated(
                             padding: const EdgeInsets.all(16),
                             itemCount: _details!.items.length,
@@ -1184,15 +1187,15 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: AppTheme.primary
+                                        color: context.primaryColor
                                             .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       alignment: Alignment.center,
                                       child: Text(
                                         'x${item.orderedQty}',
-                                        style: const TextStyle(
-                                            color: AppTheme.primary,
+                                        style: TextStyle(
+                                            color: context.primaryColor,
                                             fontWeight: FontWeight.bold),
                                       ),
                                     ),
@@ -1206,10 +1209,10 @@ class _PoDetailsSheetState extends ConsumerState<_PoDetailsSheet> {
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.bold)),
                                           Text('Part: ${item.partNumber}',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                   fontSize: 12,
                                                   color:
-                                                      AppTheme.textSecondary)),
+                                                      context.textSecondaryColor)),
                                         ],
                                       ),
                                     ),

@@ -16,27 +16,30 @@ class CustomerActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? AppTheme.darkSurface : Colors.white;
-    final borderColor = isDark ? AppTheme.darkBorder : AppTheme.border;
-    final textPrimary = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final textSecondary = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
-    // Use the freezed .when to safely extract customer-specific fields
     return item.maybeWhen(
-      customer: (id, entityName, transactionDate, amount, displayId, transactionType) {
+      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue) {
         final initials = _initials(entityName);
-        final isIncoming = transactionType.toUpperCase() != 'PAYMENT';
+        final isPayment = transactionType.toUpperCase() == 'PAYMENT';
+        
+        final hasDue = balanceDue != null && balanceDue > 0;
+        
+        final String badgeText = isPayment 
+            ? 'GOT' 
+            : (hasDue ? 'Due: ${CurrencyFormatter.format(balanceDue)}' : 'SETTLED');
+            
+        final Color badgeColor = isPayment 
+            ? context.successColor 
+            : (hasDue ? context.warningColor : context.successColor);
 
         return Container(
           decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: isDark ? AppTheme.darkPremiumShadow : AppTheme.premiumShadow,
+            color: context.surfaceColor,
+            border: Border(
+              bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+            ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
               children: [
                 // ── Avatar ──────────────────────────────────────────────
@@ -44,20 +47,20 @@ class CustomerActivityCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppTheme.success.withValues(alpha: 0.12),
+                    color: isPayment ? context.successColor.withValues(alpha: 0.12) : context.errorColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     initials,
                     style: TextStyle(
-                      color: AppTheme.success,
+                      color: isPayment ? context.successColor : context.errorColor,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 // ── Entity name + date ───────────────────────────────────
                 Expanded(
                   child: Column(
@@ -66,60 +69,62 @@ class CustomerActivityCard extends StatelessWidget {
                       Text(
                         entityName,
                         style: TextStyle(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w600,
+                          color: context.textColor,
+                          fontWeight: FontWeight.w700,
                           fontSize: 15,
                           letterSpacing: -0.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          // Transaction type chip
-                          _TypeChip(
-                            label: transactionType,
-                            color: isIncoming ? AppTheme.success : AppTheme.warning,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              _dateFormatter.format(transactionDate),
-                              style: TextStyle(
-                                color: textSecondary,
-                                fontSize: 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            'Customer • ${_dateFormatter.format(transactionDate)}',
+                            style: TextStyle(
+                              color: context.textSecondaryColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                          if (displayId != null) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '• #$displayId',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      if (displayId != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '#$displayId',
-                          style: TextStyle(
-                            color: textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                // ── Amount ───────────────────────────────────────────────
-                Text(
-                  isIncoming
-                      ? '+${CurrencyFormatter.format(amount)}'
-                      : CurrencyFormatter.format(amount),
-                  style: TextStyle(
-                    color: isIncoming ? AppTheme.success : AppTheme.warning,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
+                // ── Amount & Badge ───────────────────────────────────────────────
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      CurrencyFormatter.format(amount),
+                      style: TextStyle(
+                        color: context.textColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _TypeChip(
+                      label: badgeText,
+                      color: badgeColor,
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -54,7 +54,7 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
         ref.watch(purchaseOrderProvider.select((s) => s.suppliers));
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text(
           'NEW ORDER',
@@ -76,19 +76,19 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.06),
+                  color: context.primaryColor.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: AppTheme.primary.withValues(alpha: 0.2)),
+                      color: context.primaryColor.withValues(alpha: 0.2)),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(LucideIcons.info, size: 16, color: AppTheme.primary),
+                    Icon(LucideIcons.info, size: 16, color: context.primaryColor),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Fill in the item details. Items added here go into your draft basket.',
-                        style: TextStyle(fontSize: 12, color: AppTheme.primary),
+                        style: TextStyle(fontSize: 12, color: context.primaryColor),
                       ),
                     ),
                   ],
@@ -259,7 +259,7 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
                           TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: AppTheme.primary,
+                    backgroundColor: context.primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -280,14 +280,14 @@ class _CreatePoPageState extends ConsumerState<CreatePoPage> {
   InputDecoration _decoration(String hint) => InputDecoration(
         hintText: hint,
         filled: true,
-        fillColor: AppTheme.surface,
+        fillColor: context.surfaceColor,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppTheme.border)),
+            borderSide: BorderSide(color: context.borderColor)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
+            borderSide: BorderSide(color: context.primaryColor, width: 2)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       );

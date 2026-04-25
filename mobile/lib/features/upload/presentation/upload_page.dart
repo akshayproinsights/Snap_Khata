@@ -289,7 +289,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
                       if (context.canPop()) {
                         context.pop();
                       } else {
-                        context.go('/inventory');
+                        context.go('/');
                       }
                     },
                   ),
@@ -333,7 +333,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
           if (context.canPop()) {
             context.pop();
           } else {
-            context.go('/inventory');
+            context.go('/');
           }
         },
       ),
@@ -1229,7 +1229,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                     onPressed: isUploading
                         ? null
                         : () {
-                            if (context.mounted) context.go('/inventory');
+                            if (context.mounted) context.go('/');
                           },
                   ),
                   const Expanded(
@@ -1498,7 +1498,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                     // ── Go to Home card ──
                     GestureDetector(
                       onTap: () {
-                        if (context.mounted) context.go('/inventory');
+                        if (context.mounted) context.go('/');
                       },
                       child: Container(
                         width: double.infinity,

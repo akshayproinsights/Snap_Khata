@@ -36,15 +36,15 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
     final state = ref.watch(vendorMappingProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: const Text('Link Items',
             style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
-          indicatorColor: AppTheme.primary,
+          labelColor: context.primaryColor,
+          unselectedLabelColor: context.textSecondaryColor,
+          indicatorColor: context.primaryColor,
           tabs: [
             const Tab(icon: Icon(LucideIcons.edit3), text: 'Edit'),
             const Tab(icon: Icon(LucideIcons.uploadCloud), text: 'Upload'),
@@ -61,7 +61,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                          color: AppTheme.error,
+                          color: context.errorColor,
                           borderRadius: BorderRadius.circular(10)),
                       child: Text('${state.reviewQueue.length}',
                           style: const TextStyle(
@@ -88,7 +88,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
           state.reviewQueue.isNotEmpty && _tabController.index != 2
               ? FloatingActionButton.extended(
                   onPressed: () => _tabController.animateTo(2),
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: context.primaryColor,
                   icon: const Icon(LucideIcons.eye, color: Colors.white),
                   label: Text('Review (${state.reviewQueue.length})',
                       style: const TextStyle(
@@ -105,14 +105,14 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
       return const Center(child: CircularProgressIndicator());
     }
     if (state.exportItems.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.checkCircle2, size: 48, color: AppTheme.success),
-            SizedBox(height: 16),
+            Icon(LucideIcons.checkCircle2, size: 48, color: context.successColor),
+            const SizedBox(height: 16),
             Text('All items have been linked!',
-                style: TextStyle(color: AppTheme.textSecondary)),
+                style: TextStyle(color: context.textSecondaryColor)),
           ],
         ),
       );
@@ -131,10 +131,14 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
 
         return Container(
             decoration: BoxDecoration(
-              color: isQueued ? Colors.green.shade50 : AppTheme.surface,
+              color: isQueued 
+                ? context.successColor.withValues(alpha: 0.1)
+                : context.surfaceColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: isQueued ? Colors.green.shade200 : AppTheme.border),
+                  color: isQueued 
+                    ? context.successColor.withValues(alpha: 0.3)
+                    : context.borderColor),
             ),
             padding: const EdgeInsets.all(16),
             child:
@@ -144,20 +148,20 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                       fontWeight: FontWeight.bold, fontSize: 16)),
               if (item.partNumber != null)
                 Text('Part #: ${item.partNumber}',
-                    style: const TextStyle(
-                        color: AppTheme.textSecondary,
+                    style: TextStyle(
+                        color: context.textSecondaryColor,
                         fontSize: 12,
                         fontFamily: 'monospace')),
               const SizedBox(height: 16),
               if (isQueued)
-                const Row(
+                Row(
                   children: [
                     Icon(LucideIcons.checkCircle2,
-                        color: AppTheme.success, size: 16),
-                    SizedBox(width: 8),
+                        color: context.successColor, size: 16),
+                    const SizedBox(width: 8),
                     Text('Added to Review',
                         style: TextStyle(
-                            color: AppTheme.success,
+                            color: context.successColor,
                             fontWeight: FontWeight.bold,
                             fontSize: 14)),
                   ],
@@ -183,8 +187,8 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                                 partNumber: item.partNumber,
                                 status: 'Skip'));
                       },
-                      child: const Text('Skip',
-                          style: TextStyle(color: AppTheme.textSecondary)),
+                      child: Text('Skip',
+                          style: TextStyle(color: context.textSecondaryColor)),
                     )
                   ],
                 )
@@ -216,9 +220,9 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.amber.shade50,
+                color: context.warningColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.amber.shade200),
+                border: Border.all(color: context.warningColor.withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,19 +230,19 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                   Row(
                     children: [
                       Icon(LucideIcons.info,
-                          color: Colors.amber.shade800, size: 20),
+                          color: context.warningColor, size: 20),
                       const SizedBox(width: 8),
                       Text('Upload Scanned Sheets',
                           style: TextStyle(
-                              color: Colors.amber.shade900,
+                              color: context.warningColor,
                               fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                    Text(
                     'Upload photos of your completed mapping sheets. Data will be extracted automatically.',
                     style:
-                        TextStyle(color: Colors.amber.shade800, fontSize: 13),
+                        TextStyle(color: context.warningColor.withValues(alpha: 0.8), fontSize: 13),
                   ),
                 ],
               ),
@@ -276,20 +280,20 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 48),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: context.infoColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                        color: Colors.blue.shade200, style: BorderStyle.none),
+                        color: context.infoColor.withValues(alpha: 0.2), style: BorderStyle.none),
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
                       Icon(LucideIcons.imagePlus,
-                          size: 48, color: AppTheme.primary),
-                      SizedBox(height: 16),
+                          size: 48, color: context.primaryColor),
+                      const SizedBox(height: 16),
                       Text('Tap to select images',
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.primary)),
+                              color: context.primaryColor)),
                     ],
                   ),
                 ),
@@ -322,7 +326,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                           fontWeight: FontWeight.bold,
                           color: Colors.white)),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
+                      backgroundColor: context.primaryColor,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16))),
@@ -337,14 +341,14 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
   Widget _buildReviewTab(
       BuildContext context, WidgetRef ref, VendorMappingState state) {
     if (state.reviewQueue.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.inbox, size: 48, color: AppTheme.textSecondary),
-            SizedBox(height: 16),
+            Icon(LucideIcons.inbox, size: 48, color: context.textSecondaryColor),
+            const SizedBox(height: 16),
             Text('No items to review',
-                style: TextStyle(color: AppTheme.textSecondary)),
+                style: TextStyle(color: context.textSecondaryColor)),
           ],
         ),
       );
@@ -354,7 +358,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          color: AppTheme.surface,
+          color: context.surfaceColor,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -373,7 +377,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                   }
                 },
                 style:
-                    ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
+                    ElevatedButton.styleFrom(backgroundColor: context.successColor),
                 icon:
                     const Icon(LucideIcons.save, color: Colors.white, size: 18),
                 label: const Text('Save All',
@@ -391,9 +395,9 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
               final item = state.reviewQueue[index];
               return Container(
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: context.surfaceColor,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.border),
+                  border: Border.all(color: context.borderColor),
                 ),
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -410,8 +414,8 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis)),
                           IconButton(
-                            icon: const Icon(LucideIcons.trash2,
-                                color: AppTheme.error, size: 20),
+                            icon: Icon(LucideIcons.trash2,
+                                color: context.errorColor, size: 20),
                             onPressed: () => ref
                                 .read(vendorMappingProvider.notifier)
                                 .removeFromReviewQueue(index),
@@ -420,8 +424,8 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                       ),
                       if (item.partNumber != null)
                         Text('Part #: ${item.partNumber}',
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary,
+                            style: TextStyle(
+                                color: context.textSecondaryColor,
                                 fontSize: 12,
                                 fontFamily: 'monospace')),
                       const Divider(height: 24),
@@ -446,7 +450,7 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
                                 ? '+${item.variance}'
                                 : item.variance.toString()),
                             valueColor:
-                                item.variance! > 0 ? Colors.green : Colors.red),
+                                item.variance! > 0 ? context.successColor : context.errorColor),
                       ]
                     ]),
               );
@@ -463,13 +467,13 @@ class _VendorMappingPageState extends ConsumerState<VendorMappingPage>
       children: [
         Text(label,
             style:
-                const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                TextStyle(fontSize: 12, color: context.textSecondaryColor)),
         const SizedBox(height: 2),
         Text(value,
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: valueColor ?? AppTheme.textPrimary)),
+                color: valueColor ?? context.textColor)),
       ],
     );
   }
@@ -530,9 +534,9 @@ class _VendorMappingEditSheetState
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
           left: 24,
@@ -547,14 +551,14 @@ class _VendorMappingEditSheetState
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(widget.item.vendorDescription,
-              style: const TextStyle(color: AppTheme.textSecondary)),
+              style: TextStyle(color: context.textSecondaryColor)),
           const SizedBox(height: 24),
           TextField(
             controller: _customerItemCtrl,
             decoration: InputDecoration(
               labelText: 'Customer Item Name (Optional)',
               filled: true,
-              fillColor: AppTheme.surface,
+              fillColor: context.surfaceColor,
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -569,7 +573,7 @@ class _VendorMappingEditSheetState
                   decoration: InputDecoration(
                     labelText: 'Stock (Qty)',
                     filled: true,
-                    fillColor: AppTheme.surface,
+                    fillColor: context.surfaceColor,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
@@ -583,7 +587,7 @@ class _VendorMappingEditSheetState
                   decoration: InputDecoration(
                     labelText: 'Reorder Point',
                     filled: true,
-                    fillColor: AppTheme.surface,
+                    fillColor: context.surfaceColor,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
@@ -596,7 +600,7 @@ class _VendorMappingEditSheetState
             onPressed: _save,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: AppTheme.primary,
+              backgroundColor: context.primaryColor,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
             ),

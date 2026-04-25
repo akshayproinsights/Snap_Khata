@@ -15,6 +15,7 @@ abstract class ActivityItem with _$ActivityItem {
     required double amount,
     String? displayId,
     required String transactionType,
+    double? balanceDue,
   }) = _CustomerActivity;
 
   const factory ActivityItem.vendor({
@@ -24,6 +25,7 @@ abstract class ActivityItem with _$ActivityItem {
     required double amount,
     String? displayId,
     required bool isPaid,
+    double? balanceDue,
   }) = _VendorActivity;
 
   factory ActivityItem.fromJson(Map<String, dynamic> json) => _$ActivityItemFromJson(json);

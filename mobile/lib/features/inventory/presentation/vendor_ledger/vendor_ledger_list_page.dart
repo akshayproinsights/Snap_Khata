@@ -30,6 +30,9 @@ class VendorLedgerListPage extends ConsumerWidget {
           return ledger.balanceDue > 0;
         case UdharFilterMode.settled:
           return ledger.balanceDue == 0;
+        case UdharFilterMode.customers:
+          return false; // Vendors are not customers
+        case UdharFilterMode.suppliers:
         case UdharFilterMode.all:
           return true;
       }
