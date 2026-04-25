@@ -109,61 +109,26 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     }
 
     final allItems = itemsAsync.value ?? [];
-    
-    // Filter to verified only
-    final verifiedItems = allItems.where((i) => i.verificationStatus == 'Done').toList();
-    
-    // Deduplicate by description
-    final Map<String, InventoryItem> latestItemMap = {};
-    final Map<String, int> orderCountMap = {};
-    
-    for (var item in verifiedItems) {
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matchesDesc = item.description.toLowerCase().contains(query);
-        final matchesPart = item.partNumber.toLowerCase().contains(query);
-        final matchesVendor = (item.vendorName ?? '').toLowerCase().contains(query);
-        if (!matchesDesc && !matchesPart && !matchesVendor) continue;
-      }
-      
-      final key = item.description.trim().toLowerCase();
-      if (key.isEmpty) continue;
-      
-      orderCountMap[key] = (orderCountMap[key] ?? 0) + 1;
-      
-      if (!latestItemMap.containsKey(key)) {
-        latestItemMap[key] = item;
-      } else {
-        // Compare dates, keep most recent
-        final currentLatest = latestItemMap[key]!;
-        final currentDate = DateTime.tryParse(currentLatest.invoiceDate) ?? DateTime(0);
-        final newDate = DateTime.tryParse(item.invoiceDate) ?? DateTime(0);
-        
-        if (newDate.isAfter(currentDate)) {
-          latestItemMap[key] = item;
-        } else if (newDate.isAtSameMomentAs(currentDate)) {
-          // Tie-breaker: use created_at to pick the truly latest item
-          final currentCreated = DateTime.tryParse(currentLatest.createdAt ?? '') ?? DateTime(0);
-          final newCreated = DateTime.tryParse(item.createdAt ?? '') ?? DateTime(0);
-          if (newCreated.isAfter(currentCreated)) {
-            latestItemMap[key] = item;
-          }
-        }
-      }
-    }
 
-    final uniqueItems = latestItemMap.values.toList()
-      ..sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate)); // sort by most recently ordered
+    // Filter by search query (client-side for instant feedback)
+    final filteredItems = _searchQuery.isEmpty
+        ? allItems
+        : allItems.where((item) {
+            final query = _searchQuery.toLowerCase();
+            return item.description.toLowerCase().contains(query) ||
+                item.partNumber.toLowerCase().contains(query) ||
+                (item.vendorName ?? '').toLowerCase().contains(query);
+          }).toList();
 
     return Column(
       children: [
-        if (verifiedItems.isNotEmpty)
+        if (allItems.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: _buildSearchBox(),
           ),
         Expanded(
-          child: uniqueItems.isEmpty
+          child: filteredItems.isEmpty
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -186,13 +151,13 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                   child: ListView.separated(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    itemCount: uniqueItems.length,
+                    itemCount: filteredItems.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final item = uniqueItems[index];
-                      final orderCount = orderCountMap[item.description.trim().toLowerCase()] ?? 1;
-                      return _buildItemCatalogCard(context, item, orderCount);
+                      final item = filteredItems[index];
+                      // Backend provides order_count; no client-side counting needed
+                      return _buildItemCatalogCard(context, item, 1);
                     },
                   ),
                 ),
@@ -200,6 +165,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
       ],
     );
   }
+
 
   Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
 

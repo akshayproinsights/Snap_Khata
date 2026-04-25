@@ -25,10 +25,29 @@ class InventoryRepository {
     return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
   }
 
-  /// Price history for a vendor from inventory_invoices.
+  /// Price history for a specific item by description from inventory_items.
+  Future<List<InventoryItem>> getItemPriceHistory({required String description}) async {
+    final response = await _dio.get('/api/inventory/item-price-history', queryParameters: {
+      'description': description,
+    });
+    final items = response.data['items'] as List?;
+    return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
+  }
+
+  /// Price history for a vendor from inventory_invoices (legacy).
   Future<List<InventoryItem>> getVendorPriceHistory({required String vendorName}) async {
     final response = await _dio.get('/api/inventory/vendor-price-history', queryParameters: {
       'vendor_name': vendorName,
+    });
+    final items = response.data['items'] as List?;
+    return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();
+  }
+
+  /// Fetch all verified items for a specific invoice number (for invoice review navigation).
+  Future<List<InventoryItem>> getItemsByInvoiceNumber(String invoiceNumber) async {
+    final response = await _dio.get('/api/inventory/items', queryParameters: {
+      'invoice_number': invoiceNumber,
+      'show_all': true,
     });
     final items = response.data['items'] as List?;
     return (items ?? []).map((json) => InventoryItem.fromJson(json)).toList();

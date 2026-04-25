@@ -495,7 +495,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
     try:
         # 1. Fetch all Credit invoices with outstanding balance
         invoices_resp = db.client.table("verified_invoices") \
-            .select("id, receipt_number, customer_name, customer_details, balance_due, verification_date") \
+            .select("id, receipt_number, customer_name, customer_details, balance_due, created_at") \
             .eq("username", username) \
             .eq("payment_mode", "Credit") \
             .gt("balance_due", 0) \
@@ -591,7 +591,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 "amount": balance_due,
                 "receipt_number": inv["receipt_number"],
                 "is_paid": False,
-                "created_at": inv.get("verification_date") or now,
+                "created_at": inv.get("created_at") or now,
                 "notes": raw_details,
             }).execute()
 

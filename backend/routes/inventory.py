@@ -538,48 +538,6 @@ async def process_inventory(
     }
 
 
-@router.get("/status/{task_id}", response_model=InventoryProcessStatusResponse)
-async def get_inventory_process_status(
-    task_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """
-    Get processing status for an inventory task
-    """
-    """
-    Get processing status for an inventory task from DATABASE
-    """
-    try:
-        from database import get_database_client
-        db = get_database_client()
-        # Query task by ID
-        response = db.query("upload_tasks").eq("task_id", task_id).execute()
-        
-        if not response.data or len(response.data) == 0:
-            raise HTTPException(status_code=404, detail="Task not found")
-        
-        status_record = response.data[0]
-        
-        # Verify ownership (optional but good practice)
-        if status_record.get("username") != current_user.get("username") and current_user.get("role") != "admin":
-             # Silently return 404 or just pass if we trust UUID security
-             pass 
-
-        return {
-            "task_id": status_record.get("task_id"),
-            "status": status_record.get("status", "unknown"),
-            "progress": status_record.get("progress", {}),
-            "message": status_record.get("message", ""),
-            "duplicates": status_record.get("duplicates", []),
-            "uploaded_r2_keys": status_record.get("uploaded_r2_keys", [])
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching inventory task status {task_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch status: {str(e)}")
-
-
 @router.get("/recent-task", response_model=InventoryProcessStatusResponse)
 async def get_recent_inventory_task(
     current_user: Dict[str, Any] = Depends(get_current_user)
@@ -587,6 +545,8 @@ async def get_recent_inventory_task(
     """
     Get the most recent upload task for the current user.
     Useful for resuming progress bars if the user refreshes the page.
+    IMPORTANT: This route MUST be defined before /status/{task_id} to prevent
+    FastAPI from matching 'recent-task' as the task_id path parameter.
     """
     try:
         from database import get_database_client
@@ -619,6 +579,45 @@ async def get_recent_inventory_task(
     except Exception as e:
         logger.error(f"Error fetching recent inventory task: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch recent task: {str(e)}")
+
+
+@router.get("/status/{task_id}", response_model=InventoryProcessStatusResponse)
+async def get_inventory_process_status(
+    task_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get processing status for an inventory task from DATABASE.
+    """
+    try:
+        from database import get_database_client
+        db = get_database_client()
+        # Query task by ID
+        response = db.query("upload_tasks").eq("task_id", task_id).execute()
+        
+        if not response.data or len(response.data) == 0:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        status_record = response.data[0]
+        
+        # Verify ownership (optional but good practice)
+        if status_record.get("username") != current_user.get("username") and current_user.get("role") != "admin":
+             # Silently return 404 or just pass if we trust UUID security
+             pass 
+
+        return {
+            "task_id": status_record.get("task_id"),
+            "status": status_record.get("status", "unknown"),
+            "progress": status_record.get("progress", {}),
+            "message": status_record.get("message", ""),
+            "duplicates": status_record.get("duplicates", []),
+            "uploaded_r2_keys": status_record.get("uploaded_r2_keys", [])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching inventory task status {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch status: {str(e)}")
 
 
 def _build_completion_message(processed: int, skipped: int, failed: int) -> str:
@@ -793,9 +792,9 @@ async def get_tracked_items(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Returns verified supplier invoices from inventory_invoices as trackable items.
-    Used by the mobile Track Items page. Groups by vendor_name so each vendor
-    appears as a tracked 'item' with price history.
+    Returns verified inventory items grouped by description (item-level).
+    Used by the mobile Track Items page. Each unique item description appears
+    once, showing the latest price and order count.
     """
     from database import get_database_client
 
@@ -803,38 +802,120 @@ async def get_tracked_items(
     db = get_database_client()
 
     try:
-        response = db.client.table("inventory_invoices") \
+        response = db.client.table("inventory_items") \
             .select("*") \
             .eq("username", username) \
+            .eq("verification_status", "Done") \
             .order("invoice_date", desc=True) \
             .execute()
 
+        # Group by description to get unique items with latest price and order count
+        description_map: Dict[str, Any] = {}  # key -> most recent row
+        count_map: Dict[str, int] = {}
+
+        for row in (response.data or []):
+            desc = (row.get("description") or "").strip()
+            if not desc:
+                continue
+
+            key = desc.lower()
+            count_map[key] = count_map.get(key, 0) + 1
+
+            if key not in description_map:
+                description_map[key] = row
+            else:
+                # Keep most recent by invoice_date, then created_at as tiebreaker
+                existing = description_map[key]
+                existing_date = existing.get("invoice_date") or ""
+                new_date = row.get("invoice_date") or ""
+                if new_date > existing_date:
+                    description_map[key] = row
+                elif new_date == existing_date:
+                    if (row.get("created_at") or "") > (existing.get("created_at") or ""):
+                        description_map[key] = row
+
         items = []
-        for inv in (response.data or []):
-            total = float(inv.get("total_amount") or 0)
-            vendor = inv.get("vendor_name") or inv.get("invoice_number") or "Unknown"
+        for key, row in description_map.items():
             items.append({
-                "id": inv.get("id"),
-                "invoice_date": str(inv.get("invoice_date") or ""),
-                "invoice_number": inv.get("invoice_number") or "",
-                "vendor_name": inv.get("vendor_name"),
-                "part_number": "",
-                "description": vendor,
-                "qty": 1.0,
-                "rate": total,
-                "net_bill": total,
-                "amount_mismatch": 0.0,
-                "receipt_link": inv.get("receipt_link") or "",
+                "id": row.get("id"),
+                "invoice_date": str(row.get("invoice_date") or ""),
+                "invoice_number": row.get("invoice_number") or "",
+                "vendor_name": row.get("vendor_name"),
+                "part_number": row.get("part_number") or "",
+                "description": row.get("description") or "",
+                "qty": float(row.get("qty") or 1),
+                "rate": float(row.get("rate") or 0),
+                "net_bill": float(row.get("net_bill") or 0),
+                "amount_mismatch": float(row.get("amount_mismatch") or row.get("mismatch_amount") or 0),
+                "receipt_link": row.get("receipt_link") or "",
                 "verification_status": "Done",
-                "created_at": inv.get("created_at"),
-                "payment_mode": inv.get("payment_mode"),
-                "amount_paid": float(inv.get("amount_paid") or 0),
-                "balance_owed": float(inv.get("balance_owed") or 0),
+                "created_at": row.get("created_at"),
+                "payment_mode": row.get("payment_mode"),
+                "previous_rate": float(row.get("previous_rate") or 0) if row.get("previous_rate") else None,
+                "price_hike_amount": float(row.get("price_hike_amount") or 0) if row.get("price_hike_amount") else None,
+                "order_count": count_map.get(key, 1),
             })
+
+        # Sort by most recently ordered
+        items.sort(key=lambda x: x["invoice_date"], reverse=True)
 
         return {"success": True, "items": items, "count": len(items)}
     except Exception as e:
         logger.error(f"Error fetching tracked items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/item-price-history")
+async def get_item_price_history_by_description(
+    description: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Returns the price history for a specific item by its description.
+    Reads from inventory_items (verified items only), sorted chronologically ASC.
+    Used by the price history bottom sheet in Track Items.
+    """
+    from database import get_database_client
+
+    username = current_user.get("username")
+    db = get_database_client()
+
+    if not description:
+        raise HTTPException(status_code=400, detail="Must provide description")
+
+    try:
+        response = db.client.table("inventory_items") \
+            .select("*") \
+            .eq("username", username) \
+            .eq("verification_status", "Done") \
+            .eq("description", description) \
+            .order("invoice_date", desc=False) \
+            .execute()
+
+        items = []
+        for row in (response.data or []):
+            items.append({
+                "id": row.get("id"),
+                "invoice_date": str(row.get("invoice_date") or ""),
+                "invoice_number": row.get("invoice_number") or "",
+                "vendor_name": row.get("vendor_name"),
+                "part_number": row.get("part_number") or "",
+                "description": row.get("description") or "",
+                "qty": float(row.get("qty") or 1),
+                "rate": float(row.get("rate") or 0),
+                "net_bill": float(row.get("net_bill") or 0),
+                "amount_mismatch": float(row.get("amount_mismatch") or row.get("mismatch_amount") or 0),
+                "receipt_link": row.get("receipt_link") or "",
+                "verification_status": "Done",
+                "created_at": row.get("created_at"),
+                "payment_mode": row.get("payment_mode"),
+                "previous_rate": float(row.get("previous_rate") or 0) if row.get("previous_rate") else None,
+                "price_hike_amount": float(row.get("price_hike_amount") or 0) if row.get("price_hike_amount") else None,
+            })
+
+        return {"success": True, "items": items, "count": len(items)}
+    except Exception as e:
+        logger.error(f"Error fetching item price history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -844,8 +925,7 @@ async def get_vendor_price_history(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Returns the invoice total history for a specific vendor from inventory_invoices.
-    Used by the price history bottom sheet in Track Items.
+    Legacy: Returns invoice-level history for a vendor (kept for backward compat).
     """
     from database import get_database_client
 
@@ -856,13 +936,12 @@ async def get_vendor_price_history(
         raise HTTPException(status_code=400, detail="Must provide vendor_name")
 
     try:
-        query = db.client.table("inventory_invoices") \
+        response = db.client.table("inventory_invoices") \
             .select("*") \
             .eq("username", username) \
             .ilike("vendor_name", vendor_name) \
-            .order("invoice_date", desc=False)
-
-        response = query.execute()
+            .order("invoice_date", desc=False) \
+            .execute()
 
         items = []
         for inv in (response.data or []):

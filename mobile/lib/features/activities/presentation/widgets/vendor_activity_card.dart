@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
-import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
+import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 
 /// Renders a vendor (payable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -28,49 +26,29 @@ class VendorActivityCard extends ConsumerWidget {
         return Material(
           color: context.surfaceColor,
           child: InkWell(
-            onTap: () async {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator()),
-              );
-
+            onTap: () {
+              // Find the matching vendor ledger by name
+              final vendorState = ref.read(vendorLedgerProvider);
+              VendorLedger? matched;
               try {
-                if (displayId != null && displayId.isNotEmpty && !displayId.toUpperCase().startsWith('PAY')) {
-                  final notifier = ref.read(vendorLedgerProvider.notifier);
-                  final itemsData = await notifier.fetchInvoiceItems(displayId);
-                  
-                  if (context.mounted && itemsData.isNotEmpty) {
-                    Navigator.pop(context); // hide loading
-                    final items = itemsData.map((e) => InventoryItem.fromJson(e as Map<String, dynamic>)).toList();
-                    final bundle = InventoryInvoiceBundle(
-                      invoiceNumber: items.first.invoiceNumber,
-                      date: items.first.invoiceDate,
-                      vendorName: items.first.vendorName ?? entityName,
-                      receiptLink: items.first.receiptLink,
-                      items: items,
-                      totalAmount: items.fold(0.0, (sum, item) => sum + item.netBill),
-                      hasMismatch: items.any((i) => i.amountMismatch.abs() > 1.0),
-                      isVerified: items.every((i) => i.verificationStatus == 'Done'),
-                      createdAt: items.first.createdAt ?? '',
-                      paymentMode: isPaid ? 'Cash' : 'Credit',
-                    );
-                    context.push('/vendor-delivery-detail', extra: bundle);
-                    return;
-                  }
-                }
-              } catch (_) {}
-
-              if (context.mounted) {
-                Navigator.pop(context); // hide loading
-                context.push('/vendor-ledger-detail', 
-                  extra: VendorLedger(
-                    id: -1, 
-                    vendorName: entityName, 
-                    balanceDue: balanceDue ?? 0.0,
-                  )
+                matched = vendorState.ledgers.firstWhere(
+                  (l) => l.vendorName.toLowerCase() == entityName.toLowerCase(),
+                );
+              } catch (_) {
+                // Not found — create a synthetic ledger so the detail page still opens
+                matched = VendorLedger(
+                  id: -1,
+                  vendorName: entityName,
+                  balanceDue: balanceDue ?? 0.0,
                 );
               }
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => VendorLedgerDetailPage(ledger: matched!),
+                ),
+              );
             },
             child: Container(
               decoration: BoxDecoration(

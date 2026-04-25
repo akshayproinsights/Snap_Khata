@@ -7,9 +7,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/features/inventory/data/inventory_repository.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
-import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/item_price_history_provider.dart';
 
 class ItemPriceHistorySheet extends ConsumerWidget {
@@ -232,7 +232,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
         boxShadow: context.premiumShadow,
       ),
       child: InkWell(
-        onTap: () => _navigateToBillDetails(context, ref, item, historyItems),
+        onTap: () async => _navigateToBillDetails(context, ref, item, historyItems),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -326,7 +326,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     );
   }
 
-  void _navigateToBillDetails(BuildContext context, WidgetRef ref, InventoryItem item, List<InventoryItem> historyItems) {
+  Future<void> _navigateToBillDetails(BuildContext context, WidgetRef ref, InventoryItem item, List<InventoryItem> historyItems) async {
     if (item.invoiceNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No invoice number available for this item.')),
@@ -336,35 +336,63 @@ class ItemPriceHistorySheet extends ConsumerWidget {
 
     HapticFeedback.lightImpact();
 
-    // Use all items from inventoryItemsProvider to get the full invoice
-    final allInventoryItems = ref.read(inventoryItemsProvider).value ?? historyItems;
-
-    // Group all items belonging to the same invoice
-    final invoiceItems = allInventoryItems
-        .where((i) => i.invoiceNumber == item.invoiceNumber)
-        .toList();
-
-    if (invoiceItems.isEmpty) {
-      invoiceItems.add(item);
-    }
-
-    final totalAmount = invoiceItems.fold<double>(0, (sum, i) => sum + i.netBill);
-
-    final bundle = InventoryInvoiceBundle(
-      invoiceNumber: item.invoiceNumber,
-      date: item.invoiceDate,
-      vendorName: item.vendorName?.isNotEmpty == true ? item.vendorName! : 'Unknown Vendor',
-      receiptLink: item.receiptLink,
-      items: invoiceItems,
-      totalAmount: totalAmount,
-      hasMismatch: invoiceItems.any((i) => i.amountMismatch.abs() > 1.0),
-      isVerified: invoiceItems.every((i) => i.verificationStatus == 'Done'),
-      createdAt: item.createdAt ?? '',
-      headerAdjustments: item.headerAdjustments ?? [],
-      paymentMode: item.paymentMode ?? 'Credit',
+    // Show loading state
+    final scaffoldMsg = ScaffoldMessenger.of(context);
+    scaffoldMsg.showSnackBar(
+      const SnackBar(
+        content: Row(children: [
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+          SizedBox(width: 12),
+          Text('Loading invoice…'),
+        ]),
+        duration: Duration(seconds: 10),
+      ),
     );
 
-    context.push('/inventory-invoice-review', extra: bundle);
+    try {
+      // Fetch all items belonging to this invoice from the API
+      final repo = InventoryRepository();
+      List<InventoryItem> invoiceItems = await repo.getItemsByInvoiceNumber(item.invoiceNumber);
+
+      // Fallback: if nothing returned (e.g. invoice-level data), use history items for same invoice
+      if (invoiceItems.isEmpty) {
+        invoiceItems = historyItems
+            .where((i) => i.invoiceNumber == item.invoiceNumber)
+            .toList();
+      }
+      if (invoiceItems.isEmpty) {
+        invoiceItems = [item];
+      }
+
+      scaffoldMsg.hideCurrentSnackBar();
+
+      final totalAmount = invoiceItems.fold<double>(0, (sum, i) => sum + i.netBill);
+
+      final bundle = InventoryInvoiceBundle(
+        invoiceNumber: item.invoiceNumber,
+        date: item.invoiceDate,
+        vendorName: item.vendorName?.isNotEmpty == true ? item.vendorName! : 'Unknown Vendor',
+        receiptLink: item.receiptLink,
+        items: invoiceItems,
+        totalAmount: totalAmount,
+        hasMismatch: invoiceItems.any((i) => i.amountMismatch.abs() > 1.0),
+        isVerified: invoiceItems.every((i) => i.verificationStatus == 'Done'),
+        createdAt: item.createdAt ?? '',
+        headerAdjustments: item.headerAdjustments ?? [],
+        paymentMode: item.paymentMode ?? 'Credit',
+      );
+
+      if (context.mounted) {
+        context.push('/inventory-invoice-review', extra: bundle);
+      }
+    } catch (e) {
+      scaffoldMsg.hideCurrentSnackBar();
+      if (context.mounted) {
+        scaffoldMsg.showSnackBar(
+          SnackBar(content: Text('Could not load invoice: $e')),
+        );
+      }
+    }
   }
 }
 

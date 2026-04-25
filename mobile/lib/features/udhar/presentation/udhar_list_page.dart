@@ -12,6 +12,7 @@ import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 
 class UdharListPage extends ConsumerWidget {
   const UdharListPage({super.key});
@@ -142,6 +143,15 @@ class _LedgerCard extends ConsumerWidget {
       message += '💳 *Pay via UPI:* ${shopProfile.upiId}\n'
                 '🔗 *Payment Link:* $upiLink\n\n';
     }
+
+    // Build account statement link so the customer can view their receipt history
+    final authState = ref.read(authProvider);
+    final usernameParam = authState.user?.username != null
+        ? '&u=${Uri.encodeComponent(authState.user!.username)}'
+        : '';
+    final statementLink =
+        'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+    message += '📋 *View your account statement:*\n$statementLink\n\n';
 
     message += 'Thank you for your business!\n— *${shopName.trim()}*';
 

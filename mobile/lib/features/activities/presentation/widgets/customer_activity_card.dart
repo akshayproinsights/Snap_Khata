@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
-import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
-import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
+import 'package:mobile/features/udhar/presentation/udhar_detail_page.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 
 /// Renders a customer (receivable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -37,53 +36,29 @@ class CustomerActivityCard extends ConsumerWidget {
         return Material(
           color: context.surfaceColor,
           child: InkWell(
-            onTap: () async {
-              // Show a loading overlay
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator()),
-              );
-
+            onTap: () {
+              // Find the matching customer ledger by name
+              final udharState = ref.read(udharProvider);
+              CustomerLedger? matched;
               try {
-                final repo = ref.read(verifiedRepositoryProvider);
-                if (!isPayment && displayId != null && displayId.isNotEmpty) {
-                  final records = await repo.getVerifiedInvoices(receiptNumber: displayId);
-                  if (context.mounted && records.isNotEmpty) {
-                    final first = records.first;
-                    final group = InvoiceGroup(
-                      receiptNumber: first.receiptNumber,
-                      date: first.date.isNotEmpty ? first.date : first.uploadDate,
-                      receiptLink: first.receiptLink,
-                      customerName: first.customerName,
-                      mobileNumber: first.mobileNumber,
-                      extraFields: first.extraFields,
-                      uploadDate: first.uploadDate,
-                      paymentMode: first.paymentMode,
-                      receivedAmount: first.receivedAmount,
-                      balanceDue: first.balanceDue,
-                      customerDetails: first.customerDetails,
-                    );
-                    group.items = records;
-                    group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
-                    Navigator.pop(context); // hide loading
-                    context.push('/order-detail', extra: group);
-                    return;
-                  }
-                }
-              } catch (_) {}
-
-              if (context.mounted) {
-                Navigator.pop(context); // hide loading
-                // Navigate to Customer Ledger fallback
-                context.push('/udhar-detail', 
-                  extra: CustomerLedger(
-                    id: -1, 
-                    customerName: entityName, 
-                    balanceDue: balanceDue ?? 0.0,
-                  )
+                matched = udharState.ledgers.firstWhere(
+                  (l) => l.customerName.toLowerCase() == entityName.toLowerCase(),
+                );
+              } catch (_) {
+                // Not found — create a synthetic ledger so the detail page still opens
+                matched = CustomerLedger(
+                  id: -1,
+                  customerName: entityName,
+                  balanceDue: balanceDue ?? 0.0,
                 );
               }
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => UdharDetailPage(ledger: matched!),
+                ),
+              );
             },
             child: Container(
               decoration: BoxDecoration(
