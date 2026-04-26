@@ -3,11 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Light palette - Premium Slate
-  static const Color primary = Color(0xFF2563EB); // blue-600
+  static const Color primary = Color(0xFF0B2D5B); // Dark Navy Blue
+  static const Color neonGreen = Color(0xFF32CD32); // Neon Lime Green
   static const Color background = Color(0xFFF8FAFC); // slate-50
   static const Color surface = Colors.white;
   static const Color error = Color(0xFFDC2626); // red-600
-  static const Color success = Color(0xFF059669); // emerald-600
+  static const Color success = neonGreen; // Use neon green for success
   static const Color warning = Color(0xFFD97706); // amber-600
   static const Color textPrimary = Color(0xFF0F172A); // slate-900
   static const Color textSecondary = Color(0xFF475569); // slate-600
@@ -208,7 +209,7 @@ extension ThemeContext on BuildContext {
   Color get errorColor => colorScheme.error;
   Color get borderColor => colorScheme.outlineVariant;
   Color get warningColor => isDark ? Colors.amberAccent : AppTheme.warning;
-  Color get successColor => isDark ? Colors.greenAccent : AppTheme.success;
+  Color get successColor => AppTheme.neonGreen;
   Color get infoColor => isDark ? Colors.blueAccent : Colors.blue.shade700;
   List<BoxShadow> get premiumShadow => isDark ? AppTheme.darkPremiumShadow : AppTheme.premiumShadow;
 }

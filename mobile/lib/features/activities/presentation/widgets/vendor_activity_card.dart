@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
@@ -20,14 +23,53 @@ class VendorActivityCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
-      vendor: (id, entityName, transactionDate, amount, displayId, isPaid, balanceDue, totalPriceHike) {
+      vendor: (id, entityName, transactionDate, amount, displayId, isPaid, balanceDue, totalPriceHike, receiptLink, invoiceDate, inventoryItems, isVerified, balanceOwed) {
         final hasPriceHike = totalPriceHike > 0;
 
         return Material(
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // Find the matching vendor ledger by name
+              // If we have bill/invoice items and metadata, navigate to the 
+              // Bill Details (Inventory Review) page.
+              if (displayId != null && displayId.isNotEmpty && inventoryItems.isNotEmpty) {
+                // Map the raw dynamic items back to InventoryItem objects
+                final List<InventoryItem> items = inventoryItems.map((map) {
+                  return InventoryItem(
+                    id: int.tryParse(map['id']?.toString() ?? '0') ?? 0,
+                    invoiceDate: invoiceDate,
+                    invoiceNumber: displayId,
+                    vendorName: entityName,
+                    partNumber: map['part_number']?.toString() ?? '',
+                    description: map['description']?.toString() ?? '',
+                    qty: (map['qty'] as num?)?.toDouble() ?? 0.0,
+                    rate: (map['rate'] as num?)?.toDouble() ?? 0.0,
+                    netBill: (map['net_bill'] as num?)?.toDouble() ?? 0.0,
+                    amountMismatch: (map['amount_mismatch'] as num?)?.toDouble() ?? 0.0,
+                    receiptLink: receiptLink,
+                    priceHikeAmount: (map['price_hike_amount'] as num?)?.toDouble(),
+                    previousRate: (map['previous_rate'] as num?)?.toDouble(),
+                  );
+                }).toList();
+
+                final bundle = InventoryInvoiceBundle(
+                  invoiceNumber: displayId,
+                  date: invoiceDate,
+                  vendorName: entityName,
+                  receiptLink: receiptLink,
+                  items: items,
+                  totalAmount: amount,
+                  hasMismatch: items.any((i) => i.amountMismatch != 0),
+                  isVerified: isVerified,
+                  createdAt: transactionDate.toIso8601String(),
+                  paymentMode: isPaid ? 'Cash' : 'Credit',
+                );
+
+                context.pushNamed('vendor-delivery-detail', extra: bundle);
+                return;
+              }
+
+              // Fallback: open the vendor payment ledger detail
               final vendorState = ref.read(vendorLedgerProvider);
               VendorLedger? matched;
               try {
@@ -35,7 +77,6 @@ class VendorActivityCard extends ConsumerWidget {
                   (l) => l.vendorName.toLowerCase() == entityName.toLowerCase(),
                 );
               } catch (_) {
-                // Not found — create a synthetic ledger so the detail page still opens
                 matched = VendorLedger(
                   id: -1,
                   vendorName: entityName,
@@ -43,11 +84,10 @@ class VendorActivityCard extends ConsumerWidget {
                 );
               }
 
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VendorLedgerDetailPage(ledger: matched!),
-                ),
+              context.pushNamed(
+                'vendor-ledger-detail',
+                pathParameters: {'id': matched.id.toString()},
+                extra: matched,
               );
             },
             child: Container(

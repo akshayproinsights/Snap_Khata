@@ -330,7 +330,12 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
 
 @router.get("/transactions/all")
 async def get_all_customer_transactions(limit: int = 50, current_user: Dict = Depends(get_current_user)):
-    """Get all customer transactions for the current user across all ledgers."""
+    """Get all customer transactions for the current user across all ledgers.
+    
+    Enriches INVOICE transactions with verified_invoices metadata (receipt_link,
+    date, mobile_number, payment_mode, balance_due) so the mobile dashboard can
+    navigate directly to OrderDetailPage without additional API calls.
+    """
     username = current_user.get("username")
     if not username:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -339,17 +344,63 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
     db.set_user_context(username)
     
     try:
-        # Fetch transactions with customer_name from joined ledger table
+        # Fetch transactions with customer_name and balance_due from joined ledger
         response = db.client.table('ledger_transactions') \
-            .select('*, customer_ledgers(customer_name)') \
+            .select('*, customer_ledgers(customer_name, balance_due)') \
             .eq('username', username) \
             .order('created_at', desc=True) \
             .limit(limit) \
             .execute()
-            
+
+        transactions = response.data or []
+
+        # Collect unique receipt_numbers from INVOICE transactions
+        receipt_numbers = list({
+            tx['receipt_number']
+            for tx in transactions
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number')
+        })
+
+        # Build enrichment map from verified_invoices
+        invoice_meta: Dict[str, Dict] = {}
+        if receipt_numbers:
+            try:
+                vi_resp = db.client.table('verified_invoices') \
+                    .select('receipt_number, receipt_link, date, upload_date, mobile_number, payment_mode, balance_due, received_amount, customer_name') \
+                    .eq('username', username) \
+                    .in_('receipt_number', receipt_numbers) \
+                    .execute()
+                for row in (vi_resp.data or []):
+                    rn = row.get('receipt_number')
+                    if rn and rn not in invoice_meta:
+                        invoice_meta[rn] = row
+            except Exception as enrich_err:
+                logger.warning(f"Could not enrich transactions with verified_invoices: {enrich_err}")
+
+        # Inject metadata into each INVOICE transaction
+        for tx in transactions:
+            rn = tx.get('receipt_number')
+            if tx.get('transaction_type') == 'INVOICE' and rn and rn in invoice_meta:
+                meta = invoice_meta[rn]
+                tx['receipt_link'] = meta.get('receipt_link') or ''
+                tx['invoice_date'] = meta.get('date') or ''
+                tx['upload_date'] = meta.get('upload_date') or ''
+                tx['mobile_number'] = meta.get('mobile_number') or ''
+                tx['payment_mode'] = meta.get('payment_mode') or 'Cash'
+                tx['invoice_balance_due'] = meta.get('balance_due') or 0.0
+                tx['received_amount'] = meta.get('received_amount') or 0.0
+                # Surface customer_name from verified_invoices if ledger join is absent
+                if not (tx.get('customer_ledgers') or {}).get('customer_name'):
+                    tx['_enriched_customer_name'] = meta.get('customer_name') or ''
+            else:
+                tx.setdefault('receipt_link', '')
+                tx.setdefault('invoice_date', '')
+                tx.setdefault('upload_date', '')
+                tx.setdefault('mobile_number', '')
+
         return {
             "status": "success",
-            "data": response.data
+            "data": transactions
         }
     except Exception as e:
         logger.error(f"Error fetching all customer transactions: {e}")

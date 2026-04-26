@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
+import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/udhar_detail_page.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
@@ -19,7 +21,7 @@ class CustomerActivityCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
-      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue) {
+      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount) {
         final initials = _initials(entityName);
         final isPayment = transactionType.toUpperCase() == 'PAYMENT';
         
@@ -37,7 +39,27 @@ class CustomerActivityCard extends ConsumerWidget {
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // Find the matching customer ledger by name
+              // If we have an invoice receipt link, navigate to the Order Detail
+              // page (same behaviour as customers_tab.dart in stable branch).
+              if (displayId != null && displayId.isNotEmpty && receiptLink.isNotEmpty) {
+                final group = InvoiceGroup(
+                  receiptNumber: displayId,
+                  date: invoiceDate,
+                  receiptLink: receiptLink,
+                  customerName: entityName,
+                  mobileNumber: mobileNumber,
+                  uploadDate: invoiceDate,
+                  paymentMode: paymentMode,
+                  receivedAmount: receivedAmount,
+                  balanceDue: invoiceBalanceDue,
+                  customerDetails: entityName,
+                  extraFields: const {},
+                );
+                context.pushNamed('order-detail', extra: group);
+                return;
+              }
+
+              // Fallback: open the credit ledger detail for this customer
               final udharState = ref.read(udharProvider);
               CustomerLedger? matched;
               try {
@@ -45,19 +67,17 @@ class CustomerActivityCard extends ConsumerWidget {
                   (l) => l.customerName.toLowerCase() == entityName.toLowerCase(),
                 );
               } catch (_) {
-                // Not found — create a synthetic ledger so the detail page still opens
                 matched = CustomerLedger(
                   id: -1,
                   customerName: entityName,
                   balanceDue: balanceDue ?? 0.0,
                 );
               }
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => UdharDetailPage(ledger: matched!),
-                ),
+              
+              context.pushNamed(
+                'udhar-detail',
+                pathParameters: {'id': matched.id.toString()},
+                extra: matched,
               );
             },
             child: Container(

@@ -49,12 +49,21 @@ class ActivityRepository {
       final ledger = json['customer_ledgers'] as Map<String, dynamic>?;
       return ActivityItem.customer(
         id: json['id'].toString(),
-        entityName: ledger?['customer_name'] ?? 'Unknown Customer',
+        entityName: ledger?['customer_name']
+            ?? json['_enriched_customer_name']
+            ?? 'Unknown Customer',
         transactionDate: DateTime.parse(json['created_at']),
         amount: (json['amount'] as num).toDouble(),
         displayId: json['receipt_number']?.toString(),
         transactionType: json['transaction_type'] ?? 'INVOICE',
         balanceDue: (ledger?['balance_due'] as num?)?.toDouble() ?? 0.0,
+        // Navigation context from verified_invoices enrichment
+        receiptLink: json['receipt_link'] as String? ?? '',
+        invoiceDate: json['invoice_date'] as String? ?? '',
+        mobileNumber: json['mobile_number'] as String? ?? '',
+        paymentMode: json['payment_mode'] as String? ?? 'Cash',
+        invoiceBalanceDue: (json['invoice_balance_due'] as num?)?.toDouble() ?? 0.0,
+        receivedAmount: (json['received_amount'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
   }
@@ -71,15 +80,27 @@ class ActivityRepository {
     final data = (response.data['data'] as List?) ?? [];
     return data.map((json) {
       final ledger = json['vendor_ledgers'] as Map<String, dynamic>?;
+      final rawItems = json['inventory_items'];
+      final List<Map<String, dynamic>> items = rawItems is List
+          ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : [];
       return ActivityItem.vendor(
         id: json['id'].toString(),
-        entityName: ledger?['vendor_name'] ?? 'Unknown Vendor',
+        entityName: ledger?['vendor_name']
+            ?? json['vendor_name_enriched']
+            ?? 'Unknown Vendor',
         transactionDate: DateTime.parse(json['created_at']),
         amount: (json['amount'] as num).toDouble(),
         displayId: json['invoice_number']?.toString(),
         isPaid: json['is_paid'] ?? false,
         balanceDue: (ledger?['balance_due'] as num?)?.toDouble() ?? 0.0,
         totalPriceHike: (json['total_price_hike'] as num?)?.toDouble() ?? 0.0,
+        // Navigation context from inventory_items enrichment
+        receiptLink: json['receipt_link'] as String? ?? '',
+        invoiceDate: json['invoice_date'] as String? ?? '',
+        inventoryItems: items,
+        isVerified: json['is_verified'] as bool? ?? false,
+        balanceOwed: (json['balance_owed'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
   }

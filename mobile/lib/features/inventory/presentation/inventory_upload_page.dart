@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1495,14 +1496,9 @@ class _InventoryLoadingOverlayState
                           },
                   ),
                   const Expanded(
-                    child: Text(
-                      'SnapKhata',
-                      style: TextStyle(
-                        color: Color(0xFF0058BE),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
+                    child: BrandWordmark(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(width: 48),

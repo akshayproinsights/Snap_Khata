@@ -23,13 +23,13 @@ class VendorLedgerDetailPage extends ConsumerStatefulWidget {
       _VendorLedgerDetailPageState();
 }
 
-class ActivityItem {
+class VendorActivityItem {
   final DateTime date;
   final VendorLedgerTransaction? transaction;
   final Map<String, dynamic>? purchaseInvoice;
   final bool isPayment;
 
-  ActivityItem({
+  VendorActivityItem({
     required this.date,
     this.transaction,
     this.purchaseInvoice,
@@ -43,7 +43,7 @@ class _VendorLedgerDetailPageState
 
   List<VendorLedgerTransaction>? _transactions;
   List<Map<String, dynamic>>? _purchaseInvoices;
-  List<ActivityItem>? _activityItems;
+  List<VendorActivityItem>? _activityItems;
   bool _isLoading = true;
 
   // Selection state
@@ -81,7 +81,7 @@ class _VendorLedgerDetailPageState
     }
 
     // Unify them
-    final List<ActivityItem> activityItems = [];
+    final List<VendorActivityItem> activityItems = [];
     final Set<String> matchedInvoiceNumbers = {};
 
     // 1. Process ledger transactions
@@ -89,7 +89,7 @@ class _VendorLedgerDetailPageState
       if (tx.linkedTransactionId != null) continue; // Skip auto-generated payments
 
       if (tx.transactionType == 'PAYMENT') {
-        activityItems.add(ActivityItem(
+        activityItems.add(VendorActivityItem(
           date: tx.createdAt,
           transaction: tx,
           isPayment: true,
@@ -104,7 +104,7 @@ class _VendorLedgerDetailPageState
             matchedInvoiceNumbers.add(tx.invoiceNumber!);
           } catch (_) {}
         }
-        activityItems.add(ActivityItem(
+        activityItems.add(VendorActivityItem(
           date: tx.createdAt,
           transaction: tx,
           purchaseInvoice: matchedInvoice,
@@ -126,7 +126,7 @@ class _VendorLedgerDetailPageState
         date = DateTime.tryParse(dateStr) ?? DateTime.now();
       }
 
-      activityItems.add(ActivityItem(
+      activityItems.add(VendorActivityItem(
         date: date,
         purchaseInvoice: inv,
         isPayment: false,
@@ -756,7 +756,7 @@ class _VendorLedgerDetailPageState
                             onPressed: () {
                               final firstInvoiceTx = (_activityItems ?? []).firstWhere(
                                 (a) => !a.isPayment && a.transaction != null,
-                                orElse: () => ActivityItem(date: DateTime.now(), isPayment: false),
+                                orElse: () => VendorActivityItem(date: DateTime.now(), isPayment: false),
                               );
                               if (firstInvoiceTx.transaction != null) {
                                 _toggleSelection(firstInvoiceTx.transaction!.id);
@@ -938,7 +938,7 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  Widget _buildActivityCard(ActivityItem item) {
+  Widget _buildActivityCard(VendorActivityItem item) {
     if (item.isPayment && item.transaction != null) {
       return _buildTransactionCard(item.transaction!, true);
     } else if (item.transaction != null) {

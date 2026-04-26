@@ -70,12 +70,12 @@ class AppShell extends ConsumerWidget {
               NavigationDestination(
                 icon: Icon(LucideIcons.users),
                 selectedIcon: Icon(LucideIcons.users, color: AppTheme.primary),
-                label: 'PARTIES',
+                label: 'CREDIT',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.box),
                 selectedIcon: Icon(LucideIcons.box, color: AppTheme.primary),
-                label: 'ITEMS',
+                label: 'Track Items',
               ),
               NavigationDestination(
                 icon: Icon(LucideIcons.user),

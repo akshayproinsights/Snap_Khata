@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/upload/presentation/providers/camera_provider.dart';
@@ -1233,14 +1234,9 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                           },
                   ),
                   const Expanded(
-                    child: Text(
-                      'SnapKhata',
-                      style: TextStyle(
-                        color: Color(0xFF0058BE),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
+                    child: BrandWordmark(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(width: 48),

@@ -9,6 +9,7 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/settings/domain/models/shop_profile.dart';
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -315,7 +316,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 12),
           _buildSettingsTile(
             icon: LucideIcons.info,
-            title: 'SnapKhata Mobile',
+            titleWidget: const BrandWordmark(fontSize: 18),
             subtitle: 'Version 1.0.0 · Built for Indian SMBs',
             onTap: null,
             trailing: const SizedBox.shrink(),
@@ -328,7 +329,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Widget _buildSettingsTile({
     required IconData icon,
-    required String title,
+    String? title,
+    Widget? titleWidget,
     String? subtitle,
     Widget? trailing,
     VoidCallback? onTap,
@@ -349,8 +351,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       child: ListTile(
         leading: Icon(icon,
             color: iconColor ?? context.textColor),
-        title: Text(
-          title,
+        title: titleWidget ?? Text(
+          title ?? '',
           style: TextStyle(
               color: textColor ?? context.textColor),
         ),

@@ -14,6 +14,7 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 
 class HomeDashboardPage extends ConsumerWidget {
   const HomeDashboardPage({super.key});
@@ -50,6 +51,8 @@ class HomeDashboardPage extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildBrandHeader(context),
+                      const SizedBox(height: 12),
                       _buildHeaderRow(context, ref, currentFilter),
                       const SizedBox(height: 20),
                       _buildSummaryCards(context, ref, isDark),
@@ -249,6 +252,37 @@ class HomeDashboardPage extends ConsumerWidget {
         ),
         _buildReviewButton(context, ref, currentFilter),
       ],
+    );
+  }
+
+  Widget _buildBrandHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
+      child: Row(
+        children: [
+          Image.asset(
+            'assets/images/app_logo_v2.png',
+            height: 40,
+            width: 40,
+          ),
+          const SizedBox(width: 12),
+          const BrandWordmark(fontSize: 24),
+          const Spacer(),
+          Container(
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              shape: BoxShape.circle,
+              boxShadow: context.premiumShadow,
+              border: Border.all(color: context.borderColor, width: 1),
+            ),
+            child: IconButton(
+              icon: const Icon(LucideIcons.bell, size: 20),
+              onPressed: () => context.push('/notifications'),
+              color: context.textColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

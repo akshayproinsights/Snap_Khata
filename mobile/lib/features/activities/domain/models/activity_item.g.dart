@@ -15,6 +15,12 @@ _CustomerActivity _$CustomerActivityFromJson(Map<String, dynamic> json) =>
       displayId: json['displayId'] as String?,
       transactionType: json['transactionType'] as String,
       balanceDue: (json['balanceDue'] as num?)?.toDouble(),
+      receiptLink: json['receiptLink'] as String? ?? '',
+      invoiceDate: json['invoiceDate'] as String? ?? '',
+      mobileNumber: json['mobileNumber'] as String? ?? '',
+      paymentMode: json['paymentMode'] as String? ?? 'Cash',
+      invoiceBalanceDue: (json['invoiceBalanceDue'] as num?)?.toDouble() ?? 0.0,
+      receivedAmount: (json['receivedAmount'] as num?)?.toDouble() ?? 0.0,
       $type: json['runtimeType'] as String?,
     );
 
@@ -27,6 +33,12 @@ Map<String, dynamic> _$CustomerActivityToJson(_CustomerActivity instance) =>
       'displayId': instance.displayId,
       'transactionType': instance.transactionType,
       'balanceDue': instance.balanceDue,
+      'receiptLink': instance.receiptLink,
+      'invoiceDate': instance.invoiceDate,
+      'mobileNumber': instance.mobileNumber,
+      'paymentMode': instance.paymentMode,
+      'invoiceBalanceDue': instance.invoiceBalanceDue,
+      'receivedAmount': instance.receivedAmount,
       'runtimeType': instance.$type,
     };
 
@@ -40,6 +52,15 @@ _VendorActivity _$VendorActivityFromJson(Map<String, dynamic> json) =>
       isPaid: json['isPaid'] as bool,
       balanceDue: (json['balanceDue'] as num?)?.toDouble(),
       totalPriceHike: (json['totalPriceHike'] as num?)?.toDouble() ?? 0.0,
+      receiptLink: json['receiptLink'] as String? ?? '',
+      invoiceDate: json['invoiceDate'] as String? ?? '',
+      inventoryItems:
+          (json['inventoryItems'] as List<dynamic>?)
+              ?.map((e) => e as Map<String, dynamic>)
+              .toList() ??
+          const [],
+      isVerified: json['isVerified'] as bool? ?? false,
+      balanceOwed: (json['balanceOwed'] as num?)?.toDouble() ?? 0.0,
       $type: json['runtimeType'] as String?,
     );
 
@@ -53,5 +74,10 @@ Map<String, dynamic> _$VendorActivityToJson(_VendorActivity instance) =>
       'isPaid': instance.isPaid,
       'balanceDue': instance.balanceDue,
       'totalPriceHike': instance.totalPriceHike,
+      'receiptLink': instance.receiptLink,
+      'invoiceDate': instance.invoiceDate,
+      'inventoryItems': instance.inventoryItems,
+      'isVerified': instance.isVerified,
+      'balanceOwed': instance.balanceOwed,
       'runtimeType': instance.$type,
     };

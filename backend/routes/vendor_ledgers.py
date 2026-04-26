@@ -177,7 +177,7 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
             if tx.get('transaction_type') == 'INVOICE' and tx.get('invoice_number')
         })
 
-        # Build a map: invoice_number -> total_price_hike
+        # Build a map: invoice_number -> total_price_hike from inventory_invoices
         price_hike_map: Dict[str, float] = {}
         if invoice_numbers:
             try:
@@ -195,10 +195,68 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
             except Exception as hike_err:
                 logger.warning(f"Could not fetch price_hike_amount: {hike_err}")
 
-        # Inject total_price_hike into each transaction
+        # Build a map: invoice_number -> inventory_items metadata for navigation.
+        # Returns receipt_link, invoice_date, vendor_name, payment_mode and per-item
+        # details so the mobile app can construct an InventoryInvoiceBundle and
+        # navigate to VendorDeliveryDetailPage without any frontend changes.
+        item_meta: Dict[str, Dict] = {}
+        if invoice_numbers:
+            try:
+                items_resp = db.client.table('inventory_items') \
+                    .select('invoice_number, invoice_date, vendor_name, receipt_link, payment_mode, balance_owed, verification_status, net_bill, description, quantity, rate, amount_mismatch, part_number, created_at') \
+                    .eq('username', username) \
+                    .in_('invoice_number', invoice_numbers) \
+                    .execute()
+
+                for row in (items_resp.data or []):
+                    inv_num = row.get('invoice_number')
+                    if inv_num:
+                        if inv_num not in item_meta:
+                            item_meta[inv_num] = {
+                                'invoice_date': row.get('invoice_date') or '',
+                                'vendor_name': row.get('vendor_name') or '',
+                                'receipt_link': row.get('receipt_link') or '',
+                                'payment_mode': row.get('payment_mode') or 'Credit',
+                                'balance_owed': float(row.get('balance_owed') or 0),
+                                'is_verified': row.get('verification_status') == 'Done',
+                                'items': [],
+                            }
+                        item_meta[inv_num]['items'].append({
+                            'invoice_number': inv_num,
+                            'description': row.get('description') or '',
+                            'quantity': row.get('quantity') or 0,
+                            'rate': row.get('rate') or 0,
+                            'net_bill': float(row.get('net_bill') or 0),
+                            'amount_mismatch': float(row.get('amount_mismatch') or 0),
+                            'part_number': row.get('part_number') or '',
+                            'verification_status': row.get('verification_status') or '',
+                            'receipt_link': row.get('receipt_link') or '',
+                            'invoice_date': row.get('invoice_date') or '',
+                            'vendor_name': row.get('vendor_name') or '',
+                            'payment_mode': row.get('payment_mode') or 'Credit',
+                            'created_at': row.get('created_at') or '',
+                        })
+            except Exception as items_err:
+                logger.warning(f"Could not enrich vendor transactions with inventory_items: {items_err}")
+
+        # Inject enrichment into each transaction
         for tx in transactions:
             inv_num = tx.get('invoice_number')
             tx['total_price_hike'] = price_hike_map.get(inv_num, 0.0) if inv_num else 0.0
+
+            if tx.get('transaction_type') == 'INVOICE' and inv_num and inv_num in item_meta:
+                meta = item_meta[inv_num]
+                tx['invoice_date'] = meta.get('invoice_date') or ''
+                tx['receipt_link'] = meta.get('receipt_link') or ''
+                tx['vendor_name_enriched'] = meta.get('vendor_name') or ''
+                tx['payment_mode'] = meta.get('payment_mode') or 'Credit'
+                tx['balance_owed'] = meta.get('balance_owed') or 0.0
+                tx['is_verified'] = meta.get('is_verified', False)
+                tx['inventory_items'] = meta.get('items', [])
+            else:
+                tx.setdefault('invoice_date', '')
+                tx.setdefault('receipt_link', '')
+                tx.setdefault('inventory_items', [])
 
         return {
             "status": "success",

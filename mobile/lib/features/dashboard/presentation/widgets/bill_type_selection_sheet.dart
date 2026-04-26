@@ -126,7 +126,9 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                           Navigator.pop(context);
                           
                           // Navigate and wait for result
-                          final result = await context.push(targetRoute);
+                          final result = selectedType == BillScanType.customer
+                              ? await context.pushNamed('upload')
+                              : await context.push('/inventory-upload');
                           
                           // If the user successfully completed a scan/save, result should be true
                           if (result == true && mounted) {
@@ -137,13 +139,19 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                             // Optional: Small feedback toast could be added here later
                           }
                         },
-                  icon: const Icon(LucideIcons.scan),
+                  icon: Icon(
+                    selectedType == null
+                        ? LucideIcons.scan
+                        : selectedType == BillScanType.customer
+                            ? Icons.camera_alt_outlined
+                            : Icons.camera_alt_rounded,
+                  ),
                   label: Text(
                     selectedType == null
                         ? 'Select an option'
                         : selectedType == BillScanType.customer
-                            ? 'Start Customer Scan'
-                            : 'Start Supplier Scan',
+                            ? 'Snap New Order'
+                            : 'Scan Purchase Bill',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -153,8 +161,8 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     backgroundColor: selectedType == null
                         ? context.textSecondaryColor.withValues(alpha: 0.5)
                         : selectedType == BillScanType.customer
-                            ? context.primaryColor // Primary Blue for customer
-                            : context.errorColor, // Primary Red for supplier
+                            ? context.successColor // Green for customer
+                            : context.errorColor, // Red for supplier
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: context.textSecondaryColor.withValues(alpha: 0.3),
                     shape: RoundedRectangleBorder(

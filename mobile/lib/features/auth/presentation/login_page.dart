@@ -6,6 +6,7 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -56,28 +57,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     children: [
                       // Hero Image (Image 2)
                       Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 240),
-                          child: Image.asset(
-                            'assets/images/login_hero.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              // Fallback placeholder while the user uploads the image
-                              return Container(
-                                height: 180,
-                                width: 220,
-                                decoration: BoxDecoration(
-                                  color: context.primaryColor.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Text('SnapKhata',
-                                    style: TextStyle(color: context.primaryColor, fontSize: 28, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                        child: Column(
+                          children: [
+                            const BrandWordmark(fontSize: 32),
+                            const SizedBox(height: 16),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 400),
+                              child: Image.asset(
+                                'assets/images/login_hero_v2.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -102,11 +93,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           children: [
                             Center(
                               child: Text(
-                                'Login to Your Account',
+                                'SMART DIGITAL MUNIM',
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: context.textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: context.textColor.withValues(alpha: 0.6),
+                                  letterSpacing: 1.5,
                                 ),
                               ),
                             ),

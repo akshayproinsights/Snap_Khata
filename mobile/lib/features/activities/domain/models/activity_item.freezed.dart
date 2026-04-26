@@ -38,7 +38,8 @@ ActivityItem _$ActivityItemFromJson(
 /// @nodoc
 mixin _$ActivityItem {
 
- String get id; String get entityName; DateTime get transactionDate; double get amount; String? get displayId; double? get balanceDue;
+ String get id; String get entityName; DateTime get transactionDate; double get amount; String? get displayId; double? get balanceDue;// Navigation context — populated from verified_invoices enrichment
+ String get receiptLink; String get invoiceDate;
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -51,16 +52,16 @@ $ActivityItemCopyWith<ActivityItem> get copyWith => _$ActivityItemCopyWithImpl<A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ActivityItem&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ActivityItem&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue)&&(identical(other.receiptLink, receiptLink) || other.receiptLink == receiptLink)&&(identical(other.invoiceDate, invoiceDate) || other.invoiceDate == invoiceDate));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,balanceDue);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,balanceDue,receiptLink,invoiceDate);
 
 @override
 String toString() {
-  return 'ActivityItem(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, balanceDue: $balanceDue)';
+  return 'ActivityItem(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, balanceDue: $balanceDue, receiptLink: $receiptLink, invoiceDate: $invoiceDate)';
 }
 
 
@@ -71,7 +72,7 @@ abstract mixin class $ActivityItemCopyWith<$Res>  {
   factory $ActivityItemCopyWith(ActivityItem value, $Res Function(ActivityItem) _then) = _$ActivityItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId, double? balanceDue
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, double? balanceDue, String receiptLink, String invoiceDate
 });
 
 
@@ -88,7 +89,7 @@ class _$ActivityItemCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? balanceDue = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? balanceDue = freezed,Object? receiptLink = null,Object? invoiceDate = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
@@ -96,7 +97,9 @@ as String,transactionDate: null == transactionDate ? _self.transactionDate : tra
 as DateTime,amount: null == amount ? _self.amount : amount // ignore: cast_nullable_to_non_nullable
 as double,displayId: freezed == displayId ? _self.displayId : displayId // ignore: cast_nullable_to_non_nullable
 as String?,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
-as double?,
+as double?,receiptLink: null == receiptLink ? _self.receiptLink : receiptLink // ignore: cast_nullable_to_non_nullable
+as String,invoiceDate: null == invoiceDate ? _self.invoiceDate : invoiceDate // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -184,11 +187,11 @@ return vendor(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)?  customer,TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike)?  vendor,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue,  String receiptLink,  String invoiceDate,  String mobileNumber,  String paymentMode,  double invoiceBalanceDue,  double receivedAmount)?  customer,TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike,  String receiptLink,  String invoiceDate,  List<Map<String, dynamic>> inventoryItems,  bool isVerified,  double balanceOwed)?  vendor,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CustomerActivity() when customer != null:
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity() when vendor != null:
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue,_that.receiptLink,_that.invoiceDate,_that.mobileNumber,_that.paymentMode,_that.invoiceBalanceDue,_that.receivedAmount);case _VendorActivity() when vendor != null:
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike,_that.receiptLink,_that.invoiceDate,_that.inventoryItems,_that.isVerified,_that.balanceOwed);case _:
   return orElse();
 
 }
@@ -206,11 +209,11 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)  customer,required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike)  vendor,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue,  String receiptLink,  String invoiceDate,  String mobileNumber,  String paymentMode,  double invoiceBalanceDue,  double receivedAmount)  customer,required TResult Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike,  String receiptLink,  String invoiceDate,  List<Map<String, dynamic>> inventoryItems,  bool isVerified,  double balanceOwed)  vendor,}) {final _that = this;
 switch (_that) {
 case _CustomerActivity():
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity():
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue,_that.receiptLink,_that.invoiceDate,_that.mobileNumber,_that.paymentMode,_that.invoiceBalanceDue,_that.receivedAmount);case _VendorActivity():
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike,_that.receiptLink,_that.invoiceDate,_that.inventoryItems,_that.isVerified,_that.balanceOwed);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -227,11 +230,11 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue)?  customer,TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike)?  vendor,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  String transactionType,  double? balanceDue,  String receiptLink,  String invoiceDate,  String mobileNumber,  String paymentMode,  double invoiceBalanceDue,  double receivedAmount)?  customer,TResult? Function( String id,  String entityName,  DateTime transactionDate,  double amount,  String? displayId,  bool isPaid,  double? balanceDue,  double totalPriceHike,  String receiptLink,  String invoiceDate,  List<Map<String, dynamic>> inventoryItems,  bool isVerified,  double balanceOwed)?  vendor,}) {final _that = this;
 switch (_that) {
 case _CustomerActivity() when customer != null:
-return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue);case _VendorActivity() when vendor != null:
-return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike);case _:
+return customer(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.transactionType,_that.balanceDue,_that.receiptLink,_that.invoiceDate,_that.mobileNumber,_that.paymentMode,_that.invoiceBalanceDue,_that.receivedAmount);case _VendorActivity() when vendor != null:
+return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that.displayId,_that.isPaid,_that.balanceDue,_that.totalPriceHike,_that.receiptLink,_that.invoiceDate,_that.inventoryItems,_that.isVerified,_that.balanceOwed);case _:
   return null;
 
 }
@@ -243,7 +246,7 @@ return vendor(_that.id,_that.entityName,_that.transactionDate,_that.amount,_that
 @JsonSerializable()
 
 class _CustomerActivity extends ActivityItem {
-  const _CustomerActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.transactionType, this.balanceDue, final  String? $type}): $type = $type ?? 'customer',super._();
+  const _CustomerActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.transactionType, this.balanceDue, this.receiptLink = '', this.invoiceDate = '', this.mobileNumber = '', this.paymentMode = 'Cash', this.invoiceBalanceDue = 0.0, this.receivedAmount = 0.0, final  String? $type}): $type = $type ?? 'customer',super._();
   factory _CustomerActivity.fromJson(Map<String, dynamic> json) => _$CustomerActivityFromJson(json);
 
 @override final  String id;
@@ -253,6 +256,13 @@ class _CustomerActivity extends ActivityItem {
 @override final  String? displayId;
  final  String transactionType;
 @override final  double? balanceDue;
+// Navigation context — populated from verified_invoices enrichment
+@override@JsonKey() final  String receiptLink;
+@override@JsonKey() final  String invoiceDate;
+@JsonKey() final  String mobileNumber;
+@JsonKey() final  String paymentMode;
+@JsonKey() final  double invoiceBalanceDue;
+@JsonKey() final  double receivedAmount;
 
 @JsonKey(name: 'runtimeType')
 final String $type;
@@ -271,16 +281,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CustomerActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.transactionType, transactionType) || other.transactionType == transactionType)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CustomerActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.transactionType, transactionType) || other.transactionType == transactionType)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue)&&(identical(other.receiptLink, receiptLink) || other.receiptLink == receiptLink)&&(identical(other.invoiceDate, invoiceDate) || other.invoiceDate == invoiceDate)&&(identical(other.mobileNumber, mobileNumber) || other.mobileNumber == mobileNumber)&&(identical(other.paymentMode, paymentMode) || other.paymentMode == paymentMode)&&(identical(other.invoiceBalanceDue, invoiceBalanceDue) || other.invoiceBalanceDue == invoiceBalanceDue)&&(identical(other.receivedAmount, receivedAmount) || other.receivedAmount == receivedAmount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,transactionType,balanceDue);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,transactionType,balanceDue,receiptLink,invoiceDate,mobileNumber,paymentMode,invoiceBalanceDue,receivedAmount);
 
 @override
 String toString() {
-  return 'ActivityItem.customer(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, transactionType: $transactionType, balanceDue: $balanceDue)';
+  return 'ActivityItem.customer(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, transactionType: $transactionType, balanceDue: $balanceDue, receiptLink: $receiptLink, invoiceDate: $invoiceDate, mobileNumber: $mobileNumber, paymentMode: $paymentMode, invoiceBalanceDue: $invoiceBalanceDue, receivedAmount: $receivedAmount)';
 }
 
 
@@ -291,7 +301,7 @@ abstract mixin class _$CustomerActivityCopyWith<$Res> implements $ActivityItemCo
   factory _$CustomerActivityCopyWith(_CustomerActivity value, $Res Function(_CustomerActivity) _then) = __$CustomerActivityCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId, String transactionType, double? balanceDue
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, String transactionType, double? balanceDue, String receiptLink, String invoiceDate, String mobileNumber, String paymentMode, double invoiceBalanceDue, double receivedAmount
 });
 
 
@@ -308,7 +318,7 @@ class __$CustomerActivityCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? transactionType = null,Object? balanceDue = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? transactionType = null,Object? balanceDue = freezed,Object? receiptLink = null,Object? invoiceDate = null,Object? mobileNumber = null,Object? paymentMode = null,Object? invoiceBalanceDue = null,Object? receivedAmount = null,}) {
   return _then(_CustomerActivity(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
@@ -317,7 +327,13 @@ as DateTime,amount: null == amount ? _self.amount : amount // ignore: cast_nulla
 as double,displayId: freezed == displayId ? _self.displayId : displayId // ignore: cast_nullable_to_non_nullable
 as String?,transactionType: null == transactionType ? _self.transactionType : transactionType // ignore: cast_nullable_to_non_nullable
 as String,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
-as double?,
+as double?,receiptLink: null == receiptLink ? _self.receiptLink : receiptLink // ignore: cast_nullable_to_non_nullable
+as String,invoiceDate: null == invoiceDate ? _self.invoiceDate : invoiceDate // ignore: cast_nullable_to_non_nullable
+as String,mobileNumber: null == mobileNumber ? _self.mobileNumber : mobileNumber // ignore: cast_nullable_to_non_nullable
+as String,paymentMode: null == paymentMode ? _self.paymentMode : paymentMode // ignore: cast_nullable_to_non_nullable
+as String,invoiceBalanceDue: null == invoiceBalanceDue ? _self.invoiceBalanceDue : invoiceBalanceDue // ignore: cast_nullable_to_non_nullable
+as double,receivedAmount: null == receivedAmount ? _self.receivedAmount : receivedAmount // ignore: cast_nullable_to_non_nullable
+as double,
   ));
 }
 
@@ -328,7 +344,7 @@ as double?,
 @JsonSerializable()
 
 class _VendorActivity extends ActivityItem {
-  const _VendorActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.isPaid, this.balanceDue, this.totalPriceHike = 0.0, final  String? $type}): $type = $type ?? 'vendor',super._();
+  const _VendorActivity({required this.id, required this.entityName, required this.transactionDate, required this.amount, this.displayId, required this.isPaid, this.balanceDue, this.totalPriceHike = 0.0, this.receiptLink = '', this.invoiceDate = '', final  List<Map<String, dynamic>> inventoryItems = const [], this.isVerified = false, this.balanceOwed = 0.0, final  String? $type}): _inventoryItems = inventoryItems,$type = $type ?? 'vendor',super._();
   factory _VendorActivity.fromJson(Map<String, dynamic> json) => _$VendorActivityFromJson(json);
 
 @override final  String id;
@@ -339,6 +355,18 @@ class _VendorActivity extends ActivityItem {
  final  bool isPaid;
 @override final  double? balanceDue;
 @JsonKey() final  double totalPriceHike;
+// Navigation context — populated from inventory_items enrichment
+@override@JsonKey() final  String receiptLink;
+@override@JsonKey() final  String invoiceDate;
+ final  List<Map<String, dynamic>> _inventoryItems;
+@JsonKey() List<Map<String, dynamic>> get inventoryItems {
+  if (_inventoryItems is EqualUnmodifiableListView) return _inventoryItems;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_inventoryItems);
+}
+
+@JsonKey() final  bool isVerified;
+@JsonKey() final  double balanceOwed;
 
 @JsonKey(name: 'runtimeType')
 final String $type;
@@ -357,16 +385,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VendorActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.isPaid, isPaid) || other.isPaid == isPaid)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue)&&(identical(other.totalPriceHike, totalPriceHike) || other.totalPriceHike == totalPriceHike));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VendorActivity&&(identical(other.id, id) || other.id == id)&&(identical(other.entityName, entityName) || other.entityName == entityName)&&(identical(other.transactionDate, transactionDate) || other.transactionDate == transactionDate)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.displayId, displayId) || other.displayId == displayId)&&(identical(other.isPaid, isPaid) || other.isPaid == isPaid)&&(identical(other.balanceDue, balanceDue) || other.balanceDue == balanceDue)&&(identical(other.totalPriceHike, totalPriceHike) || other.totalPriceHike == totalPriceHike)&&(identical(other.receiptLink, receiptLink) || other.receiptLink == receiptLink)&&(identical(other.invoiceDate, invoiceDate) || other.invoiceDate == invoiceDate)&&const DeepCollectionEquality().equals(other._inventoryItems, _inventoryItems)&&(identical(other.isVerified, isVerified) || other.isVerified == isVerified)&&(identical(other.balanceOwed, balanceOwed) || other.balanceOwed == balanceOwed));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,isPaid,balanceDue,totalPriceHike);
+int get hashCode => Object.hash(runtimeType,id,entityName,transactionDate,amount,displayId,isPaid,balanceDue,totalPriceHike,receiptLink,invoiceDate,const DeepCollectionEquality().hash(_inventoryItems),isVerified,balanceOwed);
 
 @override
 String toString() {
-  return 'ActivityItem.vendor(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, isPaid: $isPaid, balanceDue: $balanceDue, totalPriceHike: $totalPriceHike)';
+  return 'ActivityItem.vendor(id: $id, entityName: $entityName, transactionDate: $transactionDate, amount: $amount, displayId: $displayId, isPaid: $isPaid, balanceDue: $balanceDue, totalPriceHike: $totalPriceHike, receiptLink: $receiptLink, invoiceDate: $invoiceDate, inventoryItems: $inventoryItems, isVerified: $isVerified, balanceOwed: $balanceOwed)';
 }
 
 
@@ -377,7 +405,7 @@ abstract mixin class _$VendorActivityCopyWith<$Res> implements $ActivityItemCopy
   factory _$VendorActivityCopyWith(_VendorActivity value, $Res Function(_VendorActivity) _then) = __$VendorActivityCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String entityName, DateTime transactionDate, double amount, String? displayId, bool isPaid, double? balanceDue, double totalPriceHike
+ String id, String entityName, DateTime transactionDate, double amount, String? displayId, bool isPaid, double? balanceDue, double totalPriceHike, String receiptLink, String invoiceDate, List<Map<String, dynamic>> inventoryItems, bool isVerified, double balanceOwed
 });
 
 
@@ -394,7 +422,7 @@ class __$VendorActivityCopyWithImpl<$Res>
 
 /// Create a copy of ActivityItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? isPaid = null,Object? balanceDue = freezed,Object? totalPriceHike = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? entityName = null,Object? transactionDate = null,Object? amount = null,Object? displayId = freezed,Object? isPaid = null,Object? balanceDue = freezed,Object? totalPriceHike = null,Object? receiptLink = null,Object? invoiceDate = null,Object? inventoryItems = null,Object? isVerified = null,Object? balanceOwed = null,}) {
   return _then(_VendorActivity(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,entityName: null == entityName ? _self.entityName : entityName // ignore: cast_nullable_to_non_nullable
@@ -404,6 +432,11 @@ as double,displayId: freezed == displayId ? _self.displayId : displayId // ignor
 as String?,isPaid: null == isPaid ? _self.isPaid : isPaid // ignore: cast_nullable_to_non_nullable
 as bool,balanceDue: freezed == balanceDue ? _self.balanceDue : balanceDue // ignore: cast_nullable_to_non_nullable
 as double?,totalPriceHike: null == totalPriceHike ? _self.totalPriceHike : totalPriceHike // ignore: cast_nullable_to_non_nullable
+as double,receiptLink: null == receiptLink ? _self.receiptLink : receiptLink // ignore: cast_nullable_to_non_nullable
+as String,invoiceDate: null == invoiceDate ? _self.invoiceDate : invoiceDate // ignore: cast_nullable_to_non_nullable
+as String,inventoryItems: null == inventoryItems ? _self._inventoryItems : inventoryItems // ignore: cast_nullable_to_non_nullable
+as List<Map<String, dynamic>>,isVerified: null == isVerified ? _self.isVerified : isVerified // ignore: cast_nullable_to_non_nullable
+as bool,balanceOwed: null == balanceOwed ? _self.balanceOwed : balanceOwed // ignore: cast_nullable_to_non_nullable
 as double,
   ));
 }

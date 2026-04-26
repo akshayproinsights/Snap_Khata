@@ -1,3 +1,4 @@
+import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -101,25 +102,14 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
               children: [
                 // Logo placeholder (simulate image)
                 Center(
-                  child: Container(
-                    height: 80,
-                    width: 200,
-                    decoration: BoxDecoration(
-                      color: context.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'SnapKhata',
-                        style: TextStyle(
-                          color: context.primaryColor,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                  child: Image.asset(
+                    'assets/images/app_logo_v2.png',
+                    height: 100,
+                    width: 100,
                   ),
                 ),
+                const SizedBox(height: 12),
+                const Center(child: BrandWordmark(fontSize: 32)),
                 const SizedBox(height: 32),
 
                 // Register Card
