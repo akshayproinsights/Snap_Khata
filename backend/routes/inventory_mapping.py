@@ -746,7 +746,7 @@ async def search_vendor_items_for_mapping(
         
         # Search with ilike for substring matching
         result = db.client.table("inventory_items")\
-            .select("id, description, part_number, qty, rate")\
+            .select("id, description, part_number, quantity, rate")\
             .eq("username", username)\
             .ilike("description", f"%{query}%")\
             .order("description")\

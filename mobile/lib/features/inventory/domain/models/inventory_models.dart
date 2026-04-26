@@ -7,7 +7,7 @@ class InventoryItem {
   final String? vendorName;
   final String partNumber;
   final String description;
-  final double qty;
+  final double quantity;
   final double rate;
   final double netBill;
   final double amountMismatch;
@@ -50,7 +50,7 @@ class InventoryItem {
     this.vendorName,
     required this.partNumber,
     required this.description,
-    required this.qty,
+    required this.quantity,
     required this.rate,
     required this.netBill,
     required this.amountMismatch,
@@ -108,7 +108,7 @@ class InventoryItem {
       vendorName: json['vendor_name']?.toString(),
       partNumber: json['part_number']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      qty: double.tryParse(json['qty']?.toString() ?? '0') ?? 0.0,
+      quantity: double.tryParse((json['quantity'] ?? json['qty'])?.toString() ?? '0') ?? 0.0,
       rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0.0,
       netBill: double.tryParse(json['net_bill']?.toString() ?? '0') ?? 0.0,
       amountMismatch: double.tryParse(json['amount_mismatch']?.toString() ??
@@ -191,7 +191,7 @@ class InventoryItem {
       'vendor_name': vendorName,
       'part_number': partNumber,
       'description': description,
-      'qty': qty,
+      'quantity': quantity,
       'rate': rate,
       'net_bill': netBill,
       'amount_mismatch': amountMismatch,
@@ -233,7 +233,7 @@ class InventoryItem {
     String? vendorName,
     String? partNumber,
     String? description,
-    double? qty,
+    double? quantity,
     double? rate,
     double? netBill,
     double? amountMismatch,
@@ -273,7 +273,7 @@ class InventoryItem {
       vendorName: vendorName ?? this.vendorName,
       partNumber: partNumber ?? this.partNumber,
       description: description ?? this.description,
-      qty: qty ?? this.qty,
+      quantity: quantity ?? this.quantity,
       rate: rate ?? this.rate,
       netBill: netBill ?? this.netBill,
       amountMismatch: amountMismatch ?? this.amountMismatch,

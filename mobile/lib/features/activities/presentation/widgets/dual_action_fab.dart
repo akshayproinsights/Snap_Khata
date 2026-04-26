@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mobile/core/theme/app_theme.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class DualActionFab extends StatelessWidget {
   const DualActionFab({super.key});
@@ -11,24 +14,30 @@ class DualActionFab extends StatelessWidget {
       children: [
         FloatingActionButton.extended(
           heroTag: 'fab_vendor_scan',
-          onPressed: () {
-            debugPrint("Vendor Scan Triggered");
-          },
-          icon: const Icon(Icons.camera_alt),
-          label: const Text("Scan Purchase Bill"),
-          backgroundColor: Colors.red.shade600,
+          onPressed: () => context.push('/inventory-upload'),
+          icon: const Icon(LucideIcons.scan, size: 18),
+          label: const Text(
+            "PURCHASE SCAN",
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.8),
+          ),
+          backgroundColor: context.errorColor,
           foregroundColor: Colors.white,
+          elevation: 8,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         FloatingActionButton.extended(
           heroTag: 'fab_customer_snap',
-          onPressed: () {
-            debugPrint("Customer Snap Triggered");
-          },
-          icon: const Icon(Icons.camera_alt_outlined),
-          label: const Text("Snap New Order"),
-          backgroundColor: Colors.green.shade600,
+          onPressed: () => context.pushNamed('upload'),
+          icon: const Icon(LucideIcons.camera, size: 18),
+          label: const Text(
+            "NEW ORDER SNAP",
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 0.8),
+          ),
+          backgroundColor: context.successColor,
           foregroundColor: Colors.white,
+          elevation: 8,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ],
     );

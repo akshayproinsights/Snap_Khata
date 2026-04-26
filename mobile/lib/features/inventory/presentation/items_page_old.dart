@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/widgets/item_price_history_sheet.dart';
@@ -29,12 +28,12 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
   Widget _buildSearchBox() {
     return Container(
       decoration: BoxDecoration(
-        color: context.surfaceColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.borderColor),
+        border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: context.isDark ? 0.1 : 0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -43,9 +42,9 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
       child: TextField(
         controller: _searchController,
         onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 14,
-          color: context.textColor,
+          color: AppTheme.textPrimary,
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
@@ -76,18 +75,17 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     final itemsAsync = ref.watch(inventoryItemsProvider);
 
     return Scaffold(
-      backgroundColor: context.backgroundColor,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         titleSpacing: 16,
         surfaceTintColor: Colors.transparent,
-        backgroundColor: context.surfaceColor,
-        title: Text(
+        backgroundColor: AppTheme.surface,
+        title: const Text(
           'Track Items',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.5,
-            color: context.textColor,
           ),
         ),
         centerTitle: false,
@@ -109,162 +107,108 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     }
 
     final allItems = itemsAsync.value ?? [];
-
-    // 1. Only show verified items for the catalog
+    
+    // Filter to verified only
     final verifiedItems = allItems.where((i) => i.verificationStatus == 'Done').toList();
-
-    // 2. Group by description (case-insensitive) to find unique catalog items
-    final Map<String, List<InventoryItem>> grouped = {};
+    
+    // Deduplicate by description
+    final Map<String, InventoryItem> latestItemMap = {};
+    final Map<String, int> orderCountMap = {};
+    
     for (var item in verifiedItems) {
-      final desc = item.description.trim().toUpperCase();
-      if (desc.isEmpty) continue;
-      grouped.putIfAbsent(desc, () => []).add(item);
-    }
-
-    // 3. Create a list of deduplicated items with calculated stats
-    final List<Map<String, dynamic>> catalogItems = [];
-    grouped.forEach((desc, groupItems) {
-      // Sort items by date (newest first) to get the latest price
-      groupItems.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
-      
-      final latestItem = groupItems.first;
-      final lastPrice = latestItem.rate;
-      
-      // Find the previous different price for trend calculation
-      double prevPrice = lastPrice;
-      for (var i = 1; i < groupItems.length; i++) {
-        if (groupItems[i].rate != lastPrice) {
-          prevPrice = groupItems[i].rate;
-          break;
-        }
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        final matchesDesc = item.description.toLowerCase().contains(query);
+        final matchesPart = item.partNumber.toLowerCase().contains(query);
+        final matchesVendor = (item.vendorName ?? '').toLowerCase().contains(query);
+        if (!matchesDesc && !matchesPart && !matchesVendor) continue;
       }
       
-      final priceChange = lastPrice - prevPrice;
-      final orderCount = groupItems.length;
+      final key = item.description.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      
+      orderCountMap[key] = (orderCountMap[key] ?? 0) + 1;
+      
+      if (!latestItemMap.containsKey(key)) {
+        latestItemMap[key] = item;
+      } else {
+        // Compare dates, keep most recent
+        final currentLatest = latestItemMap[key]!;
+        final currentDate = DateTime.tryParse(currentLatest.invoiceDate) ?? DateTime(0);
+        final newDate = DateTime.tryParse(item.invoiceDate) ?? DateTime(0);
+        
+        if (newDate.isAfter(currentDate)) {
+          latestItemMap[key] = item;
+        }
+      }
+    }
 
-      catalogItems.add({
-        'item': latestItem,
-        'lastPrice': lastPrice,
-        'priceChange': priceChange,
-        'orderCount': orderCount,
-      });
-    });
-
-    // 4. Apply search filtering on the deduplicated catalog
-    final filteredCatalog = catalogItems.where((entry) {
-      final item = entry['item'] as InventoryItem;
-      final query = _searchQuery.toLowerCase();
-      return item.description.toLowerCase().contains(query) ||
-             item.partNumber.toLowerCase().contains(query) ||
-             (item.vendorName ?? '').toLowerCase().contains(query);
-    }).toList();
+    final uniqueItems = latestItemMap.values.toList()
+      ..sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate)); // sort by most recently ordered
 
     return Column(
       children: [
-        if (allItems.isNotEmpty)
+        if (verifiedItems.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: _buildSearchBox(),
           ),
         Expanded(
-          child: verifiedItems.isEmpty
-              ? _buildEmptyState(
-                  context,
-                  LucideIcons.packageSearch,
-                  'No verified items logged yet.',
-                  'Verified items from your purchase bills\nwill appear here automatically.',
-                )
-              : filteredCatalog.isEmpty
-                  ? _buildEmptyState(
-                      context,
-                      LucideIcons.searchX,
-                      'No items found matching "$_searchQuery"',
-                      'Try searching with a different name\nor part number.',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: () async => ref.invalidate(inventoryItemsProvider),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        itemCount: filteredCatalog.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final entry = filteredCatalog[index];
-                          final item = entry['item'] as InventoryItem;
-                          final orderCount = entry['orderCount'] as int;
-                          
-                          return _buildItemCatalogCard(context, item, orderCount);
-                        },
+          child: uniqueItems.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.box,
+                          size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'No items found matching "$_searchQuery"'
+                            : 'No verified items logged yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
                       ),
-                    ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(inventoryItemsProvider),
+                  child: ListView.separated(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: uniqueItems.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final item = uniqueItems[index];
+                      final orderCount = orderCountMap[item.description.trim().toLowerCase()] ?? 1;
+                      return _buildItemCatalogCard(context, item, orderCount);
+                    },
+                  ),
+                ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, IconData icon, String title, String subtitle) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: context.surfaceColor,
-              shape: BoxShape.circle,
-              border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-            ),
-            child: Icon(icon, size: 48, color: context.borderColor),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: context.textColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: context.textSecondaryColor,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
   Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
+    final currencyFormat =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     // Determine price trend
     Color trendColor = Colors.grey.shade500;
     IconData trendIcon = LucideIcons.minus; // stable
     String trendText = 'Stable';
-
-    double delta = item.priceHikeAmount ?? 0;
-
-    // Fallback: calculate from previousRate if priceHikeAmount is missing or zero
-    if (delta == 0 && item.previousRate != null && item.previousRate! > 0) {
-      delta = item.rate - item.previousRate!;
-    }
     
-    if (delta > 0) {
+    if ((item.priceHikeAmount ?? 0) > 0) {
       trendColor = const Color(0xFFEF4444); // red
       trendIcon = LucideIcons.trendingUp;
-      trendText = 'Going Up ${CurrencyFormatter.format(delta)}';
-    } else if (delta < 0) {
+      trendText = 'Going Up';
+    } else if ((item.priceHikeAmount ?? 0) < 0) {
       trendColor = const Color(0xFF22C55E); // green
       trendIcon = LucideIcons.trendingDown;
-      trendText = 'Going Down ${CurrencyFormatter.format(delta)}';
-    } else if (orderCount > 1) {
-      // Multiple orders but no detectable direction → show "Price varies"
-      trendText = 'Price varies';
+      trendText = 'Going Down';
     }
 
     String dateLabel = '';
@@ -276,12 +220,12 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     }
 
     return Material(
-      color: context.surfaceColor,
+      color: AppTheme.surface,
       borderRadius: BorderRadius.circular(16),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: context.borderColor),
+        side: const BorderSide(color: AppTheme.border),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -311,10 +255,10 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                       children: [
                         Text(
                           item.description,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: context.textColor,
+                            color: AppTheme.textPrimary,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -339,7 +283,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                             item.partNumber,
                             style: TextStyle(
                               fontSize: 13,
-                              color: context.textSecondaryColor,
+                              color: Colors.grey.shade600,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -353,11 +297,11 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        CurrencyFormatter.format(item.rate),
-                        style: TextStyle(
+                        currencyFormat.format(item.rate),
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          color: context.textColor,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -391,7 +335,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: context.textSecondaryColor,
+                      color: Colors.grey.shade600,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -400,7 +344,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                     'Last: $dateLabel',
                     style: TextStyle(
                       fontSize: 13,
-                      color: context.textSecondaryColor,
+                      color: Colors.grey.shade600,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

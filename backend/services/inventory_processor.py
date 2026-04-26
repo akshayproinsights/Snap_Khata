@@ -637,7 +637,7 @@ def convert_to_inventory_rows(
             'hsn': item.get('hsn_code') or item.get('hsn', 'N/A'),
 
             # Quantities and pricing (compat columns)
-            'qty':             qty,
+            'quantity':         qty,
             'rate':            rate,
             'disc_percent':    disc_percent,
             'taxable_amount':  taxable_amount,

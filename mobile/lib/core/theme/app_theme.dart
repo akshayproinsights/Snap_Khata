@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Light palette - Premium Slate
-  static const Color primary = Color(0xFF0B2D5B); // Dark Navy Blue
-  static const Color neonGreen = Color(0xFF32CD32); // Neon Lime Green
-  static const Color background = Color(0xFFF8FAFC); // slate-50
+  // Light palette - Premium SaaS Indigo
+  static const Color primary = Color(0xFF4F46E5); // Vibrant Indigo (Indigo-600)
+  static const Color neonGreen = Color(0xFF10B981); // Emerald Green (Emerald-500)
+  static const Color background = Color(0xFFF8FAFC); // Slate-50
   static const Color surface = Colors.white;
-  static const Color error = Color(0xFFDC2626); // red-600
-  static const Color success = neonGreen; // Use neon green for success
-  static const Color warning = Color(0xFFD97706); // amber-600
-  static const Color textPrimary = Color(0xFF0F172A); // slate-900
-  static const Color textSecondary = Color(0xFF475569); // slate-600
-  static const Color border = Color(0xFFE2E8F0); // slate-200
+  static const Color error = Color(0xFFE11D48); // Rose Red (Rose-600)
+  static const Color success = neonGreen;
+  static const Color warning = Color(0xFFF59E0B); // Amber-500
+  static const Color textPrimary = Color(0xFF0F172A); // Slate-900
+  static const Color textSecondary = Color(0xFF64748B); // Slate-500
+  static const Color border = Color(0xFFE2E8F0); // Slate-200
 
   // Dark palette - Midnight SaaS
   static const Color darkBackground = Color(0xFF020617); // slate-950

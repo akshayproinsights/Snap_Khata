@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/core/utils/image_compress_service.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
@@ -21,10 +22,19 @@ class UploadRepository {
       final formData = FormData();
 
       for (var file in compressedFiles) {
-        formData.files.add(MapEntry(
-          'files',
-          await MultipartFile.fromFile(file.path, filename: file.name),
-        ));
+        if (kIsWeb) {
+          // On Web, file.path is a blob URL. We must read it into bytes first.
+          final bytes = await file.readAsBytes();
+          formData.files.add(MapEntry(
+            'files',
+            MultipartFile.fromBytes(bytes, filename: file.name),
+          ));
+        } else {
+          formData.files.add(MapEntry(
+            'files',
+            await MultipartFile.fromFile(file.path, filename: file.name),
+          ));
+        }
       }
 
       final response = await _dio.post(

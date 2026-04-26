@@ -341,12 +341,12 @@ class _VerifyPartsPageState extends ConsumerState<VerifyPartsPage> {
                     Expanded(
                       child: _buildInlineField(
                         label: 'Qty',
-                        initialValue: item.qty.toString(),
+                        initialValue: item.quantity.toString(),
                         isNumber: true,
                         onSubmitted: (v) => ref
                             .read(inventoryProvider.notifier)
                             .updateItem(
-                                item.id, {'qty': double.tryParse(v) ?? 0}),
+                                item.id, {'quantity': double.tryParse(v) ?? 0}),
                       ),
                     ),
                     const SizedBox(width: 8),

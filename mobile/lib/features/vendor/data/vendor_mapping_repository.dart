@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/vendor/domain/models/vendor_mapping_models.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,10 +23,19 @@ class VendorMappingRepository {
   Future<Map<String, dynamic>> uploadScan(XFile file,
       {Function(int, int)? onProgress}) async {
     final formData = FormData();
-    formData.files.add(MapEntry(
-      'file',
-      await MultipartFile.fromFile(file.path, filename: file.name),
-    ));
+
+    if (kIsWeb) {
+      final bytes = await file.readAsBytes();
+      formData.files.add(MapEntry(
+        'file',
+        MultipartFile.fromBytes(bytes, filename: file.name),
+      ));
+    } else {
+      formData.files.add(MapEntry(
+        'file',
+        await MultipartFile.fromFile(file.path, filename: file.name),
+      ));
+    }
 
     final response = await _dio.post(
       '/api/vendor-mapping/upload-scan',
@@ -39,10 +49,18 @@ class VendorMappingRepository {
       {Function(int, int)? onProgress}) async {
     final formData = FormData();
     for (var file in files) {
-      formData.files.add(MapEntry(
-        'files',
-        await MultipartFile.fromFile(file.path, filename: file.name),
-      ));
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        formData.files.add(MapEntry(
+          'files',
+          MultipartFile.fromBytes(bytes, filename: file.name),
+        ));
+      } else {
+        formData.files.add(MapEntry(
+          'files',
+          await MultipartFile.fromFile(file.path, filename: file.name),
+        ));
+      }
     }
 
     final response = await _dio.post(

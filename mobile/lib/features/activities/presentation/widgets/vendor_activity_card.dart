@@ -25,14 +25,42 @@ class VendorActivityCard extends ConsumerWidget {
       vendor: (id, entityName, transactionDate, amount, displayId, isPaid, balanceDue, totalPriceHike, receiptLink, invoiceDate, inventoryItems, isVerified, balanceOwed) {
         final hasPriceHike = totalPriceHike > 0;
         final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
+        final hasDue = balanceDue != null && balanceDue > 0;
+        final pendingAmount = hasDue ? balanceDue : 0.0;
+        
+        final String badgeText = hasDue 
+            ? 'TO PAY' 
+            : (isPaid ? 'PAID' : 'SETTLED');
+            
+        final Color statusColor = hasDue 
+            ? context.errorColor 
+            : (isPaid ? context.successColor : context.textSecondaryColor);
+
+        // Date formatting
+        final now = DateTime.now();
+        final isToday = transactionDate.year == now.year && 
+                        transactionDate.month == now.month && 
+                        transactionDate.day == now.day;
+        final isYesterday = transactionDate.year == now.year && 
+                            transactionDate.month == now.month && 
+                            transactionDate.day == (now.day - 1);
+        
+        String dateStr = "";
+        if (isToday) {
+          dateStr = "Today";
+        } else if (isYesterday) {
+          dateStr = "Yesterday";
+        } else {
+          dateStr = "${transactionDate.day}/${transactionDate.month}/${transactionDate.year}";
+        }
+        
+        final timeStr = "${transactionDate.hour % 12 == 0 ? 12 : transactionDate.hour % 12}:${transactionDate.minute.toString().padLeft(2, '0')} ${transactionDate.hour >= 12 ? 'PM' : 'AM'}";
 
         return Material(
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // Open bill details whenever this row is tied to a specific bill.
               if (hasInvoiceRef) {
-                // Map the raw dynamic items back to InventoryItem objects
                 final List<InventoryItem> items = inventoryItems.map((map) {
                   return InventoryItem(
                     id: int.tryParse(map['id']?.toString() ?? '0') ?? 0,
@@ -41,7 +69,7 @@ class VendorActivityCard extends ConsumerWidget {
                     vendorName: entityName,
                     partNumber: map['part_number']?.toString() ?? '',
                     description: map['description']?.toString() ?? '',
-                    qty: (map['qty'] as num?)?.toDouble() ?? 0.0,
+                    quantity: (map['quantity'] as num?)?.toDouble() ?? (map['qty'] as num?)?.toDouble() ?? 0.0,
                     rate: (map['rate'] as num?)?.toDouble() ?? 0.0,
                     netBill: (map['net_bill'] as num?)?.toDouble() ?? 0.0,
                     amountMismatch: (map['amount_mismatch'] as num?)?.toDouble() ?? 0.0,
@@ -53,9 +81,7 @@ class VendorActivityCard extends ConsumerWidget {
 
                 final bundle = InventoryInvoiceBundle(
                   invoiceNumber: displayId,
-                  date: invoiceDate.isNotEmpty
-                      ? invoiceDate
-                      : transactionDate.toIso8601String(),
+                  date: invoiceDate.isNotEmpty ? invoiceDate : transactionDate.toIso8601String(),
                   vendorName: entityName,
                   receiptLink: receiptLink,
                   items: items,
@@ -70,7 +96,6 @@ class VendorActivityCard extends ConsumerWidget {
                 return;
               }
 
-              // Fallback: open the vendor payment ledger detail
               final vendorState = ref.read(vendorLedgerProvider);
               VendorLedger? matched;
               try {
@@ -92,109 +117,156 @@ class VendorActivityCard extends ConsumerWidget {
               );
             },
             child: Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+                  left: BorderSide(
+                    color: hasDue ? context.errorColor : (isPaid ? context.successColor : context.textSecondaryColor.withValues(alpha: 0.5)),
+                    width: 4,
+                  ),
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Avatar ──────────────────────────────────────────────
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: hasPriceHike
-                            ? context.errorColor.withValues(alpha: 0.12)
-                            : context.primaryColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        hasPriceHike ? Icons.warning_amber_rounded : Icons.inventory_2_outlined,
-                        color: hasPriceHike ? context.errorColor : context.primaryColor,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    // ── Entity name + date + alert ───────────────────────────────────
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            entityName,
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Supplier',
-                            style: TextStyle(
-                              color: context.textSecondaryColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          // ── Price Hike Alert ────────────────────────────────
-                          if (hasPriceHike) ...[
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: context.errorColor.withValues(alpha: 0.07),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: context.errorColor.withValues(alpha: 0.25),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entityName,
+                                style: TextStyle(
+                                  color: context.textColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                  letterSpacing: -0.6,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: 2),
+                              Row(
                                 children: [
-                                  Icon(Icons.warning_amber_rounded,
-                                      size: 13, color: context.errorColor),
-                                  const SizedBox(width: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'SUPPLIER',
+                                      style: TextStyle(
+                                        color: Colors.orange,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
                                   Text(
-                                    '🔴 Price hike: ${CurrencyFormatter.format(totalPriceHike)} extra',
+                                    '$dateStr • $timeStr',
                                     style: TextStyle(
-                                      fontSize: 11,
-                                      color: context.errorColor,
-                                      fontWeight: FontWeight.w700,
+                                      color: context.textSecondaryColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // ── Amount & Badge ───────────────────────────────────────────────
-                      Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          CurrencyFormatter.format(amount),
-                          style: TextStyle(
-                            color: context.textColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        _StatusChip(isPaid: isPaid, balanceDue: balanceDue),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              CurrencyFormatter.format(pendingAmount),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            Text(
+                              hasDue ? 'TO PAY' : (isPaid ? 'PAID' : 'SETTLED'),
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    if (hasPriceHike) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: context.errorColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.errorColor.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.trending_up, size: 14, color: context.errorColor),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Price hike: ${CurrencyFormatter.format(totalPriceHike)} extra',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.errorColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (hasInvoiceRef) ...[
+                                Icon(Icons.inventory_2_outlined, size: 14, color: context.textSecondaryColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '#$displayId',
+                                  style: TextStyle(
+                                    color: context.textColor.withValues(alpha: 0.7),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              Text(
+                                'TOTAL: ${CurrencyFormatter.format(amount)}',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _StatusChip(label: badgeText, color: statusColor),
                       ],
                     ),
                   ],
@@ -211,17 +283,12 @@ class VendorActivityCard extends ConsumerWidget {
 
 /// Pill chip showing paid/unpaid status or balance due for vendor transactions.
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.isPaid, this.balanceDue});
-  final bool isPaid;
-  final double? balanceDue;
+  const _StatusChip({required this.label, required this.color});
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    // If there's a positive balance due, we show "DUE"
-    final hasDue = balanceDue != null && balanceDue! > 0;
-    final color = hasDue ? context.warningColor : (isPaid ? context.successColor : context.errorColor);
-    final label = hasDue ? 'DUE' : (isPaid ? 'PAID' : 'SETTLED');
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(

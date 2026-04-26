@@ -1,5 +1,6 @@
 import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,10 @@ import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'providers/udhar_dashboard_provider.dart';
+import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class UdharDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -504,6 +509,14 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           ],
         ),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
+            tooltip: 'Send Reminder',
+            onPressed: () => _sendWhatsAppReminder(context, ref, currentLedger),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
@@ -586,129 +599,169 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       decoration: BoxDecoration(
         color: context.primaryColor,
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
         ),
       ),
       child: Column(
         children: [
-          // Balance
+          // Balance Card with Glassmorphism feel
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-            child: Column(
-              children: [
-                Text(
-                  isPositive ? 'Pending Balance' : 'Overpaid',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  CurrencyFormatter.format(balance.abs()),
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color:
-                        isPositive ? Colors.white : Colors.greenAccent.shade200,
-                  ),
-                ),
-                if (!isPositive)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.greenAccent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Customer has overpaid',
-                      style: TextStyle(color: Colors.greenAccent, fontSize: 11),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Stats Row
-          if (!_isLoading) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatItem(
-                        label: 'Total Billed',
-                        value: CurrencyFormatter.format(_totalInvoiced),
-                        color: Colors.white,
-                        iconColor: Colors.orange.shade300,
-                        icon: LucideIcons.fileText,
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 36,
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                    Expanded(
-                      child: _buildStatItem(
-                        label: 'Total Paid',
-                        value: CurrencyFormatter.format(_totalPaid),
-                        color: Colors.white,
-                        iconColor: Colors.greenAccent.shade400,
-                        icon: LucideIcons.checkCircle,
-                      ),
-                    ),
-                  ],
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
                 ),
               ),
+              child: Column(
+                children: [
+                  Text(
+                    isPositive ? 'TOTAL BALANCE DUE' : 'OVERPAID AMOUNT',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    CurrencyFormatter.format(balance.abs()),
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  if (!isPositive)
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Customer has overpaid',
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildHeaderStat(
+                          label: 'TOTAL BILLED',
+                          value: CurrencyFormatter.format(_totalInvoiced),
+                          icon: LucideIcons.fileText,
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 30,
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                      Expanded(
+                        child: _buildHeaderStat(
+                          label: 'TOTAL PAID',
+                          value: CurrencyFormatter.format(_totalPaid),
+                          icon: LucideIcons.checkCircle2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ] else ...[
-            const SizedBox(height: 20),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem({
+  Widget _buildHeaderStat({
     required String label,
     required String value,
-    required Color color,
     required IconData icon,
-    Color? iconColor,
   }) {
     return Column(
       children: [
-        Icon(icon, color: iconColor ?? color, size: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: 0.6), size: 12),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
-          label,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11),
-        ),
-        const SizedBox(height: 2),
-        Text(
           value,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
+    );
+  }
+
+  Future<void> _sendWhatsAppReminder(BuildContext context, WidgetRef ref, CustomerLedger ledger) async {
+    HapticFeedback.lightImpact();
+
+    final customerNameMsg = ledger.customerName.isNotEmpty &&
+            ledger.customerName.toLowerCase() != 'unknown'
+        ? ledger.customerName
+        : 'Customer';
+
+    final shopProfile = ref.read(shopProvider);
+    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+    final pendingFmt = CurrencyFormatter.format(ledger.balanceDue);
+
+    String message = 'Hi $customerNameMsg,\n\n'
+        'This is a gentle reminder from *${shopName.trim()}* regarding your pending balance.\n\n'
+        '⚠️ *Total Amount Due: $pendingFmt*\n\n';
+
+    if (shopProfile.upiId.isNotEmpty) {
+      final upiLink = 'upi://pay?pa=${shopProfile.upiId}&pn=${Uri.encodeComponent(shopName)}&am=${ledger.balanceDue.toStringAsFixed(2)}&cu=INR';
+      message += '💳 *Pay via UPI:* ${shopProfile.upiId}\n'
+                '🔗 *Payment Link:* $upiLink\n\n';
+    }
+
+    final authState = ref.read(authProvider);
+    final usernameParam = authState.user?.username != null
+        ? '&u=${Uri.encodeComponent(authState.user!.username)}'
+        : '';
+    final statementLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+    message += '📋 *View your account statement:*\n$statementLink\n\n';
+    message += 'Thank you for your business!\n— *${shopName.trim()}*';
+
+    await WhatsAppUtils.shareReceipt(
+      context,
+      phone: ledger.customerPhone ?? '',
+      message: message,
+      dialogTitle: 'Send WhatsApp Reminder',
+      dialogContent: 'Enter customer\'s mobile number, or skip to select contact directly in WhatsApp.',
     );
   }
 
@@ -815,161 +868,201 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
-    final isInvoice = tx.transactionType == 'INVOICE';
+    final isInvoice = tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT';
     final canTap = isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
 
-    final Color accentColor =
-        isPayment ? context.primaryColor : context.errorColor;
-    final Color bgColor =
-        isPayment ? context.primaryColor.withValues(alpha: 0.1) : context.errorColor.withValues(alpha: 0.1);
-    final IconData txIcon =
-        isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
-    final String txTitle = isPayment
-        ? 'Payment Received'
-        : 'Credit Invoice ${tx.receiptNumber ?? ''}';
+    final Color accentColor = isPayment ? context.primaryColor : context.errorColor;
+    final Color bgColor = isPayment 
+        ? context.primaryColor.withValues(alpha: 0.08) 
+        : context.errorColor.withValues(alpha: 0.08);
+    
+    final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
+    final String txTitle = isPayment ? 'Payment Received' : 'Credit Invoice';
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: context.surfaceColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: context.borderColor, width: 0.5),
-            boxShadow: context.premiumShadow,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 8, 14, 8),
-                child: Row(
-                children: [
-                  // Icon
-                  Container(
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(txIcon, color: accentColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                txTitle,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: context.textColor,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+        border: Border.all(color: context.borderColor, width: 0.5),
+        boxShadow: context.premiumShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Status Accent
+            Container(width: 4, color: accentColor),
+            
+            Expanded(
+              child: InkWell(
+                onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          // Icon
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: bgColor,
+                              shape: BoxShape.circle,
                             ),
-                            if (isInvoice && tx.isPaid)
-                              Container(
-                                margin: const EdgeInsets.only(left: 6),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: context.primaryColor.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border:
-                                      Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
-                                ),
-                                  child: Text(
-                                    'PAID',
-                                    style: TextStyle(
-                                      color: context.primaryColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          isInvoice
-                              ? 'Invoice Date: ${dateFormatter.format(tx.createdAt.toLocal())}'
-                              : dateFormatter.format(tx.createdAt.toLocal()),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.textSecondaryColor,
+                            child: Icon(txIcon, color: accentColor, size: 18),
                           ),
-                        ),
-                        if (tx.notes != null && tx.notes!.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            tx.notes!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.textSecondaryColor,
-                              fontStyle: FontStyle.italic,
+                          const SizedBox(width: 14),
+
+                          // Content
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        txTitle,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                          color: context.textColor,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 16,
+                                        color: accentColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      DateFormat('dd MMM, hh:mm a').format(tx.createdAt.toLocal()),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: context.textSecondaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (isInvoice && tx.isPaid) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: context.primaryColor.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'SETTLED',
+                                          style: TextStyle(
+                                            color: context.primaryColor,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                if (tx.notes != null && tx.notes!.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    tx.notes!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.textSecondaryColor,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-
-                  // Trailing items
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 70,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    
+                    // Footer for ReceiptID and Total (User Request)
+                    if (isInvoice || (isPayment && tx.receiptNumber != null))
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: context.textSecondaryColor.withValues(alpha: 0.03),
+                          border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: accentColor,
-                                ),
+                            Text(
+                              tx.receiptNumber != null ? '#${tx.receiptNumber}' : 'NO RECEIPT ID',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: context.textSecondaryColor.withValues(alpha: 0.6),
+                                letterSpacing: 0.5,
                               ),
                             ),
+                            if (isInvoice)
+                              Row(
+                                children: [
+                                  Text(
+                                    'TOTAL: ',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: context.textSecondaryColor.withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                  Text(
+                                    CurrencyFormatter.format(tx.amount),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: context.textColor.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
-                      if (canTap) ...[
-                        const SizedBox(width: 4),
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(LucideIcons.eye, size: 24),
-                          color: context.textSecondaryColor,
-                          onPressed: () => _showReceiptPhotoDialog(tx),
-                          tooltip: 'View Receipt Photo',
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+                    
+                    if (isInvoice) _buildMarkAsPaidButton(tx),
+                  ],
                 ),
               ),
-              if (isInvoice) _buildMarkAsPaidButton(tx),
-            ],
-          ),
+            ),
+            
+            // View Receipt button if available
+            if (canTap || (tx.receiptLink != null))
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _showReceiptPhotoDialog(tx),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border(left: BorderSide(color: context.borderColor, width: 0.5)),
+                    ),
+                    child: Icon(LucideIcons.image, size: 18, color: context.textSecondaryColor.withValues(alpha: 0.4)),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

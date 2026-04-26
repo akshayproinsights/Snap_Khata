@@ -32,30 +32,45 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Drag Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: context.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
           // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(LucideIcons.x),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                icon: const Icon(LucideIcons.x, size: 20),
+                style: IconButton.styleFrom(
+                  backgroundColor: context.surfaceColor,
+                  side: BorderSide(color: context.borderColor),
+                ),
               ),
               const Text(
-                'Select Bill Type',
+                'SNAP NEW BILL',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
                 ),
               ),
               IconButton(
-                onPressed: () {
-                  // Help logic
-                },
-                icon: const Icon(LucideIcons.helpCircle),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                onPressed: () {},
+                icon: const Icon(LucideIcons.helpCircle, size: 20),
+                style: IconButton.styleFrom(
+                  backgroundColor: context.surfaceColor,
+                  side: BorderSide(color: context.borderColor),
+                ),
               ),
             ],
           ),
@@ -169,6 +184,9 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       borderRadius: BorderRadius.circular(16),
                     ),
                     elevation: 0,
+                    shadowColor: (selectedType == BillScanType.customer 
+                            ? context.successColor 
+                            : context.errorColor).withValues(alpha: 0.3),
                   ),
                 ),
               ),

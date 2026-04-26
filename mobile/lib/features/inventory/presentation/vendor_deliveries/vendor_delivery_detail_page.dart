@@ -565,9 +565,9 @@ class _ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMismatch = item.amountMismatch.abs() > 1.0;
-    final qtyStr = item.qty == item.qty.roundToDouble() 
-        ? item.qty.toInt().toString() 
-        : item.qty.toStringAsFixed(2);
+    final qtyStr = item.quantity == item.quantity.roundToDouble() 
+        ? item.quantity.toInt().toString() 
+        : item.quantity.toStringAsFixed(2);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),

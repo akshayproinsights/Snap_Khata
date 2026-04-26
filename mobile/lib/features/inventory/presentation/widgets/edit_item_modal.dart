@@ -50,12 +50,12 @@ class _EditItemModalState extends State<EditItemModal> {
     _descController = TextEditingController(text: widget.item.description);
     _partNumberController = TextEditingController(text: widget.item.partNumber);
     _hsnController = TextEditingController(text: widget.item.hsnCode ?? '');
-    _qtyController = TextEditingController(text: _fmt(widget.item.qty));
+    _qtyController = TextEditingController(text: _fmt(widget.item.quantity));
     _rateController = TextEditingController(text: _fmt(widget.item.rate));
 
     // --- Discount ---
     final storedDiscAmt = widget.item.discAmount ?? 0.0;
-    final grossAmt = widget.item.grossAmount ?? (widget.item.qty * widget.item.rate);
+    final grossAmt = widget.item.grossAmount ?? (widget.item.quantity * widget.item.rate);
     double inferredDiscPct = widget.item.discPercent ?? 0.0;
     if (inferredDiscPct == 0 && storedDiscAmt > 0 && grossAmt > 0) {
       inferredDiscPct = double.parse((storedDiscAmt / grossAmt * 100).toStringAsFixed(2));
@@ -178,7 +178,7 @@ class _EditItemModalState extends State<EditItemModal> {
       description: _descController.text,
       partNumber: _partNumberController.text,
       hsnCode: _hsnController.text.trim().isEmpty ? null : _hsnController.text.trim(),
-      qty: qty,
+      quantity: qty,
       rate: rate,
       grossAmount: _previewState['grossAmount'],
       discType: _previewState['discType'],

@@ -179,7 +179,7 @@ async def get_public_receipt(
                     total_from_items += amount
                     items.append({
                         "name": item.get("description") or "Item",
-                        "qty": qty if qty > 0 else 1,
+                        "quantity": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
                         "amount": amount,
                         "type": item.get("type") or "part"
@@ -202,7 +202,7 @@ async def get_public_receipt(
                     total_from_items += amount
                     items.append({
                         "name": row.get("description") or "Item",
-                        "qty": qty if qty > 0 else 1,
+                        "quantity": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
                         "amount": amount,
                         "type": row.get("type") or "part"

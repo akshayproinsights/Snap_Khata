@@ -172,7 +172,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
     final history = _getItemHistory();
 
     // Stats calculation
-    final totalQty = history.fold<double>(0, (sum, item) => sum + item.qty);
+    final totalQty = history.fold<double>(0, (sum, item) => sum + item.quantity);
     final rates = history.map((e) => e.rate).where((r) => r > 0).toList();
     final avgRate = rates.isNotEmpty
         ? rates.reduce((a, b) => a + b) / rates.length
@@ -525,7 +525,7 @@ class _ItemPurchaseHistorySheetState extends ConsumerState<ItemPurchaseHistorySh
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
-                                                '${item.qty == item.qty.toInt() ? item.qty.toInt() : item.qty.toStringAsFixed(2)} Units',
+                                                '${item.quantity == item.quantity.toInt() ? item.quantity.toInt() : item.quantity.toStringAsFixed(2)} Units',
                                                 style: const TextStyle(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,

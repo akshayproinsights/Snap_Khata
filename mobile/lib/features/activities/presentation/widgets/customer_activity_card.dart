@@ -22,39 +22,49 @@ class CustomerActivityCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
       customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount, items) {
-        final initials = _initials(entityName);
         final isPayment = transactionType.toUpperCase() == 'PAYMENT';
         final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
         
         final hasDue = balanceDue != null && balanceDue > 0;
+        final pendingAmount = hasDue ? balanceDue : 0.0;
         
         final String badgeText = isPayment 
             ? 'GOT' 
             : (hasDue ? 'DUE' : 'SETTLED');
             
-        final Color badgeColor = isPayment 
-            ? context.successColor 
-            : (hasDue ? context.warningColor : context.successColor);
+        // Date formatting: "Today 10:30 AM" style
+        final now = DateTime.now();
+        final isToday = transactionDate.year == now.year && 
+                        transactionDate.month == now.month && 
+                        transactionDate.day == now.day;
+        final isYesterday = transactionDate.year == now.year && 
+                            transactionDate.month == now.month && 
+                            transactionDate.day == (now.day - 1);
+        
+        String dateStr = "";
+        if (isToday) {
+          dateStr = "Today";
+        } else if (isYesterday) {
+          dateStr = "Yesterday";
+        } else {
+          dateStr = "${transactionDate.day}/${transactionDate.month}/${transactionDate.year}";
+        }
+        
+        final timeStr = "${transactionDate.hour % 12 == 0 ? 12 : transactionDate.hour % 12}:${transactionDate.minute.toString().padLeft(2, '0')} ${transactionDate.hour >= 12 ? 'PM' : 'AM'}";
 
         return Material(
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // Open invoice details whenever this activity is an invoice entry.
-              // Credit invoices can exist without a receipt link in some payloads.
               if (!isPayment && hasInvoiceRef) {
                 final groupItems = items.map((e) => VerifiedInvoice.fromJson(e)).toList();
                 final group = InvoiceGroup(
                   receiptNumber: displayId,
-                  date: invoiceDate.isNotEmpty
-                      ? invoiceDate
-                      : transactionDate.toIso8601String(),
+                  date: invoiceDate.isNotEmpty ? invoiceDate : transactionDate.toIso8601String(),
                   receiptLink: receiptLink,
                   customerName: entityName,
                   mobileNumber: mobileNumber,
-                  uploadDate: invoiceDate.isNotEmpty
-                      ? invoiceDate
-                      : transactionDate.toIso8601String(),
+                  uploadDate: invoiceDate.isNotEmpty ? invoiceDate : transactionDate.toIso8601String(),
                   paymentMode: paymentMode,
                   receivedAmount: receivedAmount,
                   balanceDue: invoiceBalanceDue,
@@ -68,7 +78,6 @@ class CustomerActivityCard extends ConsumerWidget {
                 return;
               }
 
-              // Fallback: open the credit ledger detail for this customer
               final udharState = ref.read(udharProvider);
               CustomerLedger? matched;
               try {
@@ -90,81 +99,131 @@ class CustomerActivityCard extends ConsumerWidget {
               );
             },
             child: Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+                  left: BorderSide(
+                    color: isPayment || !hasDue ? context.successColor : context.errorColor,
+                    width: 4,
+                  ),
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
+                child: Column(
                   children: [
-                    // ── Avatar ──────────────────────────────────────────────
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: isPayment ? context.successColor.withValues(alpha: 0.12) : context.errorColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        initials,
-                        style: TextStyle(
-                          color: isPayment ? context.successColor : context.errorColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    // ── Entity name + date ───────────────────────────────────
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            entityName,
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Customer',
-                            style: TextStyle(
-                              color: context.textSecondaryColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // ── Amount & Badge ───────────────────────────────────────────────
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          CurrencyFormatter.format(amount),
-                          style: TextStyle(
-                            color: context.textColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entityName,
+                                style: TextStyle(
+                                  color: context.textColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                  letterSpacing: -0.6,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: context.primaryColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'CUSTOMER',
+                                      style: TextStyle(
+                                        color: context.primaryColor,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '$dateStr • $timeStr',
+                                    style: TextStyle(
+                                      color: context.textSecondaryColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              CurrencyFormatter.format(pendingAmount),
+                              style: TextStyle(
+                                color: isPayment || !hasDue ? context.successColor : context.errorColor,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            Text(
+                              isPayment ? 'RECEIVED' : (hasDue ? 'BALANCE DUE' : 'SETTLED'),
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (hasInvoiceRef) ...[
+                                Icon(Icons.receipt_long_outlined, size: 14, color: context.textSecondaryColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '#$displayId',
+                                  style: TextStyle(
+                                    color: context.textColor.withValues(alpha: 0.7),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              Text(
+                                'TOTAL: ${CurrencyFormatter.format(amount)}',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         _TypeChip(
                           label: badgeText,
-                          color: badgeColor,
+                          color: isPayment || !hasDue ? context.successColor : context.errorColor,
                         ),
                       ],
                     ),
@@ -177,14 +236,6 @@ class CustomerActivityCard extends ConsumerWidget {
       },
       orElse: () => const SizedBox.shrink(),
     );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 }
 

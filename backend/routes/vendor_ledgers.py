@@ -329,7 +329,6 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                             'id': row.get('id'),
                             'invoice_number': inv_num,
                             'description': row.get('description') or '',
-                            'qty': row.get('quantity') or 0,  # Map quantity -> qty for frontend
                             'quantity': row.get('quantity') or 0, 
                             'rate': row.get('rate') or 0,
                             'net_bill': float(row.get('net_bill') or 0),

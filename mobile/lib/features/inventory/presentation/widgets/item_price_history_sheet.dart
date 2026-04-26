@@ -292,7 +292,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
               Row(
                 children: [
                   Text(
-                    '×${item.qty.toInt()} units',
+                    '×${item.quantity.toInt()} units',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,

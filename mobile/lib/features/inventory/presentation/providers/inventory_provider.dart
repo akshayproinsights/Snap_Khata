@@ -214,14 +214,14 @@ class InventoryNotifier extends Notifier<InventoryState> {
         } else {
           // Scenario B: header-only discount → apply before GST
           final totalGross = groupItems.fold(0.0,
-              (sum, item) => sum + (item.grossAmount ?? (item.qty * item.rate)));
+              (sum, item) => sum + (item.grossAmount ?? (item.quantity * item.rate)));
           final headerDiscount = adjList.fold<double>(0.0, (sum, adj) {
             final t = adj.adjustmentType.toUpperCase();
             return (t == 'HEADER_DISCOUNT' || t == 'SCHEME') ? sum + adj.amount.abs() : sum;
           });
           final totalTaxable = (totalGross - headerDiscount).clamp(0.0, double.maxFinite);
           final origTaxable = groupItems.fold<double>(0.0,
-              (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.qty * item.rate)));
+              (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.quantity * item.rate)));
           final totalGst = groupItems.fold<double>(0.0,
               (sum, item) => sum + (item.cgstAmount ?? 0.0) + (item.sgstAmount ?? 0.0) + (item.igstAmount ?? 0.0));
           final scaledGst = origTaxable > 0 ? totalGst * (totalTaxable / origTaxable) : totalGst;

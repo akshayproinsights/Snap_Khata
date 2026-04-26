@@ -162,11 +162,11 @@ class InvoiceItemCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric(context, 'Qty', item.qty.round().toString()),
+              _buildMetric(context, 'Qty', item.quantity.round().toString()),
               Text('×', style: TextStyle(color: context.textSecondaryColor)),
               _buildMetric(context, 'Rate', CurrencyFormatter.format(item.rate)),
               Text('=', style: TextStyle(color: context.textSecondaryColor)),
-              _buildMetric(context, 'Gross', CurrencyFormatter.format(item.grossAmount ?? (item.qty * item.rate)), isBold: true),
+              _buildMetric(context, 'Gross', CurrencyFormatter.format(item.grossAmount ?? (item.quantity * item.rate)), isBold: true),
             ],
           ),
           

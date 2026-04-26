@@ -8,5 +8,5 @@ import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 final inventoryItemsProvider =
     FutureProvider.autoDispose<List<InventoryItem>>((ref) async {
   final repo = InventoryRepository();
-  return repo.getTrackedItems();
+  return repo.getInventoryItems(showAll: true);
 });

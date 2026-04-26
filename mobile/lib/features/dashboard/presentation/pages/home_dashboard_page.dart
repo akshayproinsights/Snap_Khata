@@ -212,16 +212,23 @@ class HomeDashboardPage extends ConsumerWidget {
     final username = authState.user?.username ?? 'Merchant';
 
     final hour = DateTime.now().hour;
-    String greeting = 'GOOD MORNING,';
-    if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON,';
-    if (hour >= 17) greeting = 'GOOD EVENING,';
+    String greeting = 'GOOD MORNING';
+    if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON';
+    if (hour >= 17) greeting = 'GOOD EVENING';
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
-          child: const Icon(LucideIcons.user, color: Colors.white, size: 22),
+        Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: context.primaryColor.withValues(alpha: 0.2), width: 2),
+          ),
+          child: CircleAvatar(
+            radius: 20,
+            backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
+            child: const Icon(LucideIcons.user, color: Colors.white, size: 20),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -229,22 +236,22 @@ class HomeDashboardPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                greeting,
+                greeting.toUpperCase(),
                 style: TextStyle(
                   color: context.textSecondaryColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
-                username.toUpperCase(),
+                username,
                 style: TextStyle(
-                  color: context.primaryColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
+                  color: context.textColor,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
               ),
             ],
@@ -407,27 +414,25 @@ class HomeDashboardPage extends ConsumerWidget {
   Widget _buildFilterChips(BuildContext context, WidgetRef ref, ActivityFilter currentFilter, bool isDark) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
           _FilterChip(
             label: 'All',
             isSelected: currentFilter == ActivityFilter.all,
             onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.all),
-            isDark: isDark,
           ),
           const SizedBox(width: 8),
           _FilterChip(
             label: 'Customers',
             isSelected: currentFilter == ActivityFilter.customers,
             onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.customers),
-            isDark: isDark,
           ),
           const SizedBox(width: 8),
           _FilterChip(
             label: 'Suppliers',
             isSelected: currentFilter == ActivityFilter.suppliers,
             onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.suppliers),
-            isDark: isDark,
           ),
         ],
       ),
@@ -541,49 +546,79 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: context.premiumShadow,
         border: Border.all(
           color: context.borderColor,
           width: 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: context.textSecondaryColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.0,
+          Positioned(
+            right: -10,
+            top: -10,
+            child: Icon(
+              label.contains('GET') ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
+              color: color.withValues(alpha: 0.05),
+              size: 64,
             ),
           ),
-          const SizedBox(height: 12),
-          if (isLoading)
-            SizedBox(
-              height: 32,
-              child: Center(
-                child: LinearProgressIndicator(
-                  color: color,
-                  backgroundColor: color.withValues(alpha: 0.1),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (isLoading)
+                SizedBox(
+                  height: 32,
+                  child: Center(
+                    child: LinearProgressIndicator(
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                )
+              else
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    amount,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1.0,
+                    ),
+                  ),
                 ),
-              ),
-            )
-          else
-            Text(
-              amount,
-              style: TextStyle(
-                color: color,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -594,42 +629,49 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final bool isDark;
 
   const _FilterChip({
     required this.label,
     required this.isSelected,
     required this.onTap,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
               ? context.primaryColor
               : context.surfaceColor,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
                 ? context.primaryColor
                 : context.borderColor,
             width: 1.5,
           ),
-          boxShadow: isSelected ? context.premiumShadow : [],
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: context.primaryColor.withValues(alpha: 0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ] : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             color: isSelected
                 ? Colors.white
-                : context.textColor,
-            fontSize: 14,
+                : context.textSecondaryColor,
+            fontSize: 13,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
           ),
         ),

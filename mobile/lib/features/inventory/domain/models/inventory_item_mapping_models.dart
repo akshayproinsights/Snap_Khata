@@ -96,7 +96,7 @@ class VendorItem {
   final int id;
   final String description;
   final String partNumber;
-  final double? qty;
+  final double? quantity;
   final double? rate;
   final double? matchScore;
 
@@ -104,7 +104,7 @@ class VendorItem {
     required this.id,
     required this.description,
     required this.partNumber,
-    this.qty,
+    this.quantity,
     this.rate,
     this.matchScore,
   });
@@ -114,7 +114,7 @@ class VendorItem {
       id: json['id'] ?? 0,
       description: json['description'] ?? '',
       partNumber: json['part_number'] ?? '',
-      qty: (json['qty'] as num?)?.toDouble(),
+      quantity: ((json['quantity'] ?? json['qty']) as num?)?.toDouble(),
       rate: (json['rate'] as num?)?.toDouble(),
       matchScore: (json['match_score'] as num?)?.toDouble(),
     );

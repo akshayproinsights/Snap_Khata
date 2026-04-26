@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/core/utils/image_compress_service.dart';
@@ -92,10 +93,18 @@ class InventoryRepository {
 
     final formData = FormData();
     for (var file in compressedFiles) {
-      formData.files.add(MapEntry(
-        'files',
-        await MultipartFile.fromFile(file.path, filename: file.name),
-      ));
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        formData.files.add(MapEntry(
+          'files',
+          MultipartFile.fromBytes(bytes, filename: file.name),
+        ));
+      } else {
+        formData.files.add(MapEntry(
+          'files',
+          await MultipartFile.fromFile(file.path, filename: file.name),
+        ));
+      }
     }
     final response = await _dio.post('/api/inventory/upload',
         data: formData, onSendProgress: onProgress);

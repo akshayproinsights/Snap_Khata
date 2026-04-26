@@ -355,7 +355,7 @@ def get_stock_history(
     try:
         # Get vendor transactions (IN) - include ID for editing
         vendor_items = db.client.table("inventory_items")\
-            .select("id, part_number, description, qty, rate, invoice_date, invoice_number, receipt_link")\
+            .select("id, part_number, description, quantity, rate, invoice_date, invoice_number, receipt_link")\
             .eq("username", username)\
             .execute()
         
@@ -372,9 +372,9 @@ def get_stock_history(
                     "date": item.get("invoice_date"),
                     "invoice_number": item.get("invoice_number"),
                     "description": item.get("description"),
-                    "quantity": float(item.get("qty", 0) or 0),
+                    "quantity": float(item.get("quantity", 0) or 0),
                     "rate": item.get("rate"),
-                    "amount": float(item.get("qty", 0) or 0) * float(item.get("rate", 0) or 0),
+                    "amount": float(item.get("quantity", 0) or 0) * float(item.get("rate", 0) or 0),
                     "receipt_link": item.get("receipt_link")
                 })
         
@@ -520,7 +520,7 @@ def update_transaction(
         # Update appropriate table based on type
         if updates.type == "IN":
             # Update inventory_items table
-            update_data = {"qty": updates.quantity}
+            update_data = {"quantity": updates.quantity}
             if updates.rate is not None:
                 update_data["rate"] = updates.rate
             

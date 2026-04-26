@@ -621,7 +621,7 @@ class _InventoryInvoiceReviewPageState
 
       final totalGross = sortedItems.fold(
         0.0,
-        (sum, item) => sum + (item.grossAmount ?? (item.qty * item.rate)),
+        (sum, item) => sum + (item.grossAmount ?? (item.quantity * item.rate)),
       );
 
       final headerDiscountAmt = _adjustments.fold<double>(
@@ -641,7 +641,7 @@ class _InventoryInvoiceReviewPageState
       // (Items' GST was computed on grossAmount since discPct=0 at item level)
       final originalTaxableBase = sortedItems.fold<double>(
         0.0,
-        (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.qty * item.rate)),
+        (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.quantity * item.rate)),
       );
       final totalGst = sortedItems.fold<double>(
         0.0,
@@ -817,7 +817,7 @@ class _InventoryInvoiceReviewPageState
                         'description': updatedItem.description,
                         'part_number': updatedItem.partNumber,
                         'hsn_code': updatedItem.hsnCode,
-                        'qty': updatedItem.qty,
+                        'quantity': updatedItem.quantity,
                         'rate': updatedItem.rate,
                         'gross_amount': updatedItem.grossAmount,
                         'disc_type': updatedItem.discType,

@@ -41,7 +41,13 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
       if (mounted) {
         setState(() {
           _industries = industries;
-          _selectedIndustry = industries.first['id'] as String;
+          // Set "General" as default if it exists, otherwise pick the first one
+          final generalIndex = industries.indexWhere((i) => i['id'] == 'general');
+          if (generalIndex != -1) {
+            _selectedIndustry = industries[generalIndex]['id'] as String;
+          } else {
+            _selectedIndustry = industries.first['id'] as String;
+          }
           _isLoadingIndustries = false;
         });
       }
