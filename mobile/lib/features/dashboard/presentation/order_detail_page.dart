@@ -729,22 +729,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             ],
           ),
           const SizedBox(height: 20),
-          TextField(
-            controller: _creditDetailsController,
-            decoration: InputDecoration(
-              labelText: 'Customer Details / Notes',
-              labelStyle:
-                  TextStyle(fontSize: 14, color: context.textSecondaryColor),
-              alignLabelWithHint: true,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: context.borderColor)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: context.borderColor)),
-            ),
-            maxLines: 2,
-          ),
         ],
       ],
     );
@@ -948,6 +932,29 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                           }).toList(),
                         ),
                       ],
+
+                      // ── Notes / Additional Details ──
+                      if (isEditing || _creditDetailsController.text.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text('Notes / Additional Details',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: context.textSecondaryColor,
+                                letterSpacing: 0.5)),
+                        const SizedBox(height: 4),
+                        if (isEditing)
+                          _buildTextField(context, _creditDetailsController, 'Enter any additional notes here...', maxLines: 2)
+                        else
+                          Text(
+                              _creditDetailsController.text,
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textColor),
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis),
+                      ],
                     ],
                   ),
                 ),
@@ -968,12 +975,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   Widget _buildTextField(BuildContext context, TextEditingController controller, String hint,
-      {bool isNumber = false}) {
+      {bool isNumber = false, int maxLines = 1}) {
     return TextFormField(
       controller: controller,
+      maxLines: maxLines,
       keyboardType: isNumber
           ? const TextInputType.numberWithOptions(decimal: true)
-          : TextInputType.text,
+          : (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.textColor),
       decoration: InputDecoration(
         hintText: hint,

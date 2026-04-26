@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/upload/data/upload_repository.dart';
@@ -214,7 +214,7 @@ class UploadNotifier extends Notifier<UploadState> {
       if (existingNames.contains(file.name)) continue;
       int? size;
       try {
-        size = await File(file.path).length();
+        size = await file.length();
       } catch (_) {}
       newItems.add(UploadFileItem(
         path: file.path,

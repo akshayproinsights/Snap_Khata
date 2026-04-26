@@ -110,18 +110,18 @@ class ItemPriceHistorySheet extends ConsumerWidget {
     Color trendColor = context.textSecondaryColor;
     Color trendBgColor = context.borderColor.withValues(alpha: 0.1);
     IconData trendIcon = LucideIcons.minus;
-    String trendText = 'Price varies / Stable';
+    String trendText = 'Price is Stable';
     
     if ((latestItem.priceHikeAmount ?? 0) > 0) {
       trendColor = context.errorColor;
       trendBgColor = context.errorColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingUp;
-      trendText = 'Price is Going Up';
+      trendText = 'Price Hike Detected';
     } else if ((latestItem.priceHikeAmount ?? 0) < 0) {
       trendColor = context.successColor;
       trendBgColor = context.successColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingDown;
-      trendText = 'Price Dropped';
+      trendText = 'Price Drop Detected';
     }
 
     return CustomScrollView(

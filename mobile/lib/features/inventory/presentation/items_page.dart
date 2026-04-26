@@ -124,8 +124,12 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
     // 3. Create a list of deduplicated items with calculated stats
     final List<Map<String, dynamic>> catalogItems = [];
     grouped.forEach((desc, groupItems) {
-      // Sort items by date (newest first) to get the latest price
-      groupItems.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
+      // Sort items by date (newest first) and then by ID (highest first) to get the absolute latest entry
+      groupItems.sort((a, b) {
+        int dateCmp = b.invoiceDate.compareTo(a.invoiceDate);
+        if (dateCmp != 0) return dateCmp;
+        return b.id.compareTo(a.id); // Tie-breaker for same-day invoices
+      });
       
       final latestItem = groupItems.first;
       final lastPrice = latestItem.rate;
@@ -238,55 +242,49 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
       ),
     );
   }
-
-
   Widget _buildItemCatalogCard(BuildContext context, InventoryItem item, int orderCount) {
-
     // Determine price trend
     Color trendColor = Colors.grey.shade500;
-    IconData trendIcon = LucideIcons.minus; // stable
+    Color trendBg = context.borderColor.withValues(alpha: 0.1);
+    IconData trendIcon = LucideIcons.minus;
     String trendText = 'Stable';
 
     double delta = item.priceHikeAmount ?? 0;
-
-    // Fallback: calculate from previousRate if priceHikeAmount is missing or zero
     if (delta == 0 && item.previousRate != null && item.previousRate! > 0) {
       delta = item.rate - item.previousRate!;
     }
     
     if (delta > 0) {
-      trendColor = const Color(0xFFEF4444); // red
+      trendColor = const Color(0xFFEF4444); // Red-500
+      trendBg = trendColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingUp;
-      trendText = 'Going Up ${CurrencyFormatter.format(delta)}';
+      trendText = '+${CurrencyFormatter.format(delta)}';
     } else if (delta < 0) {
-      trendColor = const Color(0xFF22C55E); // green
+      trendColor = const Color(0xFF22C55E); // Green-500
+      trendBg = trendColor.withValues(alpha: 0.1);
       trendIcon = LucideIcons.trendingDown;
-      trendText = 'Going Down ${CurrencyFormatter.format(delta)}';
-    } else if (orderCount > 1) {
-      // Multiple orders but no detectable direction → show "Price varies"
-      trendText = 'Price varies';
+      trendText = CurrencyFormatter.format(delta);
     }
 
     String dateLabel = '';
     try {
       final dt = DateTime.parse(item.invoiceDate);
-      dateLabel = DateFormat('dd MMM yy').format(dt);
+      dateLabel = DateFormat('d MMM yyyy').format(dt);
     } catch (_) {
       dateLabel = item.invoiceDate.split('T').first;
     }
 
-    return Material(
-      color: context.surfaceColor,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: context.borderColor),
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.borderColor, width: 1.2),
+        boxShadow: context.premiumShadow,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: () {
-          HapticFeedback.lightImpact();
+          HapticFeedback.mediumImpact();
           showModalBottomSheet(
             context: context,
             isScrollControlled: true,
@@ -298,10 +296,11 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
           );
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top Row: Item Name & Latest Price
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -312,99 +311,144 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                         Text(
                           item.description,
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
                             color: context.textColor,
+                            letterSpacing: -0.4,
+                            height: 1.2,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (item.vendorName != null) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            item.vendorName!,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.primary.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
                         if (item.partNumber.isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            item.partNumber,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: context.textSecondaryColor,
-                              fontWeight: FontWeight.w500,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: context.borderColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              item.partNumber,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.textSecondaryColor,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
-                        ]
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Price block
+                  const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
                         CurrencyFormatter.format(item.rate),
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
                           color: context.textColor,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(trendIcon, size: 14, color: trendColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            trendText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: trendColor,
-                            ),
+                      if (delta != 0) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: trendBg,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(trendIcon, size: 14, color: trendColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                trendText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: trendColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(LucideIcons.history, size: 14, color: Colors.grey.shade500),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Ordered $orderCount time${orderCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.textSecondaryColor,
-                      fontWeight: FontWeight.w500,
+              
+              const SizedBox(height: 20),
+              
+              // Bottom Section: Vendor & History Meta
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.backgroundColor.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(LucideIcons.store, size: 14, color: context.primaryColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.vendorName ?? 'Unknown Vendor',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: context.primaryColor,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Last: $dateLabel',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.textSecondaryColor,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(LucideIcons.calendar, size: 14, color: context.textSecondaryColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Last bought $dateLabel',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.textSecondaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: context.borderColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '$orderCount orders',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.textSecondaryColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

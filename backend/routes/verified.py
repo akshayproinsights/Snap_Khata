@@ -205,58 +205,30 @@ async def update_bulk_verified_invoices(
         raise HTTPException(status_code=400, detail="No username in token")
         
     try:
-        db = get_database_client()
-        from database_helpers import convert_numeric_types
+        from database_helpers import update_verified_invoices
         from routes.udhar import process_ledgers_for_verified_invoices
         
-        success_count = 0
-        error_count = 0
+        if not records:
+            return {"success": True, "message": "No records to update"}
+
+        # Perform optimized batch upsert
+        success = update_verified_invoices(username, records)
         
-        for record in records:
-            row_id = record.get('row_id')
-            if not row_id:
-                error_count += 1
-                continue
-                
+        if success:
+            # OPTIMIZED: Update all ledger transactions in a single background process (or at least one call)
+            # process_ledgers_for_verified_invoices is already bulk-capable
             try:
-                record['username'] = username
-                record = convert_numeric_types(record)
-                
-                # Get old record to check for amount differences
-                old_record_resp = db.client.table('verified_invoices').select('amount', 'receipt_number').eq('username', username).eq('row_id', row_id).execute()
-                old_amount = 0.0
-                receipt_number = record.get('receipt_number')
-                
-                if old_record_resp.data:
-                    old_amount = float(old_record_resp.data[0].get('amount', 0) or 0)
-                    if not receipt_number:
-                        receipt_number = old_record_resp.data[0].get('receipt_number')
-                
-                # Delete the old record
-                db.delete('verified_invoices', {'username': username, 'row_id': row_id})
-                
-                # Insert the updated record
-                db.insert('verified_invoices', record)
-                
-                # Adjust ledger transaction
-                try:
-                    await process_ledgers_for_verified_invoices(username, [record])
-                except Exception as inner_e:
-                    logger.error(f"Error syncing ledger transaction in bulk update: {inner_e}")
-                except Exception as inner_e:
-                    logger.error(f"Error syncing ledger transaction in bulk update: {inner_e}")
-                
-                success_count += 1
-            except Exception as item_e:
-                logger.error(f"Error processing record {row_id} in bulk update: {item_e}")
-                error_count += 1
-                
-        logger.info(f"Bulk updated {success_count} verified invoice records for {username} with {error_count} errors")
-        
-        return {
-            "success": True,
-            "message": f"Updated {success_count} records successfully" + (f", {error_count} failed" if error_count > 0 else "")
-        }
+                await process_ledgers_for_verified_invoices(username, records)
+            except Exception as inner_e:
+                logger.error(f"Error syncing ledger transactions in bulk update: {inner_e}")
+            
+            logger.info(f"Bulk updated {len(records)} verified invoice records for {username}")
+            return {
+                "success": True,
+                "message": f"Updated {len(records)} records successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to bulk update verified invoices")
     
     except Exception as e:
         logger.error(f"Error logging verified invoices in bulk: {e}")
@@ -281,47 +253,26 @@ async def update_single_verified_invoice(
         raise HTTPException(status_code=400, detail="row_id is required for update")
     
     try:
-        db = get_database_client()
+        from database_helpers import update_verified_invoices
+        from routes.udhar import process_ledgers_for_verified_invoices
         
-        # Ensure username is set in the record
-        record['username'] = username
+        # Perform optimized upsert
+        success = update_verified_invoices(username, [record])
         
-        # Convert numeric types
-        from database_helpers import convert_numeric_types
-        record = convert_numeric_types(record)
-        
-        # Get old record to check for amount differences
-        old_record_resp = db.client.table('verified_invoices').select('amount', 'receipt_number').eq('username', username).eq('row_id', row_id).execute()
-        old_amount = 0.0
-        receipt_number = record.get('receipt_number')
-        
-        if old_record_resp.data:
-            old_amount = float(old_record_resp.data[0].get('amount', 0) or 0)
-            if not receipt_number:
-                receipt_number = old_record_resp.data[0].get('receipt_number')
-        
-        # Delete the old record
-        db.delete('verified_invoices', {'username': username, 'row_id': row_id})
-        
-        # Insert the updated record
-        db.insert('verified_invoices', record)
-        
-        # Adjust ledger transaction
-        try:
-            from routes.udhar import process_ledgers_for_verified_invoices
-            await process_ledgers_for_verified_invoices(username, [record])
-        except Exception as inner_e:
-            logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")
-                            
-        except Exception as inner_e:
-            logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")
-        
-        logger.info(f"Updated verified invoice record {row_id} for {username}")
-        
-        return {
-            "success": True,
-            "message": f"Updated record {row_id} successfully"
-        }
+        if success:
+            # Adjust ledger transaction
+            try:
+                await process_ledgers_for_verified_invoices(username, [record])
+            except Exception as inner_e:
+                logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")
+            
+            logger.info(f"Updated verified invoice record {row_id} for {username}")
+            return {
+                "success": True,
+                "message": f"Updated record {row_id} successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update verified invoice")
     
     except Exception as e:
         logger.error(f"Error updating verified invoice: {e}")

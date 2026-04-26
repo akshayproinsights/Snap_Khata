@@ -311,19 +311,43 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
         
         # Prepare records for batch upsert
         records = []
+        
+        # CORE columns that are guaranteed to exist in verified_invoices
+        CORE_VERIFIED_COLS = {
+            'username', 'receipt_number', 'date', 'description', 'amount', 
+            'r2_file_path', 'image_hash', 'row_id', 'header_id', 'extra_fields',
+            'line_item_row_bbox', 'model_used', 'model_accuracy', 
+            'input_tokens', 'output_tokens', 'total_tokens', 'cost_inr',
+            'receipt_link', 'type', 'customer_name', 'upload_date'
+        }
+        
         for record in data:
             record['username'] = username  # Ensure username is set
-            # CRITICAL: Clean empty date strings (Supabase rejects empty strings for date columns)
+            
+            # CRITICAL: Clean empty date strings
             if 'date' in record and (record['date'] == '' or pd.isna(record['date'])):
                 record['date'] = None
+                
             record = convert_numeric_types(record)
-            records.append(record)
+            
+            # Handle extra_fields resilience
+            extra_fields = record.get('extra_fields', {})
+            if not isinstance(extra_fields, dict):
+                extra_fields = {}
+            
+            # Move non-core columns to extra_fields
+            # We skip 'id' and 'row_id' as they are keys
+            cleaned_record = {}
+            for k, v in record.items():
+                if k in CORE_VERIFIED_COLS or k in ['id', 'row_id']:
+                    cleaned_record[k] = v
+                elif v is not None:
+                    extra_fields[k] = v
+            
+            cleaned_record['extra_fields'] = extra_fields
+            records.append(cleaned_record)
         
         # OPTIMIZED: Use batch upsert with row_id as conflict resolution
-        # This allows updating existing records instead of throwing duplicate key errors
-        # CRITICAL: Use composite conflict key (username, row_id) — NOT just row_id.
-        # row_id values like '_1', '_2' are identical across all tenants.
-        # Upserting on row_id alone would overwrite another tenant's rows.
         count = db.batch_upsert('verified_invoices', records, batch_size=500, on_conflict='username,row_id')
         logger.info(f"✅ Upserted {count} verified invoices for {username} (preserving existing data)")
         return True

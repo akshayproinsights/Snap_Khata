@@ -932,11 +932,19 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             existing_receipts_response = db.client.table('verified_invoices').select('receipt_number').eq('username', username).execute()
             existing_receipts = {r.get('receipt_number') for r in existing_receipts_response.data if r.get('receipt_number')}
             
-            new_receipts = [r for r in final_records if r.get('receipt_number') and r.get('receipt_number') not in existing_receipts]
+            # Deduplicate by receipt_number to prevent ON CONFLICT error for multi-line invoices
+            unique_new_receipts = {}
+            for r in final_records:
+                rn = r.get('receipt_number')
+                if rn and rn not in existing_receipts:
+                    if rn not in unique_new_receipts:
+                        unique_new_receipts[rn] = r
             
-            if new_receipts:
+            new_receipts_list = list(unique_new_receipts.values())
+            
+            if new_receipts_list:
                 usage_records = []
-                for r in new_receipts:
+                for r in new_receipts_list:
                     receipt_number = r.get('receipt_number')
                     # Use a deterministic UUID to prevent double-counting of the same receipt
                     log_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"customer-{username}-{receipt_number}"))
@@ -949,7 +957,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                 # Using upsert to handle cases where the log already exists (e.g. from a previous partial success)
                 # This ensures we never count the same receipt twice.
                 db.client.table('usage_logs').upsert(usage_records).execute()
-                logger.info(f"Logged {len(new_receipts)} unique customer orders to usage_logs")
+                logger.info(f"Logged {len(new_receipts_list)} unique customer orders to usage_logs")
         except Exception as e:
             logger.error(f"Failed to log customer usage metrics: {e}")
             

@@ -18,16 +18,16 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-class UdharDetailPage extends ConsumerStatefulWidget {
+class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
 
-  const UdharDetailPage({super.key, required this.ledger});
+  const PartyDetailPage({super.key, required this.ledger});
 
   @override
-  ConsumerState<UdharDetailPage> createState() => _UdharDetailPageState();
+  ConsumerState<PartyDetailPage> createState() => _PartyDetailPageState();
 }
 
-class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
+class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   final dateFormatter = DateFormat('dd MMM yyyy, hh:mm a');
 
   List<LedgerTransaction>? _transactions;
@@ -40,10 +40,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
   }
 
   Future<void> _loadTransactions() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final transactions = await ref
         .read(udharProvider.notifier)
         .fetchTransactions(widget.ledger.id);
+    if (!mounted) return;
     setState(() {
       _transactions = transactions;
       _isLoading = false;
@@ -104,13 +106,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
               ),
               decoration: BoxDecoration(
                 color: context.surfaceColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Handle bar
                   Center(
                     child: Container(
                       width: 40,
@@ -126,12 +127,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Receive Payment',
+                        'Record Payment',
                         style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
+                            fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: const Icon(LucideIcons.x),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -141,8 +142,8 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: context.primaryColor.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.3), width: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.2), width: 1),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -154,49 +155,62 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                               fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          CurrencyFormatter.format(widget.ledger.balanceDue),
+                          CurrencyFormatter.format(_computedBalance),
                           style: TextStyle(
                             color: context.primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   TextField(
                     controller: amountController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(color: context.textColor),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
                     decoration: InputDecoration(
-                      labelText: 'Amount Received (₹)',
+                      labelText: 'Amount Received',
                       labelStyle: TextStyle(color: context.textSecondaryColor),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       prefixIcon: Icon(LucideIcons.indianRupee, color: context.primaryColor),
+                      filled: true,
+                      fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
                     ),
                     autofocus: true,
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: notesController,
-                    style: TextStyle(color: context.textColor),
                     decoration: InputDecoration(
-                      labelText: 'Notes / Reference',
+                      labelText: 'Notes (Optional)',
                       labelStyle: TextStyle(color: context.textSecondaryColor),
+                      prefixIcon: Icon(LucideIcons.edit3, color: context.textSecondaryColor),
+                      filled: true,
+                      fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
                       ),
-                      prefixIcon: Icon(LucideIcons.edit2, color: context.textSecondaryColor),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
+                    height: 56,
                     child: ElevatedButton(
                       onPressed: isSubmitting
                           ? null
@@ -241,8 +255,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: context.primaryColor,
                         foregroundColor: Colors.white,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       child: isSubmitting
@@ -254,7 +269,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                           : const Text(
                               'Save Payment',
                               style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold),
+                                  fontSize: 18, fontWeight: FontWeight.w800),
                             ),
                     ),
                   ),
@@ -271,7 +286,6 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
   Future<void> _navigateToOrderDetails(LedgerTransaction tx) async {
     if (tx.receiptNumber == null) return;
 
-    // Show a loading overlay
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -284,7 +298,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           await repo.getVerifiedInvoices(receiptNumber: tx.receiptNumber);
 
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       if (records.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -293,7 +307,6 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         return;
       }
 
-      // Construct InvoiceGroup
       final first = records.first;
       final group = InvoiceGroup(
         receiptNumber: first.receiptNumber,
@@ -316,7 +329,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Close loading dialog if still open
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
         );
@@ -337,47 +350,44 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         maxChildSize: 0.95,
         builder: (context, scrollController) => Container(
           decoration: const BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            color: Colors.black,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: Column(
             children: [
-              // Handle bar
               Container(
                 margin: const EdgeInsets.symmetric(vertical: 12),
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.white38,
+                  color: Colors.white24,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
-                    const SizedBox(width: 8),
+                    const Icon(LucideIcons.receipt, color: Colors.white, size: 20),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Invoice #${tx.receiptNumber ?? "N/A"}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(LucideIcons.x, color: Colors.white70),
+                      icon: const Icon(LucideIcons.x, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
               const Divider(color: Colors.white12),
-              // Receipt photo area
               Expanded(
                 child: tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null'
                   ? _buildImageWidget(tx.receiptLink!, scrollController)
@@ -385,11 +395,11 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(LucideIcons.imageOff, color: Colors.white38, size: 48),
-                          const SizedBox(height: 12),
+                          Icon(LucideIcons.imageOff, color: Colors.white.withValues(alpha: 0.2), size: 64),
+                          const SizedBox(height: 16),
                           const Text(
                             'No receipt photo available',
-                            style: TextStyle(color: Colors.white54, fontSize: 15),
+                            style: TextStyle(color: Colors.white54, fontSize: 16),
                           ),
                         ],
                       ),
@@ -409,28 +419,27 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       child: InteractiveViewer(
         maxScale: 5.0,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: CachedNetworkImage(
             imageUrl: url,
             fit: BoxFit.contain,
             width: double.infinity,
             placeholder: (context, url) => Container(
-              height: 300,
-              color: Colors.white10,
+              height: 400,
+              color: Colors.white.withValues(alpha: 0.05),
               child: const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               ),
             ),
             errorWidget: (context, url, error) => Container(
               height: 200,
-              color: Colors.white10,
+              color: Colors.white.withValues(alpha: 0.05),
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
-                  SizedBox(height: 8),
-                  Text('Could not load receipt image',
-                    style: TextStyle(color: Colors.white54)),
+                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 48),
+                  SizedBox(height: 12),
+                  Text('Could not load image', style: TextStyle(color: Colors.white54)),
                 ],
               ),
             ),
@@ -462,36 +471,40 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         backgroundColor: context.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        titleSpacing: 0,
+        centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.white.withValues(alpha: 0.25),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Text(
                 initials,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    currentLedger.customerName.toUpperCase(),
+                    currentLedger.customerName,
                     style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                       color: Colors.white,
+                      letterSpacing: -0.5,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -500,15 +513,17 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                       currentLedger.customerPhone!.isNotEmpty)
                     Text(
                       currentLedger.customerPhone!,
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7)),
+                      style: TextStyle(
+                        fontSize: 12, 
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                 ],
               ),
             ),
           ],
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
@@ -520,37 +535,48 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       ),
       body: Column(
         children: [
-          // Header with balance & stats
           _buildHeaderCard(currentLedger),
 
-          // Section Label
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  width: 3,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: context.primaryColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: context.primaryColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'TRANSACTION HISTORY',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: context.textSecondaryColor,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'TRANSACTIONS',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: context.textSecondaryColor,
-                    letterSpacing: 1.2,
+                if (_transactions != null && _transactions!.isNotEmpty)
+                  Text(
+                    '${_transactions!.length} Entries',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.textSecondaryColor.withValues(alpha: 0.6),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
 
-          // Transactions List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -563,10 +589,10 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                             .toList();
                         if (visibleTxs.isEmpty) return _buildEmptyState();
                         return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                           itemCount: visibleTxs.length,
                           separatorBuilder: (context, index) =>
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final tx = visibleTxs[index];
                             return _buildTransactionCard(tx);
@@ -576,14 +602,19 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddPaymentDialog(context),
-        backgroundColor: context.primaryColor,
-        icon: const Icon(LucideIcons.indianRupee, color: Colors.white),
-        label: const Text(
-          'Add Payment',
-          style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+      floatingActionButton: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddPaymentDialog(context),
+          backgroundColor: context.primaryColor,
+          elevation: 8,
+          icon: const Icon(LucideIcons.indianRupee, color: Colors.white, size: 20),
+          label: const Text(
+            'RECORD PAYMENT',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -599,24 +630,37 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       decoration: BoxDecoration(
         color: context.primaryColor,
         borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: context.primaryColor.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
       ),
       child: Column(
         children: [
-          // Balance Card with Glassmorphism feel
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.08),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(32),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
+                  width: 1.5,
                 ),
               ),
               child: Column(
@@ -624,40 +668,41 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                   Text(
                     isPositive ? 'TOTAL BALANCE DUE' : 'OVERPAID AMOUNT',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
+                      color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.0,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    CurrencyFormatter.format(balance.abs()),
-                    style: TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.w900,
-                      color: isPositive ? Colors.white : Colors.greenAccent.shade200,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                  if (!isPositive)
-                    Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Customer has overpaid',
-                        style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          '₹',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                          ),
                         ),
                       ),
-                    ),
-                  const SizedBox(height: 24),
+                      const SizedBox(width: 4),
+                      Text(
+                        NumberFormat('#,##,###.##').format(balance.abs()),
+                        style: TextStyle(
+                          fontSize: 48,
+                          fontWeight: FontWeight.w900,
+                          color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                          letterSpacing: -2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
                   Row(
                     children: [
                       Expanded(
@@ -668,9 +713,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                         ),
                       ),
                       Container(
-                        width: 1,
-                        height: 30,
-                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 1.5,
+                        height: 36,
+                        color: Colors.white.withValues(alpha: 0.15),
                       ),
                       Expanded(
                         child: _buildHeaderStat(
@@ -700,26 +745,27 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white.withValues(alpha: 0.6), size: 12),
-            const SizedBox(width: 4),
+            Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 14),
+            const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
                 letterSpacing: 0.5,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           value,
           style: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            letterSpacing: -0.5,
           ),
         ),
       ],
@@ -760,13 +806,12 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       context,
       phone: ledger.customerPhone ?? '',
       message: message,
-      dialogTitle: 'Send WhatsApp Reminder',
-      dialogContent: 'Enter customer\'s mobile number, or skip to select contact directly in WhatsApp.',
+      dialogTitle: 'Send Reminder',
+      dialogContent: 'Send a payment reminder statement to ${ledger.customerName} via WhatsApp.',
     );
   }
 
   Future<void> _togglePaidStatus(LedgerTransaction tx, bool isPaid) async {
-    // Show loading indicator wrapper
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -778,10 +823,9 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         .toggleTransactionPaidStatus(widget.ledger.id, tx.id, isPaid);
 
     if (mounted) {
-      Navigator.pop(context); // Close dialog
+      Navigator.pop(context);
 
       if (success) {
-        // Invalidate providers to refresh invoice list and dashboard totals
         ref.invalidate(verifiedProvider);
         ref.invalidate(udharDashboardProvider);
         _loadTransactions();
@@ -800,7 +844,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Failed to mark invoice as ${isPaid ? 'paid' : 'unpaid'}.'),
+                'Failed to update status.'),
             backgroundColor: context.errorColor,
           ),
         );
@@ -808,263 +852,220 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
     }
   }
 
-  Widget _buildMarkAsPaidButton(LedgerTransaction tx) {
-    if (tx.isPaid) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton.icon(
-              onPressed: () => _togglePaidStatus(tx, false),
-              icon: Icon(LucideIcons.xCircle,
-                  color: context.warningColor, size: 18),
-              label: Text(
-                'Mark as Unpaid',
-                style: TextStyle(
-                    color: context.warningColor, fontWeight: FontWeight.bold),
-              ),
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton.icon(
-            onPressed: () => _togglePaidStatus(tx, true),
-            icon: const Icon(LucideIcons.checkCircle2,
-                color: Colors.white, size: 20),
-            label: const Text(
-              'Mark as Paid',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.successColor,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
     final isInvoice = tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT';
     final canTap = isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
 
-    final Color accentColor = isPayment ? context.primaryColor : context.errorColor;
-    final Color bgColor = isPayment 
-        ? context.primaryColor.withValues(alpha: 0.08) 
-        : context.errorColor.withValues(alpha: 0.08);
+    final Color accentColor = isPayment ? context.successColor : context.errorColor;
+    final Color bgColor = accentColor.withValues(alpha: 0.08);
     
     final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
-    final String txTitle = isPayment ? 'Payment Received' : 'Credit Invoice';
+    final String txTitle = isPayment ? 'Payment Received' : 'Credit Sale';
 
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.borderColor, width: 0.5),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: context.premiumShadow,
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Status Accent
-            Container(width: 4, color: accentColor),
-            
-            Expanded(
-              child: InkWell(
-                onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          // Icon
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: bgColor,
-                              shape: BoxShape.circle,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(txIcon, color: accentColor, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              txTitle,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                letterSpacing: -0.5,
+                              ),
                             ),
-                            child: Icon(txIcon, color: accentColor, size: 18),
-                          ),
-                          const SizedBox(width: 14),
-
-                          // Content
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Text(
+                              '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: accentColor,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(LucideIcons.calendar, size: 12, color: context.textSecondaryColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('dd MMM yyyy • hh:mm a').format(tx.createdAt.toLocal()),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: context.textSecondaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (tx.notes != null && tx.notes!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: context.textSecondaryColor.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        txTitle,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                          color: context.textColor,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 16,
-                                        color: accentColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      DateFormat('dd MMM, hh:mm a').format(tx.createdAt.toLocal()),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: context.textSecondaryColor,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    if (isInvoice && tx.isPaid) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: context.primaryColor.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'SETTLED',
-                                          style: TextStyle(
-                                            color: context.primaryColor,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                if (tx.notes != null && tx.notes!.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
+                                Icon(LucideIcons.messageSquare, size: 10, color: context.textSecondaryColor),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
                                     tx.notes!,
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: context.textSecondaryColor,
-                                      fontStyle: FontStyle.italic,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ],
+                                ),
                               ],
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                    
-                    // Footer for ReceiptID and Total (User Request)
-                    if (isInvoice || (isPayment && tx.receiptNumber != null))
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: context.textSecondaryColor.withValues(alpha: 0.03),
-                          border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              tx.receiptNumber != null ? '#${tx.receiptNumber}' : 'NO RECEIPT ID',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: context.textSecondaryColor.withValues(alpha: 0.6),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            if (isInvoice)
-                              Row(
-                                children: [
-                                  Text(
-                                    'TOTAL: ',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: context.textSecondaryColor.withValues(alpha: 0.5),
-                                    ),
-                                  ),
-                                  Text(
-                                    CurrencyFormatter.format(tx.amount),
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      color: context.textColor.withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-                    
-                    if (isInvoice) _buildMarkAsPaidButton(tx),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            
-            // View Receipt button if available
-            if (canTap || (tx.receiptLink != null))
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _showReceiptPhotoDialog(tx),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      border: Border(left: BorderSide(color: context.borderColor, width: 0.5)),
-                    ),
-                    child: Icon(LucideIcons.image, size: 18, color: context.textSecondaryColor.withValues(alpha: 0.4)),
-                  ),
-                ),
+          ),
+          
+          // User Clarity Row: Bill, Paid, Balance
+          if (isInvoice)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: context.textSecondaryColor.withValues(alpha: 0.03),
+                border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
               ),
-          ],
-        ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildClarityItem('Bill Amount', CurrencyFormatter.format(tx.amount)),
+                  _buildClarityItem('Paid', tx.isPaid ? CurrencyFormatter.format(tx.amount) : '₹0'),
+                  _buildClarityItem(
+                    'Balance', 
+                    tx.isPaid ? '₹0' : CurrencyFormatter.format(tx.amount),
+                    valueColor: tx.isPaid ? context.successColor : context.errorColor,
+                  ),
+                ],
+              ),
+            ),
+
+          // Actions Row
+          if (isInvoice || canTap)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  if (tx.receiptNumber != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        '#${tx.receiptNumber}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: context.textSecondaryColor.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  if (canTap)
+                    TextButton.icon(
+                      onPressed: () => _showReceiptPhotoDialog(tx),
+                      icon: const Icon(LucideIcons.eye, size: 14),
+                      label: const Text('VIEW BILL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: context.primaryColor,
+                      ),
+                    ),
+                  if (isInvoice)
+                    TextButton.icon(
+                      onPressed: () => _togglePaidStatus(tx, !tx.isPaid),
+                      icon: Icon(tx.isPaid ? LucideIcons.xCircle : LucideIcons.checkCircle2, size: 14),
+                      label: Text(
+                        tx.isPaid ? 'MARK UNPAID' : 'MARK PAID', 
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)
+                      ),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: tx.isPaid ? context.warningColor : context.successColor,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildClarityItem(String label, String value, {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: context.textSecondaryColor.withValues(alpha: 0.6),
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: valueColor ?? context.textColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1073,20 +1074,32 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.fileText, size: 52, color: context.borderColor),
-          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              shape: BoxShape.circle,
+              boxShadow: context.premiumShadow,
+            ),
+            child: Icon(LucideIcons.fileText, size: 48, color: context.borderColor),
+          ),
+          const SizedBox(height: 24),
           Text(
             'No transactions yet',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: context.textSecondaryColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: context.textColor,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Transactions will appear here once\nan invoice or payment is recorded.',
-            style: TextStyle(fontSize: 13, color: context.textSecondaryColor),
+            style: TextStyle(
+              fontSize: 14, 
+              color: context.textSecondaryColor,
+              fontWeight: FontWeight.w500,
+            ),
             textAlign: TextAlign.center,
           ),
         ],

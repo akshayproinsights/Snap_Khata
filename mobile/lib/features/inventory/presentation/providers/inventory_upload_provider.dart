@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/routing/app_router.dart';
@@ -8,6 +8,7 @@ import 'package:mobile/features/inventory/data/inventory_persistence_service.dar
 import 'package:mobile/features/inventory/data/inventory_upload_repository.dart';
 import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
+import 'package:flutter/foundation.dart';
 
 // ─────────────────── State ───────────────────────────────────────────────────
 
@@ -143,7 +144,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       if (existingNames.contains(file.name)) continue;
       int? size;
       try {
-        size = await File(file.path).length();
+        size = await file.length();
       } catch (_) {}
       newItems.add(UploadFileItem(
         path: file.path,
@@ -562,16 +563,24 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
 
     try {
       final status = await _repository.getProcessStatus(taskId);
+      
+      // CRITICAL: If the user started a NEW upload while this poll was in flight,
+      // ignore this result. Applying it would overwrite the new task's state.
+      if (taskId != state.activeTaskId) {
+        debugPrint('Ignoring poll result for stale task: $taskId (Active: ${state.activeTaskId})');
+        return;
+      }
+
       _consecutivePollingErrors = 0;
       state = state.copyWith(processingStatus: status);
       _backgroundTask.updateTask(status.message);
 
       if (status.status == 'completed') {
         _pollingTimer?.cancel();
-        await _handleCompleted(status);
+        await _handleCompleted(status, taskId);
       } else if (status.status == 'failed') {
         _pollingTimer?.cancel();
-        await _handleProcessingFailed(status.message);
+        await _handleProcessingFailed(status.message, taskId);
       } else {
         _scheduleNextPoll(taskId);
       }
@@ -613,7 +622,10 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
 
   // ─────────────────────────── Terminal state handlers ────────────
 
-  Future<void> _handleCompleted([UploadTaskStatus? status]) async {
+  Future<void> _handleCompleted([UploadTaskStatus? status, String? taskId]) async {
+    // If taskId is provided, ensure it's still the active one
+    if (taskId != null && taskId != state.activeTaskId) return;
+
     await InventoryPersistenceService.clearTask();
     final done = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.processing) {
@@ -657,7 +669,10 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     });
   }
 
-  Future<void> _handleProcessingFailed(String message) async {
+  Future<void> _handleProcessingFailed(String message, [String? taskId]) async {
+    // If taskId is provided, ensure it's still the active one
+    if (taskId != null && taskId != state.activeTaskId) return;
+
     await InventoryPersistenceService.clearTask();
     final failed = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.processing) {
@@ -669,6 +684,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     state = state.copyWith(
       fileItems: failed,
       isProcessing: false,
+      error: message,
       clearActiveTaskId: true,
     );
     _backgroundTask.completeTask('Inventory processing failed');

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,7 @@ import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/upload/presentation/providers/camera_provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:mobile/shared/widgets/universal_image.dart';
 
 class UploadPage extends ConsumerStatefulWidget {
   const UploadPage({super.key});
@@ -374,7 +374,10 @@ class _UploadPageState extends ConsumerState<UploadPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (state.fileItems.isNotEmpty) _buildThumbnailsList(state),
+                if (state.fileItems.isNotEmpty) ...[
+                  _buildSelectedFilesHeader(state),
+                  _buildThumbnailsList(state),
+                ],
                 _buildBottomControls(controller, state),
               ],
             ),
@@ -390,6 +393,51 @@ class _UploadPageState extends ConsumerState<UploadPage>
       barrierColor: Colors.black87,
       builder: (_) => _ImagePreviewDialog(initialIndex: index),
     );
+  }
+
+  Widget _buildSelectedFilesHeader(UploadState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${state.fileItems.length} PAGE${state.fileItems.length > 1 ? 'S' : ''}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'SELECTED',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const Spacer(),
+          if (state.fileItems.length >= 2)
+            const Text(
+              'Scroll to see all →',
+              style: TextStyle(
+                color: Colors.white30,
+                fontSize: 10,
+              ),
+            ),
+        ],
+      ),
+    ).animate().fadeIn().slideY(begin: 0.2);
   }
 
   Widget _buildThumbnailsList(UploadState state) {
@@ -410,14 +458,12 @@ class _UploadPageState extends ConsumerState<UploadPage>
                 // Tappable thumbnail — opens enlarged preview
                 GestureDetector(
                   onTap: () => _showImagePreview(context, fileItem.path, index),
-                  child: ClipRRect(
+                  child: UniversalImage(
+                    path: fileItem.path,
+                    width: 70,
+                    height: 90,
+                    fit: BoxFit.cover,
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(fileItem.path),
-                      width: 70,
-                      height: 90,
-                      fit: BoxFit.cover,
-                    ),
                   ),
                 ),
                 // Small ✕ delete button (quick remove without preview)
@@ -1791,8 +1837,8 @@ class _ImagePreviewDialogState extends ConsumerState<_ImagePreviewDialog> {
                 return Center(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.file(
-                      File(fileItems[index].path),
+                    child: UniversalImage(
+                      path: fileItems[index].path,
                       fit: BoxFit.contain,
                     ),
                   ),

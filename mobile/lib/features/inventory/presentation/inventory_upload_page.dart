@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import 'package:mobile/features/inventory/presentation/providers/inventory_uploa
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/upload/presentation/providers/camera_provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:mobile/shared/widgets/universal_image.dart';
 
 class InventoryUploadPage extends ConsumerStatefulWidget {
   const InventoryUploadPage({super.key});
@@ -192,8 +192,8 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
       }
     });
 
-    // ── Error view ────────────────────────────────────────────────────────
-    if (state.failedCount > 0 && state.pendingCount == 0) {
+    // ── Error view (only if we don't have a final summary status) ──────────
+    if (state.failedCount > 0 && state.pendingCount == 0 && state.lastCompletedStatus == null) {
       return Scaffold(
         backgroundColor: AppTheme.background,
         appBar: _buildBasicAppBar(),
@@ -380,7 +380,10 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (state.fileItems.isNotEmpty) _buildThumbnailsList(state),
+                if (state.fileItems.isNotEmpty) ...[
+                  _buildSelectedFilesHeader(state),
+                  _buildThumbnailsList(state),
+                ],
                 _buildBottomControls(controller, state),
               ],
             ),
@@ -388,6 +391,51 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         ],
       ),
     );
+  }
+
+  Widget _buildSelectedFilesHeader(InventoryUploadState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${state.fileItems.length} PAGE${state.fileItems.length > 1 ? 'S' : ''}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'SELECTED',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const Spacer(),
+          if (state.fileItems.length >= 2)
+            const Text(
+              'Scroll to see all →',
+              style: TextStyle(
+                color: Colors.white30,
+                fontSize: 10,
+              ),
+            ),
+        ],
+      ),
+    ).animate().fadeIn().slideY(begin: 0.2);
   }
 
   Widget _buildThumbnailsList(InventoryUploadState state) {
@@ -405,15 +453,15 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
             width: 70,
             child: Stack(
               children: [
-                ClipRRect(
+                UniversalImage(
+                  path: fileItem.path,
+                  width: 70,
+                  height: 90,
+                  fit: BoxFit.cover,
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(fileItem.path),
-                    width: 70,
-                    height: 90,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                ).animate(key: ValueKey(fileItem.path))
+                  .scale(duration: 300.ms, curve: Curves.easeOutBack)
+                  .fadeIn(),
                 Positioned(
                   top: -4,
                   right: -4,
@@ -585,10 +633,10 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
                 color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'There was an issue processing your vendor invoices.',
+          Text(
+            state.error ?? 'There was an issue processing your vendor invoices.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+            style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 32),
           Row(

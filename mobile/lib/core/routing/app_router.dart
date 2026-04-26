@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
 import 'package:mobile/features/auth/presentation/registration_page.dart';
-import 'package:mobile/features/udhar/presentation/udhar_dashboard_page.dart';
+import 'package:mobile/features/udhar/presentation/parties_dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
 import 'package:mobile/features/review/presentation/pending_receipts_page.dart';
 import 'package:mobile/features/review/presentation/receipt_review_page.dart';
@@ -31,8 +31,8 @@ import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
-import 'package:mobile/features/udhar/presentation/udhar_list_page.dart';
-import 'package:mobile/features/udhar/presentation/udhar_detail_page.dart';
+import 'package:mobile/features/udhar/presentation/parties_list_page.dart';
+import 'package:mobile/features/udhar/presentation/party_detail_page.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
@@ -76,7 +76,7 @@ class AppRouter {
               GoRoute(
                 path: '/udhar-dashboard',
                 name: 'udhar-dashboard',
-                builder: (context, state) => const UdharDashboardPage(),
+                builder: (context, state) => const PartiesDashboardPage(),
               ),
             ],
           ),
@@ -247,18 +247,18 @@ class AppRouter {
         builder: (context, state) => const NotificationsPage(),
       ),
       GoRoute(
-        path: '/udhar',
-        name: 'udhar-list',
+        path: '/parties',
+        name: 'party-list',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const UdharListPage(),
+        builder: (context, state) => const PartiesListPage(),
       ),
       GoRoute(
-        path: '/udhar/:id',
-        name: 'udhar-detail',
+        path: '/party/:id',
+        name: 'party-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final ledger = state.extra as CustomerLedger;
-          return UdharDetailPage(ledger: ledger);
+          return PartyDetailPage(ledger: ledger);
         },
       ),
       GoRoute(
