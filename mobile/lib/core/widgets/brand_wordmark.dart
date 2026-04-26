@@ -17,7 +17,6 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final primary = snapColor ?? (Theme.of(context).brightness == Brightness.dark ? Colors.white : AppTheme.primary);
     
     final text = RichText(

@@ -1,12 +1,76 @@
-from fastapi import APIRouter, HTTPException
-from typing import Optional
+import base64
+import hashlib
+import hmac
+import os
+import time
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, Dict, Optional
+from auth import get_current_user
 from database import get_database_client
 from config_loader import get_user_config
 
 router = APIRouter()
 
+def _urlsafe_b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
+
+
+def _get_public_receipt_secret() -> str:
+    secret = os.getenv("PUBLIC_RECEIPT_SIGNING_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(status_code=500, detail="Public receipt sharing is not configured")
+    return secret
+
+
+def _sign_receipt_token(receipt_number: str, username: str, expires_at: int, secret: str) -> str:
+    payload = f"{receipt_number}:{username}:{expires_at}".encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).digest()
+    return _urlsafe_b64(signature)
+
+
+def _verify_receipt_token(receipt_number: str, username: str, expires_at: int, token: str, secret: str) -> bool:
+    if expires_at <= int(time.time()):
+        return False
+    expected = _sign_receipt_token(receipt_number, username, expires_at, secret)
+    return hmac.compare_digest(expected, token)
+
+
+@router.post("/receipts/{receipt_number:path}/share-token")
+async def create_public_receipt_share_token(
+    receipt_number: str,
+    ttl_hours: int = 168,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Create a signed, time-bound token for a public receipt link.
+    The token is scoped to receipt_number + username and can be revoked
+    by rotating PUBLIC_RECEIPT_SIGNING_SECRET.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="Invalid authenticated user")
+
+    ttl_hours = max(1, min(ttl_hours, 24 * 30))
+    expires_at = int(time.time()) + (ttl_hours * 3600)
+    secret = _get_public_receipt_secret()
+    token = _sign_receipt_token(receipt_number, username, expires_at, secret)
+
+    return {
+        "receipt_number": receipt_number,
+        "username": username,
+        "expires_at": expires_at,
+        "st": token,
+        "share_url": f"https://snapkhata.com/receipt.html?i={receipt_number}&u={username}&st={token}&exp={expires_at}",
+    }
+
+
 @router.get("/receipts/{receipt_number:path}")
-async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
+async def get_public_receipt(
+    receipt_number: str,
+    u: Optional[str] = None,
+    st: Optional[str] = None,
+    exp: Optional[int] = None,
+):
     """
     Fetch basic public info for a receipt given its receipt_number.
     This endpoint does not require authentication, so anyone with the link can view it.
@@ -17,6 +81,8 @@ async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
     """
     try:
         db = get_database_client()
+
+        require_signed_token = os.getenv("REQUIRE_PUBLIC_RECEIPT_TOKEN", "false").strip().lower() == "true"
 
         # ── 1. Try verification_dates first (pending/in-review receipts) ──────────
         header = None
@@ -53,6 +119,14 @@ async def get_public_receipt(receipt_number: str, u: Optional[str] = None):
 
         if header is None:
             raise HTTPException(status_code=404, detail="Receipt not found")
+
+        username = header.get("username") or username or ""
+        if require_signed_token:
+            if not st or not exp:
+                raise HTTPException(status_code=401, detail="Signed receipt token is required")
+            secret = _get_public_receipt_secret()
+            if not _verify_receipt_token(receipt_number, username, exp, st, secret):
+                raise HTTPException(status_code=403, detail="Invalid or expired receipt token")
 
         # ── Shop name & details from user profile ─────────────────────────────────
         shop_name = "Our Shop"

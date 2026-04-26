@@ -36,6 +36,7 @@ class LedgerTransaction {
   final DateTime createdAt;
   final bool isPaid;
   final int? linkedTransactionId;
+  final String? receiptLink;
 
   LedgerTransaction({
     required this.id,
@@ -47,6 +48,7 @@ class LedgerTransaction {
     required this.createdAt,
     this.isPaid = false,
     this.linkedTransactionId,
+    this.receiptLink,
   });
 
   factory LedgerTransaction.fromJson(Map<String, dynamic> json) {
@@ -60,6 +62,7 @@ class LedgerTransaction {
       createdAt: DateTime.parse(json['created_at']),
       isPaid: json['is_paid'] ?? false,
       linkedTransactionId: json['linked_transaction_id'],
+      receiptLink: json['receipt_link'],
     );
   }
 }

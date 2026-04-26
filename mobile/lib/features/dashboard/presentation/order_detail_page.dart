@@ -18,6 +18,7 @@ import 'package:mobile/features/config/presentation/providers/config_provider.da
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
+import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -389,11 +390,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   }
 
                   final authState = ref.read(authProvider);
-                  final usernameParam = authState.user?.username != null
-                      ? '&u=${authState.user!.username}'
-                      : '';
-
-                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
+                  final username = authState.user?.username;
 
                   final Set<String> ignoredExtraFields = {
                     'total_bill_amount',
@@ -422,8 +419,21 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         _formatFieldLabel(e.key): e.value.text,
                   };
 
-                  final link =
-                      'https://snapkhata.com/receipt.html?i=${widget.group.receiptNumber}$gstParam$usernameParam';
+                  final link = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                    receiptNumber: widget.group.receiptNumber,
+                    username: username,
+                    gstMode: _gstMode.name,
+                  );
+                  if (link == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not generate secure receipt link. Please try again.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
 
                   final customerNameMsg = widget
                               .group.customerName.isNotEmpty &&

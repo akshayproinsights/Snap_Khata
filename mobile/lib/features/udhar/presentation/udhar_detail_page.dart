@@ -10,6 +10,7 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'providers/udhar_dashboard_provider.dart';
 
 class UdharDetailPage extends ConsumerStatefulWidget {
@@ -316,6 +317,122 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
         );
       }
     }
+  }
+
+  void _showReceiptPhotoDialog(LedgerTransaction tx) async {
+    if (tx.receiptNumber == null && tx.receiptLink == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white38,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Invoice #${tx.receiptNumber ?? "N/A"}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(LucideIcons.x, color: Colors.white70),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12),
+              // Receipt photo area
+              Expanded(
+                child: tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null'
+                  ? _buildImageWidget(tx.receiptLink!, scrollController)
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.imageOff, color: Colors.white38, size: 48),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No receipt photo available',
+                            style: TextStyle(color: Colors.white54, fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(String url, ScrollController scrollController) {
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.all(16),
+      child: InteractiveViewer(
+        maxScale: 5.0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.contain,
+            width: double.infinity,
+            placeholder: (context, url) => Container(
+              height: 300,
+              color: Colors.white10,
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
+              height: 200,
+              color: Colors.white10,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
+                  SizedBox(height: 8),
+                  Text('Could not load receipt image',
+                    style: TextStyle(color: Colors.white54)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -699,7 +816,7 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
     final isInvoice = tx.transactionType == 'INVOICE';
-    final canTap = isInvoice && tx.receiptNumber != null;
+    final canTap = isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
 
     final Color accentColor =
         isPayment ? context.primaryColor : context.errorColor;
@@ -713,19 +830,22 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
 
     return Material(
       color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: context.borderColor, width: 0.5),
-          boxShadow: context.premiumShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 14, 8),
-              child: Row(
+      child: InkWell(
+        onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.borderColor, width: 0.5),
+            boxShadow: context.premiumShadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 14, 8),
+                child: Row(
                 children: [
                   // Icon
                   Container(
@@ -836,19 +956,20 @@ class _UdharDetailPageState extends ConsumerState<UdharDetailPage> {
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: Icon(LucideIcons.eye,
-                              color: context.textSecondaryColor, size: 24),
-                          onPressed: () => _navigateToOrderDetails(tx),
-                          tooltip: 'View Order Details',
+                          icon: const Icon(LucideIcons.eye, size: 24),
+                          color: context.textSecondaryColor,
+                          onPressed: () => _showReceiptPhotoDialog(tx),
+                          tooltip: 'View Receipt Photo',
                         ),
                       ],
                     ],
                   ),
                 ],
+                ),
               ),
-            ),
-            if (isInvoice) _buildMarkAsPaidButton(tx),
-          ],
+              if (isInvoice) _buildMarkAsPaidButton(tx),
+            ],
+          ),
         ),
       ),
     );

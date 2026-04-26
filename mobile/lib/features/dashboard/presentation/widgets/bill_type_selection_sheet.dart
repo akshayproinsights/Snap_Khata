@@ -120,15 +120,15 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                   onPressed: selectedType == null
                       ? null
                       : () async {
-                          final targetRoute = selectedType == BillScanType.customer ? '/upload' : '/inventory-upload';
+                          final router = GoRouter.of(context);
                           
                           // Close the bottom sheet first
                           Navigator.pop(context);
                           
                           // Navigate and wait for result
                           final result = selectedType == BillScanType.customer
-                              ? await context.pushNamed('upload')
-                              : await context.push('/inventory-upload');
+                              ? await router.pushNamed('upload')
+                              : await router.push('/inventory-upload');
                           
                           // If the user successfully completed a scan/save, result should be true
                           if (result == true && mounted) {

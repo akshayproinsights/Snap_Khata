@@ -214,7 +214,7 @@ class _VendorLedgerDetailPageState
 
   /// Opens a dialog showing the original receipt photo for the given transaction.
   void _showReceiptPhotoDialog(VendorLedgerTransaction tx) async {
-    if (tx.invoiceNumber == null) return;
+    if (tx.invoiceNumber == null && tx.receiptLink == null) return;
 
     showModalBottomSheet(
       context: context,
@@ -268,9 +268,11 @@ class _VendorLedgerDetailPageState
               const Divider(color: Colors.white12),
               // Receipt photo area
               Expanded(
-                child: FutureBuilder<String?>(
-                  future: ref.read(vendorLedgerProvider.notifier).fetchReceiptLink(tx.invoiceNumber!),
-                  builder: (context, snapshot) {
+                child: tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null'
+                  ? _buildImageWidget(tx.receiptLink!, scrollController)
+                  : FutureBuilder<String?>(
+                      future: ref.read(vendorLedgerProvider.notifier).fetchReceiptLink(tx.invoiceNumber!),
+                      builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
                         child: Column(
@@ -307,41 +309,7 @@ class _VendorLedgerDetailPageState
                       );
                     }
 
-                    return SingleChildScrollView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.all(16),
-                      child: InteractiveViewer(
-                        maxScale: 5.0,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: receiptLink,
-                            fit: BoxFit.contain,
-                            width: double.infinity,
-                            placeholder: (context, url) => Container(
-                              height: 300,
-                              color: Colors.white10,
-                              child: const Center(
-                                child: CircularProgressIndicator(color: Colors.white),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              height: 200,
-                              color: Colors.white10,
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
-                                  SizedBox(height: 8),
-                                  Text('Could not load receipt image',
-                                    style: TextStyle(color: Colors.white54)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
+                    return _buildImageWidget(receiptLink, scrollController);
                   },
                 ),
               ),
@@ -383,6 +351,44 @@ class _VendorLedgerDetailPageState
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(String url, ScrollController scrollController) {
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.all(16),
+      child: InteractiveViewer(
+        maxScale: 5.0,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.contain,
+            width: double.infinity,
+            placeholder: (context, url) => Container(
+              height: 300,
+              color: Colors.white10,
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
+              height: 200,
+              color: Colors.white10,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
+                  SizedBox(height: 8),
+                  Text('Could not load receipt image',
+                    style: TextStyle(color: Colors.white54)),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1059,7 +1065,7 @@ class _VendorLedgerDetailPageState
                           Text(
                             isPayment
                                 ? 'Payment Sent'
-                                : (tx.invoiceNumber?.isNotEmpty == true ? 'Invoice #${tx.invoiceNumber}' : 'Purchase Order'),
+                                : (tx.invoiceNumber?.isNotEmpty == true ? 'Credit Invoice ${tx.invoiceNumber}' : 'Purchase Order'),
                             style: TextStyle(
                               fontSize: 12,
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1078,11 +1084,9 @@ class _VendorLedgerDetailPageState
                           children: [
                             if (!isPayment && !_isSelectionMode)
                                IconButton(
-                                 icon: Icon(LucideIcons.eye, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                 padding: EdgeInsets.zero,
-                                 constraints: const BoxConstraints(),
-                                 onPressed: () => _showReceiptPhotoDialog(tx),
-                                 tooltip: 'View Receipt Photo',
+                                  icon: Icon(LucideIcons.eye, color: context.textSecondaryColor, size: 24),
+                                  onPressed: () => _showReceiptPhotoDialog(tx),
+                                  tooltip: 'View Receipt Photo',
                                ),
                             const SizedBox(width: 8),
                             Text(
@@ -1190,7 +1194,7 @@ class _VendorLedgerDetailPageState
     );
 
     if (mounted) {
-      context.push('/inventory-invoice-review', extra: bundle);
+      context.pushNamed('vendor-delivery-detail', extra: bundle);
     }
   }
 

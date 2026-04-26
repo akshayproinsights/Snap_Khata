@@ -13,6 +13,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
+import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
   final String customerName;
@@ -331,7 +332,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Invoice ${group.receiptNumber.isNotEmpty ? "#${group.receiptNumber}" : "Captured"}',
+                    'Credit Invoice ${group.receiptNumber.isNotEmpty ? group.receiptNumber : "Captured"}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 14),
                     maxLines: 1,
@@ -387,17 +388,23 @@ class _InvoiceGroupTile extends ConsumerWidget {
                     final prefs = await SharedPreferences.getInstance();
                     final savedMode = prefs
                         .getString('gst_mode_order_${group.receiptNumber}');
-                    final gstParam = (savedMode != null && savedMode != 'none')
-                        ? '&g=$savedMode'
-                        : '';
-
                     final authState = ref.read(authProvider);
-                    final usernameParam = authState.user?.username != null
-                        ? '&u=${authState.user!.username}'
-                        : '';
-
-                    final link =
-                        'https://snapkhata.com/receipt.html?i=${group.receiptNumber}$gstParam$usernameParam';
+                    final username = authState.user?.username;
+                    final link = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                      receiptNumber: group.receiptNumber,
+                      username: username,
+                      gstMode: savedMode,
+                    );
+                    if (link == null) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not generate secure receipt link. Please try again.'),
+                          ),
+                        );
+                      }
+                      return;
+                    }
 
                     final customerNameMsg = group.customerName.isNotEmpty &&
                             group.customerName.toLowerCase() != 'unknown'

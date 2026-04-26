@@ -289,7 +289,7 @@ async def extract_from_image(
         if not system_instruction:
             raise HTTPException(
                 status_code=404, 
-                detail="vendor_mapping_gemini prompt not configured"
+                detail="Processing service not configured"
             )
         
         # Download image from R2 if needed, or use URL directly
@@ -406,7 +406,7 @@ async def extract_from_image(
     
     except json.JSONDecodeError as e:
         logger.error(f"JSON parse error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process image: {e}")
     except HTTPException:
         raise
     except Exception as e:

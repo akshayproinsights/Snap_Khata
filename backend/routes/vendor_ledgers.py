@@ -133,10 +133,53 @@ async def get_vendor_ledger_transactions(ledger_id: int, current_user: Dict = De
             .order('created_at', desc=True) \
             .execute()
             
+        # Enrich INVOICE transactions with actual invoice data
+        invoice_numbers = [tx['invoice_number'] for tx in tx_resp.data if tx.get('transaction_type') == 'INVOICE' and tx.get('invoice_number')]
+        
+        enriched_data = []
+        if invoice_numbers:
+            # Fetch inventory invoices for these invoice numbers
+            invoices_resp = db.client.table('inventory_invoices') \
+                .select('*') \
+                .eq('username', username) \
+                .in_('invoice_number', invoice_numbers) \
+                .execute()
+            
+            invoice_map = {inv['invoice_number']: inv for inv in (invoices_resp.data or [])}
+            
+            for tx in tx_resp.data:
+                enriched_tx = tx.copy()
+                if tx.get('transaction_type') == 'INVOICE' and tx.get('invoice_number'):
+                    inv = invoice_map.get(tx['invoice_number'])
+                    if inv:
+                        # Extract amounts (Inventory Invoices use total_amount, amount_paid, balance_owed)
+                        total_amount = float(inv.get('total_amount') or 0)
+                        received_amount = float(inv.get('amount_paid') or 0)
+                        balance_owed = float(inv.get('balance_owed') or 0)
+                        
+                        # Add raw data for UI
+                        enriched_tx['raw_invoice_data'] = inv
+                        
+                        # For history, show the full amount and received amount
+                        enriched_tx['grand_total'] = total_amount
+                        enriched_tx['received_amount'] = received_amount
+                        
+                        # Update display amount to grand_total if it's currently 0 or balance
+                        # This matches udhar.py behavior
+                        if total_amount > 0:
+                            enriched_tx['amount'] = total_amount
+                        
+                        # Add receipt link to top level
+                        enriched_tx['receipt_link'] = inv.get('receipt_link') or ''
+                
+                enriched_data.append(enriched_tx)
+        else:
+            enriched_data = tx_resp.data or []
+            
         return {
             "status": "success",
             "ledger": ledger,
-            "data": tx_resp.data
+            "data": enriched_data
         }
     except HTTPException:
         raise
@@ -160,34 +203,87 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
     db.set_user_context(username)
     
     try:
-        # Fetch transactions with vendor_name from joined ledger table
+        # 1. Fetch latest ledger transactions (Credit invoices and Payments)
         response = db.client.table('vendor_ledger_transactions') \
-            .select('*, vendor_ledgers(vendor_name)') \
+            .select('*, vendor_ledgers(vendor_name, balance_due)') \
             .eq('username', username) \
             .order('created_at', desc=True) \
             .limit(limit) \
             .execute()
+        
+        ledger_txs_raw = response.data or []
+        
+        # Group ledger transactions by invoice_number to avoid duplicates in feed
+        grouped_ledger_txs: Dict[str, Dict] = {}
+        unified_txs = []
+        
+        for tx in ledger_txs_raw:
+            inv_num = tx.get('invoice_number')
+            tx_type = tx.get('transaction_type')
+            
+            if tx_type == 'INVOICE' and inv_num:
+                if inv_num not in grouped_ledger_txs:
+                    grouped_ledger_txs[inv_num] = tx
+                    unified_txs.append(tx)
+                else:
+                    # Merge amounts if multiple entries exist for same invoice
+                    grouped_ledger_txs[inv_num]['amount'] = float(grouped_ledger_txs[inv_num].get('amount') or 0) + float(tx.get('amount') or 0)
+            else:
+                # Payments or unnumbered invoices go straight in
+                unified_txs.append(tx)
 
-        transactions = response.data or []
-
-        # Collect unique invoice numbers that have INVOICE type transactions
-        invoice_numbers = list({
+        # Track invoice numbers we already have from the ledger
+        ledger_invoice_numbers = {
             tx['invoice_number']
-            for tx in transactions
+            for tx in unified_txs
             if tx.get('transaction_type') == 'INVOICE' and tx.get('invoice_number')
-        })
+        }
+
+        # 2. Fetch latest inventory invoices (for Cash or un-ledgered invoices)
+        inv_resp = db.client.table('inventory_invoices') \
+            .select('*') \
+            .eq('username', username) \
+            .order('created_at', desc=True) \
+            .limit(limit) \
+            .execute()
+        
+        for inv in (inv_resp.data or []):
+            inv_num = inv.get('invoice_number')
+            if inv_num and inv_num not in ledger_invoice_numbers:
+                unified_txs.append({
+                    'id': inv.get('id', 0),
+                    'ledger_id': None,
+                    'username': username,
+                    'transaction_type': 'INVOICE',
+                    'amount': inv.get('total_amount') or 0.0,
+                    'invoice_number': inv_num,
+                    'created_at': inv.get('created_at'),
+                    'is_paid': True,
+                    'vendor_ledgers': {
+                        'vendor_name': inv.get('vendor_name') or ''
+                    },
+                    'invoice_date': inv.get('invoice_date'),
+                    'receipt_link': inv.get('receipt_link'),
+                    'is_verified': True,
+                    'balance_owed': inv.get('balance_owed', 0.0),
+                    'payment_mode': inv.get('payment_mode', 'Cash')
+                })
+                ledger_invoice_numbers.add(inv_num)
+
+        # 3. Collect ALL unique invoice numbers to fetch items for
+        all_invoice_numbers = list(ledger_invoice_numbers)
 
         # Build a map: invoice_number -> total_price_hike from inventory_invoices
         price_hike_map: Dict[str, float] = {}
-        if invoice_numbers:
+        if all_invoice_numbers:
             try:
-                inv_resp = db.client.table('inventory_invoices') \
+                hike_resp = db.client.table('inventory_invoices') \
                     .select('invoice_number, price_hike_amount') \
                     .eq('username', username) \
-                    .in_('invoice_number', invoice_numbers) \
+                    .in_('invoice_number', all_invoice_numbers) \
                     .execute()
 
-                for row in (inv_resp.data or []):
+                for row in (hike_resp.data or []):
                     inv_num = row.get('invoice_number')
                     hike = float(row.get('price_hike_amount') or 0)
                     if inv_num:
@@ -195,17 +291,25 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
             except Exception as hike_err:
                 logger.warning(f"Could not fetch price_hike_amount: {hike_err}")
 
-        # Build a map: invoice_number -> inventory_items metadata for navigation.
-        # Returns receipt_link, invoice_date, vendor_name, payment_mode and per-item
-        # details so the mobile app can construct an InventoryInvoiceBundle and
-        # navigate to VendorDeliveryDetailPage without any frontend changes.
+        # 4. Fetch inventory items to enrich transactions
         item_meta: Dict[str, Dict] = {}
-        if invoice_numbers:
-            try:
+        try:
+            # Also look for recent items that might not have an invoice record yet
+            items_rns_resp = db.client.table('inventory_items') \
+                .select('invoice_number') \
+                .eq('username', username) \
+                .order('created_at', desc=True) \
+                .limit(limit * 2) \
+                .execute()
+            
+            item_rns = {row['invoice_number'] for row in (items_rns_resp.data or []) if row.get('invoice_number')}
+            search_rns = list(set(all_invoice_numbers) | item_rns)
+            
+            if search_rns:
                 items_resp = db.client.table('inventory_items') \
-                    .select('invoice_number, invoice_date, vendor_name, receipt_link, payment_mode, balance_owed, verification_status, net_bill, description, quantity, rate, amount_mismatch, part_number, created_at') \
+                    .select('id, invoice_number, invoice_date, vendor_name, receipt_link, payment_mode, balance_owed, verification_status, net_bill, description, quantity, rate, amount_mismatch, part_number, created_at, price_hike_amount, previous_rate') \
                     .eq('username', username) \
-                    .in_('invoice_number', invoice_numbers) \
+                    .in_('invoice_number', search_rns) \
                     .execute()
 
                 for row in (items_resp.data or []):
@@ -222,9 +326,11 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                                 'items': [],
                             }
                         item_meta[inv_num]['items'].append({
+                            'id': row.get('id'),
                             'invoice_number': inv_num,
                             'description': row.get('description') or '',
-                            'quantity': row.get('quantity') or 0,
+                            'qty': row.get('quantity') or 0,  # Map quantity -> qty for frontend
+                            'quantity': row.get('quantity') or 0, 
                             'rate': row.get('rate') or 0,
                             'net_bill': float(row.get('net_bill') or 0),
                             'amount_mismatch': float(row.get('amount_mismatch') or 0),
@@ -235,33 +341,67 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                             'vendor_name': row.get('vendor_name') or '',
                             'payment_mode': row.get('payment_mode') or 'Credit',
                             'created_at': row.get('created_at') or '',
+                            'price_hike_amount': float(row.get('price_hike_amount') or 0.0),
+                            'previous_rate': float(row.get('previous_rate') or 0.0),
                         })
-            except Exception as items_err:
-                logger.warning(f"Could not enrich vendor transactions with inventory_items: {items_err}")
+        except Exception as items_err:
+            logger.warning(f"Could not enrich vendor transactions with inventory_items: {items_err}")
 
-        # Inject enrichment into each transaction
-        for tx in transactions:
+        # 5. Add Fragmented Items (not in ledger or inventory_invoices)
+        for inv_num, meta in item_meta.items():
+            if inv_num not in ledger_invoice_numbers:
+                items = meta['items']
+                total_amount = sum(float(i.get('net_bill') or 0.0) for i in items)
+                earliest_ts = min([i.get('created_at') for i in items if i.get('created_at')] or [datetime.utcnow().isoformat()])
+                
+                unified_txs.append({
+                    'id': items[0].get('id', 0),
+                    'ledger_id': None,
+                    'username': username,
+                    'transaction_type': 'INVOICE',
+                    'amount': total_amount,
+                    'invoice_number': inv_num,
+                    'created_at': earliest_ts,
+                    'is_paid': meta.get('payment_mode') == 'Cash' or meta.get('balance_owed', 1.0) == 0.0,
+                    'vendor_ledgers': {
+                        'vendor_name': meta.get('vendor_name') or ''
+                    },
+                    'invoice_date': meta.get('invoice_date'),
+                    'receipt_link': meta.get('receipt_link'),
+                    'is_verified': meta.get('is_verified', False),
+                    'balance_owed': meta.get('balance_owed', 0.0),
+                    'inventory_items': items,
+                    'payment_mode': meta.get('payment_mode', 'Cash')
+                })
+
+        # 6. Final Enrichment of Unified Transactions
+        for tx in unified_txs:
             inv_num = tx.get('invoice_number')
             tx['total_price_hike'] = price_hike_map.get(inv_num, 0.0) if inv_num else 0.0
 
             if tx.get('transaction_type') == 'INVOICE' and inv_num and inv_num in item_meta:
-                meta = item_meta[inv_num]
-                tx['invoice_date'] = meta.get('invoice_date') or ''
-                tx['receipt_link'] = meta.get('receipt_link') or ''
-                tx['vendor_name_enriched'] = meta.get('vendor_name') or ''
-                tx['payment_mode'] = meta.get('payment_mode') or 'Credit'
-                tx['balance_owed'] = meta.get('balance_owed') or 0.0
-                tx['is_verified'] = meta.get('is_verified', False)
-                tx['inventory_items'] = meta.get('items', [])
+                if not tx.get('inventory_items'):
+                    meta = item_meta[inv_num]
+                    tx['invoice_date'] = meta.get('invoice_date') or tx.get('invoice_date') or ''
+                    tx['receipt_link'] = meta.get('receipt_link') or tx.get('receipt_link') or ''
+                    tx['vendor_name_enriched'] = meta.get('vendor_name') or ''
+                    tx['payment_mode'] = meta.get('payment_mode') or tx.get('payment_mode') or 'Credit'
+                    tx['balance_owed'] = meta.get('balance_owed') or tx.get('balance_owed') or 0.0
+                    tx['is_verified'] = meta.get('is_verified', tx.get('is_verified', False))
+                    tx['inventory_items'] = meta.get('items', [])
             else:
                 tx.setdefault('invoice_date', '')
                 tx.setdefault('receipt_link', '')
                 tx.setdefault('inventory_items', [])
 
+        # Sort combined list by created_at descending
+        unified_txs.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+
         return {
             "status": "success",
-            "data": transactions
+            "data": unified_txs[:limit]
         }
+
     except Exception as e:
         logger.error(f"Error fetching all vendor transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -961,12 +1101,10 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
     db.set_user_context(username)
 
     try:
-        # 1. Fetch all Credit invoices with outstanding balance
+        # 1. Fetch all invoices to ensure all vendors are onboarded to ledgers
         invoices_resp = db.client.table("inventory_invoices") \
-            .select("id, invoice_number, vendor_name, balance_owed, invoice_date") \
+            .select("id, invoice_number, vendor_name, balance_owed, invoice_date, payment_mode") \
             .eq("username", username) \
-            .eq("payment_mode", "Credit") \
-            .gt("balance_owed", 0) \
             .execute()
 
         invoices = invoices_resp.data or []
@@ -1060,13 +1198,14 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                 }
                 ledgers_created += 1
 
+            # Record transaction
             db.client.table("vendor_ledger_transactions").insert({
                 "username": username,
                 "ledger_id": ledger_id,
                 "transaction_type": "INVOICE",
                 "amount": balance_owed,
                 "invoice_number": inv["invoice_number"],
-                "is_paid": False,
+                "is_paid": (inv.get("payment_mode") != "Credit" or balance_owed == 0),
                 "created_at": inv.get("invoice_date") or now,
             }).execute()
             transactions_created += 1

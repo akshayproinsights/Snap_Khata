@@ -175,7 +175,7 @@ async def update_single_review_date(
             'fallback_reason', 'processing_errors', 'date_and_receipt_combined_bbox',
             'receipt_number_bbox', 'date_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'vehicle_number'
+            'vehicle_number', 'gst_mode'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -447,7 +447,7 @@ async def update_bulk_review_amount(
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'type'
+            'type', 'vehicle_number', 'gst_mode'
         }
         
         success_count = 0
@@ -540,7 +540,7 @@ async def update_single_review_amount(
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'type'
+            'type', 'vehicle_number', 'gst_mode'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         

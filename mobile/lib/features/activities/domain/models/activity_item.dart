@@ -23,6 +23,7 @@ abstract class ActivityItem with _$ActivityItem {
     @Default('Cash') String paymentMode,
     @Default(0.0) double invoiceBalanceDue,
     @Default(0.0) double receivedAmount,
+    @Default([]) List<Map<String, dynamic>> items,
   }) = _CustomerActivity;
 
   const factory ActivityItem.vendor({

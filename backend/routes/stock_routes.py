@@ -1079,7 +1079,7 @@ def _perform_stock_recalculation(username: str, db):
 
     # 1. Get all vendor invoice items (IN transactions) - EXCLUDING items marked as deleted
     vendor_items = db.client.table("inventory_items")\
-        .select("part_number, description, qty, rate, invoice_date")\
+        .select("part_number, description, quantity, rate, invoice_date")\
         .eq("username", username)\
         .eq("excluded_from_stock", False)\
         .execute()
@@ -1249,7 +1249,7 @@ def _perform_stock_recalculation(username: str, db):
             }
 
         # Fill in transactional data
-        stock_by_part[group_key]["total_in"] += float(item.get("qty", 0) or 0)
+        stock_by_part[group_key]["total_in"] += float(item.get("quantity", 0) or 0)
 
         # Update vendor_description if it was created from mapping without invoice
         if not stock_by_part[group_key].get("internal_item_name"):

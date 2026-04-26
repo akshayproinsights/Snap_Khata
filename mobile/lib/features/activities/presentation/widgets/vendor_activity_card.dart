@@ -9,7 +9,6 @@ import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 
 /// Renders a vendor (payable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -25,14 +24,14 @@ class VendorActivityCard extends ConsumerWidget {
     return item.maybeWhen(
       vendor: (id, entityName, transactionDate, amount, displayId, isPaid, balanceDue, totalPriceHike, receiptLink, invoiceDate, inventoryItems, isVerified, balanceOwed) {
         final hasPriceHike = totalPriceHike > 0;
+        final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
 
         return Material(
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // If we have bill/invoice items and metadata, navigate to the 
-              // Bill Details (Inventory Review) page.
-              if (displayId != null && displayId.isNotEmpty && inventoryItems.isNotEmpty) {
+              // Open bill details whenever this row is tied to a specific bill.
+              if (hasInvoiceRef) {
                 // Map the raw dynamic items back to InventoryItem objects
                 final List<InventoryItem> items = inventoryItems.map((map) {
                   return InventoryItem(
@@ -54,7 +53,9 @@ class VendorActivityCard extends ConsumerWidget {
 
                 final bundle = InventoryInvoiceBundle(
                   invoiceNumber: displayId,
-                  date: invoiceDate,
+                  date: invoiceDate.isNotEmpty
+                      ? invoiceDate
+                      : transactionDate.toIso8601String(),
                   vendorName: entityName,
                   receiptLink: receiptLink,
                   items: items,

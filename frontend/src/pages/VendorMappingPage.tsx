@@ -512,7 +512,7 @@ const VendorMappingPage: React.FC = () => {
                             <h3 className="font-semibold text-yellow-900 mb-2">Upload Scanned Sheets</h3>
                             <p className="text-yellow-700 text-sm">
                                 Upload one or more scanned images of your mapping sheets.
-                                The AI will extract handwritten values, fetch system stock, and calculate variance automatically.
+                                The system will extract handwritten values, fetch system stock, and calculate variance automatically.
                             </p>
                         </div>
 

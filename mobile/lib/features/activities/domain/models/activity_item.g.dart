@@ -21,6 +21,11 @@ _CustomerActivity _$CustomerActivityFromJson(Map<String, dynamic> json) =>
       paymentMode: json['paymentMode'] as String? ?? 'Cash',
       invoiceBalanceDue: (json['invoiceBalanceDue'] as num?)?.toDouble() ?? 0.0,
       receivedAmount: (json['receivedAmount'] as num?)?.toDouble() ?? 0.0,
+      items:
+          (json['items'] as List<dynamic>?)
+              ?.map((e) => e as Map<String, dynamic>)
+              .toList() ??
+          const [],
       $type: json['runtimeType'] as String?,
     );
 
@@ -39,6 +44,7 @@ Map<String, dynamic> _$CustomerActivityToJson(_CustomerActivity instance) =>
       'paymentMode': instance.paymentMode,
       'invoiceBalanceDue': instance.invoiceBalanceDue,
       'receivedAmount': instance.receivedAmount,
+      'items': instance.items,
       'runtimeType': instance.$type,
     };
 

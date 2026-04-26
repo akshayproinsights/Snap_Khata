@@ -64,6 +64,7 @@ class ActivityRepository {
         paymentMode: json['payment_mode'] as String? ?? 'Cash',
         invoiceBalanceDue: (json['invoice_balance_due'] as num?)?.toDouble() ?? 0.0,
         receivedAmount: (json['received_amount'] as num?)?.toDouble() ?? 0.0,
+        items: (json['items'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [],
       );
     }).toList();
   }

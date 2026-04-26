@@ -861,9 +861,16 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         
         # Remove columns that exist in 'invoices' but NOT in 'verified_invoices'
         # NOTE: 'id' has already been renamed to 'row_id' above, so no need to exclude it
+        # Rule: any column added to invoices that is NOT in verified_invoices schema must be listed here.
         columns_to_exclude = [
             'updated_at',           # Only in invoices table
-            'Review Status',         # Only used internally, not in verified_invoices table
+            'Review Status',        # Only used internally, not in verified_invoices table
+            # AI fallback / processing columns — invoices only
+            'fallback_attempted',
+            'fallback_reason',
+            'processing_errors',
+            # GST / udhar tracking column — added to invoices by migration 003 but not to verified_invoices
+            'taxable_row_ids',
             # NOTE: 'extra_fields' was excluded here because verified_invoices lacked the column.
             # The migration SQL (add_extra_fields.sql) now includes verified_invoices too.
             # Once you run that migration in Supabase, remove this exclusion to start storing

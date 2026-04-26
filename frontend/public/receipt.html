@@ -555,14 +555,26 @@
             if (!orderId) { showError('Invalid Link', 'No receipt ID found in URL.'); return; }
 
             const uParam = params.get('u'); // username
+            const signedToken = params.get('st');
+            const expiresAt = params.get('exp');
 
             try {
                 let apiUrl = `${API_BASE}/api/public/receipts/${orderId}`;
                 if (uParam) {
                     apiUrl += `?u=${encodeURIComponent(uParam)}`;
                 }
+                if (signedToken) {
+                    apiUrl += `${apiUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(signedToken)}`;
+                }
+                if (expiresAt) {
+                    apiUrl += `${apiUrl.includes('?') ? '&' : '?'}exp=${encodeURIComponent(expiresAt)}`;
+                }
                 const resp = await fetch(apiUrl);
-                if (!resp.ok) throw new Error(resp.status === 404 ? 'not_found' : 'server_error');
+                if (!resp.ok) {
+                    if (resp.status === 404) throw new Error('not_found');
+                    if (resp.status === 401 || resp.status === 403) throw new Error('unauthorized');
+                    throw new Error('server_error');
+                }
                 const data = await resp.json();
 
                 // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
@@ -589,6 +601,7 @@
                 }
             } catch (err) {
                 if (err.message === 'not_found') showError('Receipt Not Found', 'We could not locate this receipt.');
+                else if (err.message === 'unauthorized') showError('Link Expired', 'This receipt link is invalid or has expired.');
                 else showError('Unable to Load', 'Please check your connection and try again.');
             }
         }

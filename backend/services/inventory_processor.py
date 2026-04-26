@@ -703,6 +703,7 @@ def convert_to_inventory_rows(
             # ── Price Hike Detection ──────────────────────────────────────────────
             'previous_rate': previous_rate,
             'price_hike_amount': price_hike_amount,
+            'upload_date': upload_date or None,
         }
 
         # ── extra_fields: v2 data + any unrecognised Gemini fields ───────────
@@ -920,7 +921,7 @@ def process_single_inventory_item(
         )
 
         if not invoice_data:
-            raise Exception("Gemini processing returned no data")
+            raise Exception("Processing returned no data")
 
         # Convert to inventory rows and save
         inventory_rows = convert_to_inventory_rows(invoice_data, username, img_hash)

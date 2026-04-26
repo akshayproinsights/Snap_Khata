@@ -651,7 +651,7 @@ def check_duplicate_invoice(image_hash: str, username: str) -> Optional[Dict[str
         
         # If not found in invoices, check verified_invoices table (completed invoices)
         # Note: verified_invoices uses 'row_id', not 'id'
-        fields_verified = ['row_id', 'receipt_number', 'date', 'customer_name', 'total_bill_amount', 
+        fields_verified = ['row_id', 'receipt_number', 'date', 'customer_name',
                           'receipt_link', 'upload_date', 'image_hash']
         result_verified = db.query('verified_invoices', fields_verified) \
                             .eq('image_hash', image_hash) \

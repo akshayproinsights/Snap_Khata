@@ -742,31 +742,31 @@ def process_inventory_sync(
             
         # AUTO-RECALCULATION: Trigger stock recalculation after successful inventory processing
         # Advisory locks prevent race conditions with concurrent recalculations
-        if results["processed"] > 0:
-            logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
-            try:
-                from routes.stock_routes import recalculate_stock_wrapper
-
-                recalc_task_id = str(uuid.uuid4())
-
-                try:
-                    from database import get_database_client
-                    db = get_database_client()
-                    db.insert("recalculation_tasks", {
-                        "task_id": recalc_task_id,
-                        "username": username,
-                        "status": "queued",
-                        "message": "Auto-triggered after inventory upload",
-                        "progress": {"total": 0, "processed": 0},
-                        "created_at": datetime.utcnow().isoformat()
-                    })
-                except Exception as db_err:
-                    logger.warning(f"Could not create recalculation task record: {db_err}")
-
-                recalculate_stock_wrapper(recalc_task_id, username)
-                logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
-            except Exception as e:
-                logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
+        # if results["processed"] > 0:
+        #     logger.info(f"🔄 Auto-triggering stock recalculation for {username}...")
+        #     try:
+        #         from routes.stock_routes import recalculate_stock_wrapper
+        # 
+        #         recalc_task_id = str(uuid.uuid4())
+        # 
+        #         try:
+        #             from database import get_database_client
+        #             db = get_database_client()
+        #             db.insert("recalculation_tasks", {
+        #                 "task_id": recalc_task_id,
+        #                 "username": username,
+        #                 "status": "queued",
+        #                 "message": "Auto-triggered after inventory upload",
+        #                 "progress": {"total": 0, "processed": 0},
+        #                 "created_at": datetime.utcnow().isoformat()
+        #             })
+        #         except Exception as db_err:
+        #             logger.warning(f"Could not create recalculation task record: {db_err}")
+        # 
+        #         recalculate_stock_wrapper(recalc_task_id, username)
+        #         logger.info(f"✅ Stock recalculation queued for {username} (Task: {recalc_task_id})")
+        #     except Exception as e:
+        #         logger.error(f"❌ Auto-recalculation failed for {username}: {e}")
 
         if results.get("errors"):
             logger.warning(f"Processing errors: {results['errors']}")
@@ -1215,10 +1215,10 @@ async def verify_inventory_invoice(
             if adj_inserts:
                 db.client.table("invoice_adjustments").insert(adj_inserts).execute()
             
-        # 4. Handle Vendor Ledger if Credit
-        balance_owed_val = request.balance_owed if request.balance_owed is not None else 0.0
-        if request.payment_mode == 'Credit' and request.vendor_name and balance_owed_val > 0:
+        # 4. Handle Vendor Ledger (Process all vendors to ensure they appear in the Parties list)
+        if request.vendor_name:
             vendor_name_clean = str(request.vendor_name).strip()
+            balance_owed_val = request.balance_owed if request.balance_owed is not None else 0.0
             balance_owed_float = float(balance_owed_val)
             
             # Fetch existing ledger (case-insensitive to prevent duplicate ledgers)
@@ -1249,14 +1249,25 @@ async def verify_inventory_invoice(
                     ledger_id = None
             
             if ledger_id:
-                db.client.table('vendor_ledger_transactions').insert({
-                    'username': username,
-                    'ledger_id': ledger_id,
-                    'transaction_type': 'INVOICE',
-                    'amount': balance_owed_float,
-                    'invoice_number': request.invoice_number,
-                    'notes': request.vendor_notes
-                }).execute()
+                # Check if transaction already exists for this invoice number
+                tx_exists = db.client.table('vendor_ledger_transactions') \
+                    .select('id') \
+                    .eq('username', username) \
+                    .eq('ledger_id', ledger_id) \
+                    .eq('invoice_number', request.invoice_number) \
+                    .eq('transaction_type', 'INVOICE') \
+                    .execute()
+                
+                if not tx_exists.data:
+                    db.client.table('vendor_ledger_transactions').insert({
+                        'username': username,
+                        'ledger_id': ledger_id,
+                        'transaction_type': 'INVOICE',
+                        'amount': balance_owed_float,
+                        'invoice_number': request.invoice_number,
+                        'is_paid': (request.payment_mode != 'Credit' or balance_owed_float == 0),
+                        'notes': request.vendor_notes
+                    }).execute()
             
         return {
             "success": True,

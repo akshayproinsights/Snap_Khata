@@ -47,19 +47,23 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
         else:
             customer_name = raw_name
 
-        if payment_mode == 'Credit' and customer_name and balance_due is not None:
+        # Process all invoices with a customer name to ensure they appear in the Parties list
+        if customer_name and balance_due is not None:
             try:
                 bal = float(balance_due)
             except (TypeError, ValueError):
                 continue
-            if bal > 0:
-                clean_name = str(customer_name).strip()
-                logger.info(f"Processing credit for '{clean_name}' (Original: '{raw_name}', Details: '{raw_details}')")
-                credit_records.append({
-                    **record,
-                    '_customer_clean': clean_name,
-                    '_balance_due_float': bal,
-                })
+            
+            clean_name = str(customer_name).strip()
+            # Determine if this invoice is settled (Cash or zero balance Credit)
+            is_settled = (payment_mode != 'Credit') or (bal == 0)
+            
+            credit_records.append({
+                **record,
+                '_customer_clean': clean_name,
+                '_balance_due_float': bal,
+                '_is_paid': is_settled
+            })
 
     if not credit_records:
         logger.info("No Credit records to process for ledgers")
@@ -128,6 +132,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                 'transaction_type': 'INVOICE',
                 'amount': balance_due_float,
                 'receipt_number': receipt_number,
+                'is_paid': record.get('_is_paid', False),
                 'notes': record.get('customer_details', ''),
             })
         else:
@@ -149,6 +154,7 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
             pending_new_ledgers[customer_name_clean]['transactions'].append({
                 'receipt_number': receipt_number,
                 'amount': balance_due_float,
+                'is_paid': record.get('_is_paid', False),
                 'notes': record.get('customer_details', ''),
             })
 
@@ -179,7 +185,10 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                         'username': username,
                         'ledger_id': new_ledger_id,
                         'transaction_type': 'INVOICE',
-                        **tx,
+                        'amount': tx['amount'],
+                        'receipt_number': tx['receipt_number'],
+                        'is_paid': tx.get('is_paid', False),
+                        'notes': tx['notes'],
                     })
             else:
                 logger.error(f"Failed to create ledger for {customer_name_clean}")
@@ -271,17 +280,19 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         enrichment = {}
         if receipt_numbers:
             # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
-            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due').in_('receipt_number', receipt_numbers).eq('username', username).execute()
+            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, receipt_link').in_('receipt_number', receipt_numbers).eq('username', username).execute()
             
             for vi in vi_resp.data:
                 rn = vi.get('receipt_number')
                 if not rn:
                     continue
                 if rn not in enrichment:
-                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0}
+                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'receipt_link': ''}
                 enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
                 enrichment[rn]['received_amount'] = float(vi.get('received_amount', 0) or 0)
                 enrichment[rn]['balance_due'] = float(vi.get('balance_due', 0) or 0)
+                if vi.get('receipt_link'):
+                    enrichment[rn]['receipt_link'] = vi['receipt_link']
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
@@ -293,6 +304,7 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 enriched_tx = dict(tx)
                 if grand_total > 0:
                     enriched_tx['amount'] = grand_total 
+                enriched_tx['receipt_link'] = enr.get('receipt_link') or ''
                 enriched_transactions.append(enriched_tx)
                 
                 # If there was an initial payment, construct a dummy PAYMENT transaction
@@ -344,41 +356,62 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
     db.set_user_context(username)
     
     try:
-        # Fetch transactions with customer_name and balance_due from joined ledger
+        # 1. Fetch latest ledger transactions
         response = db.client.table('ledger_transactions') \
             .select('*, customer_ledgers(customer_name, balance_due)') \
             .eq('username', username) \
             .order('created_at', desc=True) \
             .limit(limit) \
             .execute()
+        ledger_txs = response.data or []
 
-        transactions = response.data or []
-
-        # Collect unique receipt_numbers from INVOICE transactions
-        receipt_numbers = list({
+        # Collect unique receipt_numbers from INVOICE transactions in ledger
+        ledger_receipt_numbers = {
             tx['receipt_number']
-            for tx in transactions
+            for tx in ledger_txs
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number')
-        })
+        }
 
-        # Build enrichment map from verified_invoices
+        # 2. Fetch latest verified invoices (Cash, etc.)
+        vi_resp = db.client.table('verified_invoices') \
+            .select('receipt_number') \
+            .eq('username', username) \
+            .order('created_at', desc=True) \
+            .limit(limit) \
+            .execute()
+        recent_vi_rns = {row['receipt_number'] for row in (vi_resp.data or []) if row.get('receipt_number')}
+
+        # 3. Fetch full items for all relevant receipt numbers
+        all_rns = ledger_receipt_numbers | recent_vi_rns
+        
+        invoice_items_map: Dict[str, List[Dict]] = {}
         invoice_meta: Dict[str, Dict] = {}
-        if receipt_numbers:
-            try:
-                vi_resp = db.client.table('verified_invoices') \
-                    .select('receipt_number, receipt_link, date, upload_date, mobile_number, payment_mode, balance_due, received_amount, customer_name') \
-                    .eq('username', username) \
-                    .in_('receipt_number', receipt_numbers) \
-                    .execute()
-                for row in (vi_resp.data or []):
-                    rn = row.get('receipt_number')
-                    if rn and rn not in invoice_meta:
-                        invoice_meta[rn] = row
-            except Exception as enrich_err:
-                logger.warning(f"Could not enrich transactions with verified_invoices: {enrich_err}")
 
-        # Inject metadata into each INVOICE transaction
-        for tx in transactions:
+        if all_rns:
+            try:
+                # Fetch all rows for these receipt numbers to ensure we get every line item
+                all_vi_resp = db.client.table('verified_invoices') \
+                    .select('*') \
+                    .eq('username', username) \
+                    .in_('receipt_number', list(all_rns)) \
+                    .execute()
+                
+                for vi in (all_vi_resp.data or []):
+                    rn = vi.get('receipt_number')
+                    if rn:
+                        if rn not in invoice_items_map:
+                            invoice_items_map[rn] = []
+                        invoice_items_map[rn].append(vi)
+                        # Keep the latest or first as meta
+                        if rn not in invoice_meta:
+                            invoice_meta[rn] = vi
+            except Exception as e:
+                logger.warning(f"Error fetching full items for verified_invoices: {e}")
+
+        unified_txs = []
+
+        # Inject metadata and items into each ledger transaction
+        for tx in ledger_txs:
             rn = tx.get('receipt_number')
             if tx.get('transaction_type') == 'INVOICE' and rn and rn in invoice_meta:
                 meta = invoice_meta[rn]
@@ -389,7 +422,7 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 tx['payment_mode'] = meta.get('payment_mode') or 'Cash'
                 tx['invoice_balance_due'] = meta.get('balance_due') or 0.0
                 tx['received_amount'] = meta.get('received_amount') or 0.0
-                # Surface customer_name from verified_invoices if ledger join is absent
+                tx['items'] = invoice_items_map.get(rn, [])
                 if not (tx.get('customer_ledgers') or {}).get('customer_name'):
                     tx['_enriched_customer_name'] = meta.get('customer_name') or ''
             else:
@@ -397,10 +430,60 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 tx.setdefault('invoice_date', '')
                 tx.setdefault('upload_date', '')
                 tx.setdefault('mobile_number', '')
+                tx.setdefault('items', [])
+            unified_txs.append(tx)
+
+        # 4. Add verified invoices that are NOT in ledger_txs
+        # Group by receipt_number so that multi-item Cash invoices appear as ONE entry
+        grouped_cash_invoices: Dict[str, Dict] = {}
+        for rn, items in invoice_items_map.items():
+            if rn in ledger_receipt_numbers:
+                continue  # Skip credit invoices (already handled above via ledger_txs)
+
+            first_item = items[0]
+            total_amount = sum(float(i.get('amount') or 0.0) for i in items)
+            
+            # Find earliest created_at for stable sorting
+            timestamps = [i.get('created_at') for i in items if i.get('created_at')]
+            earliest_ts = min(timestamps) if timestamps else first_item.get('created_at')
+            
+            # Find valid receipt_link and mobile_number
+            receipt_link = next((i.get('receipt_link') for i in items if i.get('receipt_link')), '')
+            mobile_number = next((i.get('mobile_number') for i in items if i.get('mobile_number')), '')
+
+            grouped_cash_invoices[rn] = {
+                'id': first_item.get('id', 0),
+                'ledger_id': None,
+                'username': username,
+                'transaction_type': 'INVOICE',
+                'amount': total_amount,
+                'notes': first_item.get('notes') or '',
+                'receipt_number': rn,
+                'created_at': earliest_ts,
+                'is_paid': True,
+                'receipt_link': receipt_link,
+                'invoice_date': first_item.get('date') or '',
+                'upload_date': first_item.get('upload_date') or '',
+                'mobile_number': mobile_number,
+                'payment_mode': first_item.get('payment_mode') or 'Cash',
+                'invoice_balance_due': float(first_item.get('balance_due') or 0.0),
+                'received_amount': float(first_item.get('received_amount') or first_item.get('amount') or 0.0),
+                '_enriched_customer_name': first_item.get('customer_name') or '',
+                'customer_ledgers': {
+                    'customer_name': first_item.get('customer_name') or '',
+                    'balance_due': 0.0
+                },
+                'items': items
+            }
+
+        unified_txs.extend(grouped_cash_invoices.values())
+
+        # Sort combined list by created_at descending
+        unified_txs.sort(key=lambda x: x.get('created_at') or '', reverse=True)
 
         return {
             "status": "success",
-            "data": transactions
+            "data": unified_txs[:limit]
         }
     except Exception as e:
         logger.error(f"Error fetching all customer transactions: {e}")
@@ -544,12 +627,10 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
     db.set_user_context(username)
 
     try:
-        # 1. Fetch all Credit invoices with outstanding balance
+        # 1. Fetch all invoices to ensure all customers are onboarded to ledgers
         invoices_resp = db.client.table("verified_invoices") \
-            .select("id, receipt_number, customer_name, customer_details, balance_due, created_at") \
+            .select("id, receipt_number, customer_name, customer_details, balance_due, created_at, payment_mode") \
             .eq("username", username) \
-            .eq("payment_mode", "Credit") \
-            .gt("balance_due", 0) \
             .execute()
 
         invoices = invoices_resp.data or []
@@ -641,7 +722,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 "transaction_type": "INVOICE",
                 "amount": balance_due,
                 "receipt_number": inv["receipt_number"],
-                "is_paid": False,
+                "is_paid": (inv.get("payment_mode") != "Credit" or balance_due == 0),
                 "created_at": inv.get("created_at") or now,
                 "notes": raw_details,
             }).execute()

@@ -16,6 +16,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
+import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
@@ -783,16 +784,26 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   }
 
                   final authState = ref.read(authProvider);
-                  final usernameParam = authState.user?.username != null
-                      ? '&u=${authState.user!.username}'
-                      : '';
+                  final username = authState.user?.username;
 
                   final double balanceDue =
                       _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
-                  final gstParam = (_gstMode != GstMode.none) ? '&g=${_gstMode.name}' : '';
-                  final shareUrl =
-                      'https://snapkhata.com/receipt.html?i=${freshGroup.receiptNumber}$gstParam$usernameParam';
+                  final shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                    receiptNumber: freshGroup.receiptNumber,
+                    username: username,
+                    gstMode: _gstMode.name,
+                  );
+                  if (shareUrl == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not generate secure receipt link. Please try again.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
 
                   final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 

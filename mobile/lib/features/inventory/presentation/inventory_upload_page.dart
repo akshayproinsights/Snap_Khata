@@ -837,7 +837,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '$failed invoice${failed == 1 ? '' : 's'} could not be read by AI.',
+                            '$failed invoice${failed == 1 ? '' : 's'} could not be processed.',
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

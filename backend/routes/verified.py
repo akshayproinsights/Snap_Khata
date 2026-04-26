@@ -238,48 +238,11 @@ async def update_bulk_verified_invoices(
                 # Insert the updated record
                 db.insert('verified_invoices', record)
                 
-                # Adjust ledger transaction if payment state changed
+                # Adjust ledger transaction
                 try:
-                    if receipt_number:
-                        new_payment_mode = record.get('payment_mode', 'Cash')
-                        new_balance_due = float(record.get('balance_due', 0) or 0)
-                        customer_name = record.get('customer_name') or record.get('customer_details')
-                        customer_name_clean = str(customer_name).strip() if customer_name else ""
-                        
-                        tx_resp = db.client.table('ledger_transactions').select('id', 'ledger_id', 'amount').eq('username', username).eq('receipt_number', receipt_number).eq('transaction_type', 'INVOICE').execute()
-                        
-                        if new_payment_mode == 'Credit' and customer_name_clean and new_balance_due > 0:
-                            if tx_resp.data:
-                                tx = tx_resp.data[0]
-                                old_tx_amount = float(tx.get('amount', 0) or 0)
-                                diff = new_balance_due - old_tx_amount
-                                
-                                if diff != 0:
-                                    db.client.table('ledger_transactions').update({'amount': new_balance_due}).eq('id', tx['id']).execute()
-                                    
-                                    ledger_id = tx['ledger_id']
-                                    ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
-                                    if ledger_resp.data:
-                                        current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
-                                        db.client.table('customer_ledgers').update({
-                                            'balance_due': current_balance + diff
-                                        }).eq('id', ledger_id).execute()
-                            else:
-                                await process_ledgers_for_verified_invoices(username, [record])
-                        else:
-                            if tx_resp.data:
-                                tx = tx_resp.data[0]
-                                old_tx_amount = float(tx.get('amount', 0) or 0)
-                                ledger_id = tx['ledger_id']
-                                
-                                db.client.table('ledger_transactions').delete().eq('id', tx['id']).execute()
-                                
-                                ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
-                                if ledger_resp.data:
-                                    current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
-                                    db.client.table('customer_ledgers').update({
-                                        'balance_due': current_balance - old_tx_amount
-                                    }).eq('id', ledger_id).execute()
+                    await process_ledgers_for_verified_invoices(username, [record])
+                except Exception as inner_e:
+                    logger.error(f"Error syncing ledger transaction in bulk update: {inner_e}")
                 except Exception as inner_e:
                     logger.error(f"Error syncing ledger transaction in bulk update: {inner_e}")
                 
@@ -343,62 +306,12 @@ async def update_single_verified_invoice(
         # Insert the updated record
         db.insert('verified_invoices', record)
         
-        # Adjust ledger transaction if payment state changed
+        # Adjust ledger transaction
         try:
-            if receipt_number:
-                new_payment_mode = record.get('payment_mode', 'Cash')
-                new_balance_due = float(record.get('balance_due', 0) or 0)
-                customer_name = record.get('customer_name') or record.get('customer_details')
-                customer_name_clean = str(customer_name).strip() if customer_name else ""
-                
-                # Check for existing ledger transaction for this receipt
-                tx_resp = db.client.table('ledger_transactions').select('id', 'ledger_id', 'amount').eq('username', username).eq('receipt_number', receipt_number).eq('transaction_type', 'INVOICE').execute()
-                
-                if new_payment_mode == 'Credit' and customer_name_clean and new_balance_due > 0:
-                    # Should exist or be created
-                    if tx_resp.data:
-                        tx = tx_resp.data[0]
-                        old_tx_amount = float(tx.get('amount', 0) or 0)
-                        diff = new_balance_due - old_tx_amount
-                        
-                        if diff != 0:
-                            # Update transaction
-                            db.client.table('ledger_transactions').update({'amount': new_balance_due}).eq('id', tx['id']).execute()
-                            
-                            # Update ledger
-                            ledger_id = tx['ledger_id']
-                            ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
-                            if ledger_resp.data:
-                                current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
-                                db.client.table('customer_ledgers').update({
-                                    'balance_due': current_balance + diff
-                                }).eq('id', ledger_id).execute()
-                                logger.info(f"Updated ledger {ledger_id} by {diff} to match new balance due")
-                    else:
-                        # Transaction doesn't exist, we need to create it (and possibly ledger)
-                        from routes.udhar import process_ledgers_for_verified_invoices
-                        
-                        # Process using the existing helper which handles edge cases
-                        await process_ledgers_for_verified_invoices(username, [record])
-                        logger.info(f"Created new ledger transaction for {receipt_number} via update")
-                else:
-                    # Should NOT exist (Cash or 0 balance due)
-                    if tx_resp.data:
-                        tx = tx_resp.data[0]
-                        old_tx_amount = float(tx.get('amount', 0) or 0)
-                        ledger_id = tx['ledger_id']
-                        
-                        # Delete transaction
-                        db.client.table('ledger_transactions').delete().eq('id', tx['id']).execute()
-                        
-                        # Update ledger
-                        ledger_resp = db.client.table('customer_ledgers').select('balance_due').eq('id', ledger_id).execute()
-                        if ledger_resp.data:
-                            current_balance = float(ledger_resp.data[0].get('balance_due', 0) or 0)
-                            db.client.table('customer_ledgers').update({
-                                'balance_due': current_balance - old_tx_amount
-                            }).eq('id', ledger_id).execute()
-                            logger.info(f"Deleted ledger transaction for {receipt_number} and reduced ledger {ledger_id} by {old_tx_amount}")
+            from routes.udhar import process_ledgers_for_verified_invoices
+            await process_ledgers_for_verified_invoices(username, [record])
+        except Exception as inner_e:
+            logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")
                             
         except Exception as inner_e:
             logger.error(f"Error syncing ledger transaction for invoice edit: {inner_e}")

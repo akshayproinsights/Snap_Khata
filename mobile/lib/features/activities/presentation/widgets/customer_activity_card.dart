@@ -7,8 +7,8 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
-import 'package:mobile/features/udhar/presentation/udhar_detail_page.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/verified/domain/models/verified_models.dart';
 
 /// Renders a customer (receivable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -21,9 +21,10 @@ class CustomerActivityCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
-      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount) {
+      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount, items) {
         final initials = _initials(entityName);
         final isPayment = transactionType.toUpperCase() == 'PAYMENT';
+        final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
         
         final hasDue = balanceDue != null && balanceDue > 0;
         
@@ -39,22 +40,30 @@ class CustomerActivityCard extends ConsumerWidget {
           color: context.surfaceColor,
           child: InkWell(
             onTap: () {
-              // If we have an invoice receipt link, navigate to the Order Detail
-              // page (same behaviour as customers_tab.dart in stable branch).
-              if (displayId != null && displayId.isNotEmpty && receiptLink.isNotEmpty) {
+              // Open invoice details whenever this activity is an invoice entry.
+              // Credit invoices can exist without a receipt link in some payloads.
+              if (!isPayment && hasInvoiceRef) {
+                final groupItems = items.map((e) => VerifiedInvoice.fromJson(e)).toList();
                 final group = InvoiceGroup(
                   receiptNumber: displayId,
-                  date: invoiceDate,
+                  date: invoiceDate.isNotEmpty
+                      ? invoiceDate
+                      : transactionDate.toIso8601String(),
                   receiptLink: receiptLink,
                   customerName: entityName,
                   mobileNumber: mobileNumber,
-                  uploadDate: invoiceDate,
+                  uploadDate: invoiceDate.isNotEmpty
+                      ? invoiceDate
+                      : transactionDate.toIso8601String(),
                   paymentMode: paymentMode,
                   receivedAmount: receivedAmount,
                   balanceDue: invoiceBalanceDue,
                   customerDetails: entityName,
                   extraFields: const {},
-                );
+                )
+                  ..items = groupItems
+                  ..totalAmount = amount;
+                
                 context.pushNamed('order-detail', extra: group);
                 return;
               }
