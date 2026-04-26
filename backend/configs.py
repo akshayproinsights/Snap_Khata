@@ -5,9 +5,16 @@ import json
 # Try to load python-dotenv if available (for .env file support)
 try:
     from dotenv import load_dotenv
-    # Load .env file from root directory
-    dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(dotenv_path)
+    import os
+    # 1. Load .env file from current directory (backend/)
+    dotenv_path_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(dotenv_path_backend):
+        load_dotenv(dotenv_path_backend)
+        
+    # 2. Load .env file from root directory (parent)
+    dotenv_path_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(dotenv_path_root):
+        load_dotenv(dotenv_path_root)
 except Exception:
     pass  # python-dotenv not installed, will use system env vars only
 

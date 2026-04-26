@@ -25,8 +25,12 @@ class CustomerActivityCard extends ConsumerWidget {
         final isPayment = transactionType.toUpperCase() == 'PAYMENT';
         final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
         
-        final hasDue = balanceDue != null && balanceDue > 0;
-        final pendingAmount = hasDue ? balanceDue : 0.0;
+        // Use invoiceBalanceDue for the specific transaction balance
+        final double currentBalance = invoiceBalanceDue;
+        final hasDue = currentBalance > 0;
+        
+        // Fix for TOTAL: ₹0 bug - if amount is 0, sum received + balance
+        final double billTotal = (amount > 0) ? amount : (receivedAmount + invoiceBalanceDue);
         
         final String badgeText = isPayment 
             ? 'GOT' 
@@ -72,7 +76,7 @@ class CustomerActivityCard extends ConsumerWidget {
                   extraFields: const {},
                 )
                   ..items = groupItems
-                  ..totalAmount = amount;
+                  ..totalAmount = billTotal;
                 
                 context.pushNamed('order-detail', extra: group);
                 return;
@@ -169,7 +173,9 @@ class CustomerActivityCard extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              CurrencyFormatter.format(pendingAmount),
+                              isPayment 
+                                  ? CurrencyFormatter.format(amount)
+                                  : (hasDue ? CurrencyFormatter.format(currentBalance) : CurrencyFormatter.format(receivedAmount)),
                               style: TextStyle(
                                 color: isPayment || !hasDue ? context.successColor : context.errorColor,
                                 fontWeight: FontWeight.w900,
@@ -178,7 +184,9 @@ class CustomerActivityCard extends ConsumerWidget {
                               ),
                             ),
                             Text(
-                              isPayment ? 'RECEIVED' : (hasDue ? 'BALANCE DUE' : 'SETTLED'),
+                              isPayment 
+                                  ? 'RECEIVED' 
+                                  : (hasDue ? 'BALANCE' : 'PAID'),
                               style: TextStyle(
                                 color: context.textSecondaryColor,
                                 fontSize: 10,
@@ -211,11 +219,13 @@ class CustomerActivityCard extends ConsumerWidget {
                                 const SizedBox(width: 12),
                               ],
                               Text(
-                                'TOTAL: ${CurrencyFormatter.format(amount)}',
+                                isPayment 
+                                    ? 'MODE: $paymentMode'
+                                    : 'BILL TOTAL: ${CurrencyFormatter.format(billTotal)}',
                                 style: TextStyle(
                                   color: context.textSecondaryColor,
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],

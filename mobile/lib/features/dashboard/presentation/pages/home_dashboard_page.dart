@@ -79,22 +79,6 @@ class HomeDashboardPage extends ConsumerWidget {
                               letterSpacing: 1.0,
                             ),
                           ),
-                          TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              minimumSize: Size.zero,
-                              padding: EdgeInsets.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'View All',
-                              style: TextStyle(
-                                color: context.primaryColor,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),

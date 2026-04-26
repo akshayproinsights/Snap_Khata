@@ -188,7 +188,7 @@ class VendorActivityCard extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              CurrencyFormatter.format(pendingAmount),
+                              hasDue ? CurrencyFormatter.format(pendingAmount) : CurrencyFormatter.format(amount),
                               style: TextStyle(
                                 color: statusColor,
                                 fontWeight: FontWeight.w900,
@@ -197,7 +197,7 @@ class VendorActivityCard extends ConsumerWidget {
                               ),
                             ),
                             Text(
-                              hasDue ? 'TO PAY' : (isPaid ? 'PAID' : 'SETTLED'),
+                              hasDue ? 'BALANCE' : 'PAID',
                               style: TextStyle(
                                 color: context.textSecondaryColor,
                                 fontSize: 10,
@@ -256,11 +256,11 @@ class VendorActivityCard extends ConsumerWidget {
                                 const SizedBox(width: 12),
                               ],
                               Text(
-                                'TOTAL: ${CurrencyFormatter.format(amount)}',
+                                'BILL TOTAL: ${CurrencyFormatter.format(amount)}',
                                 style: TextStyle(
                                   color: context.textSecondaryColor,
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],

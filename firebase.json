@@ -29,6 +29,10 @@
             ],
             "rewrites": [
                 {
+                    "source": "/receipt.html",
+                    "destination": "/receipt.html"
+                },
+                {
                     "source": "**",
                     "destination": "/index.html"
                 }

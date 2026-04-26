@@ -19,6 +19,20 @@ class CurrencyFormatter {
     return NumberFormat.decimalPattern('en_IN').format(amount.round());
   }
 
+  /// Formats amount for input fields (no symbol, no commas, minimal decimals).
+  /// Example: 1200.50 -> 1200.5
+  static String formatInput(double? amount) {
+    if (amount == null) return '';
+    // Use toStringAsFixed to avoid scientific notation and limit decimals
+    // then remove trailing zeros
+    String result = amount.toStringAsFixed(2);
+    if (result.contains('.')) {
+      result = result.replaceAll(RegExp(r'0*$'), '');
+      result = result.replaceAll(RegExp(r'\.$'), '');
+    }
+    return result;
+  }
+
   /// Formats percentage (like GST) preserving decimals if needed.
   /// Example: 12.5 -> 12.5%
   static String formatPercentage(double value) {

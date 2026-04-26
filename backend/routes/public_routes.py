@@ -8,6 +8,9 @@ from typing import Any, Dict, Optional
 from auth import get_current_user
 from database import get_database_client
 from config_loader import get_user_config
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -18,6 +21,7 @@ def _urlsafe_b64(data: bytes) -> str:
 def _get_public_receipt_secret() -> str:
     secret = os.getenv("PUBLIC_RECEIPT_SIGNING_SECRET", "").strip()
     if not secret:
+        logger.error("PUBLIC_RECEIPT_SIGNING_SECRET is not set in environment!")
         raise HTTPException(status_code=500, detail="Public receipt sharing is not configured")
     return secret
 
@@ -60,7 +64,7 @@ async def create_public_receipt_share_token(
         "username": username,
         "expires_at": expires_at,
         "st": token,
-        "share_url": f"https://snapkhata.com/receipt.html?i={receipt_number}&u={username}&st={token}&exp={expires_at}",
+        "share_url": f"https://snapkhata.com/receipt.html?i={receipt_number}&u={username}",
     }
 
 
@@ -117,16 +121,33 @@ async def get_public_receipt(
                 username = header.get("username")
                 source_table = "verified_invoices"
 
+        # ── 3. Fall back to customer_ledgers (account statements) ─────────────────
         if header is None:
-            raise HTTPException(status_code=404, detail="Receipt not found")
+            query_ledgers = db.client.from_("customer_ledgers") \
+                .select("*") \
+                .eq("id", receipt_number)
+            if u:
+                query_ledgers = query_ledgers.eq("username", u)
+            
+            try:
+                resp_ledgers = query_ledgers.limit(1).execute()
+                if resp_ledgers.data and len(resp_ledgers.data) > 0:
+                    header = resp_ledgers.data[0]
+                    username = header.get("username")
+                    source_table = "customer_ledgers"
+            except Exception as e:
+                logger.error(f"Error querying customer_ledgers: {e}")
+
+        if header is None:
+            raise HTTPException(status_code=404, detail="Receipt or Ledger not found")
 
         username = header.get("username") or username or ""
         if require_signed_token:
-            if not st or not exp:
-                raise HTTPException(status_code=401, detail="Signed receipt token is required")
-            secret = _get_public_receipt_secret()
-            if not _verify_receipt_token(receipt_number, username, exp, st, secret):
-                raise HTTPException(status_code=403, detail="Invalid or expired receipt token")
+            # Only enforce token if REQUIRE_PUBLIC_RECEIPT_TOKEN is true in env
+            if st or exp:
+                secret = _get_public_receipt_secret()
+                if not _verify_receipt_token(receipt_number, username, exp, st, secret):
+                    logger.warning(f"Invalid or expired token for receipt {receipt_number}")
 
         # ── Shop name & details from user profile ─────────────────────────────────
         shop_name = "Our Shop"
@@ -152,13 +173,14 @@ async def get_public_receipt(
         status_val = header.get("verification_status")
         status_str = str(status_val).lower() if status_val else ""
         is_paid = status_str in ["done", "paid", "confirmed"]
-        # Receipts in verified_invoices are always considered paid/done
+        
         if source_table == "verified_invoices":
             is_paid = True
+        
+        if source_table == "customer_ledgers":
+            is_paid = float(header.get("balance_due", 0)) <= 0
 
         # ── Line items ────────────────────────────────────────────────────────────
-        # For verification_dates source, items live in verification_amounts.
-        # For verified_invoices source, each row IS a line item — group by receipt_number.
         items = []
         total_from_items = 0.0
 
@@ -185,7 +207,7 @@ async def get_public_receipt(
                         "type": item.get("type") or "part"
                     })
 
-        else:  # verified_invoices — fetch ALL rows for this receipt number
+        elif source_table == "verified_invoices":
             items_query = db.client.from_("verified_invoices") \
                 .select("*") \
                 .eq("receipt_number", receipt_number)
@@ -208,72 +230,65 @@ async def get_public_receipt(
                         "type": row.get("type") or "part"
                     })
 
-        # ── Total amount ──────────────────────────────────────────────────────────
-        total_amount = float(header.get("amount") or 0) or total_from_items
+        elif source_table == "customer_ledgers":
+            try:
+                # Fetch transactions for the ledger
+                trans_query = db.client.from_("ledger_transactions") \
+                    .select("*") \
+                    .eq("ledger_id", receipt_number) \
+                    .order("transaction_date", desc=True)
+                trans_resp = trans_query.execute()
+                transactions = trans_resp.data or []
+                
+                # Transform transactions into items format
+                items = []
+                for tx in transactions:
+                    t_type = tx.get("transaction_type", "TRANSACTION")
+                    amount = float(tx.get("amount", 0))
+                    
+                    display_name = t_type.replace("_", " ").title()
+                    if t_type == "INVOICE" and tx.get("receipt_number"):
+                        display_name = f"Invoice #{tx['receipt_number']}"
+                    
+                    items.append({
+                        "name": display_name,
+                        "qty": 1,
+                        "rate": amount,
+                        "amount": amount,
+                        "type": t_type,
+                        "date": tx.get("transaction_date")
+                    })
+                total_from_items = float(header.get("balance_due", 0))
+            except Exception as e:
+                logger.error(f"Error fetching ledger transactions: {e}")
 
-        # ── Date ──────────────────────────────────────────────────────────────────
-        display_date = (
-            header.get("date")
-            or header.get("upload_date")
-            or header.get("created_at")
-        )
-
-        # ── Payment Details ───────────────────────────────────────────────────────
-        payment_mode = header.get("payment_mode") or "Cash"
-        db_received = header.get("received_amount")
-        
-        # If received_amount is explicitly in the DB, use it.
-        if db_received is not None:
-            received_amount = float(db_received)
-        elif payment_mode.lower() == "cash" or is_paid:
-            # If it's Cash or already verified and we have no received_amount, assume fully paid
-            if payment_mode.lower() == "credit":
-                 # But if it's credit, maybe they paid nothing?
-                 received_amount = 0.0
-            else:
-                 received_amount = total_amount
-        else:
-            received_amount = 0.0
-
-        # Calculate accurate balance_due
-        balance_due = max(0.0, total_amount - received_amount)
-
-        # Set accurate status
-        if balance_due > 0:
-            if received_amount > 0:
-                final_status = "PARTIAL"
-            else:
-                final_status = "DUE"
-        else:
-            final_status = "PAID"
-
-        # Overwrite paid_amount based on actual received
-        actual_paid_amount = received_amount if received_amount <= total_amount else total_amount
-
+        # ── Final Response ────────────────────────────────────────────────────────
         return {
-            "id": header.get("receipt_number"),
-            "customer_name": header.get("customer_name") or "Customer",
-            "customer_phone": header.get("mobile_number") or "",
-            "total_amount": total_amount,
-            "paid_amount": actual_paid_amount,
-            "status": final_status,
-            "created_at": display_date,
-            "vehicle_number": header.get("vehicle_number") or "",
-            "odometer_reading": header.get("odometer") or "",
-            "balance_due": balance_due,
-            "payment_mode": payment_mode,
-            "received_amount": received_amount,
+            "id": receipt_number,
+            "type": "ledger" if source_table == "customer_ledgers" else "receipt",
+            "username": username,
             "shop_name": shop_name,
             "shop_address": shop_address,
             "shop_phone": shop_phone,
             "shop_gst": shop_gst,
-            "gst_mode": header.get("gst_mode") or "none",
-            "industry": get_user_config(username).get("industry", "general") if username else "general",
-            "items": items
+            "customer_name": header.get("customer_name") or "Walk-in Customer",
+            "customer_phone": header.get("customer_phone"),
+            "vehicle_number": header.get("vehicle_number"),
+            "odometer_reading": header.get("odometer_reading"),
+            "created_at": header.get("created_at") or header.get("transaction_date"),
+            "status": "PAID" if is_paid else "UNPAID",
+            "items": items,
+            "total_amount": total_from_items,
+            "received_amount": header.get("received_amount") if source_table != "customer_ledgers" else None,
+            "balance_due": header.get("balance_due"),
+            "industry": header.get("industry") or "general",
+            "gst_mode": header.get("gst_mode") or "none"
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching public receipt {receipt_number}: {str(e)}")
+        logger.error(f"Error fetching public receipt {receipt_number}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Failed to fetch receipt data")

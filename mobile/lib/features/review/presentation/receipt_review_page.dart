@@ -79,7 +79,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       setState(() {
         _receivedAmount = savedReceivedAmount;
         _isReceivedChecked = savedReceivedAmount > 0;
-        _receivedAmountController.text = _formatAmount(savedReceivedAmount);
+        _receivedAmountController.text = _formatInput(savedReceivedAmount);
       });
     }
 
@@ -222,7 +222,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   String _formatAmount(double? amount) {
     if (amount == null) return '';
-    return CurrencyFormatter.format(amount);
+    return CurrencyFormatter.formatPlain(amount);
+  }
+
+  String _formatInput(double? amount) {
+    return CurrencyFormatter.formatInput(amount);
   }
 
   Future<void> _saveCurrentState({String? updatePhoneNumber}) async {
@@ -934,7 +938,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         setState(() {
                           _receivedAmount = grandTotal;
                           _receivedAmountController.text =
-                              _formatAmount(grandTotal);
+                              _formatInput(grandTotal);
                         });
                         _saveReceivedAmount(grandTotal);
                       },
@@ -978,7 +982,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       } else {
                         _receivedAmount = grandTotal;
                         _receivedAmountController.text =
-                            _formatAmount(grandTotal);
+                            _formatInput(grandTotal);
                         _saveReceivedAmount(grandTotal);
                       }
                     });
@@ -1458,7 +1462,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               Expanded(
                 flex: 2,
                 child: DebouncedReviewField(
-                  initialValue: _formatAmount(item.amount),
+                  initialValue: _formatInput(item.amount),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
@@ -1484,7 +1488,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               children: [
                 Expanded(
                     child: DebouncedReviewField(
-                  initialValue: _formatAmount(item.quantity),
+                  initialValue: _formatInput(item.quantity),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: _inputDecoration('Qty'),
@@ -1507,7 +1511,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 ),
                 Expanded(
                     child: DebouncedReviewField(
-                  initialValue: _formatAmount(item.rate),
+                  initialValue: _formatInput(item.rate),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: _inputDecoration('Rate (₹)'),

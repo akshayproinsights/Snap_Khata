@@ -168,7 +168,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _receivedAmount = widget.group.receivedAmount ?? (hasDue ? (widget.group.totalAmount - (widget.group.balanceDue ?? 0)) : widget.group.totalAmount);
     _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
     _receivedAmountController = TextEditingController(
-        text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? CurrencyFormatter.formatPlain(_receivedAmount) : '') : '');
+        text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _formatInput(_receivedAmount) : '') : '');
     _creditDetailsController = TextEditingController(text: widget.group.customerDetails ?? '');
 
     itemCtrls = widget.group.items.map((item) {
@@ -176,12 +176,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         rowId: item.rowId,
         descCtrl: TextEditingController(text: item.description),
         typeCtrl: TextEditingController(text: item.type),
-        qtyCtrl: TextEditingController(
-            text: item.quantity == item.quantity.roundToDouble()
-                ? item.quantity.toInt().toString()
-                : item.quantity.toStringAsFixed(1)),
-        rateCtrl: TextEditingController(text: item.rate.toString()),
-        amtCtrl: TextEditingController(text: item.amount.toString()),
+        qtyCtrl: TextEditingController(text: _formatInput(item.quantity)),
+        rateCtrl: TextEditingController(text: _formatInput(item.rate)),
+        amtCtrl: TextEditingController(text: _formatInput(item.amount)),
       );
     }).toList();
   }
@@ -1176,6 +1173,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   String _formatAmount(double amount) {
     return CurrencyFormatter.formatPlain(amount);
+  }
+
+  String _formatInput(double? amount) {
+    return CurrencyFormatter.formatInput(amount);
   }
 
   void _showReceiptDialog(BuildContext context) {
