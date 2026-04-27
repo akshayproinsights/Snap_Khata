@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final cameraControllerProvider =
@@ -48,8 +49,8 @@ final cameraControllerProvider =
     return controller;
   } catch (e, stackTrace) {
     // Log detailed error for debugging
-    print('Camera initialization error: $e');
-    print('Stack trace: $stackTrace');
+    debugPrint('Camera initialization error: $e');
+    debugPrint('Stack trace: $stackTrace');
     rethrow;
   }
 });

@@ -378,7 +378,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.camera_alt_off_rounded,
+                Icon(LucideIcons.cameraOff,
                     size: 48, color: Colors.red[300]),
                 SizedBox(height: 16),
                 Text('Camera Unavailable',
@@ -395,7 +395,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => _showQuickPickMenu(),
+                    onPressed: _pickGallery,
                     icon: const Icon(Icons.image),
                     label: const Text('Use Gallery Instead'),
                     style: ElevatedButton.styleFrom(
