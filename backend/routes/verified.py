@@ -9,6 +9,7 @@ import math
 from auth import get_current_user
 from database_helpers import get_verified_invoices, update_verified_invoices
 from database import get_database_client
+from services.storage import get_storage_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,6 +23,29 @@ class VerifiedInvoice(BaseModel):
 class SaveVerifiedRequest(BaseModel):
     """Request to save verified records"""
     records: List[Dict[str, Any]]
+
+
+def _resolve_receipt_link(receipt_link: str) -> str:
+    """
+    Convert internal r2://bucket/key URLs to proper HTTPS public URLs.
+    If the URL is already a valid HTTP/HTTPS URL it is returned unchanged.
+    """
+    if not receipt_link or not receipt_link.startswith('r2://'):
+        return receipt_link
+    try:
+        path = receipt_link[5:]  # strip 'r2://'
+        parts = path.split('/', 1)
+        if len(parts) != 2:
+            logger.warning(f"Cannot parse r2:// URL '{receipt_link}' — returning as-is")
+            return receipt_link
+        bucket, key = parts[0], parts[1]
+        storage = get_storage_client()
+        public_url = storage.get_public_url(bucket, key)
+        if public_url:
+            return public_url
+    except Exception as exc:
+        logger.error(f"Error resolving receipt_link '{receipt_link}': {exc}")
+    return receipt_link
 
 
 def sanitize_value(val):
@@ -148,6 +172,11 @@ async def get_verified_invoices_route(
         
         filtered_records = df.to_dict('records')
         sanitized = sanitize_records(filtered_records)
+        
+        # Resolve r2:// URLs
+        for record in sanitized:
+            if record.get("receipt_link", "").startswith("r2://"):
+                record["receipt_link"] = _resolve_receipt_link(record["receipt_link"])
         
         return {
             "records": sanitized,

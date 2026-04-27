@@ -1,7 +1,7 @@
 """Review workflow routes"""
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 import numpy as np
 
@@ -12,6 +12,7 @@ from database_helpers import (
     update_verification_records
 )
 from database import get_database_client
+from services.storage import get_storage_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +34,40 @@ def _normalize_date_for_supabase(date_str: str) -> str:
             pass
     # Already ISO or unknown — return as-is
     return date_str
+
+
+def _resolve_receipt_link(receipt_link: str) -> str:
+    """
+    Convert internal r2://bucket/key URLs to proper HTTPS public URLs.
+
+    When the R2 public_base_url is not configured at the time of processing,
+    the processor falls back to storing 'r2://bucket/key'. CachedNetworkImage
+    on the mobile client cannot load these — this function converts them to a
+    real HTTP URL using the same get_public_url logic used everywhere else.
+
+    If the URL is already a valid HTTP/HTTPS URL it is returned unchanged.
+    If conversion fails for any reason the original value is returned so that
+    the error widget in the app is triggered rather than crashing the API.
+    """
+    if not receipt_link or not receipt_link.startswith('r2://'):
+        return receipt_link
+    try:
+        # Format: r2://bucket-name/folder/file.jpg
+        path = receipt_link[5:]  # strip 'r2://'
+        parts = path.split('/', 1)
+        if len(parts) != 2:
+            logger.warning(f"Cannot parse r2:// URL '{receipt_link}' — returning as-is")
+            return receipt_link
+        bucket, key = parts[0], parts[1]
+        storage = get_storage_client()
+        public_url = storage.get_public_url(bucket, key)
+        if public_url:
+            logger.info(f"Resolved r2:// URL to: {public_url[:80]}...")
+            return public_url
+        logger.warning(f"No public_base_url configured — cannot resolve '{receipt_link}'")
+    except Exception as exc:
+        logger.error(f"Error resolving receipt_link '{receipt_link}': {exc}")
+    return receipt_link
 
 
 class ReviewData(BaseModel):
@@ -73,7 +108,13 @@ async def get_review_dates(
 
         # Apply recursive cleaning to all records
         records = [clean_for_json(record) for record in records]
-        
+
+        # Resolve any r2:// receipt links to proper HTTP URLs so that
+        # CachedNetworkImage on the mobile app can load them.
+        for record in records:
+            if record.get('receipt_link', '').startswith('r2://'):
+                record['receipt_link'] = _resolve_receipt_link(record['receipt_link'])
+
         return {
             "records": records if records else [],
             "total": len(records) if records else 0
@@ -394,12 +435,17 @@ async def get_review_amounts(
 
         # Apply recursive cleaning to all records
         records = [clean_for_json(record) for record in records]
-        
+
+        # Resolve any r2:// receipt links to proper HTTP URLs.
+        for record in records:
+            if record.get('receipt_link', '').startswith('r2://'):
+                record['receipt_link'] = _resolve_receipt_link(record['receipt_link'])
+
         return {
             "records": records if records else [],
             "total": len(records) if records else 0
         }
-    
+
     except Exception as e:
         logger.error(f"Error reading review amounts: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to read review data: {str(e)}")

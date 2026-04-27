@@ -23,13 +23,13 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
         color: context.backgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Drag Handle
@@ -96,10 +96,11 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           const SizedBox(height: 32),
 
           // Selectable Cards
-          Expanded(
+          Flexible(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildTypeCard(
                     type: BillScanType.customer,

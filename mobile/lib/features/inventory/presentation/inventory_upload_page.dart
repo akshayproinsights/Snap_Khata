@@ -178,10 +178,12 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         await ref.read(inventoryUploadProvider.notifier).addFiles(pickedFiles);
       }
     } catch (e) {
-      if (mounted) {
-        if (!context.mounted) return;
+      if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gallery error: $e')),
+          SnackBar(
+            content: Text('Error picking images: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -379,11 +381,56 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         ),
       ),
       error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text('Camera unavailable: $e',
-              style: const TextStyle(color: AppTheme.textSecondary),
-              textAlign: TextAlign.center),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.camera_alt_off_rounded,
+                    size: 48, color: Colors.red[300]),
+                SizedBox(height: 16),
+                Text('Camera Unavailable',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center),
+                SizedBox(height: 12),
+                Text('$e',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                    textAlign: TextAlign.center),
+                SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _pickGallery,
+                    icon: const Icon(Icons.image),
+                    label: const Text('Use Gallery Instead'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0066FF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => ref.refresh(cameraControllerProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Try Again'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: BorderSide(color: Colors.white30),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
       data: (controller) => Stack(

@@ -33,14 +33,17 @@ class UserResponse(BaseModel):
 async def login(credentials: LoginRequest):
     """
     Authenticate user and return JWT token.
-    Username matching is case-insensitive — canonical casing from secrets.toml
-    is used in the JWT so that all DB queries use the correct username.
+    Username matching is case-insensitive and normalized (spaces → underscores).
     """
+    # Normalize username: spaces to underscores, lowercase
+    # This handles both self-registered users (already normalized in DB) and legacy users
+    normalized_input = credentials.username.strip().replace(" ", "_").lower()
+    
     # Resolve canonical username (case-insensitive lookup against secrets.toml)
     users_db = config.get_users_db()
-    canonical_username = credentials.username  # default: use as-typed
+    canonical_username = normalized_input  # default: use normalized input
     for stored_user in users_db.keys():
-        if stored_user.lower() == credentials.username.lower():
+        if stored_user.lower() == normalized_input:
             canonical_username = stored_user
             break
 

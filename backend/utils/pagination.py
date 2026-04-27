@@ -120,6 +120,13 @@ class PaginationHelper:
         include_total: bool = False
     ) -> Dict[str, Any]:
         """Build a paginated response from fetched items"""
+        
+        # Calculate line_total for each item (quantity * rate)
+        for item in items:
+            if 'quantity' in item and 'rate' in item:
+                quantity = float(item.get('quantity', 0) or 0)
+                rate = float(item.get('rate', 0) or 0)
+                item['line_total'] = quantity * rate
 
         # Check if we fetched more than limit (indicates has_next)
         has_next = len(items) > limit
@@ -233,7 +240,7 @@ class OptimizedQueries:
         query = db_client.table('inventory_items') \
             .select(
                 'id, invoice_number, vendor_name, invoice_date, '
-                'quantity, rate, line_total, hsn_code, product_name'
+                'quantity, rate, hsn_code, product_name'
             ) \
             .eq('username', username)
 

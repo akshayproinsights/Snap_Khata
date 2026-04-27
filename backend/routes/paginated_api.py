@@ -100,7 +100,7 @@ async def get_inventory_summary(
 
         # Fetch summary stats (this can be cached/aggregated in DB)
         response = db.client.table('inventory_items') \
-            .select('id, line_total, created_at') \
+            .select('id, created_at') \
             .eq('username', username) \
             .order('created_at', desc=True) \
             .limit(1) \

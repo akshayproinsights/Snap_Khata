@@ -62,6 +62,11 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
     }
   }
 
+  String _normalizeUsername(String input) {
+    // Match backend normalization: spaces to underscores, lowercase
+    return input.trim().replaceAll(" ", "_").toLowerCase();
+  }
+
   void _handleRegister() async {
     if (_username.isEmpty || _shopName.isEmpty || _password.isEmpty || _selectedIndustry == null) {
       AppToast.showError(context, 'Please fill all fields', title: 'Error');
@@ -178,6 +183,31 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                           });
                         },
                       ),
+                      const SizedBox(height: 6),
+                      // Display normalized username preview
+                      if (_username.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            'Username will be: ${_normalizeUsername(_username)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.textSecondaryColor,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            'Use letters, numbers, spaces, or underscores (3-30 characters)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.textSecondaryColor,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 20),
 
                       Text('Password',

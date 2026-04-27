@@ -9,8 +9,12 @@ class AuthRepository {
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
+      // Normalize username: spaces to underscores, lowercase
+      // Matches backend normalization for consistency
+      final normalizedUsername = username.trim().replaceAll(" ", "_").toLowerCase();
+      
       final response = await _dio.post('/api/auth/login', data: {
-        'username': username,
+        'username': normalizedUsername,
         'password': password,
       });
       return response.data;
@@ -59,8 +63,12 @@ class AuthRepository {
   Future<Map<String, dynamic>> register(
       String username, String password, String shopName, String selectedIndustry) async {
     try {
+      // Normalize username: spaces to underscores, lowercase
+      // Matches backend normalization for consistency
+      final normalizedUsername = username.trim().replaceAll(" ", "_").toLowerCase();
+      
       final response = await _dio.post('/api/auth/register', data: {
-        'username': username,
+        'username': normalizedUsername,
         'password': password,
         'shop_name': shopName,
         'industry': selectedIndustry,

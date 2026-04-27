@@ -28,6 +28,27 @@ executor = ThreadPoolExecutor(max_workers=int(os.getenv('INVENTORY_MAX_WORKERS',
 # inventory_processing_status: Dict[str, Dict[str, Any]] = {}
 
 
+def _resolve_receipt_link(receipt_link: str) -> str:
+    """
+    Convert internal r2://bucket/key URLs to proper HTTPS public URLs.
+    If the URL is already a valid HTTP/HTTPS URL it is returned unchanged.
+    """
+    if not receipt_link or not receipt_link.startswith('r2://'):
+        return receipt_link
+    try:
+        path = receipt_link[5:]  # strip 'r2://'
+        parts = path.split('/', 1)
+        if len(parts) != 2:
+            logger.warning(f"Cannot parse r2:// URL '{receipt_link}' — returning as-is")
+            return receipt_link
+        bucket, key = parts[0], parts[1]
+        storage = get_storage_client()
+        public_url = storage.get_public_url(bucket, key)
+        if public_url:
+            return public_url
+    except Exception as exc:
+        logger.error(f"Error resolving receipt_link '{receipt_link}': {exc}")
+    return receipt_link
 class InventoryUploadResponse(BaseModel):
     """Inventory upload response model"""
     success: bool
@@ -725,7 +746,7 @@ def process_inventory_sync(
                 "file_key": dup.get("file_key", ""),
                 "invoice_number": rec.get("invoice_number", ""),
                 "invoice_date": rec.get("invoice_date", ""),
-                "receipt_link": rec.get("receipt_link", ""),
+                "receipt_link": _resolve_receipt_link(rec.get("receipt_link", "")),
                 "message": dup.get("message", "Already uploaded previously"),
             })
 
@@ -852,7 +873,7 @@ async def get_tracked_items(
                 "rate": float(row.get("rate") or 0),
                 "net_bill": float(row.get("net_bill") or 0),
                 "amount_mismatch": float(row.get("amount_mismatch") or row.get("mismatch_amount") or 0),
-                "receipt_link": row.get("receipt_link") or "",
+                "receipt_link": _resolve_receipt_link(row.get("receipt_link") or ""),
                 "verification_status": "Done",
                 "created_at": row.get("created_at"),
                 "payment_mode": row.get("payment_mode"),
@@ -910,7 +931,7 @@ async def get_item_price_history_by_description(
                 "rate": float(row.get("rate") or 0),
                 "net_bill": float(row.get("net_bill") or 0),
                 "amount_mismatch": float(row.get("amount_mismatch") or row.get("mismatch_amount") or 0),
-                "receipt_link": row.get("receipt_link") or "",
+                "receipt_link": _resolve_receipt_link(row.get("receipt_link") or ""),
                 "verification_status": "Done",
                 "created_at": row.get("created_at"),
                 "payment_mode": row.get("payment_mode"),
@@ -962,7 +983,7 @@ async def get_vendor_price_history(
                 "rate": total,
                 "net_bill": total,
                 "amount_mismatch": 0.0,
-                "receipt_link": inv.get("receipt_link") or "",
+                "receipt_link": _resolve_receipt_link(inv.get("receipt_link") or ""),
                 "verification_status": "Done",
                 "created_at": inv.get("created_at"),
                 "payment_mode": inv.get("payment_mode"),
@@ -1008,10 +1029,16 @@ async def get_inventory_items(
         
         response = query.execute()
         
+        # Resolve r2:// URLs in response
+        items = response.data or []
+        for item in items:
+            if item.get("receipt_link", "").startswith("r2://"):
+                item["receipt_link"] = _resolve_receipt_link(item["receipt_link"])
+
         return {
             "success": True,
-            "items": response.data,
-            "count": len(response.data)
+            "items": items,
+            "count": len(items)
         }
     except Exception as e:
         logger.error(f"Error fetching inventory items: {e}")
@@ -1052,10 +1079,16 @@ async def get_item_price_history(
         
         response = query.execute()
         
+        # Resolve r2:// URLs
+        items = response.data or []
+        for item in items:
+            if item.get("receipt_link", "").startswith("r2://"):
+                item["receipt_link"] = _resolve_receipt_link(item["receipt_link"])
+
         return {
             "success": True,
-            "items": response.data,
-            "count": len(response.data)
+            "items": items,
+            "count": len(items)
         }
     except HTTPException:
         raise

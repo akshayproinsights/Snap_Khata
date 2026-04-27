@@ -50,10 +50,14 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_username(cls, v: str) -> str:
         v = v.strip()
+        # Convert spaces to underscores for better UX (e.g., "Omkar Khanapure" → "omkar_khanapure")
+        v = v.replace(" ", "_")
+        # Convert to lowercase for consistency
+        v = v.lower()
         if not _USERNAME_RE.match(v):
             raise ValueError(
                 "Username must be 3–30 characters and contain only letters, "
-                "numbers, or underscores."
+                "numbers, or underscores (no spaces)."
             )
         return v
 
