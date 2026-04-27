@@ -1,0 +1,106 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 93.0.0 (100.0.0 available)
+  analyzer 10.0.1 (13.0.0 available)
+  cli_util 0.4.2 (0.5.0 available)
+  dart_style 3.1.7 (3.1.8 available)
+  file_picker 10.3.10 (11.0.2 available)
+  flutter_launcher_icons 0.13.1 (0.14.4 available)
+  flutter_lints 5.0.0 (6.0.0 available)
+  font_awesome_flutter 10.12.0 (11.0.0 available)
+  lints 5.1.1 (6.1.0 available)
+  meta 1.17.0 (1.18.2 available)
+  native_toolchain_c 0.17.6 (0.18.0 available)
+  share_plus 12.0.2 (13.1.0 available)
+  share_plus_platform_interface 6.1.0 (7.1.0 available)
+  test 1.30.0 (1.31.0 available)
+  test_api 0.7.10 (0.7.11 available)
+  test_core 0.6.16 (0.6.17 available)
+  vector_math 2.2.0 (2.3.0 available)
+  win32 5.15.0 (6.1.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+19 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing mobile...                                             
+
+  error • The method 'when' isn't defined for the type 'PaginationState' • lib/features/inventory/presentation/items_page_paginated.dart:91:36 • undefined_method
+warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • lib/features/inventory/presentation/providers/paginated_inventory_provider.dart:1:8 • unused_import
+warning • Unused import: 'package:mobile/providers/pagination_provider.dart' • lib/features/inventory/presentation/providers/paginated_inventory_provider.dart:4:8 • unused_import
+  error • The name '_Loaded' isn't a type, so it can't be used in an 'as' expression • lib/features/inventory/presentation/providers/paginated_inventory_provider.dart:104:35 • cast_to_non_type
+  error • The method 'when' isn't defined for the type 'PaginationState' • lib/features/udhar/presentation/parties_list_page_paginated.dart:93:36 • undefined_method
+warning • Dead code • lib/features/udhar/presentation/parties_list_page_paginated.dart:202:39 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/parties_list_page_paginated.dart:202:42 • dead_null_aware_expression
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/udhar/presentation/parties_list_page_paginated.dart:230:40 • unnecessary_null_comparison
+warning • The '!' will have no effect because the receiver can't be null • lib/features/udhar/presentation/parties_list_page_paginated.dart:232:39 • unnecessary_non_null_assertion
+  error • The method 'toUpperCase' isn't defined for the type 'PartyType' • lib/features/udhar/presentation/parties_list_page_paginated.dart:232:41 • undefined_method
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/parties_list_page_paginated.dart:244:70 • dead_null_aware_expression
+  error • The method 'when' isn't defined for the type 'PaginationState' • lib/features/udhar/presentation/party_detail_paginated.dart:70:29 • undefined_method
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/features/udhar/presentation/party_detail_paginated.dart:180:18 • invalid_null_aware_operator
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/features/udhar/presentation/party_detail_paginated.dart:180:55 • invalid_null_aware_operator
+warning • Dead code • lib/features/udhar/presentation/party_detail_paginated.dart:181:33 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:181:36 • dead_null_aware_expression
+warning • Dead code • lib/features/udhar/presentation/party_detail_paginated.dart:183:34 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:183:37 • dead_null_aware_expression
+  error • The argument type 'String' can't be assigned to the parameter type 'int'.  • lib/features/udhar/presentation/party_detail_paginated.dart:339:45 • argument_type_not_assignable
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/features/udhar/presentation/party_detail_paginated.dart:380:37 • invalid_null_aware_operator
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/features/udhar/presentation/party_detail_paginated.dart:381:25 • invalid_null_aware_operator
+warning • Dead code • lib/features/udhar/presentation/party_detail_paginated.dart:397:45 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:397:48 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:397:68 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:407:53 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/udhar/presentation/party_detail_paginated.dart:420:70 • dead_null_aware_expression
+warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • lib/features/udhar/presentation/providers/paginated_khata_provider.dart:1:8 • unused_import
+  error • The argument type 'Map<String, dynamic>' can't be assigned to the parameter type 'Map<String, String?>'.  • lib/features/udhar/presentation/providers/paginated_khata_provider.dart:70:26 • argument_type_not_assignable
+  error • The name '_Loaded' isn't a type, so it can't be used in an 'as' expression • lib/features/udhar/presentation/providers/paginated_khata_provider.dart:111:35 • cast_to_non_type
+warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • lib/features/udhar/presentation/providers/paginated_transactions_provider.dart:1:8 • unused_import
+warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • lib/features/upload/presentation/providers/paginated_upload_provider.dart:1:8 • unused_import
+  error • The name '_Loaded' isn't a type, so it can't be used in an 'as' expression • lib/features/upload/presentation/providers/paginated_upload_provider.dart:105:35 • cast_to_non_type
+  error • The method 'when' isn't defined for the type 'PaginationState' • lib/features/upload/presentation/upload_tracking_paginated.dart:99:36 • undefined_method
+warning • Dead code • lib/features/upload/presentation/upload_tracking_paginated.dart:230:53 • dead_code
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:230:56 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:231:54 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:256:55 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:282:41 • dead_null_aware_expression
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/upload/presentation/upload_tracking_paginated.dart:294:33 • unnecessary_null_comparison
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/upload/presentation/upload_tracking_paginated.dart:294:60 • unnecessary_null_comparison
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:305:43 • dead_null_aware_expression
+warning • The left operand can't be null, so the right operand is never executed • lib/features/upload/presentation/upload_tracking_paginated.dart:305:67 • dead_null_aware_expression
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/upload/presentation/upload_tracking_paginated.dart:312:30 • unnecessary_null_comparison
+warning • The '!' will have no effect because the receiver can't be null • lib/features/upload/presentation/upload_tracking_paginated.dart:315:29 • unnecessary_non_null_assertion
+warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • lib/models/pagination_state.dart:1:8 • unused_import
+warning • Unused import: 'dart:async' • lib/models/pagination_state.dart:3:8 • unused_import
+  error • Missing concrete implementations of 'getter _$PaginationCursor.direction', 'getter _$PaginationCursor.lastId', and 'getter _$PaginationCursor.lastValue' • lib/models/pagination_state.dart:9:7 • non_abstract_class_inherits_abstract_member
+  error • Missing concrete implementations of 'getter _$PaginatedData.data', 'getter _$PaginatedData.hasNext', 'getter _$PaginatedData.hasPrevious', 'getter _$PaginatedData.nextCursor', and 3 more • lib/models/pagination_state.dart:19:7 • non_abstract_class_inherits_abstract_member
+  error • Missing concrete implementations of 'getter _$PaginationConfig.filters', 'getter _$PaginationConfig.pageSize', 'getter _$PaginationConfig.searchQuery', 'getter _$PaginationConfig.sortBy', and 1 more • lib/models/pagination_state.dart:105:7 • non_abstract_class_inherits_abstract_member
+  error • Missing concrete implementations of 'getter _$PaginationStats.lastLoadedAt', 'getter _$PaginationStats.loadTime', 'getter _$PaginationStats.pageCount', and 'getter _$PaginationStats.totalItemsLoaded' • lib/models/pagination_state.dart:127:7 • non_abstract_class_inherits_abstract_member
+   info • The import of 'package:state_notifier/state_notifier.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter_riverpod/legacy.dart' • lib/providers/pagination_provider.dart:3:8 • unnecessary_import
+warning • Unused import: '../core/network/api_client.dart' • lib/providers/pagination_provider.dart:8:8 • unused_import
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:24:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:35:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:45:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:55:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:74:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:84:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:95:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/utils/pagination_caching.dart:134:9 • avoid_print
+   info • Parameter 'key' could be a super parameter • lib/widgets/paginated_list_view.dart:19:9 • use_super_parameters
+warning • A value for optional parameter 'hasNext' isn't ever given • lib/widgets/paginated_list_view.dart:105:38 • unused_element_parameter
+   info • Parameter 'key' could be a super parameter • lib/widgets/paginated_list_view.dart:196:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/paginated_list_view.dart:223:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/paginated_list_view.dart:250:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/paginated_list_view.dart:278:9 • use_super_parameters
+warning • Unused import: '../models/pagination_state.dart' • lib/widgets/pagination_widgets.dart:3:8 • unused_import
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:10:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:89:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:164:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:231:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:318:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:366:9 • use_super_parameters
+   info • Parameter 'key' could be a super parameter • lib/widgets/pagination_widgets.dart:411:9 • use_super_parameters
+
+74 issues found. (ran in 2.5s)

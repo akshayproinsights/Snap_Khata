@@ -88,7 +88,7 @@ class ReviewCenterSheet extends ConsumerWidget {
             child: Column(
               children: [
                 _ReviewCard(
-                  title: 'Purchases (Bills)',
+                  title: 'Supplier (Purchases)',
                   subtitle: 'Verify items bought from suppliers to update your stock.',
                   count: supplierCount,
                   icon: LucideIcons.shoppingCart,
@@ -101,7 +101,7 @@ class ReviewCenterSheet extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 _ReviewCard(
-                  title: 'Sales (Invoices)',
+                  title: 'Customer (Receipts)',
                   subtitle: 'Verify items sold to customers to track your earnings.',
                   count: customerCount,
                   icon: LucideIcons.banknote,

@@ -97,30 +97,35 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
 
           // Selectable Cards
           Expanded(
-            child: Column(
-              children: [
-                _buildTypeCard(
-                  type: BillScanType.customer,
-                  title: 'Customer',
-                  subtitle: '↓ Money In',
-                  subtitleColor: context.successColor,
-                  icon: LucideIcons.user,
-                  isSelected: selectedType == BillScanType.customer,
-                  selectedColor: context.successColor,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 16),
-                _buildTypeCard(
-                  type: BillScanType.supplier,
-                  title: 'Supplier',
-                  subtitle: '↑ Money Out',
-                  subtitleColor: context.errorColor,
-                  icon: LucideIcons.truck,
-                  isSelected: selectedType == BillScanType.supplier,
-                  selectedColor: context.errorColor,
-                  isDark: isDark,
-                ),
-              ],
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildTypeCard(
+                    type: BillScanType.customer,
+                    title: 'Customer',
+                    subtitle: '↓ Money In',
+                    subtitleColor: context.successColor,
+                    icon: LucideIcons.user,
+                    isSelected: selectedType == BillScanType.customer,
+                    selectedColor: context.successColor,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTypeCard(
+                    type: BillScanType.supplier,
+                    title: 'Supplier',
+                    subtitle: '↑ Money Out',
+                    subtitleColor: context.errorColor,
+                    icon: LucideIcons.truck,
+                    isSelected: selectedType == BillScanType.supplier,
+                    selectedColor: context.errorColor,
+                    isDark: isDark,
+                  ),
+                  // Add a small bottom padding to the scrollable area
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
 
@@ -166,7 +171,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                         ? 'Select an option'
                         : selectedType == BillScanType.customer
                             ? 'Snap New Order'
-                            : 'Scan Purchase Bill',
+                            : 'Scan Supplier Purchase',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

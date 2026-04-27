@@ -5,6 +5,7 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/parties_list_page.dart' as mobile;
 import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/unified_ledger_provider.dart';
 import 'package:mobile/features/udhar/presentation/widgets/add_party_entry_sheet.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,7 @@ class PartiesDashboardPage extends ConsumerWidget {
     final dashboardState = ref.watch(udharDashboardProvider);
     final filterMode = ref.watch(udharFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ledgersLoading = ref.watch(unifiedLedgerLoadingProvider);
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
@@ -62,7 +64,9 @@ class PartiesDashboardPage extends ConsumerWidget {
                     ],
                   ),
                 )
-              : Column(
+              : ledgersLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
                   children: [
                     // Summary Section
                     _buildSummaryCard(

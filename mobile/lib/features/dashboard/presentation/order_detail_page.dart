@@ -1569,7 +1569,7 @@ class _CreditBookButton extends ConsumerWidget {
           return;
         }
 
-        context.push('/udhar/${match.id}', extra: match);
+        context.push('/party/${match.id}', extra: match);
       },
       child: Container(
         width: double.infinity,

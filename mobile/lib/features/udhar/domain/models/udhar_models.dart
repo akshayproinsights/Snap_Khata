@@ -51,6 +51,11 @@ class LedgerTransaction {
     this.receiptLink,
   });
 
+  // Getters for backwards compatibility
+  String get type => transactionType;
+  String get description => notes ?? receiptNumber ?? '';
+  DateTime get date => createdAt;
+
   factory LedgerTransaction.fromJson(Map<String, dynamic> json) {
     return LedgerTransaction(
       id: json['id'],

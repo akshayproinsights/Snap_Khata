@@ -74,6 +74,7 @@ dependencies:
   supabase_flutter: ^2.12.4
   json_annotation: ^4.11.0
   timeago: ^3.7.1
+  state_notifier: ^1.0.0
 
 dev_dependencies:
   flutter_test:

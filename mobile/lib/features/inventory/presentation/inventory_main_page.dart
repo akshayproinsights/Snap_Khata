@@ -301,7 +301,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
         extendedIconLabelSpacing: 10,
         icon: const Icon(Icons.camera_alt_rounded, size: 22, color: Colors.white),
         label: Text(
-          'Scan Purchase Bill',
+          'Scan Supplier Purchase',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.5,
@@ -609,7 +609,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tap "Scan Purchase Bill" to snap\na vendor bill or purchase order',
+                    'Tap "Scan Supplier Purchase" to snap\na vendor bill or purchase order',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
                   ),

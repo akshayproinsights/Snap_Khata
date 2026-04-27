@@ -262,7 +262,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
               flexibleSpace: FlexibleSpaceBar(
                 titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
                 title: const Text(
-                  'VERIFIED BILLS',
+                  'VERIFIED PURCHASES',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,
@@ -310,7 +310,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Text('TOTAL INVOICES',
+                                    const Text('TOTAL RECEIPTS',
                                         style: TextStyle(
                                             color: Colors.white70,
                                             fontSize: 10,
@@ -1094,13 +1094,23 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     if (_groupBy != GroupByField.customer &&
                         record.customerName.isNotEmpty)
                       _buildMetaTag(LucideIcons.user, record.customerName),
+                    if (record.mobileNumber.isNotEmpty)
+                      _buildMetaTag(LucideIcons.phone, record.mobileNumber),
+                    if (isAutomobile) ...[
+                      if ((record.extraFields['car_number'] ?? record.extraFields['vehicle_number']) != null && 
+                          (record.extraFields['car_number'] ?? record.extraFields['vehicle_number']).toString().isNotEmpty)
+                        _buildMetaTag(LucideIcons.car, (record.extraFields['car_number'] ?? record.extraFields['vehicle_number']).toString()),
+                    ],
                     if (_groupBy != GroupByField.date && record.date.isNotEmpty)
                       _buildMetaTag(LucideIcons.calendar, record.date),
                     if (_groupBy != GroupByField.receipt &&
                         record.receiptNumber.isNotEmpty)
                       _buildMetaTag(LucideIcons.hash, record.receiptNumber),
-                    ...record.extraFields.entries.map((entry) {
-                      if (entry.value == null || entry.value.toString().isEmpty) return const SizedBox.shrink();
+                    ...record.extraFields.entries.where((entry) {
+                      final key = entry.key.toLowerCase();
+                      if (key == 'car_number' || key == 'vehicle_number' || key == 'mobile_number') return false;
+                      return entry.value != null && entry.value.toString().isNotEmpty;
+                    }).map((entry) {
                       return _buildMetaTag(LucideIcons.tag, entry.value.toString());
                     }),
                   ]),

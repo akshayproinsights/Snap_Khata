@@ -5,7 +5,7 @@ import { GlobalStatusProvider } from './contexts/GlobalStatusContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
-// import DashboardPage from './pages/DashboardPage'; // HIDDEN: HOME page
+import DashboardPage from './pages/DashboardPage';
 import UploadPage from './pages/UploadPage';
 import ReviewInvoiceDetailsPage from './pages/ReviewInvoiceDetailsPage';
 import VerifiedInvoicesPage from './pages/VerifiedInvoicesPage';
@@ -13,7 +13,7 @@ import InventoryUploadPage from './pages/InventoryUploadPage';
 import VerifyPartsPage from './pages/VerifyPartsPage';
 import InventoryMappedPage from './pages/InventoryMappedPage';
 import CurrentStockPage from './pages/CurrentStockPage';
-// import UdharDashboardPage from './pages/UdharDashboardPage'; // HIDDEN: Party Details page
+import UdharDashboardPage from './pages/UdharDashboardPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,12 +40,8 @@ function App() {
                   </ProtectedRoute>
                 }
               >
-                {/* Dashboard - HIDDEN for now
                 <Route index element={<DashboardPage />} />
                 <Route path="credit" element={<UdharDashboardPage />} />
-                */}
-                <Route index element={<Navigate to="/sales/upload" replace />} />
-                <Route path="credit" element={<Navigate to="/sales/upload" replace />} />
 
                 {/* Sales Section */}
                 <Route path="sales/upload" element={<UploadPage />} />

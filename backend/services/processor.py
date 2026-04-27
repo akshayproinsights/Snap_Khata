@@ -889,7 +889,9 @@ def convert_to_dataframe_rows(
                 
         # Handle car_number normalization if present in extra
         if "car_number" in extra:
-            extra["car_number"] = normalize_text_field(extra["car_number"], "car_number")
+            normalized_car = normalize_text_field(extra["car_number"], "car_number")
+            extra["car_number"] = normalized_car
+            row["vehicle_number"] = normalized_car
             
         row["extra_fields"] = extra
         

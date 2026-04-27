@@ -48,6 +48,8 @@ const DashboardPage: React.FC = () => {
     // Draft PO state
     const [draftPOItems, setDraftPOItems] = useState<Map<string, DraftPOItem>>(new Map());
 
+    const { sales } = useGlobalStatus();
+
     // Fetch KPIs
     const { data: kpis, refetch: refetchKPIs } = useQuery({
         queryKey: ['dashboardKPIs', dateRange, dynamicFilters],
@@ -57,20 +59,11 @@ const DashboardPage: React.FC = () => {
                 dateRange.end,
                 dynamicFilters
             ),
-        staleTime: 30000,
+        staleTime: 0,
     });
 
     // Auto-refresh every 30 seconds
-    useEffect(() => {
-        const interval = setInterval(() => {
-            refetchKPIs();
-        }, 30000); // 30 seconds
-
-        return () => clearInterval(interval);
-    }, [refetchKPIs]);
-
-    // Fetch daily sales volume
-    const { data: dailySales, isLoading: salesLoading } = useQuery({
+    const { data: dailySales, isLoading: salesLoading, refetch: refetchSales } = useQuery({
         queryKey: ['dailySalesVolume', dateRange, dynamicFilters],
         queryFn: () =>
             dashboardAPI.getDailySalesVolume(
@@ -78,28 +71,33 @@ const DashboardPage: React.FC = () => {
                 dateRange.end,
                 dynamicFilters
             ),
-        staleTime: 30000,
+        staleTime: 0,
     });
 
-
-
-    // Fetch stock summary for out of stock count
-    const { data: stockSummary } = useQuery({
+    const { data: stockSummary, refetch: refetchStockSummary } = useQuery({
         queryKey: ['stockSummary'],
         queryFn: () => dashboardAPI.getStockSummary(),
-        staleTime: 30000,
+        staleTime: 0,
     });
 
-    const { sales } = useGlobalStatus();
-
-    // Fetch unmapped items count - use stock levels API to match Stock Register page
-    const { data: stockLevels } = useQuery({
+    const { data: stockLevels, refetch: refetchStockLevels } = useQuery({
         queryKey: ['stockLevels'],
         queryFn: async () => {
             return await dashboardAPI.getStockLevels();
         },
-        staleTime: 30000,
+        staleTime: 0,
     });
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refetchKPIs();
+            refetchSales();
+            refetchStockSummary();
+            refetchStockLevels();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [refetchKPIs, refetchSales, refetchStockSummary, refetchStockLevels]);
 
     // Handle date range presets
     const setDatePreset = (preset: 'week' | 'month' | 'quarter' | 'all' | 'custom') => {

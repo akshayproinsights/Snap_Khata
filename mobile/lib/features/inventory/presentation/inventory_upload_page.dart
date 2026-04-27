@@ -32,6 +32,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   /// LOCAL guard: true until backend confirms no task is active.
   /// Camera CANNOT render while this is true.
   bool _isCheckingBackend = true;
+  bool _isCapturing = false;
 
   @override
   void initState() {
@@ -133,12 +134,23 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   }
 
   Future<void> _capture(CameraController cam) async {
+    if (_isCapturing || _isCheckingBackend) return;
     final s = ref.read(inventoryUploadProvider);
-    if (s.isActive || _isCheckingBackend) return;
+    if (s.isActive) return;
 
+    setState(() => _isCapturing = true);
     try {
       HapticFeedback.mediumImpact();
       final xFile = await cam.takePicture();
+
+      // ✅ RESUME PREVIEW: The camera package often freezes the preview after takePicture().
+      // This is the CRITICAL fix to allow taking multiple photos sequentially.
+      try {
+        await cam.resumePreview();
+      } catch (e) {
+        debugPrint('Resume preview failed: $e');
+      }
+
       await ref.read(inventoryUploadProvider.notifier).addFiles([xFile]);
     } catch (e) {
       if (mounted) {
@@ -146,6 +158,10 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Capture failed: $e')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCapturing = false);
       }
     }
   }

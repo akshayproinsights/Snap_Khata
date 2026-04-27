@@ -17,6 +17,8 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
@@ -479,7 +481,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                if (header != null) _buildHeaderCard(header, invoiceColumns),
+                if (header != null) _buildHeaderCard(header, invoiceColumns, isAutomobile),
                 const SizedBox(height: 16),
                 Text('Line Items',
                     style: TextStyle(
@@ -1088,7 +1090,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns) {
+  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
     final isError = header.hasError;
     final isDone = header.verificationStatus == 'Done';
 
@@ -1107,6 +1109,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final isEditable = c['editable'] == true || c['editable'] == 'true';
       final isStandardLineItem = ['description', 'quantity', 'rate', 'amount', 'amount_mismatch', 'verification_status', 'audit_findings', 'receipt_link'].contains(dbCol);
       final isStandardHeader = ['receipt_number', 'date'].contains(dbCol);
+      
+      if (!isAutomobile && dbCol != null && (dbCol.contains('vehicle') || dbCol.contains('car'))) {
+        return false;
+      }
+      
       return isEditable && dbCol != null && !isStandardLineItem && !isStandardHeader;
     }).toList();
 
@@ -1258,46 +1265,72 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               String value = '';
               if (dbCol == 'customer_name') {
                 value = header.customerName ?? '';
+              } else if (dbCol == 'mobile_number') {
+                value = header.mobileNumber ?? '';
               } else {
                 value = header.extraFields[dbCol]?.toString() ?? '';
               }
 
               return FractionallySizedBox(
-                widthFactor: ['customer_name'].contains(dbCol) ? 1.0 : 0.48,
-                child: DebouncedReviewField(
-                  initialValue: value,
-                  keyboardType: (dbCol.contains('mobile') || dbCol.contains('phone')) ? TextInputType.phone : TextInputType.text,
-                  decoration: _inputDecoration(label).copyWith(
-                    prefixIcon: dbCol == 'customer_name' 
-                      ? const Icon(LucideIcons.user, size: 16) 
-                      : (dbCol.contains('vehicle') || dbCol.contains('car')) 
-                        ? const Icon(LucideIcons.car, size: 16)
-                        : (dbCol.contains('mobile') || dbCol.contains('phone'))
-                          ? const Icon(LucideIcons.phone, size: 16)
-                          : const Icon(LucideIcons.edit2, size: 16),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
-                  ),
-                  onSaved: (val) {
-                    if (val != value) {
-                      ReviewRecord newRecord;
-                      if (dbCol == 'customer_name') {
-                        newRecord = header.copyWith(customerName: val);
-                      } else if (dbCol == 'mobile_number') {
-                        final newExtra = Map<String, dynamic>.from(header.extraFields);
-                        newExtra[dbCol] = val;
-                        newRecord = header.copyWith(
-                          extraFields: newExtra,
-                          mobileNumber: val, // Sync top-level field
-                        );
-                      } else {
-                        final newExtra = Map<String, dynamic>.from(header.extraFields);
-                        newExtra[dbCol] = val;
-                        newRecord = header.copyWith(extraFields: newExtra);
-                      }
-                      ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-                    }
-                  },
-                ),
+                widthFactor: ['customer_name', 'mobile_number'].contains(dbCol) ? 1.0 : 0.48,
+                child: dbCol == 'customer_name'
+                    ? CustomerAutocompleteField(
+                        initialValue: value,
+                        label: label,
+                        onSaved: (val) {
+                          if (val != value) {
+                            final newRecord = header.copyWith(customerName: val);
+                            ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+                          }
+                        },
+                        onCustomerSelected: (CustomerLedger ledger) {
+                          ReviewRecord newRecord = header.copyWith(
+                            customerName: ledger.customerName,
+                            mobileNumber: ledger.customerPhone ?? header.mobileNumber,
+                          );
+                          
+                          // Also sync mobile_number in extraFields if it exists
+                          if (dynamicColumns.any((c) => c['db_column'] == 'mobile_number')) {
+                            final newExtra = Map<String, dynamic>.from(newRecord.extraFields);
+                            newExtra['mobile_number'] = ledger.customerPhone ?? header.mobileNumber;
+                            newRecord = newRecord.copyWith(extraFields: newExtra);
+                          }
+                          
+                          ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+                        },
+                      )
+                    : DebouncedReviewField(
+                        initialValue: value,
+                        keyboardType: (dbCol.contains('mobile') || dbCol.contains('phone'))
+                            ? TextInputType.phone
+                            : TextInputType.text,
+                        decoration: _inputDecoration(label).copyWith(
+                          prefixIcon: (dbCol.contains('vehicle') || dbCol.contains('car'))
+                              ? const Icon(LucideIcons.car, size: 16)
+                              : (dbCol.contains('mobile') || dbCol.contains('phone'))
+                                  ? const Icon(LucideIcons.phone, size: 16)
+                                  : const Icon(LucideIcons.edit2, size: 16),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
+                        ),
+                        onSaved: (val) {
+                          if (val != value) {
+                            ReviewRecord newRecord;
+                            if (dbCol == 'mobile_number') {
+                              final newExtra = Map<String, dynamic>.from(header.extraFields);
+                              newExtra[dbCol] = val;
+                              newRecord = header.copyWith(
+                                extraFields: newExtra,
+                                mobileNumber: val, // Sync top-level field
+                              );
+                            } else {
+                              final newExtra = Map<String, dynamic>.from(header.extraFields);
+                              newExtra[dbCol] = val;
+                              newRecord = header.copyWith(extraFields: newExtra);
+                            }
+                            ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
+                          }
+                        },
+                      ),
               );
             }).toList(),
           ),

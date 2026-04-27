@@ -9,6 +9,7 @@ import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// Renders a customer (receivable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -21,7 +22,7 @@ class CustomerActivityCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return item.maybeWhen(
-      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount, items) {
+      customer: (id, entityName, transactionDate, amount, displayId, transactionType, balanceDue, receiptLink, invoiceDate, mobileNumber, paymentMode, invoiceBalanceDue, receivedAmount, items, isVerified) {
         final isPayment = transactionType.toUpperCase() == 'PAYMENT';
         final hasInvoiceRef = displayId != null && displayId.isNotEmpty;
         
@@ -212,6 +213,19 @@ class CustomerActivityCard extends ConsumerWidget {
                                   '#$displayId',
                                   style: TextStyle(
                                     color: context.textColor.withValues(alpha: 0.7),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              if (mobileNumber.isNotEmpty) ...[
+                                Icon(LucideIcons.phone, size: 13, color: context.textSecondaryColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  mobileNumber,
+                                  style: TextStyle(
+                                    color: context.textSecondaryColor,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),

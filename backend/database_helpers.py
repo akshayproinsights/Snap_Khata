@@ -10,6 +10,21 @@ from database import get_database_client
 logger = logging.getLogger(__name__)
 
 
+def flatten_extra_fields(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Flatten the 'extra_fields' JSONB column into the top level of each record.
+    If a key in extra_fields already exists at the top level, the top level value wins.
+    """
+    for record in records:
+        extra = record.get('extra_fields')
+        if extra and isinstance(extra, dict):
+            for key, value in extra.items():
+                if key not in record:
+                    record[key] = value
+    return records
+
+
+
 def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     """
     Convert numeric values to proper Python types for Supabase.
@@ -113,6 +128,9 @@ def get_all_invoices(username: str, limit: Optional[int] = None, offset: int = 0
     except Exception as e:
         logger.error(f"Error getting invoices for {username}: {e}")
         return []
+    
+    return flatten_extra_fields(all_records if limit is None else result.data)
+
 
 
 def get_all_inventory(username: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -229,6 +247,9 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
     except Exception as e:
         logger.error(f"Error getting verified invoices for {username}: {e}")
         return []
+        
+    return flatten_extra_fields(all_records if limit is None else result.data)
+
 
 
 

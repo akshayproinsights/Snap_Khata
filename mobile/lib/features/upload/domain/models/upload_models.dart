@@ -1,6 +1,45 @@
 /// Per-file upload lifecycle status
 enum UploadFileStatus { idle, uploading, processing, done, failed, duplicate }
 
+/// Represents a single upload task for pagination
+class UploadTask {
+  final String taskId;
+  final String status; // 'processing', 'completed', 'failed'
+  final String message;
+  final int total;
+  final int processed;
+  final int failed;
+  final DateTime createdAt;
+
+  UploadTask({
+    required this.taskId,
+    required this.status,
+    required this.message,
+    required this.total,
+    required this.processed,
+    required this.failed,
+    required this.createdAt,
+  });
+
+  // Getters for presentation layer
+  int get itemsCount => processed;
+  int get totalItems => total;
+
+  factory UploadTask.fromJson(Map<String, dynamic> json) {
+    return UploadTask(
+      taskId: json['task_id'] ?? '',
+      status: json['status'] ?? 'unknown',
+      message: json['message'] ?? '',
+      total: json['total'] ?? 0,
+      processed: json['processed'] ?? 0,
+      failed: json['failed'] ?? 0,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
+    );
+  }
+}
+
 /// Wraps an XFile with its individual status for per-file UI tracking
 class UploadFileItem {
   final String path;

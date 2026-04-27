@@ -4,6 +4,16 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
 
+// Track loading state for unified ledgers
+final unifiedLedgerLoadingProvider = Provider<bool>((ref) {
+  final udharState = ref.watch(udharProvider);
+  final vendorState = ref.watch(vendorLedgerProvider);
+  
+  // Show loading if either provider is loading AND we have no data yet
+  return (udharState.isLoading || vendorState.isLoading) && 
+         (udharState.ledgers.isEmpty && vendorState.ledgers.isEmpty);
+});
+
 final unifiedLedgerProvider = Provider<List<UnifiedLedger>>((ref) {
   final udharState = ref.watch(udharProvider);
   final vendorState = ref.watch(vendorLedgerProvider);

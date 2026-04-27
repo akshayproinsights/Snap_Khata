@@ -42,8 +42,8 @@ const Sidebar: React.FC = () => {
     };
 
     const navigation: NavItem[] = [
-        // { name: 'Dashboard', path: '/', icon: LayoutDashboard }, // HIDDEN: HOME page
-        // { name: 'Credit / Ledger', path: '/credit', icon: Wallet }, // HIDDEN: Party Details
+        { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+        { name: 'Khata', path: '/credit', icon: Wallet },
         {
             name: 'Sales',
             icon: ShoppingCart,

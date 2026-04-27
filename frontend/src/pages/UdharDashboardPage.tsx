@@ -2,18 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { udharAPI, type Ledger } from '../services/udharAPI';
+import { udharAPI } from '../services/udharAPI';
 import { formatCurrency } from '../utils/dashboardHelpers';
 import {
     Users,
     Truck,
     Search,
-    ChevronRight,
     MoreVertical,
     Plus,
     Filter,
-    ArrowUpRight,
-    ArrowDownLeft,
     CheckCircle2
 } from 'lucide-react';
 
@@ -35,19 +32,29 @@ const UdharDashboardPage: React.FC = () => {
         localStorage.setItem('udhar_show_paid_bills', JSON.stringify(showPaidBills));
     }, [showPaidBills]);
 
-    // Fetch dashboard summary (YOU WILL GET / YOU WILL GIVE)
-    const { data: summary, isLoading: summaryLoading } = useQuery({
+    // Fetch dashboard summary (TO COLLECT / TO PAY)
+    const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
         queryKey: ['udharSummary'],
         queryFn: udharAPI.getSummary,
-        staleTime: 30000,
+        staleTime: 0,
     });
 
     // Fetch customer ledgers
     const { data: ledgers, isLoading: ledgersLoading, refetch: refetchLedgers } = useQuery({
         queryKey: ['customerLedgers'],
         queryFn: udharAPI.getLedgers,
-        staleTime: 30000,
+        staleTime: 0,
     });
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refetchSummary();
+            refetchLedgers();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [refetchSummary, refetchLedgers]);
 
     // Mutations
     const recordPaymentMutation = useMutation({
@@ -88,7 +95,7 @@ const UdharDashboardPage: React.FC = () => {
             <div className="flex items-center gap-2">
                 <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-medium">
                     <Plus size={18} />
-                    New Credit Entry
+                    New Khata Entry
                 </button>
             </div>
         );
@@ -96,25 +103,39 @@ const UdharDashboardPage: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            {/* Credit Summary Cards */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
-                    <div className="flex items-center gap-2 text-green-600 font-medium mb-1">
-                        <Users size={16} />
-                        <span className="text-xs uppercase tracking-wider font-bold">You Will Get</span>
-                    </div>
-                    <div className="text-3xl font-bold text-green-600">
-                        {summaryLoading ? '...' : formatCurrency(summary?.total_receivable || 0)}
+            {/* Credit Summary Cards - Horizontal Style like Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* TO PAY (Payable) - RED */}
+                <div className="bg-white rounded-lg shadow-sm border border-red-200 hover:shadow-md transition-all duration-300 h-[90px]">
+                    <div className="flex items-center h-full px-4 py-2.5 gap-4">
+                        <div className="bg-red-100 text-red-600 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Truck size={24} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 leading-tight">
+                                To Pay
+                            </h3>
+                            <p className="text-3xl font-bold text-red-500 tabular-nums leading-none">
+                                {summaryLoading ? '...' : formatCurrency(summary?.total_payable || 0)}
+                            </p>
+                        </div>
                     </div>
                 </div>
                 
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
-                    <div className="flex items-center gap-2 text-red-500 font-medium mb-1">
-                        <Truck size={16} />
-                        <span className="text-xs uppercase tracking-wider font-bold">You Will Give</span>
-                    </div>
-                    <div className="text-3xl font-bold text-red-500">
-                        {summaryLoading ? '...' : formatCurrency(summary?.total_payable || 0)}
+                {/* TO COLLECT (Receivable) - GREEN */}
+                <div className="bg-white rounded-lg shadow-sm border border-green-200 hover:shadow-md transition-all duration-300 h-[90px]">
+                    <div className="flex items-center h-full px-4 py-2.5 gap-4">
+                        <div className="bg-green-100 text-green-600 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Users size={24} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 leading-tight">
+                                To Collect
+                            </h3>
+                            <p className="text-3xl font-bold text-green-600 tabular-nums leading-none">
+                                {summaryLoading ? '...' : formatCurrency(summary?.total_receivable || 0)}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -163,7 +184,7 @@ const UdharDashboardPage: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 leading-tight">Show Paid Bills</h3>
-                                <p className="text-xs text-gray-500">View parties with zero balance</p>
+                                <p className="text-xs text-gray-500">View Khata with zero balance</p>
                             </div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -183,7 +204,7 @@ const UdharDashboardPage: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input 
                                 type="text"
-                                placeholder="Search Party Name..."
+                                placeholder="Search Khata Name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition-all"
@@ -200,19 +221,19 @@ const UdharDashboardPage: React.FC = () => {
                     {ledgersLoading ? (
                         <div className="flex flex-col items-center justify-center py-20 space-y-3">
                             <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-                            <p className="text-sm text-gray-500 font-medium">Loading ledger entries...</p>
+                            <p className="text-sm text-gray-500 font-medium">Loading Khata entries...</p>
                         </div>
                     ) : filteredLedgers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                             <div className="bg-gray-100 p-4 rounded-full text-gray-400 mb-4">
                                 <Users size={32} />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-1">No Parties Found</h3>
+                            <h3 className="text-lg font-bold text-gray-900 mb-1">No Khata Found</h3>
                             <p className="text-sm text-gray-500 max-w-[250px]">
                                 {searchTerm 
-                                    ? `No parties matching "${searchTerm}"`
+                                    ? `No Khata matching "${searchTerm}"`
                                     : showPaidBills 
-                                        ? "You haven't added any credit entries yet."
+                                        ? "You haven't added any Khata entries yet."
                                         : "All your bills are paid! Turn on 'Show Paid Bills' to see history."
                                 }
                             </p>

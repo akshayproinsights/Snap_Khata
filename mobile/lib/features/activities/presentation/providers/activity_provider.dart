@@ -36,7 +36,7 @@ class RecentActivitiesNotifier extends AsyncNotifier<List<ActivityItem>> {
   }
 
   /// Manually invalidate and refresh the state.
-  /// To be called after a user successfully scans a new purchase bill or customer receipt.
+  /// To be called after a user successfully scans a new supplier purchase or customer receipt.
   Future<void> refreshData() async {
     ref.invalidateSelf();
     // Also invalidate dashboard totals as transactions affect balances
@@ -54,9 +54,11 @@ final filteredActivitiesProvider = Provider<AsyncValue<List<ActivityItem>>>((ref
 
   // if the raw data is in a loading or error state, pass that state through.
   return rawActivitiesAsync.whenData((activities) {
-    var filtered = activities;
+    // 1. First, always filter out unverified activities.
+    // These should only be visible in the Review Center until synced.
+    var filtered = activities.where((a) => a.isVerified).toList();
 
-    // Apply Type Filter
+    // 2. Apply Type Filter
     if (filter == ActivityFilter.customers) {
       filtered = filtered.where((a) => a.map(customer: (_) => true, vendor: (_) => false)).toList();
     } else if (filter == ActivityFilter.suppliers) {

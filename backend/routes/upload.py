@@ -208,10 +208,15 @@ async def upload_files(
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_id = uuid.uuid4().hex[:6]
             sales_folder = get_sales_folder(username)
-            file_key = f"{sales_folder}{timestamp}_{unique_id}_{file.filename}"
+            # Ensure file has an extension, default to .jpg since our optimizer always outputs JPEG
+            filename = file.filename or ""
+            if not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                filename = f"{filename}.jpg"
+            
+            file_key = f"{sales_folder}{timestamp}_{unique_id}_{filename}"
             file_data_list.append({
                 'content': content,
-                'filename': file.filename,
+                'filename': filename,
                 'file_key': file_key
             })
         

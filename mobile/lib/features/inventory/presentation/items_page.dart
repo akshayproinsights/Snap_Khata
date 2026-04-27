@@ -176,7 +176,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
                   context,
                   LucideIcons.packageSearch,
                   'No verified items logged yet.',
-                  'Verified items from your purchase bills\nwill appear here automatically.',
+                  'Verified items from your supplier purchases\nwill appear here automatically.',
                 )
               : filteredCatalog.isEmpty
                   ? _buildEmptyState(

@@ -31,6 +31,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
   /// ── LOCAL guard: true until we've confirmed with the backend that
   ///    no task is active. The camera page CANNOT render while this is true.
   bool _isCheckingBackend = true;
+  bool _isCapturing = false;
 
   @override
   void initState() {
@@ -128,13 +129,23 @@ class _UploadPageState extends ConsumerState<UploadPage>
   }
 
   Future<void> _capture(CameraController cam) async {
-    // Block capture while backend is processing
+    if (_isCapturing || _isCheckingBackend) return;
     final s = ref.read(uploadProvider);
-    if (s.isActive || _isCheckingBackend) return;
+    if (s.isActive) return;
 
+    setState(() => _isCapturing = true);
     try {
       HapticFeedback.mediumImpact();
       final xFile = await cam.takePicture();
+
+      // ✅ RESUME PREVIEW: The camera package often freezes the preview after takePicture().
+      // This is the CRITICAL fix to allow taking multiple photos sequentially.
+      try {
+        await cam.resumePreview();
+      } catch (e) {
+        debugPrint('Resume preview failed: $e');
+      }
+
       await ref.read(uploadProvider.notifier).addFiles([xFile]);
     } catch (e) {
       if (mounted) {
@@ -142,6 +153,10 @@ class _UploadPageState extends ConsumerState<UploadPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Capture failed: $e')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCapturing = false);
       }
     }
   }

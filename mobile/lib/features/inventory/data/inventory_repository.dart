@@ -4,6 +4,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/core/utils/image_compress_service.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:path/path.dart' as p;
 
 class InventoryRepository {
   final Dio _dio;
@@ -100,9 +101,10 @@ class InventoryRepository {
           MultipartFile.fromBytes(bytes, filename: file.name),
         ));
       } else {
+        final filename = file.name.isNotEmpty ? file.name : p.basename(file.path);
         formData.files.add(MapEntry(
           'files',
-          await MultipartFile.fromFile(file.path, filename: file.name),
+          await MultipartFile.fromFile(file.path, filename: filename),
         ));
       }
     }

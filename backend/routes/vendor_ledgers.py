@@ -348,7 +348,8 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
 
         # 5. Add Fragmented Items (not in ledger or inventory_invoices)
         for inv_num, meta in item_meta.items():
-            if inv_num not in ledger_invoice_numbers:
+            # ONLY add if verified. Pending items should not appear in activity feed
+            if inv_num not in ledger_invoice_numbers and meta.get('is_verified'):
                 items = meta['items']
                 total_amount = sum(float(i.get('net_bill') or 0.0) for i in items)
                 earliest_ts = min([i.get('created_at') for i in items if i.get('created_at')] or [datetime.utcnow().isoformat()])

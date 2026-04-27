@@ -125,7 +125,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (!mounted) return;
     final state = ref.read(reviewProvider);
     if (state.error == null) {
-      AppToast.showSuccess(context, 'Invoices synced successfully!',
+      AppToast.showSuccess(context, 'Receipts synced successfully!',
           title: 'Sync Complete');
       context.go('/');
     } else {

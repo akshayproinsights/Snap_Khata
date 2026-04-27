@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
-import { verifiedAPI } from '../services/api';
+import { verifiedAPI, configAPI } from '../services/api';
 import { Search, Download, Loader2, ExternalLink, Trash2, Edit, X, CheckSquare, Square } from 'lucide-react';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 
@@ -10,6 +10,7 @@ interface VerifiedInvoice {
     'Receipt Number'?: string;
     'Date'?: string;
     'Customer Name'?: string;
+    'Mobile Number'?: string;
     'Car Number'?: string;
     'Vehicle Number'?: string;
     'Description'?: string;
@@ -55,6 +56,8 @@ const VerifiedInvoicesPage: React.FC = () => {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteType, setDeleteType] = useState<'single' | 'bulk'>('single');
     const [recordToDelete, setRecordToDelete] = useState<VerifiedInvoice | null>(null);
+    const [userConfig, setUserConfig] = useState<any>(null);
+
 
     // Refs for auto-save
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,6 +107,22 @@ const VerifiedInvoicesPage: React.FC = () => {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
+
+    // Fetch user config on mount
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const config = await configAPI.getConfig();
+                setUserConfig(config);
+            } catch (err) {
+                console.error("Failed to fetch user config", err);
+            }
+        };
+        fetchConfig();
+    }, []);
+
+    const isAutomobile = userConfig?.industry === 'automobile';
+
 
     // Individual row update mutation
     const updateRowMutation = useMutation({
@@ -647,7 +666,10 @@ const VerifiedInvoicesPage: React.FC = () => {
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt #</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle #</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mobile</th>
+                                    {isAutomobile && (
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle #</th>
+                                    )}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
@@ -745,22 +767,39 @@ const VerifiedInvoicesPage: React.FC = () => {
                                                 )}
                                             </td>
 
-                                            {/* Vehicle Number - Bold and larger font for visual prominence */}
-                                            <td className="px-4 py-3">
+                                            {/* Mobile Number */}
+                                            <td className="px-4 py-3 text-sm">
                                                 {isEditing ? (
                                                     <input
                                                         type="text"
-                                                        value={currentItem['Car Number'] || currentItem['Vehicle Number'] || ''}
-                                                        onChange={(e) => handleFieldChange('Car Number', e.target.value)}
+                                                        value={currentItem['Mobile Number'] || ''}
+                                                        onChange={(e) => handleFieldChange('Mobile Number', e.target.value)}
                                                         disabled={saveStatus === 'saving'}
-                                                        className="w-28 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed font-bold"
+                                                        className="w-32 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                                     />
                                                 ) : (
-                                                    <span className="text-gray-900 font-bold text-base">
-                                                        {record['Car Number'] || record['Vehicle Number'] || '—'}
-                                                    </span>
+                                                    <span className="text-gray-900">{record['Mobile Number'] || '—'}</span>
                                                 )}
                                             </td>
+
+                                            {/* Vehicle Number - Bold and larger font for visual prominence */}
+                                            {isAutomobile && (
+                                                <td className="px-4 py-3">
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="text"
+                                                            value={currentItem['Car Number'] || currentItem['Vehicle Number'] || ''}
+                                                            onChange={(e) => handleFieldChange('Car Number', e.target.value)}
+                                                            disabled={saveStatus === 'saving'}
+                                                            className="w-28 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed font-bold"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-gray-900 font-bold text-base">
+                                                            {record['Car Number'] || record['Vehicle Number'] || '—'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            )}
 
                                             {/* Description */}
                                             <td className="px-4 py-3 text-sm">

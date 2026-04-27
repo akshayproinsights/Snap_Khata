@@ -51,6 +51,7 @@ const Layout: React.FC = () => {
             '/inventory/upload': 'Add Purchase Bills',
             '/inventory/verify': 'All Past Purchases',
             '/inventory/mapped': 'Mapped Items',
+            '/credit': 'Khata',
         };
 
         return titleMap[path] || 'Dashboard';

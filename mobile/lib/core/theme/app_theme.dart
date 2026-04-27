@@ -211,5 +211,6 @@ extension ThemeContext on BuildContext {
   Color get warningColor => isDark ? Colors.amberAccent : AppTheme.warning;
   Color get successColor => AppTheme.neonGreen;
   Color get infoColor => isDark ? Colors.blueAccent : Colors.blue.shade700;
+  Color get containerColor => colorScheme.surfaceContainerHighest;
   List<BoxShadow> get premiumShadow => isDark ? AppTheme.darkPremiumShadow : AppTheme.premiumShadow;
 }

@@ -26,6 +26,7 @@ _CustomerActivity _$CustomerActivityFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as Map<String, dynamic>)
               .toList() ??
           const [],
+      isVerified: json['isVerified'] as bool? ?? true,
       $type: json['runtimeType'] as String?,
     );
 
@@ -45,6 +46,7 @@ Map<String, dynamic> _$CustomerActivityToJson(_CustomerActivity instance) =>
       'invoiceBalanceDue': instance.invoiceBalanceDue,
       'receivedAmount': instance.receivedAmount,
       'items': instance.items,
+      'isVerified': instance.isVerified,
       'runtimeType': instance.$type,
     };
 

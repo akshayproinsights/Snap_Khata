@@ -24,6 +24,7 @@ abstract class ActivityItem with _$ActivityItem {
     @Default(0.0) double invoiceBalanceDue,
     @Default(0.0) double receivedAmount,
     @Default([]) List<Map<String, dynamic>> items,
+    @Default(true) bool isVerified,
   }) = _CustomerActivity;
 
   const factory ActivityItem.vendor({
