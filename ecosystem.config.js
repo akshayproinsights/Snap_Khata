@@ -38,7 +38,7 @@ module.exports = {
     {
       name: "log-viewer",
       script: "frontail",
-      args: "--host 0.0.0.0 --port 9003 --theme dark /home/deploy/Snap_Khata/logs/backend.log /home/deploy/Snap_Khata/logs/flutter.log /home/deploy/Snap_Khata/logs/react.log",
+      args: "--host 0.0.0.0 --port 9003 --theme dark /root/Snap_Khata/logs/backend.log /root/Snap_Khata/logs/flutter.log /root/Snap_Khata/logs/react.log",
     },
     {
       name: "log-downloader",

@@ -8,6 +8,7 @@ import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
 import 'package:mobile/core/routing/app_router.dart';
 import 'package:mobile/core/network/sync_queue_service.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 final uploadRepositoryProvider = Provider<UploadRepository>((ref) {
   return UploadRepository();
@@ -207,11 +208,9 @@ class UploadNotifier extends Notifier<UploadState> {
   // ─────────────────────────── File management ────────────────────
 
   Future<void> addFiles(List<XFile> newFiles) async {
-    final existingNames = state.fileItems.map((f) => f.name).toSet();
     final newItems = <UploadFileItem>[];
 
     for (final file in newFiles) {
-      if (existingNames.contains(file.name)) continue;
       int? size;
       try {
         size = await file.length();
@@ -536,7 +535,7 @@ class UploadNotifier extends Notifier<UploadState> {
 
       // 2. Start AI processing
       final initialStatus =
-          await _repository.processInvoices(fileKeys, forceUpload: force);
+          await _repository.processInvoices(fileKeys, forceUpload: true);
 
       // ✅ Persist task to disk (also clears upload-phase)
       await UploadPersistenceService.saveTask(
@@ -549,11 +548,6 @@ class UploadNotifier extends Notifier<UploadState> {
         activeTaskId: initialStatus.taskId,
       );
 
-      // Immediate duplicate detection
-      if (initialStatus.status == 'duplicate_detected') {
-        await _handleDuplicate();
-        return;
-      }
 
       // 3. Poll for completion
       _startPolling(initialStatus.taskId);
@@ -627,9 +621,6 @@ class UploadNotifier extends Notifier<UploadState> {
       } else if (status.status == 'failed') {
         _pollingTimer?.cancel();
         await _handleProcessingFailed(status.message);
-      } else if (status.status == 'duplicate_detected') {
-        _pollingTimer?.cancel();
-        await _handleDuplicate();
       } else {
         // Still running — schedule next poll with backoff
         _scheduleNextPoll(taskId);
@@ -690,6 +681,7 @@ class UploadNotifier extends Notifier<UploadState> {
       clearActiveTaskId: true,
       lastCompletedStatus: completedStatus,
     );
+    ref.invalidate(dashboardTotalsProvider);
     _backgroundTask.completeTaskWithAction(
       'Orders ready to review!',
       'Review',
@@ -719,46 +711,6 @@ class UploadNotifier extends Notifier<UploadState> {
     _backgroundTask.completeTask('Processing failed');
   }
 
-  Future<void> _handleDuplicate() async {
-    // ❌ DO NOT clear task yet! User needs to review and decide on each duplicate first!
-    // await UploadPersistenceService.clearTask();
-    
-    final dupStatus = state.processingStatus;
-    final duplicates = List<dynamic>.from(dupStatus?.duplicates ?? []);
-
-    if (duplicates.isEmpty) {
-      // No duplicates to show — complete normally
-      await UploadPersistenceService.clearTask();
-      finishDuplicateReview();
-      return;
-    }
-
-    // ✅ SET UP STATE TO SHOW DUPLICATE MODAL
-    // This mirrors the web app's sequential duplicate review workflow
-    
-    final done = state.fileItems.map((item) {
-      if (item.status == UploadFileStatus.processing) {
-        return item.copyWith(status: UploadFileStatus.done);
-      }
-      return item;
-    }).toList();
-
-    state = state.copyWith(
-      fileItems: done,
-      isProcessing: false,
-      hasDuplicate: true, // ✅ SHOW THE DUPLICATE MODAL!
-      clearActiveTaskId: false, // Keep task ID — might need to retry
-      duplicateQueue: duplicates, // ✅ Load all duplicates
-      currentDuplicateIndex: 0, // ✅ Start at first duplicate
-      filesToSkip: [],
-      filesToForceUpload: [],
-    );
-
-    // ✅ Notify user that duplicate review UI is now available
-    _backgroundTask.updateTask(
-      'Duplicate ${state.currentDuplicateIndex + 1}/${duplicates.length} — tap to review',
-    );
-  }
 
   // ─────────────────────────── Sequential duplicate review ────────────────
 

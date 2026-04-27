@@ -106,34 +106,60 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     # Track ledgers we are creating mid-loop so siblings share the same pending ledger
     pending_new_ledgers: Dict[str, Dict] = {}  # customer_name -> {balance_due, transactions[]}
 
+    # ── 4. Group by (ledger_id, receipt_number) to handle multi-line invoices ──
+    # First, group all items for the same invoice together
+    invoice_groups: Dict[tuple, Dict[str, Any]] = {}
+    
     for record in credit_records:
         customer_name_clean = record['_customer_clean']
         balance_due_float = record['_balance_due_float']
-        receipt_number = record.get('receipt_number')
-
+        receipt_number = str(record.get('receipt_number') or "NO_RECEIPT")
+        
         existing_ledger = ledger_map.get(customer_name_clean)
+        ledger_id = existing_ledger['id'] if existing_ledger else None
+        
+        group_key = (ledger_id, customer_name_clean, receipt_number)
+        
+        if group_key not in invoice_groups:
+            invoice_groups[group_key] = {
+                'ledger_id': ledger_id,
+                'customer_name': customer_name_clean,
+                'receipt_number': record.get('receipt_number'),
+                'total_balance': 0.0,
+                'is_paid': record.get('_is_paid', False),
+                'notes': record.get('customer_details', ''),
+                'items_count': 0
+            }
+        
+        invoice_groups[group_key]['total_balance'] += balance_due_float
+        invoice_groups[group_key]['items_count'] += 1
 
-        if existing_ledger:
-            ledger_id = existing_ledger['id']
+    # Now process each grouped invoice
+    for key, group in invoice_groups.items():
+        ledger_id, customer_name_clean, receipt_number = key
+        total_balance = group['total_balance']
+        orig_receipt_number = group['receipt_number']
+
+        if ledger_id:
             # Dedup check (in-memory, no DB round-trip)
-            if receipt_number and (ledger_id, str(receipt_number)) in existing_tx_set:
-                logger.info(f"Transaction for invoice {receipt_number} already exists, skipping duplicate ledger addition")
+            if orig_receipt_number and (ledger_id, str(orig_receipt_number)) in existing_tx_set:
+                logger.info(f"Transaction for invoice {orig_receipt_number} already exists, skipping duplicate ledger addition")
                 continue
                 
-            if receipt_number:
-                existing_tx_set.add((ledger_id, str(receipt_number)))
+            if orig_receipt_number:
+                existing_tx_set.add((ledger_id, str(orig_receipt_number)))
 
-            # Accumulate balance delta (in case multiple records for same ledger)
-            ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(existing_ledger.get('balance_due', 0))) + balance_due_float
+            # Accumulate balance delta
+            ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(ledger_map[customer_name_clean].get('balance_due', 0))) + total_balance
 
             new_transactions.append({
                 'username': username,
                 'ledger_id': ledger_id,
                 'transaction_type': 'INVOICE',
-                'amount': balance_due_float,
-                'receipt_number': receipt_number,
-                'is_paid': record.get('_is_paid', False),
-                'notes': record.get('customer_details', ''),
+                'amount': total_balance,
+                'receipt_number': orig_receipt_number,
+                'is_paid': group['is_paid'],
+                'notes': f"{group['notes']} ({group['items_count']} items)" if group['items_count'] > 1 else group['notes'],
             })
         else:
             # No ledger yet — group by customer to avoid duplicate creates for siblings
@@ -145,17 +171,17 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
                 }
             
             # Dedup for new ledgers
-            if receipt_number:
-                if receipt_number in pending_new_ledgers[customer_name_clean]['receipts_processed']:
+            if orig_receipt_number:
+                if orig_receipt_number in pending_new_ledgers[customer_name_clean]['receipts_processed']:
                     continue
-                pending_new_ledgers[customer_name_clean]['receipts_processed'].add(receipt_number)
+                pending_new_ledgers[customer_name_clean]['receipts_processed'].add(orig_receipt_number)
 
-            pending_new_ledgers[customer_name_clean]['balance_due'] += balance_due_float
+            pending_new_ledgers[customer_name_clean]['balance_due'] += total_balance
             pending_new_ledgers[customer_name_clean]['transactions'].append({
-                'receipt_number': receipt_number,
-                'amount': balance_due_float,
-                'is_paid': record.get('_is_paid', False),
-                'notes': record.get('customer_details', ''),
+                'receipt_number': orig_receipt_number,
+                'amount': total_balance,
+                'is_paid': group['is_paid'],
+                'notes': f"{group['notes']} ({group['items_count']} items)" if group['items_count'] > 1 else group['notes'],
             })
 
     # ── 5. Write ledger balance updates (one UPDATE per ledger) ───────────────
@@ -305,6 +331,10 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 if grand_total > 0:
                     enriched_tx['amount'] = grand_total 
                 enriched_tx['receipt_link'] = enr.get('receipt_link') or ''
+                # Crucial: Determine is_paid status from the source of truth (verified_invoices)
+                # This fixes the issue where ledger says 'Paid' even when balance exists.
+                enriched_tx['is_paid'] = (enr['balance_due'] <= 0)
+                enriched_tx['balance_due'] = enr['balance_due']
                 enriched_transactions.append(enriched_tx)
                 
                 # If there was an initial payment, construct a dummy PAYMENT transaction
@@ -467,7 +497,7 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 'mobile_number': mobile_number,
                 'payment_mode': first_item.get('payment_mode') or 'Cash',
                 'invoice_balance_due': float(first_item.get('balance_due') or 0.0),
-                'received_amount': float(first_item.get('received_amount') or first_item.get('amount') or 0.0),
+                'received_amount': float(first_item.get('received_amount') or total_amount or 0.0),
                 '_enriched_customer_name': first_item.get('customer_name') or '',
                 'customer_ledgers': {
                     'customer_name': first_item.get('customer_name') or '',
@@ -649,14 +679,18 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
 
         already_synced = {tx["receipt_number"] for tx in (existing_tx_resp.data or []) if tx.get("receipt_number")}
 
-        # 3. Only process invoices not yet fully synced, deduplicated by receipt number
+        # 3. Only process invoices not yet fully synced, SUMMING items for the same receipt
         unique_missing = {}
         for inv in invoices:
             rn = inv.get("receipt_number")
             if rn and rn not in already_synced:
-                # Store the invoice, ensuring we only process one entry per receipt_number
                 if rn not in unique_missing:
-                    unique_missing[rn] = inv
+                    # Initialize with a copy to avoid modifying original
+                    unique_missing[rn] = dict(inv)
+                    unique_missing[rn]["balance_due"] = float(inv.get("balance_due") or 0)
+                else:
+                    # Balance due is consistent across multi-line invoices, no need to sum
+                    pass
         
         missing_invoices = list(unique_missing.values())
 
@@ -722,7 +756,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 "transaction_type": "INVOICE",
                 "amount": balance_due,
                 "receipt_number": inv["receipt_number"],
-                "is_paid": (inv.get("payment_mode") != "Credit" or balance_due == 0),
+                "is_paid": (str(inv.get("payment_mode") or "").lower() != "credit" or balance_due == 0),
                 "created_at": inv.get("created_at") or now,
                 "notes": raw_details,
             }).execute()

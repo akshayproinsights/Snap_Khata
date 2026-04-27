@@ -339,7 +339,10 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
             'r2_file_path', 'image_hash', 'row_id', 'header_id', 'extra_fields',
             'line_item_row_bbox', 'model_used', 'model_accuracy', 
             'input_tokens', 'output_tokens', 'total_tokens', 'cost_inr',
-            'receipt_link', 'type', 'customer_name', 'upload_date'
+            'receipt_link', 'type', 'customer_name', 'upload_date',
+            'received_amount', 'balance_due', 'payment_mode', 'mobile_number',
+            'customer_details', 'car_number', 'vehicle_number', 
+            'total_bill_amount', 'gst_mode', 'odometer', 'quantity', 'rate'
         }
         
         for record in data:

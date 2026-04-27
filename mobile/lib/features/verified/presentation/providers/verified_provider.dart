@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/verified/data/verified_repository.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 final verifiedRepositoryProvider =
     Provider<VerifiedRepository>((ref) => VerifiedRepository());
@@ -80,7 +80,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.updateVerifiedInvoice(record);
       ref.invalidate(udharProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to update record: $e');
       await fetchRecords(); // Revert
@@ -104,7 +104,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.updateVerifiedInvoicesBulk(recordsToUpdate);
       ref.invalidate(udharProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to update records in bulk: $e');
       await fetchRecords(); // Revert
@@ -120,7 +120,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.deleteBulk(ids);
       ref.invalidate(udharProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete records: $e');
       await fetchRecords(); // Revert

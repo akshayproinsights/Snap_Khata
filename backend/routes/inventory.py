@@ -59,7 +59,7 @@ class InventoryUploadResponse(BaseModel):
 class InventoryProcessRequest(BaseModel):
     """Process inventory request model"""
     file_keys: List[str]
-    force_upload: bool = False  # If True, bypass duplicate checking and delete old duplicates
+    force_upload: bool = True  # If True, bypass duplicate checking and delete old duplicates
 
 
 class InventoryProcessResponse(BaseModel):
@@ -647,12 +647,10 @@ async def get_inventory_process_status(
 
 
 def _build_completion_message(processed: int, skipped: int, failed: int) -> str:
-    """Build a human-readable completion message that surfaces duplicate-skip count."""
+    """Build a human-readable completion message."""
     parts = []
     if processed > 0:
         parts.append(f"{processed} invoice{'s' if processed != 1 else ''} processed")
-    if skipped > 0:
-        parts.append(f"{skipped} duplicate{'s' if skipped != 1 else ''} skipped")
     if failed > 0:
         parts.append(f"{failed} failed")
     if not parts:

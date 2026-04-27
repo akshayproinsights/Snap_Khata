@@ -3,7 +3,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:dio/dio.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 class VendorLedgerState {
   final bool isLoading;
@@ -57,6 +57,19 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
+  Future<void> fetchLedgersSilent() async {
+    try {
+      final response = await _dio.get('/api/vendor-ledgers/vendor-ledgers');
+      final data = response.data['data'] as List?;
+      if (data != null) {
+        final ledgers = data.map((e) => VendorLedger.fromJson(e)).toList();
+        state = state.copyWith(isLoading: false, ledgers: ledgers, clearError: true);
+      }
+    } catch (e) {
+      // Ignore errors for silent refresh
+    }
+  }
+
   Future<List<VendorLedgerTransaction>> fetchTransactions(int ledgerId) async {
     try {
       final response = await _dio.get('/api/vendor-ledgers/vendor-ledgers/$ledgerId/transactions');
@@ -96,7 +109,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       });
       // Refresh list after successful payment
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -111,7 +124,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       });
       // Refresh list after successful toggle
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -123,7 +136,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId');
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -138,7 +151,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'is_paid': markAsPaid,
       });
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -152,7 +165,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'transaction_ids': transactionIds,
       });
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -174,7 +187,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         'date': date,
       });
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -216,7 +229,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {

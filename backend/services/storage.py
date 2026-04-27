@@ -20,6 +20,7 @@ class R2StorageClient:
     def __init__(self):
         self._client = None
         self._public_base_url = None
+        self._bucket_domains = {}
     
     def get_client(self):
         """Get or create boto3 S3 client for R2"""
@@ -33,6 +34,7 @@ class R2StorageClient:
             access_key_id = r2_config.get("access_key_id")
             secret_access_key = r2_config.get("secret_access_key")
             self._public_base_url = r2_config.get("public_base_url")
+            self._bucket_domains = r2_config.get("bucket_domains", {})
             
             if not all([endpoint_url, access_key_id, secret_access_key]):
                 raise ValueError("Incomplete R2 configuration")
@@ -201,10 +203,18 @@ class R2StorageClient:
             r2_config = get_r2_config()
             if r2_config:
                 self._public_base_url = r2_config.get("public_base_url")
+                self._bucket_domains = r2_config.get("bucket_domains", {})
         
-        if self._public_base_url:
+        # 1. Check for bucket-specific domain first
+        base_url = self._bucket_domains.get(bucket)
+        
+        # 2. Fallback to default public_base_url
+        if not base_url:
+            base_url = self._public_base_url
+            
+        if base_url:
             # Remove trailing slash if present
-            base_url = self._public_base_url.rstrip('/')
+            base_url = base_url.rstrip('/')
             # For R2 public URLs, the bucket name is NOT included in the path
             # Format: https://pub-xxx.r2.dev/{key}
             final_url = f"{base_url}/{key}"

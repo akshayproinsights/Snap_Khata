@@ -9,7 +9,7 @@ import 'package:mobile/features/verified/presentation/providers/verified_provide
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 // Standardized green colors moved to context extensions
 
@@ -254,7 +254,7 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                                 .deleteBulk(rowIds);
                             // Invalidate udhar providers to refresh credit balances
                             ref.invalidate(udharProvider);
-                            ref.invalidate(udharDashboardProvider);
+                            ref.invalidate(dashboardTotalsProvider);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Text('Order deleted successfully.'),

@@ -12,7 +12,7 @@ import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
@@ -234,7 +234,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                               if (success && context.mounted) {
                                 ref.invalidate(verifiedProvider);
-                                ref.invalidate(udharDashboardProvider);
+                                ref.invalidate(dashboardTotalsProvider);
                                 Navigator.pop(context);
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -827,7 +827,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
       if (success) {
         ref.invalidate(verifiedProvider);
-        ref.invalidate(udharDashboardProvider);
+        ref.invalidate(dashboardTotalsProvider);
         _loadTransactions();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -979,11 +979,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildClarityItem('Bill Amount', CurrencyFormatter.format(tx.amount)),
-                  _buildClarityItem('Paid', tx.isPaid ? CurrencyFormatter.format(tx.amount) : '₹0'),
+                  _buildClarityItem(
+                    'Paid', 
+                    CurrencyFormatter.format(tx.amount - (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)))
+                  ),
                   _buildClarityItem(
                     'Balance', 
-                    tx.isPaid ? '₹0' : CurrencyFormatter.format(tx.amount),
-                    valueColor: tx.isPaid ? context.successColor : context.errorColor,
+                    CurrencyFormatter.format(tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)),
+                    valueColor: (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)) <= 0 
+                        ? context.successColor 
+                        : context.errorColor,
                   ),
                 ],
               ),

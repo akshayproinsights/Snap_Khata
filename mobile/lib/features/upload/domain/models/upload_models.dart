@@ -134,6 +134,32 @@ class UploadTaskStatus {
       errors: rawErrors.map((e) => e.toString()).toList(),
     );
   }
+
+  UploadTaskStatus copyWith({
+    String? taskId,
+    String? status,
+    String? message,
+    int? total,
+    int? processed,
+    int? failed,
+    int? skipped,
+    List<dynamic>? duplicates,
+    List<Map<String, dynamic>>? skippedDetails,
+    List<String>? errors,
+  }) {
+    return UploadTaskStatus(
+      taskId: taskId ?? this.taskId,
+      status: status ?? this.status,
+      message: message ?? this.message,
+      total: total ?? this.total,
+      processed: processed ?? this.processed,
+      failed: failed ?? this.failed,
+      skipped: skipped ?? this.skipped,
+      duplicates: duplicates ?? this.duplicates,
+      skippedDetails: skippedDetails ?? this.skippedDetails,
+      errors: errors ?? this.errors,
+    );
+  }
 }
 
 class UploadSummary {

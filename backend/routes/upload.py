@@ -36,7 +36,7 @@ class UploadResponse(BaseModel):
 class ProcessRequest(BaseModel):
     """Process invoices request model"""
     file_keys: List[str]
-    force_upload: bool = False  # If True, bypass duplicate checking and delete old duplicates
+    force_upload: bool = True  # If True, bypass duplicate checking and delete old duplicates
 
 
 class ProcessResponse(BaseModel):
@@ -837,8 +837,6 @@ def process_invoices_sync(
         parts = []
         if results["processed"] > 0:
             parts.append(f"{results['processed']} invoice{'s' if results['processed'] != 1 else ''} processed")
-        if skipped_count > 0:
-            parts.append(f"{skipped_count} duplicate{'s' if skipped_count != 1 else ''} skipped")
         if results["failed"] > 0:
             parts.append(f"{results['failed']} failed")
         completion_msg = ", ".join(parts) if parts else "No invoices were processed"

@@ -11,7 +11,7 @@ import '../../domain/models/inventory_models.dart';
 import '../inventory_review_page.dart';
 import '../providers/inventory_items_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
-import '../../../udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 class VendorLedgerDetailPage extends ConsumerStatefulWidget {
   final VendorLedger ledger;
@@ -509,7 +509,7 @@ class _VendorLedgerDetailPageState
 
                             if (success && context.mounted) {
                               ref.invalidate(inventoryItemsProvider);
-                              ref.invalidate(udharDashboardProvider);
+                              ref.invalidate(dashboardTotalsProvider);
                               Navigator.pop(context);
                               _loadData();
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1205,7 +1205,7 @@ class _VendorLedgerDetailPageState
     
     if (success && mounted) {
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       _loadData();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Transaction marked as ${paid ? 'paid' : 'unpaid'}')),
@@ -1232,7 +1232,7 @@ class _VendorLedgerDetailPageState
 
     if (success && mounted) {
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invoice marked as paid! 🎉')),
       );

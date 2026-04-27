@@ -43,6 +43,14 @@ class RecentActivitiesNotifier extends AsyncNotifier<List<ActivityItem>> {
     ref.invalidate(dashboardTotalsProvider);
     await future;
   }
+
+  /// Refreshes the activity list in the background without a loading state.
+  Future<void> refreshSilent() async {
+    final result = await AsyncValue.guard(() => build());
+    if (result.hasValue) {
+      state = result;
+    }
+  }
 }
 
 /// A derived provider that watches both the raw list, the search query, and the filter,

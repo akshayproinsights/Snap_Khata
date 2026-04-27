@@ -4,7 +4,7 @@ import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/domain/utils/invoice_math_logic.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 final inventoryRepositoryProvider =
     Provider<InventoryRepository>((ref) => InventoryRepository());
@@ -108,7 +108,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.updateInventoryItem(id, updates);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to update item: $e');
       await fetchItems(); // Revert
@@ -124,7 +124,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.deleteInventoryItem(id);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete item: $e');
       await fetchItems(); // Revert
@@ -141,7 +141,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.deleteBulkInventoryItems(ids);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete items: $e');
       await fetchItems(); // Revert
@@ -154,7 +154,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.verifyInvoice(data);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchItems(); // Refresh the items to remove the verified ones
     } catch (e) {
       state = state.copyWith(
@@ -247,7 +247,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await Future.wait(futures);
       
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
 
       // Finally, fetch items to ensure we are up to date
       await fetchItems();

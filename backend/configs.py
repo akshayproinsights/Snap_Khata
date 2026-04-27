@@ -9,12 +9,12 @@ try:
     # 1. Load .env file from current directory (backend/)
     dotenv_path_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(dotenv_path_backend):
-        load_dotenv(dotenv_path_backend)
+        load_dotenv(dotenv_path_backend, override=True)
         
     # 2. Load .env file from root directory (parent)
     dotenv_path_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     if os.path.exists(dotenv_path_root):
-        load_dotenv(dotenv_path_root)
+        load_dotenv(dotenv_path_root, override=True)
 except Exception:
     pass  # python-dotenv not installed, will use system env vars only
 
@@ -22,7 +22,7 @@ except Exception:
 
 
 
-def get_r2_config() -> Dict[str, str]:
+def get_r2_config() -> Dict[str, Any]:
     """
     Returns the cloudflare_r2 configuration as a dict.
     Strictly uses environment variables.
@@ -32,6 +32,16 @@ def get_r2_config() -> Dict[str, str]:
     access_key_id = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID")
     secret_access_key = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY")
     public_base_url = os.getenv("CLOUDFLARE_R2_PUBLIC_BASE_URL") or os.getenv("R2_PUBLIC_BASE_URL")
+    
+    # Support for multiple bucket-specific domains
+    bucket_domains_raw = os.getenv("R2_BUCKET_DOMAINS")
+    
+    bucket_domains = {}
+    if bucket_domains_raw:
+        try:
+            bucket_domains = json.loads(bucket_domains_raw)
+        except Exception as e:
+            print(f"Error parsing R2_BUCKET_DOMAINS: {e}")
 
     if account_id and access_key_id and secret_access_key:
         if not endpoint_url:
@@ -42,7 +52,8 @@ def get_r2_config() -> Dict[str, str]:
             "endpoint_url": endpoint_url,
             "access_key_id": access_key_id,
             "secret_access_key": secret_access_key,
-            "public_base_url": public_base_url
+            "public_base_url": public_base_url,
+            "bucket_domains": bucket_domains
         }
     
     return {}

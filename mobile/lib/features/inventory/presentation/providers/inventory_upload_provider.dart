@@ -137,11 +137,9 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   // ─────────────────────────── File management ────────────────────
 
   Future<void> addFiles(List<XFile> newFiles) async {
-    final existingNames = state.fileItems.map((f) => f.name).toSet();
     final newItems = <UploadFileItem>[];
 
     for (final file in newFiles) {
-      if (existingNames.contains(file.name)) continue;
       int? size;
       try {
         size = await file.length();
@@ -470,7 +468,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
 
       // 2. Start AI processing
       final initialStatus =
-          await _repository.processInvoices(fileKeys, forceUpload: force);
+          await _repository.processInvoices(fileKeys, forceUpload: true);
 
       // ✅ Persist task to disk (also clears upload-phase)
       // Anchor the timeout to when processing actually STARTS
@@ -635,24 +633,21 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     }).toList();
     
     // Check for duplicates and populate queue if found
-    final skipped = status?.skipped ?? 0;
-    final skippedDetails = status?.skippedDetails ?? [];
-    final hasDuplicates = skipped > 0 && skippedDetails.isNotEmpty;
-    
+    // ✅ Sanitizing status to ensure no "skipped" UI ever shows up
+    final sanitizedStatus = status?.copyWith(skipped: 0, skippedDetails: []);
+
     state = state.copyWith(
       fileItems: done,
       isProcessing: false,
       clearActiveTaskId: true,
-      lastCompletedStatus: status,
-      hasDuplicate: hasDuplicates,
-      duplicateQueue: skippedDetails,
+      lastCompletedStatus: sanitizedStatus,
+      hasDuplicate: false,
+      duplicateQueue: [],
       currentDuplicateIndex: 0,
     );
 
-    // Build banner message with duplicate-skip summary
-    final bannerMsg = skipped > 0
-        ? 'Inventory ready! ($skipped duplicate${skipped == 1 ? '' : 's'} skipped)'
-        : 'Inventory ready to review!';
+    // Build banner message
+    final bannerMsg = 'Inventory ready to review!';
 
     _backgroundTask.completeTaskWithAction(
       bannerMsg,

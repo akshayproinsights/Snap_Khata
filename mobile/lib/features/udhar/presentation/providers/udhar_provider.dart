@@ -3,7 +3,7 @@ import 'package:mobile/core/network/api_client.dart';
 import 'package:dio/dio.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 class UdharState {
   final bool isLoading;
@@ -57,6 +57,19 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  Future<void> fetchLedgersSilent() async {
+    try {
+      final response = await _dio.get('/api/udhar/ledgers');
+      final data = response.data['data'] as List?;
+      if (data != null) {
+        final ledgers = data.map((e) => CustomerLedger.fromJson(e)).toList();
+        state = state.copyWith(isLoading: false, ledgers: ledgers, clearError: true);
+      }
+    } catch (e) {
+      // Ignore errors for silent refresh
+    }
+  }
+
   Future<List<LedgerTransaction>> fetchTransactions(int ledgerId) async {
     try {
       final response = await _dio.get('/api/udhar/ledgers/$ledgerId/transactions');
@@ -78,7 +91,7 @@ class UdharNotifier extends Notifier<UdharState> {
       });
       // Refresh list after successful payment
       ref.invalidate(verifiedProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -90,7 +103,7 @@ class UdharNotifier extends Notifier<UdharState> {
     try {
       await _dio.delete('/api/udhar/ledgers/$ledgerId');
       ref.invalidate(verifiedProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -105,7 +118,7 @@ class UdharNotifier extends Notifier<UdharState> {
         data: {'is_paid': isPaid},
       );
       ref.invalidate(verifiedProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       await fetchLedgers();
       return true;
     } catch (e) {

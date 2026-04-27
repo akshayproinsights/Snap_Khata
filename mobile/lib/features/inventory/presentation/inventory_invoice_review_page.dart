@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:mobile/shared/widgets/universal_image.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/domain/models/invoice_item_v2_model.dart';
@@ -17,7 +17,7 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:intl/intl.dart';
 import 'providers/vendor_ledger_provider.dart';
 import 'providers/inventory_items_provider.dart';
-import '../../udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
   final InventoryInvoiceBundle bundle;
@@ -89,7 +89,7 @@ class _InventoryInvoiceReviewPageState
       await ref.read(inventoryProvider.notifier).deleteItem(item.id);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -144,7 +144,7 @@ class _InventoryInvoiceReviewPageState
       await ref.read(inventoryProvider.notifier).bulkDeleteItems(ids);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice deleted')),
@@ -288,11 +288,9 @@ class _InventoryInvoiceReviewPageState
             child: Center(
               child: Hero(
                 tag: 'inv_img_${widget.bundle.invoiceNumber}',
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
+                child: UniversalImage(
+                  path: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(color: Colors.white)),
                 ),
               ),
             ),
@@ -387,7 +385,7 @@ class _InventoryInvoiceReviewPageState
       
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
 
       // Persist payment mode on the bundle so downstream pages reflect it
       widget.bundle.paymentMode = _paymentMode;
@@ -723,17 +721,10 @@ class _InventoryInvoiceReviewPageState
                   children: [
                     Hero(
                       tag: 'inv_img_${widget.bundle.invoiceNumber}',
-                      child: CachedNetworkImage(
-                        imageUrl: widget.bundle.receiptLink,
+                      child: UniversalImage(
+                        path: widget.bundle.receiptLink,
                         fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
-                        placeholder: (ctx, url) => const Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white)),
-                        errorWidget: (ctx, url, err) => const Icon(
-                            LucideIcons.imageOff,
-                            color: Colors.white54,
-                            size: 40),
                       ),
                     ),
                     Positioned(

@@ -75,6 +75,7 @@ dependencies:
   json_annotation: ^4.11.0
   timeago: ^3.7.1
   state_notifier: ^1.0.0
+  visibility_detector: ^0.4.0+2
 
 dev_dependencies:
   flutter_test:

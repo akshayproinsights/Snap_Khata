@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/review/data/review_repository.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:mobile/features/activities/presentation/providers/activity_provider.dart';
 
 final reviewRepositoryProvider =
     Provider<ReviewRepository>((ref) => ReviewRepository());
@@ -280,6 +284,10 @@ class ReviewNotifier extends Notifier<ReviewState> {
 
       // Remove groups that were processed (refresh)
       await fetchReviewData();
+      ref.invalidate(dashboardTotalsProvider);
+      ref.invalidate(udharProvider);
+      ref.invalidate(vendorLedgerProvider);
+      ref.invalidate(recentActivitiesProvider);
     } catch (e) {
       state = state.copyWith(error: 'Sync failed. ${_friendlyError(e)}');
     } finally {

@@ -6,10 +6,33 @@ from datetime import datetime
 
 from auth import get_current_user
 from database import get_database_client
+from services.storage import get_storage_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def _resolve_receipt_link(receipt_link: str) -> str:
+    """
+    Convert internal r2://bucket/key URLs to proper HTTPS public URLs.
+    If the URL is already a valid HTTP/HTTPS URL it is returned unchanged.
+    """
+    if not receipt_link or not receipt_link.startswith('r2://'):
+        return receipt_link or ""
+    try:
+        path = receipt_link[5:]  # strip 'r2://'
+        parts = path.split('/', 1)
+        if len(parts) != 2:
+            logger.warning(f"Cannot parse r2:// URL '{receipt_link}' — returning as-is")
+            return receipt_link
+        bucket, key = parts[0], parts[1]
+        storage = get_storage_client()
+        public_url = storage.get_public_url(bucket, key)
+        if public_url:
+            return public_url
+    except Exception as e:
+        logger.error(f"Error resolving receipt link {receipt_link}: {e}")
+    return receipt_link
 
 class PaymentCreate(BaseModel):
     amount: float
@@ -263,7 +286,7 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                         'vendor_name': inv.get('vendor_name') or ''
                     },
                     'invoice_date': inv.get('invoice_date'),
-                    'receipt_link': inv.get('receipt_link'),
+                    'receipt_link': _resolve_receipt_link(inv.get('receipt_link')),
                     'is_verified': True,
                     'balance_owed': inv.get('balance_owed', 0.0),
                     'payment_mode': inv.get('payment_mode', 'Cash')
@@ -319,7 +342,7 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                             item_meta[inv_num] = {
                                 'invoice_date': row.get('invoice_date') or '',
                                 'vendor_name': row.get('vendor_name') or '',
-                                'receipt_link': row.get('receipt_link') or '',
+                                'receipt_link': _resolve_receipt_link(row.get('receipt_link')),
                                 'payment_mode': row.get('payment_mode') or 'Credit',
                                 'balance_owed': float(row.get('balance_owed') or 0),
                                 'is_verified': row.get('verification_status') == 'Done',
@@ -383,11 +406,11 @@ async def get_all_vendor_transactions(limit: int = 50, current_user: Dict = Depe
                 if not tx.get('inventory_items'):
                     meta = item_meta[inv_num]
                     tx['invoice_date'] = meta.get('invoice_date') or tx.get('invoice_date') or ''
-                    tx['receipt_link'] = meta.get('receipt_link') or tx.get('receipt_link') or ''
+                    tx['receipt_link'] = _resolve_receipt_link(meta.get('receipt_link') or tx.get('receipt_link') or '')
                     tx['vendor_name_enriched'] = meta.get('vendor_name') or ''
                     tx['payment_mode'] = meta.get('payment_mode') or tx.get('payment_mode') or 'Credit'
                     tx['balance_owed'] = meta.get('balance_owed') or tx.get('balance_owed') or 0.0
-                    tx['is_verified'] = meta.get('is_verified', tx.get('is_verified', False))
+                    tx['is_verified'] = True # If it's in the ledger, it's verified
                     tx['inventory_items'] = meta.get('items', [])
             else:
                 tx.setdefault('invoice_date', '')
@@ -1128,14 +1151,18 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
 
         already_synced = {tx["invoice_number"] for tx in (existing_tx_resp.data or [])}
 
-        # 3. Only process invoices not yet fully synced, deduplicated by invoice number
+        # 3. Only process invoices not yet fully synced, SUMMING items for the same invoice number
         unique_missing = {}
         for inv in invoices:
             inv_num = inv.get("invoice_number")
             if inv_num and inv_num not in already_synced:
-                # Store the invoice, ensuring we only process one entry per invoice_number
                 if inv_num not in unique_missing:
-                    unique_missing[inv_num] = inv
+                    # Initialize with a copy to avoid modifying original
+                    unique_missing[inv_num] = dict(inv)
+                    unique_missing[inv_num]["balance_owed"] = float(inv.get("balance_owed") or 0)
+                else:
+                    # Balance owed is consistent across multi-line invoices, no need to sum
+                    pass
         
         missing_invoices = list(unique_missing.values())
 

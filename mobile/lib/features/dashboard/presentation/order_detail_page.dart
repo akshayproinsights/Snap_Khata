@@ -16,7 +16,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 
@@ -277,7 +277,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       await notifier.updateRecordsBulk(updatedItems);
       // Invalidate udhar providers to refresh credit ledger and dashboard totals
       ref.invalidate(udharProvider);
-      ref.invalidate(udharDashboardProvider);
+      ref.invalidate(dashboardTotalsProvider);
     }
 
     widget.group.receiptNumber = receiptCtrl.text;
@@ -900,7 +900,18 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         Wrap(
                           spacing: 16,
                           runSpacing: 12,
-                          children: _extraFieldCtrls.entries.map((entry) {
+                          children: _extraFieldCtrls.entries.where((e) {
+                            final key = e.key.toLowerCase();
+                            final ignored = [
+                              'rate', 'quantity', 'amount', 'receipt_number',
+                              'receipt_link', 'row_id', 'username', 'created_at',
+                              'upload_date', 'balance_due', 'payment_mode',
+                              'received_amount', 'id', 'customer_name',
+                              'mobile_number', 'description', 'type', 'date',
+                              'customer_details', 'is_paid'
+                            ];
+                            return !ignored.contains(key);
+                          }).map((entry) {
                             final label = _formatFieldLabel(entry.key);
                             return SizedBox(
                               width: 140,

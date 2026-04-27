@@ -14,7 +14,7 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
-import 'package:mobile/core/widgets/brand_wordmark.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class HomeDashboardPage extends ConsumerWidget {
   const HomeDashboardPage({super.key});
@@ -33,156 +33,164 @@ class HomeDashboardPage extends ConsumerWidget {
         scrolledUnderElevation: 0,
         toolbarHeight: 0,
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.wait([
-              ref.refresh(recentActivitiesProvider.future),
-              ref.refresh(dashboardTotalsProvider.future),
-            ]);
-          },
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // ── Header with Greeting & Actions ──
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildBrandHeader(context),
-                      const SizedBox(height: 12),
-                      _buildHeaderRow(context, ref, currentFilter),
-                      const SizedBox(height: 20),
-                      _buildSummaryCards(context, ref, isDark),
-                      const SizedBox(height: 28),
-                      _buildSearchBar(context, ref, isDark),
-                      const SizedBox(height: 16),
-                      _buildFilterChips(context, ref, currentFilter, isDark),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            currentFilter == ActivityFilter.all 
-                                ? 'RECENT ACTIVITY' 
-                                : currentFilter == ActivityFilter.customers 
-                                    ? 'RECENT SALES' 
-                                    : currentFilter == ActivityFilter.suppliers
-                                        ? 'RECENT PURCHASES'
-                                        : 'RECENT ITEMS',
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Activity List ──
-              filteredActivitiesAsync.when(
-                loading: () => const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (error, stack) => SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Failed to load activities',
-                            style: TextStyle(fontWeight: FontWeight.w600, color: context.textColor),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(error.toString(), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondaryColor)),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed: () => ref.read(recentActivitiesProvider.notifier).refreshData(),
-                            child: const Text('RETRY'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                data: (activities) {
-                  if (activities.isEmpty) {
-                    return SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+      body: VisibilityDetector(
+        key: const Key('home_dashboard_visibility'),
+        onVisibilityChanged: (info) {
+          if (info.visibleFraction > 0.1) {
+            // Silently refresh dashboard totals and recent activity in background
+            ref.read(dashboardTotalsProvider.notifier).refreshSilent();
+            ref.read(recentActivitiesProvider.notifier).refreshSilent();
+          }
+        },
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([
+                ref.refresh(recentActivitiesProvider.future),
+                ref.refresh(dashboardTotalsProvider.future),
+              ]);
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // ── Header with Greeting & Actions ──
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeaderRow(context, ref, currentFilter),
+                        const SizedBox(height: 20),
+                        _buildSummaryCards(context, ref, isDark),
+                        const SizedBox(height: 28),
+                        _buildSearchBar(context, ref, isDark),
+                        const SizedBox(height: 16),
+                        _buildFilterChips(context, ref, currentFilter, isDark),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: context.primaryColor.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                LucideIcons.scan,
-                                size: 48,
-                                color: context.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
                             Text(
-                              'No transactions yet',
+                              currentFilter == ActivityFilter.all 
+                                  ? 'RECENT ACTIVITY' 
+                                  : currentFilter == ActivityFilter.customers 
+                                      ? 'RECENT SALES' 
+                                      : currentFilter == ActivityFilter.suppliers
+                                          ? 'RECENT PURCHASES'
+                                          : 'RECENT ITEMS',
                               style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
                                 color: context.textColor,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Start by scanning your first bill.',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: context.textSecondaryColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.0,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    );
-                  }
-
-                  return SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final item = activities[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
-                            child: item.map(
-                              customer: (c) => CustomerActivityCard(item: c),
-                              vendor: (v) => VendorActivityCard(item: v),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+  
+                // ── Activity List ──
+                filteredActivitiesAsync.when(
+                  loading: () => const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (error, stack) => SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Failed to load activities',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: context.textColor),
                             ),
-                          );
-                        },
-                        childCount: activities.length,
+                            const SizedBox(height: 8),
+                            Text(error.toString(), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondaryColor)),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: () => ref.read(recentActivitiesProvider.notifier).refreshData(),
+                              child: const Text('RETRY'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  );
-                },
-              ),
-            ],
+                  ),
+                  data: (activities) {
+                    if (activities.isEmpty) {
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: context.primaryColor.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  LucideIcons.scan,
+                                  size: 48,
+                                  color: context.primaryColor,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'No transactions yet',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: context.textColor,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Start by scanning your first bill.',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: context.textSecondaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+  
+                    return SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final item = activities[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: item.map(
+                                customer: (c) => CustomerActivityCard(item: c),
+                                vendor: (v) => VendorActivityCard(item: v),
+                              ),
+                            );
+                          },
+                          childCount: activities.length,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -194,11 +202,22 @@ class HomeDashboardPage extends ConsumerWidget {
   Widget _buildHeaderRow(BuildContext context, WidgetRef ref, ActivityFilter currentFilter) {
     final authState = ref.watch(authProvider);
     final username = authState.user?.username ?? 'Merchant';
+    final supplierPending = ref.watch(pendingSupplierReviewsProvider);
+    final customerPending = ref.watch(pendingCustomerReviewsProvider);
 
     final hour = DateTime.now().hour;
     String greeting = 'GOOD MORNING';
     if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON';
     if (hour >= 17) greeting = 'GOOD EVENING';
+
+    int pendingCount = 0;
+    if (currentFilter == ActivityFilter.suppliers) {
+      pendingCount = supplierPending;
+    } else if (currentFilter == ActivityFilter.customers) {
+      pendingCount = customerPending;
+    } else {
+      pendingCount = supplierPending + customerPending;
+    }
 
     return Row(
       children: [
@@ -241,39 +260,35 @@ class HomeDashboardPage extends ConsumerWidget {
             ],
           ),
         ),
-        _buildReviewButton(context, ref, currentFilter),
+        Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            shape: BoxShape.circle,
+            boxShadow: context.premiumShadow,
+            border: Border.all(color: context.borderColor, width: 1),
+          ),
+          child: IconButton(
+            icon: Badge(
+              isLabelVisible: pendingCount > 0,
+              label: Text(pendingCount > 99 ? '99+' : pendingCount.toString()),
+              backgroundColor: context.errorColor,
+              child: const Icon(LucideIcons.bell, size: 20),
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              if (currentFilter == ActivityFilter.suppliers) {
+                context.push('/inventory-review');
+              } else if (currentFilter == ActivityFilter.customers) {
+                context.push('/review');
+              } else {
+                _showReviewSelectionDialog(context);
+              }
+            },
+            color: context.textColor,
+            tooltip: 'Review pending invoices',
+          ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildBrandHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
-      child: Row(
-        children: [
-          Image.asset(
-            'assets/images/app_logo_v2.png',
-            height: 40,
-            width: 40,
-          ),
-          const SizedBox(width: 12),
-          const BrandWordmark(fontSize: 24),
-          const Spacer(),
-          Container(
-            decoration: BoxDecoration(
-              color: context.surfaceColor,
-              shape: BoxShape.circle,
-              boxShadow: context.premiumShadow,
-              border: Border.all(color: context.borderColor, width: 1),
-            ),
-            child: IconButton(
-              icon: const Icon(LucideIcons.bell, size: 20),
-              onPressed: () => context.push('/notifications'),
-              color: context.textColor,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -464,40 +479,6 @@ class HomeDashboardPage extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildReviewButton(BuildContext context, WidgetRef ref, ActivityFilter filter) {
-    final supplierPending = ref.watch(pendingSupplierReviewsProvider);
-    final customerPending = ref.watch(pendingCustomerReviewsProvider);
-    
-    int count = 0;
-    if (filter == ActivityFilter.suppliers) {
-      count = supplierPending;
-    } else if (filter == ActivityFilter.customers) {
-      count = customerPending;
-    } else {
-      count = supplierPending + customerPending;
-    }
-
-    return IconButton(
-      icon: Badge(
-        isLabelVisible: count > 0,
-        label: Text(count > 99 ? '99+' : count.toString()),
-        backgroundColor: context.errorColor,
-        child: const Icon(LucideIcons.clipboardCheck),
-      ),
-      onPressed: () {
-        HapticFeedback.lightImpact();
-        if (filter == ActivityFilter.suppliers) {
-          context.push('/inventory-review');
-        } else if (filter == ActivityFilter.customers) {
-          context.push('/review');
-        } else {
-          _showReviewSelectionDialog(context);
-        }
-      },
-      tooltip: 'Review pending invoices',
     );
   }
 

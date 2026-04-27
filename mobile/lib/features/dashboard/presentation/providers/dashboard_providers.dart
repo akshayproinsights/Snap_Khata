@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/network/api_client.dart';
-import 'package:mobile/features/dashboard/domain/models/dashboard_totals.dart';
 import 'package:mobile/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
+import 'package:mobile/features/udhar/domain/models/dashboard_summary_model.dart';
 
 
 /// Holds the current filter for the activity list (All, Customers, Suppliers).
@@ -17,36 +17,40 @@ class ActiveFilterNotifier extends Notifier<ActivityFilter> {
 
 enum ActivityFilter { all, customers, suppliers, items }
 
-/// An [AsyncNotifier] that fetches aggregate totals from Supabase.
-final dashboardTotalsProvider = AsyncNotifierProvider<DashboardTotalsNotifier, DashboardTotals>(
+/// An [AsyncNotifier] that fetches aggregate totals from the dashboard-summary endpoint.
+final dashboardTotalsProvider = AsyncNotifierProvider<DashboardTotalsNotifier, DashboardSummary>(
   DashboardTotalsNotifier.new,
 );
 
-class DashboardTotalsNotifier extends AsyncNotifier<DashboardTotals> {
+class DashboardTotalsNotifier extends AsyncNotifier<DashboardSummary> {
   @override
-  Future<DashboardTotals> build() async {
+  Future<DashboardSummary> build() async {
     final dio = ApiClient().dio;
 
     try {
       final response = await dio.get('/api/udhar/dashboard-summary');
       final data = response.data['data'];
       if (data != null) {
-        return DashboardTotals(
-          totalReceivable: double.tryParse(data['total_receivable']?.toString() ?? '0') ?? 0.0,
-          totalPayable: double.tryParse(data['total_payable']?.toString() ?? '0') ?? 0.0,
-        );
+        return DashboardSummary.fromJson(data);
       }
       throw Exception('Invalid response: data is null');
     } catch (e) {
-      // Re-throw to allow UI to show error state instead of silently returning 0s
       throw Exception('Failed to load dashboard totals: $e');
     }
   }
 
-  /// Refreshes the dashboard totals.
+  /// Refreshes the dashboard totals with a loading state.
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => build());
+  }
+
+  /// Refreshes the dashboard totals in the background without a loading state.
+  Future<void> refreshSilent() async {
+    final result = await AsyncValue.guard(() => build());
+    if (result.hasValue) {
+      state = result;
+    }
   }
 }
 

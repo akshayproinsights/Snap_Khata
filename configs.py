@@ -98,11 +98,11 @@ def load_secrets() -> Dict[str, Any]:
     return _secrets_cache
 
 
-def get_r2_config() -> Dict[str, str]:
+def get_r2_config() -> Dict[str, Any]:
     """
     Returns the cloudflare_r2 configuration as a dict.
     Checks environment variables first, then falls back to secrets file.
-    Keys expected: account_id, endpoint_url, access_key_id, secret_access_key
+    Keys expected: account_id, endpoint_url, access_key_id, secret_access_key, public_base_url, bucket_domains
     """
     # Check environment variables first
     env_config = {
@@ -110,13 +110,25 @@ def get_r2_config() -> Dict[str, str]:
         "endpoint_url": os.getenv("CLOUDFLARE_R2_ENDPOINT_URL"),
         "access_key_id": os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID"),
         "secret_access_key": os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY"),
-        "public_base_url": os.getenv("CLOUDFLARE_R2_PUBLIC_BASE_URL")
+        "public_base_url": os.getenv("CLOUDFLARE_R2_PUBLIC_BASE_URL"),
+        "bucket_domains_raw": os.getenv("R2_BUCKET_DOMAINS")
     }
     
-    # If all required env vars are present, return them
-    if all([env_config.get("account_id"), env_config.get("endpoint_url"), 
-            env_config.get("access_key_id"), env_config.get("secret_access_key")]):
-        return {k: v for k, v in env_config.items() if v is not None}
+    # Parse bucket domains if present
+    bucket_domains = {}
+    if env_config.get("bucket_domains_raw"):
+        try:
+            bucket_domains = json.loads(env_config["bucket_domains_raw"])
+        except Exception:
+            pass
+
+    # If required env vars are present, return them
+    if all([env_config.get("account_id"), env_config.get("access_key_id"), env_config.get("secret_access_key")]):
+        config = {k: v for k, v in env_config.items() if v is not None and k != "bucket_domains_raw"}
+        config["bucket_domains"] = bucket_domains
+        if not config.get("endpoint_url") and config.get("account_id"):
+            config["endpoint_url"] = f"https://{config['account_id']}.r2.cloudflarestorage.com"
+        return config
     
     # Fallback to secrets file
     secrets = load_secrets()
@@ -129,6 +141,10 @@ def get_r2_config() -> Dict[str, str]:
         "secret_access_key": r2.get("secret_access_key") or r2.get("secretAccessKey") or r2.get("secret_key"),
         "public_base_url": r2.get("public_base_url") or r2.get("publicBaseUrl") or None
     }
+    
+    # Bucket domains from secrets if any
+    normalized["bucket_domains"] = r2.get("bucket_domains") or {}
+    
     return {k: v for k, v in normalized.items() if v is not None}
 
 

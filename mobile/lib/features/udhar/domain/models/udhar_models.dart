@@ -37,6 +37,7 @@ class LedgerTransaction {
   final bool isPaid;
   final int? linkedTransactionId;
   final String? receiptLink;
+  final double? balanceDue;
 
   LedgerTransaction({
     required this.id,
@@ -49,6 +50,7 @@ class LedgerTransaction {
     this.isPaid = false,
     this.linkedTransactionId,
     this.receiptLink,
+    this.balanceDue,
   });
 
   // Getters for backwards compatibility
@@ -68,6 +70,9 @@ class LedgerTransaction {
       isPaid: json['is_paid'] ?? false,
       linkedTransactionId: json['linked_transaction_id'],
       receiptLink: json['receipt_link'],
+      balanceDue: json['balance_due'] != null 
+          ? double.tryParse(json['balance_due'].toString()) 
+          : null,
     );
   }
 }

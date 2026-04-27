@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/shared/presentation/widgets/global_task_banner.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AppShell extends ConsumerWidget {
@@ -17,6 +18,12 @@ class AppShell extends ConsumerWidget {
     final uploadState = ref.read(uploadProvider);
     // Block navigation while file upload is in-flight
     if (uploadState.isUploading) return;
+
+    // Background refresh totals when switching to main data tabs (Home or Parties)
+    if (index == 0 || index == 1) {
+      ref.read(dashboardTotalsProvider.notifier).refreshSilent();
+    }
+
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,

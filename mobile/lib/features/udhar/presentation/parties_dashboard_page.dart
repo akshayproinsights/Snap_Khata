@@ -3,19 +3,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/parties_list_page.dart' as mobile;
-import 'package:mobile/features/udhar/presentation/providers/udhar_dashboard_provider.dart';
+import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/unified_ledger_provider.dart';
 import 'package:mobile/features/udhar/presentation/widgets/add_party_entry_sheet.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class PartiesDashboardPage extends ConsumerWidget {
   const PartiesDashboardPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dashboardState = ref.watch(udharDashboardProvider);
+    final dashboardAsync = ref.watch(dashboardTotalsProvider);
     final filterMode = ref.watch(udharFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final ledgersLoading = ref.watch(unifiedLedgerLoadingProvider);
@@ -44,35 +47,42 @@ class PartiesDashboardPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: dashboardState.isLoading && dashboardState.summary == null
-          ? const Center(child: CircularProgressIndicator())
-          : dashboardState.error != null && dashboardState.summary == null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
-                      const SizedBox(height: 16),
-                      Text(dashboardState.error!, style: TextStyle(color: context.textColor)),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () => ref
-                            .read(udharDashboardProvider.notifier)
-                            .fetchSummary(),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : ledgersLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Column(
+      body: VisibilityDetector(
+        key: const Key('parties_dashboard_visibility'),
+        onVisibilityChanged: (info) {
+          if (info.visibleFraction > 0.1) {
+            // Silently refresh dashboard totals and ledgers in background
+            ref.read(dashboardTotalsProvider.notifier).refreshSilent();
+            ref.read(udharProvider.notifier).fetchLedgersSilent();
+            ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
+          }
+        },
+        child: dashboardAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
+                const SizedBox(height: 16),
+                Text(error.toString(), style: TextStyle(color: context.textColor)),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+          data: (summary) => ledgersLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
                   children: [
                     // Summary Section
                     _buildSummaryCard(
                       context, 
-                      dashboardState.summary?.totalReceivable ?? 0.0,
-                      dashboardState.summary?.totalPayable ?? 0.0,
+                      summary.totalReceivable,
+                      summary.totalPayable,
                       isDark,
                     ),
                     
@@ -119,9 +129,9 @@ class PartiesDashboardPage extends ConsumerWidget {
                         ),
                       ),
                     ),
-
+  
                     const SizedBox(height: 16),
-
+  
                     // Filter Pills
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -165,6 +175,8 @@ class PartiesDashboardPage extends ConsumerWidget {
                     ),
                   ],
                 ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           HapticFeedback.mediumImpact();
