@@ -520,6 +520,32 @@ async def process_inventory(
             logger.warning(f"[IDEMPOTENCY GUARD] Inventory check failed (non-fatal), proceeding: {guard_err}")
     # ── END IDEMPOTENCY GUARD ─────────────────────────────────────────────────
 
+    # ── FILE PATH VALIDATION ──────────────────────────────────────────────────
+    # CRITICAL: Ensure all files are from the inventory/ folder, not sales/ folder
+    # This prevents accidental routing of supplier bills to customer receipts
+    expected_prefix = get_purchases_folder(username)  # e.g., "akshaykh/inventory/"
+    sales_prefix = f"{username}/sales/"
+    
+    invalid_files = []
+    for file_key in request.file_keys:
+        if not file_key.startswith(expected_prefix):
+            invalid_files.append(file_key)
+            # Log warning if file is in sales folder
+            if file_key.startswith(sales_prefix):
+                logger.error(f"⚠️ ROUTING ERROR: File {file_key} is in SALES folder but being processed as INVENTORY. This indicates a frontend/mobile routing issue!")
+    
+    if invalid_files:
+        logger.error(f"Rejecting inventory process request: {len(invalid_files)}/{len(request.file_keys)} files are not from inventory folder")
+        logger.error(f"Expected prefix: {expected_prefix}")
+        logger.error(f"Invalid files: {invalid_files}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid file paths for inventory processing. Expected files from '{expected_prefix}' folder. "
+                   f"Please check that you used the 'Supplier/Inventory' upload, not 'Sales' upload. "
+                   f"Invalid: {', '.join(invalid_files[:3])}"
+        )
+    # ── END FILE PATH VALIDATION ──────────────────────────────────────────────
+
     # Initialize status in DATABASE
     initial_status = {
         "task_id": task_id,

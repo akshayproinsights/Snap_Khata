@@ -26,10 +26,11 @@ def _find_col(df: pd.DataFrame, candidates: list) -> Optional[str]:
 
 
 def _is_valid_scalar(val):
+    """Check if a value is a valid scalar (not None, not empty list/dict)"""
     if val is None:
         return False
     if isinstance(val, (list, dict, tuple)):
-        return True
+        return False  # Lists, dicts, tuples should NOT be treated as valid scalars for direct assignment
     try:
         return bool(pd.notna(val))
     except ValueError:
@@ -356,7 +357,11 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
     date_done_df = date[date["Verification Status_clean"] == "done"].copy()
     
     # Identify columns to exclude from merging (technical columns or status fields)
-    exclude_cols = ["Verification Status", "Verification Status_clean", "username", "id", "Database_Id", "Upload Date_dt", "Row_Id", "Receipt Link_clean"]
+    exclude_cols = [
+        "Verification Status", "Verification Status_clean", "username", "id", "Database_Id", 
+        "Upload Date_dt", "Row_Id", "Receipt Link_clean", "audit_findings", "Amount Mismatch",
+        "line_item_row_bbox", "date_and_receipt_combined_bbox", "description_bbox"
+    ]
     
     # Identify metadata columns to apply from verification_dates
     date_apply_cols = [c for c in date_done_df.columns if c not in exclude_cols]
@@ -374,16 +379,23 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
     for col in date_apply_cols:
         verified_col = f"{col}_date_verified"
         if verified_col in included_rows.columns:
-            # Combine verified value with existing value
-            included_rows[col] = included_rows[verified_col].combine_first(included_rows[col])
-            included_rows.drop(columns=[verified_col], inplace=True)
+            # Combine verified value with existing value (only if the target column exists)
+            if col in included_rows.columns:
+                included_rows[col] = included_rows[verified_col].combine_first(included_rows[col])
+            else:
+                included_rows[col] = included_rows[verified_col]
+            included_rows.drop(columns=[verified_col], inplace=True, errors="ignore")
     # (Cleanup of temporary merge columns already handled in loop above)
 
     # Apply amount corrections
     amount_done_df = amount[amount["Verification Status_clean"] == "done"].copy()
     
     # Metadata columns to merge from verification_amounts
-    exclude_amt_cols = ["Verification Status", "Verification Status_clean", "username", "id", "Database_Id", "Upload Date_dt", "Row_Id"]
+    exclude_amt_cols = [
+        "Verification Status", "Verification Status_clean", "username", "id", "Database_Id", 
+        "Upload Date_dt", "Row_Id", "audit_findings", "Amount Mismatch",
+        "line_item_row_bbox", "date_and_receipt_combined_bbox", "description_bbox"
+    ]
     amt_apply_cols = [c for c in amount_done_df.columns if c not in exclude_amt_cols]
     
     if not amount_done_df.empty:
@@ -395,7 +407,10 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
         for col in amt_apply_cols:
             if rowid_col_amount and rowid_col_amount in amount_done_df.columns:
                 corr_map = amount_done_df.set_index(rowid_col_amount)[col].to_dict()
-                included_rows[col] = included_rows[rowid_col_raw].map(corr_map).combine_first(included_rows[col])
+                if col in included_rows.columns:
+                    included_rows[col] = included_rows[rowid_col_raw].map(corr_map).combine_first(included_rows[col])
+                else:
+                    included_rows[col] = included_rows[rowid_col_raw].map(corr_map)
 
     included_rows["Review Status"] = "Verified"
 
@@ -531,6 +546,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'upload_date': 'Upload Date',
             'image_hash': 'Image Hash',
             'verification_status': 'Verification Status',
+            'amount_mismatch': 'Amount Mismatch',  # Include amount_mismatch field
             # Payment tracking fields from verification_dates
             'payment_mode': 'Payment Mode',
             'received_amount': 'Received Amount',
@@ -685,17 +701,29 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                         if 'Type' in row and _is_valid_scalar(row['Type']) and str(row['Type']).strip() != '':
                             df_raw.loc[mask, 'Type'] = row['Type']
                         if 'Payment Mode' in row and _is_valid_scalar(row['Payment Mode']):
-                            df_raw.loc[mask, 'Payment Mode'] = row['Payment Mode']
+                            pm = row['Payment Mode']
+                            if not (isinstance(pm, (list, dict)) and len(pm) == 0):
+                                df_raw.loc[mask, 'Payment Mode'] = pm
                         if 'Received Amount' in row and _is_valid_scalar(row['Received Amount']):
-                            df_raw.loc[mask, 'Received Amount'] = row['Received Amount']
+                            ra = row['Received Amount']
+                            if not (isinstance(ra, (list, dict)) and len(ra) == 0):
+                                df_raw.loc[mask, 'Received Amount'] = ra
                         if 'Balance Due' in row and _is_valid_scalar(row['Balance Due']):
-                            df_raw.loc[mask, 'Balance Due'] = row['Balance Due']
+                            bd = row['Balance Due']
+                            if not (isinstance(bd, (list, dict)) and len(bd) == 0):
+                                df_raw.loc[mask, 'Balance Due'] = bd
                         if 'Customer Details' in row and _is_valid_scalar(row['Customer Details']):
-                            df_raw.loc[mask, 'Customer Details'] = row['Customer Details']
+                            cd = row['Customer Details']
+                            if not (isinstance(cd, (list, dict)) and len(cd) == 0):
+                                df_raw.loc[mask, 'Customer Details'] = cd
                         if 'GST Mode' in row and _is_valid_scalar(row['GST Mode']):
-                            df_raw.loc[mask, 'GST Mode'] = row['GST Mode']
+                            gm = row['GST Mode']
+                            if not (isinstance(gm, (list, dict)) and len(gm) == 0):
+                                df_raw.loc[mask, 'GST Mode'] = gm
                         if 'Taxable Row Ids' in row and _is_valid_scalar(row['Taxable Row Ids']):
-                            df_raw.loc[mask, 'Taxable Row Ids'] = row['Taxable Row Ids']
+                            tri = row['Taxable Row Ids']
+                            if not (isinstance(tri, (list, dict)) and len(tri) == 0):
+                                df_raw.loc[mask, 'Taxable Row Ids'] = tri
                             
                         corrections_made = True
                     else:
@@ -753,11 +781,17 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                         if 'Type' in row and _is_valid_scalar(row['Type']) and str(row['Type']).strip() != '':
                             df_raw.loc[mask, 'Type'] = row['Type']
                         if 'Payment Mode' in row and _is_valid_scalar(row['Payment Mode']):
-                            df_raw.loc[mask, 'Payment Mode'] = row['Payment Mode']
+                            pm = row['Payment Mode']
+                            if not (isinstance(pm, (list, dict)) and len(pm) == 0):
+                                df_raw.loc[mask, 'Payment Mode'] = pm
                         if 'Received Amount' in row and _is_valid_scalar(row['Received Amount']):
-                            df_raw.loc[mask, 'Received Amount'] = row['Received Amount']
+                            ra = row['Received Amount']
+                            if not (isinstance(ra, (list, dict)) and len(ra) == 0):
+                                df_raw.loc[mask, 'Received Amount'] = ra
                         if 'Balance Due' in row and _is_valid_scalar(row['Balance Due']):
-                            df_raw.loc[mask, 'Balance Due'] = row['Balance Due']
+                            bd = row['Balance Due']
+                            if not (isinstance(bd, (list, dict)) and len(bd) == 0):
+                                df_raw.loc[mask, 'Balance Due'] = bd
                             
                         corrections_made = True
                     else:
@@ -887,7 +921,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         
         # We don't need the string row_id anymore for verified_invoices
         if 'row_id' in final_df_snake.columns:
-            final_df_snake = final_df_snake.drop(columns=['row_id'])
+            final_df_snake = final_df_snake.drop(columns=['row_id'], errors='ignore')
 
         # CRITICAL: 'Database_Id' (integer PK) needs to be mapped to 'row_id' for verified_invoices
         if 'Database_Id' in final_df_snake.columns:
@@ -928,11 +962,15 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'fallback_attempted',
             'fallback_reason',
             'processing_errors',
+            # BBOX columns — exist in invoices but not in verified_invoices
+            'line_item_row_bbox',
+            'date_and_receipt_combined_bbox',
+            'description_bbox',
         ]
         
         for col in columns_to_exclude:
             if col in final_df_snake.columns:
-                final_df_snake = final_df_snake.drop(columns=[col])
+                final_df_snake = final_df_snake.drop(columns=[col], errors="ignore")
         
         # CRITICAL FIX: Remove duplicate column names before converting to dict
         # Pandas silently omits duplicate columns when calling to_dict(), causing data loss

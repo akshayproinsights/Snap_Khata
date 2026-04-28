@@ -41,7 +41,7 @@ async def get_inventory_items_paginated(
     limit: int = Query(20, ge=10, le=100, description="Items per page"),
     cursor: Optional[str] = Query(None, description="Pagination cursor"),
     sort_by: InventorySortBy = Query(InventorySortBy.INVOICE_DATE),
-    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
+    sort_direction: str = Query("desc", pattern="^(asc|desc)$"),
     search: Optional[str] = Query(None, description="Search product/vendor name"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -140,7 +140,7 @@ async def get_khata_parties_paginated(
     limit: int = Query(20, ge=10, le=100),
     cursor: Optional[str] = Query(None),
     sort_by: KhataSortBy = Query(KhataSortBy.UPDATED_AT),
-    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
+    sort_direction: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -209,7 +209,7 @@ async def get_party_transactions_paginated(
     limit: int = Query(20, ge=10, le=100),
     cursor: Optional[str] = Query(None),
     sort_by: str = Query("transaction_date"),
-    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
+    sort_direction: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
@@ -247,7 +247,7 @@ async def get_upload_tasks_paginated(
     limit: int = Query(20, ge=10, le=100),
     cursor: Optional[str] = Query(None),
     sort_by: str = Query("created_at"),
-    sort_direction: str = Query("desc", regex="^(asc|desc)$"),
+    sort_direction: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """

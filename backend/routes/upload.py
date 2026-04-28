@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from auth import get_current_user, get_current_user_r2_bucket
 from services.storage import get_storage_client
 from utils.image_optimizer import optimize_image_for_gemini, should_optimize_image, validate_image_quality
-from config import get_sales_folder
+from config import get_sales_folder, get_purchases_folder
 from database import get_database_client, create_fresh_database_client
 
 router = APIRouter()
@@ -449,6 +449,32 @@ async def process_invoices_endpoint(
             # blocking a legitimate upload.
             logger.warning(f"[IDEMPOTENCY GUARD] Check failed (non-fatal), proceeding: {guard_err}")
     # ── END IDEMPOTENCY GUARD ─────────────────────────────────────────────────
+
+    # ── FILE PATH VALIDATION ──────────────────────────────────────────────────
+    # CRITICAL: Ensure all files are from the sales/ folder, not inventory/ folder
+    # This prevents accidental routing of sales bills to supplier purchases
+    expected_prefix = get_sales_folder(username)  # e.g., "akshaykh/sales/"
+    inventory_prefix = get_purchases_folder(username)  # e.g., "akshaykh/inventory/"
+    
+    invalid_files = []
+    for file_key in request.file_keys:
+        if not file_key.startswith(expected_prefix):
+            invalid_files.append(file_key)
+            # Log warning if file is in inventory folder
+            if file_key.startswith(inventory_prefix):
+                logger.error(f"⚠️ ROUTING ERROR: File {file_key} is in INVENTORY folder but being processed as SALES. This indicates a frontend/mobile routing issue!")
+    
+    if invalid_files:
+        logger.error(f"Rejecting sales process request: {len(invalid_files)}/{len(request.file_keys)} files are not from sales folder")
+        logger.error(f"Expected prefix: {expected_prefix}")
+        logger.error(f"Invalid files: {invalid_files}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid file paths for sales processing. Expected files from '{expected_prefix}' folder. "
+                   f"Please check that you used the 'Sales' upload, not 'Supplier/Inventory' upload. "
+                   f"Invalid: {', '.join(invalid_files[:3])}"
+        )
+    # ── END FILE PATH VALIDATION ──────────────────────────────────────────────
 
     # Initialize status in DATABASE
     initial_status = {

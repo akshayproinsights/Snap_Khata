@@ -149,8 +149,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                           // Navigate and wait for result
                           final result = selectedType == BillScanType.customer
                               ? await router.pushNamed('upload')
-                              : await router.push('/inventory-upload');
-                          
+                            : await router.pushNamed('inventory-upload');
                           // If the user successfully completed a scan/save, result should be true
                           if (result == true && mounted) {
                             // Trigger global refresh via providers
