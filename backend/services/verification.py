@@ -24,6 +24,17 @@ def _find_col(df: pd.DataFrame, candidates: list) -> Optional[str]:
     return None
 
 
+
+def _is_valid_scalar(val):
+    if val is None:
+        return False
+    if isinstance(val, (list, dict, tuple)):
+        return True
+    try:
+        return bool(pd.notna(val))
+    except ValueError:
+        return True
+
 def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.DataFrame) -> pd.DataFrame:
     """
     Build the Invoice Verified sheet from Invoice All and verification sheets.
@@ -343,61 +354,48 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
 
     # Apply date corrections
     date_done_df = date[date["Verification Status_clean"] == "done"].copy()
-    date_apply_cols = []
-    if "Receipt Number" in date_done_df.columns:
-        date_apply_cols.append("Receipt Number")
-    if "Receipt Link" in date_done_df.columns:
-        date_apply_cols.append("Receipt Link")
-    if "Date" in date_done_df.columns:
-        date_apply_cols.append("Date")
-    date_apply_cols = ["Receipt Link_clean"] + date_apply_cols
-    date_done_sel = date_done_df[date_apply_cols].drop_duplicates(subset=["Receipt Link_clean"], keep="last").copy()
     
-    rename_map = {}
-    if "Receipt Number" in date_done_sel.columns:
-        rename_map["Receipt Number"] = "ReceiptNumber_date_verified"
-    if "Receipt Link" in date_done_sel.columns:
-        rename_map["Receipt Link"] = "ReceiptLink_date_verified"
-    if "Date" in date_done_sel.columns:
-        rename_map["Date"] = "Date_date_verified"
+    # Identify columns to exclude from merging (technical columns or status fields)
+    exclude_cols = ["Verification Status", "Verification Status_clean", "username", "id", "Database_Id", "Upload Date_dt", "Row_Id", "Receipt Link_clean"]
+    
+    # Identify metadata columns to apply from verification_dates
+    date_apply_cols = [c for c in date_done_df.columns if c not in exclude_cols]
+    # Ensure primary keys for merging are present
+    merge_on = "Receipt Link_clean"
+    date_done_sel = date_done_df[[merge_on] + date_apply_cols].drop_duplicates(subset=[merge_on], keep="last").copy()
+    
+    # Rename columns for merging to avoid name collisions
+    rename_map = {col: f"{col}_date_verified" for col in date_apply_cols}
     date_done_sel = date_done_sel.rename(columns=rename_map)
 
-    included_rows = included_rows.merge(date_done_sel, on="Receipt Link_clean", how="left", validate="m:1")
-    if "ReceiptNumber_date_verified" in included_rows.columns:
-        included_rows["Receipt Number"] = included_rows["ReceiptNumber_date_verified"].combine_first(included_rows["Receipt Number"])
-    if "ReceiptLink_date_verified" in included_rows.columns:
-        included_rows["Receipt Link"] = included_rows["ReceiptLink_date_verified"].combine_first(included_rows["Receipt Link"])
-    if "Date_date_verified" in included_rows.columns:
-        included_rows["Date"] = included_rows["Date_date_verified"].combine_first(included_rows["Date"])
-    for c in ["ReceiptNumber_date_verified", "ReceiptLink_date_verified", "Date_date_verified"]:
-        if c in included_rows.columns:
-            included_rows.drop(columns=[c], inplace=True)
+    included_rows = included_rows.merge(date_done_sel, on=merge_on, how="left", validate="m:1")
+    
+    # Dynamically apply all merged columns
+    for col in date_apply_cols:
+        verified_col = f"{col}_date_verified"
+        if verified_col in included_rows.columns:
+            # Combine verified value with existing value
+            included_rows[col] = included_rows[verified_col].combine_first(included_rows[col])
+            included_rows.drop(columns=[verified_col], inplace=True)
+    # (Cleanup of temporary merge columns already handled in loop above)
 
     # Apply amount corrections
     amount_done_df = amount[amount["Verification Status_clean"] == "done"].copy()
-    amt_cols = [c for c in ["Quantity", "Rate", "Amount", "Amount Mismatch"] if c in amount_done_df.columns]
     
-    if not amount_done_df.empty and amt_cols:
-        amt_merge = pd.DataFrame()
-        if rowid_col_amount and rowid_col_amount in amount_done_df.columns:
-            amt_merge = amount_done_df[[rowid_col_amount] + amt_cols].copy()
-            amt_merge[rowid_col_amount] = amt_merge[rowid_col_amount].astype(str)
-            amt_merge = amt_merge.drop_duplicates(subset=[rowid_col_amount], keep="last")
-            included_rows[rowid_col_raw] = included_rows.get(rowid_col_raw, pd.Series([""]*len(included_rows))).astype(str)
+    # Metadata columns to merge from verification_amounts
+    exclude_amt_cols = ["Verification Status", "Verification Status_clean", "username", "id", "Database_Id", "Upload Date_dt", "Row_Id"]
+    amt_apply_cols = [c for c in amount_done_df.columns if c not in exclude_amt_cols]
+    
+    if not amount_done_df.empty:
+        # ROBUSTNESS: Handle commas in Amount string before converting to numeric
+        if "Amount" in amount_done_df.columns:
+            amount_done_df["Amount"] = amount_done_df["Amount"].astype(str).str.replace(',', '').str.strip()
+            amount_done_df["Amount"] = pd.to_numeric(amount_done_df["Amount"], errors='coerce')
             
-            included_rows = included_rows.merge(
-                amt_merge.rename(columns={rowid_col_amount: rowid_col_raw}), 
-                on=rowid_col_raw, 
-                how="left", 
-                suffixes=('', '_verified'),  # FIX: Use empty string instead of None to prevent duplicates
-                validate="m:1"
-            )
-            
-            for col in amt_cols:
-                verified_col = f"{col}_verified"
-                if verified_col in included_rows.columns:
-                    included_rows[col] = included_rows[verified_col].combine_first(included_rows[col])
-                    included_rows.drop(columns=[verified_col], inplace=True)
+        for col in amt_apply_cols:
+            if rowid_col_amount and rowid_col_amount in amount_done_df.columns:
+                corr_map = amount_done_df.set_index(rowid_col_amount)[col].to_dict()
+                included_rows[col] = included_rows[rowid_col_raw].map(corr_map).combine_first(included_rows[col])
 
     included_rows["Review Status"] = "Verified"
 
@@ -524,6 +522,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'date': 'Date',
             'customer': 'Customer Name',        # invoices.customer -> Customer Name
             'vehicle_number': 'Car Number',     # invoices.vehicle_number -> Car Number
+            'mobile_number': 'Mobile Number',   # invoices.mobile_number -> Mobile Number
             'description': 'Description',
             'type': 'Type',
             'quantity': 'Quantity',
@@ -544,8 +543,15 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # Rename columns for processing
         df_raw = df_raw.rename(columns=column_map)
         
-        # For verification tables, also map 'receipt_link' to 'Receipt Link'
+        # For verification tables, use a specific map to ensure all metadata is captured correctly
         verification_map = column_map.copy()
+        verification_map.update({
+            'customer_name': 'Customer Name',
+            'mobile_number': 'Mobile Number',
+            'vehicle_number': 'Car Number',
+            'payment_mode': 'Payment Mode',
+            'type': 'Type',
+        })
         
         df_date = df_date.rename(columns=verification_map)
         df_amount = df_amount.rename(columns=verification_map)
@@ -670,17 +676,25 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                             df_raw.loc[mask, 'Date'] = new_date  # Already normalized to DD-MM-YYYY
                         
                         # Apply payment mapping corrections (use Title Case column names)
-                        if 'Payment Mode' in row and pd.notna(row['Payment Mode']):
+                        if 'Customer Name' in row and _is_valid_scalar(row['Customer Name']) and str(row['Customer Name']).strip() != '':
+                            df_raw.loc[mask, 'Customer Name'] = row['Customer Name']
+                        if 'Car Number' in row and _is_valid_scalar(row['Car Number']) and str(row['Car Number']).strip() != '':
+                            df_raw.loc[mask, 'Car Number'] = row['Car Number']
+                        if 'Mobile Number' in row and _is_valid_scalar(row['Mobile Number']) and str(row['Mobile Number']).strip() != '':
+                            df_raw.loc[mask, 'Mobile Number'] = row['Mobile Number']
+                        if 'Type' in row and _is_valid_scalar(row['Type']) and str(row['Type']).strip() != '':
+                            df_raw.loc[mask, 'Type'] = row['Type']
+                        if 'Payment Mode' in row and _is_valid_scalar(row['Payment Mode']):
                             df_raw.loc[mask, 'Payment Mode'] = row['Payment Mode']
-                        if 'Received Amount' in row and pd.notna(row['Received Amount']):
+                        if 'Received Amount' in row and _is_valid_scalar(row['Received Amount']):
                             df_raw.loc[mask, 'Received Amount'] = row['Received Amount']
-                        if 'Balance Due' in row and pd.notna(row['Balance Due']):
+                        if 'Balance Due' in row and _is_valid_scalar(row['Balance Due']):
                             df_raw.loc[mask, 'Balance Due'] = row['Balance Due']
-                        if 'Customer Details' in row and pd.notna(row['Customer Details']):
+                        if 'Customer Details' in row and _is_valid_scalar(row['Customer Details']):
                             df_raw.loc[mask, 'Customer Details'] = row['Customer Details']
-                        if 'GST Mode' in row and pd.notna(row['GST Mode']):
+                        if 'GST Mode' in row and _is_valid_scalar(row['GST Mode']):
                             df_raw.loc[mask, 'GST Mode'] = row['GST Mode']
-                        if 'Taxable Row Ids' in row and pd.notna(row['Taxable Row Ids']):
+                        if 'Taxable Row Ids' in row and _is_valid_scalar(row['Taxable Row Ids']):
                             df_raw.loc[mask, 'Taxable Row Ids'] = row['Taxable Row Ids']
                             
                         corrections_made = True
@@ -720,14 +734,31 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                         continue
 
                     if mask.any():
-                        if pd.notna(new_desc) and str(new_desc).strip() != '' and str(new_desc).strip() != desc:
+                        if _is_valid_scalar(new_desc) and str(new_desc).strip() != '' and str(new_desc).strip() != desc:
                             df_raw.loc[mask, 'Description'] = new_desc
-                        if pd.notna(new_qty) and str(new_qty) != '':
+                        if _is_valid_scalar(new_qty) and str(new_qty) != '':
                             df_raw.loc[mask, 'Quantity'] = new_qty
-                        if pd.notna(new_rate) and str(new_rate) != '':
+                        if _is_valid_scalar(new_rate) and str(new_rate) != '':
                             df_raw.loc[mask, 'Rate'] = new_rate
-                        if pd.notna(new_amt) and str(new_amt) != '':
+                        if _is_valid_scalar(new_amt) and str(new_amt) != '':
                             df_raw.loc[mask, 'Amount'] = new_amt
+                        
+                        # Apply header-level edits from amount screen just in case
+                        if 'Customer Name' in row and _is_valid_scalar(row['Customer Name']) and str(row['Customer Name']).strip() != '':
+                            df_raw.loc[mask, 'Customer Name'] = row['Customer Name']
+                        if 'Car Number' in row and _is_valid_scalar(row['Car Number']) and str(row['Car Number']).strip() != '':
+                            df_raw.loc[mask, 'Car Number'] = row['Car Number']
+                        if 'Mobile Number' in row and _is_valid_scalar(row['Mobile Number']) and str(row['Mobile Number']).strip() != '':
+                            df_raw.loc[mask, 'Mobile Number'] = row['Mobile Number']
+                        if 'Type' in row and _is_valid_scalar(row['Type']) and str(row['Type']).strip() != '':
+                            df_raw.loc[mask, 'Type'] = row['Type']
+                        if 'Payment Mode' in row and _is_valid_scalar(row['Payment Mode']):
+                            df_raw.loc[mask, 'Payment Mode'] = row['Payment Mode']
+                        if 'Received Amount' in row and _is_valid_scalar(row['Received Amount']):
+                            df_raw.loc[mask, 'Received Amount'] = row['Received Amount']
+                        if 'Balance Due' in row and _is_valid_scalar(row['Balance Due']):
+                            df_raw.loc[mask, 'Balance Due'] = row['Balance Due']
+                            
                         corrections_made = True
                     else:
                         logger.warning(f"No matching invoice for amount correction: link='{link}', receipt='{receipt_num}', desc='{desc[:30]}'")
@@ -785,6 +816,8 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         # Build the column reverse map here (outside if block) so it's available for verified_invoices too
         invoice_reverse_map = {v: k for k, v in column_map.items()}
         invoice_reverse_map['Receipt Link'] = 'receipt_link'  # Ensure correct reverse mapping
+        invoice_reverse_map['Extra Fields'] = 'extra_fields'
+        invoice_reverse_map['Taxable Row Ids'] = 'taxable_row_ids'
 
         # 4. Save updated invoices to Supabase
         if corrections_made:
@@ -805,15 +838,41 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                 df_raw_snake['date'] = df_raw_snake['date'].apply(lambda x: None if x == '' or pd.isna(x) else x)
             
             # OPTIMIZED: Use batch upsert for 10-15x performance improvement
+            # CRITICAL: Filter columns to match 'invoices' table schema to prevent PGRST204 errors
+            INVOICE_TABLE_COLS = {
+                'id', 'created_at', 'username', 'receipt_number', 'date', 'customer', 
+                'vehicle_number', 'description', 'amount', 'r2_file_path', 'image_hash', 
+                'row_id', 'header_id', 'model_used', 'model_accuracy', 'input_tokens', 
+                'output_tokens', 'total_tokens', 'cost_inr', 'extra_fields', 'receipt_link', 
+                'quantity', 'rate', 'upload_date', 'fallback_attempted', 'fallback_reason', 
+                'processing_errors', 'gst_mode', 'payment_mode', 'received_amount', 
+                'balance_due', 'customer_details', 'taxable_row_ids'
+            }
+            
             records_to_upsert = []
             for _, row in df_raw_snake.iterrows():
                 row_dict = row.to_dict()
                 row_dict['username'] = username
-                row_dict = convert_numeric_types(row_dict)
-                records_to_upsert.append(row_dict)
+                row_dict = convert_numeric_types(row_dict) # type: ignore
+                
+                # Filter to only valid columns for 'invoices' table
+                # Move everything else into extra_fields if possible, or just drop
+                cleaned_invoice = {}
+                extra_fields = row_dict.get('extra_fields', {})
+                if not isinstance(extra_fields, dict):
+                    extra_fields = {}
+                
+                for k, v in row_dict.items():
+                    if k in INVOICE_TABLE_COLS:
+                        cleaned_invoice[k] = v
+                    elif v is not None and k not in ['id']: # don't put 'id' in extra_fields
+                        extra_fields[k] = v
+                
+                cleaned_invoice['extra_fields'] = extra_fields
+                records_to_upsert.append(cleaned_invoice)
             
             updated_count = db.batch_upsert('invoices', records_to_upsert, batch_size=500)
-            logger.info(f"✅ Upserted {updated_count} invoice records (preserving all existing data)")
+            logger.info(f"✅ Upserted {updated_count} invoice records (with schema-safe column filtering)")
 
         # 5. Build and save verified_invoices
         await emit_progress("building_verified", 40, "Building verified invoices...")
@@ -869,15 +928,6 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'fallback_attempted',
             'fallback_reason',
             'processing_errors',
-            # GST / udhar tracking column — added to invoices by migration 003 but not to verified_invoices
-            'taxable_row_ids',
-            # NOTE: 'extra_fields' was excluded here because verified_invoices lacked the column.
-            # The migration SQL (add_extra_fields.sql) now includes verified_invoices too.
-            # Once you run that migration in Supabase, remove this exclusion to start storing
-            # industry-specific data (vehicle numbers, etc.) in verified_invoices as well.
-            'extra_fields',         # JSONB column — remove after running migration in Supabase:
-                                    # ALTER TABLE verified_invoices
-                                    #   ADD COLUMN IF NOT EXISTS extra_fields JSONB DEFAULT '{}'::jsonb;
         ]
         
         for col in columns_to_exclude:

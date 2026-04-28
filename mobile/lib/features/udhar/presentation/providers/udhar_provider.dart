@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:dio/dio.dart';
@@ -89,9 +90,9 @@ class UdharNotifier extends Notifier<UdharState> {
         'amount': amount,
         'notes': notes,
       });
-      // Refresh list after successful payment
+      // Eagerly re-fetch dashboard totals (don't just invalidate — that's lazy)
       ref.invalidate(verifiedProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -103,7 +104,7 @@ class UdharNotifier extends Notifier<UdharState> {
     try {
       await _dio.delete('/api/udhar/ledgers/$ledgerId');
       ref.invalidate(verifiedProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
       await fetchLedgers();
       return true;
     } catch (e) {
@@ -118,7 +119,7 @@ class UdharNotifier extends Notifier<UdharState> {
         data: {'is_paid': isPaid},
       );
       ref.invalidate(verifiedProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
       await fetchLedgers();
       return true;
     } catch (e) {

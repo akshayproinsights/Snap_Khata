@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/features/upload/data/upload_repository.dart';
+import 'package:mobile/features/inventory/data/inventory_upload_repository.dart';
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/core/network/sync_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ class SyncQueueService {
   final _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _subscription;
   final UploadRepository _uploadRepository = UploadRepository();
+  final InventoryUploadRepository _inventoryUploadRepository = InventoryUploadRepository();
   static ProviderContainer? _container;
 
   static void setContainer(ProviderContainer container) {
@@ -39,11 +41,12 @@ class SyncQueueService {
     _subscription?.cancel();
   }
 
-  Future<void> queueUpload(List<String> filePaths) async {
+  Future<void> queueUpload(List<String> filePaths, {String queueType = 'sales'}) async {
     final box = Hive.box('sync_queue');
     await box.add({
       'type': 'upload_invoices',
       'paths': filePaths,
+      'queue_type': queueType,
       'timestamp': DateTime.now().toIso8601String(),
     });
 
@@ -108,9 +111,15 @@ class SyncQueueService {
         if (item['type'] == 'upload_invoices') {
           final paths = List<String>.from(item['paths'] as List);
           final xFiles = paths.map((path) => XFile(path)).toList();
+          final queueType = item['queue_type'] as String? ?? 'sales';
 
-          final uploadedKeys = await _uploadRepository.uploadFiles(xFiles);
-          await _uploadRepository.processInvoices(uploadedKeys);
+          if (queueType == 'inventory') {
+            final uploadedKeys = await _inventoryUploadRepository.uploadFiles(xFiles);
+            await _inventoryUploadRepository.processInvoices(uploadedKeys);
+          } else {
+            final uploadedKeys = await _uploadRepository.uploadFiles(xFiles);
+            await _uploadRepository.processInvoices(uploadedKeys);
+          }
 
           // Successful, remove from queue
           await box.delete(key);

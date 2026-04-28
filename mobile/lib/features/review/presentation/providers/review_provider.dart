@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/review/data/review_repository.dart';
@@ -284,7 +285,7 @@ class ReviewNotifier extends Notifier<ReviewState> {
 
       // Remove groups that were processed (refresh)
       await fetchReviewData();
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
       ref.invalidate(udharProvider);
       ref.invalidate(vendorLedgerProvider);
       ref.invalidate(recentActivitiesProvider);

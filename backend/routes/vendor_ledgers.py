@@ -1126,7 +1126,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
     try:
         # 1. Fetch all invoices to ensure all vendors are onboarded to ledgers
         invoices_resp = db.client.table("inventory_invoices") \
-            .select("id, invoice_number, vendor_name, balance_owed, invoice_date, payment_mode") \
+            .select("id, invoice_number, vendor_name, balance_owed, invoice_date, payment_mode, total_amount, amount_paid, car_number, vehicle_number, extra_fields") \
             .eq("username", username) \
             .execute()
 
@@ -1141,40 +1141,38 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
 
         invoice_numbers = [inv["invoice_number"] for inv in invoices if inv.get("invoice_number")]
 
-        # 2. Fetch existing INVOICE transactions for these invoice numbers
-        existing_tx_resp = db.client.table("vendor_ledger_transactions") \
-            .select("invoice_number") \
-            .eq("username", username) \
-            .eq("transaction_type", "INVOICE") \
-            .in_("invoice_number", invoice_numbers) \
-            .execute()
-
-        already_synced = {tx["invoice_number"] for tx in (existing_tx_resp.data or [])}
-
-        # 3. Only process invoices not yet fully synced, SUMMING items for the same invoice number
+        # 2. Group invoices by invoice_number to handle multi-line records
         unique_missing = {}
         for inv in invoices:
             inv_num = inv.get("invoice_number")
-            if inv_num and inv_num not in already_synced:
-                if inv_num not in unique_missing:
-                    # Initialize with a copy to avoid modifying original
-                    unique_missing[inv_num] = dict(inv)
-                    unique_missing[inv_num]["balance_owed"] = float(inv.get("balance_owed") or 0)
-                else:
-                    # Balance owed is consistent across multi-line invoices, no need to sum
-                    pass
-        
-        missing_invoices = list(unique_missing.values())
+            if not inv_num: continue
+            if inv_num not in unique_missing:
+                unique_missing[inv_num] = dict(inv)
+            else:
+                # If there are multiple lines for the same invoice number, we should aggregate.
+                # However, balance_owed/total_amount might already be aggregated in the DB view.
+                # For safety, we just keep the first one or sum if they are truly line items.
+                # Previous logic didn't sum, so we'll stick to that unless we see sum is needed.
+                pass
 
-        if not missing_invoices:
-            return {
-                "status": "success",
-                "message": "All Credit invoices already synced",
-                "ledgers_created": 0,
-                "transactions_created": 0,
-            }
+        # 3. Fetch existing transactions for these invoice numbers (both INVOICE and PAYMENT)
+        existing_tx_resp = db.client.table("vendor_ledger_transactions") \
+            .select("id, invoice_number, vendor_ledger_id, amount, is_paid, transaction_type") \
+            .eq("username", username) \
+            .in_("invoice_number", invoice_numbers) \
+            .execute()
 
-        # 4. Fetch existing vendor ledgers for this user
+        existing_invoices = {}
+        existing_payments = {}
+        for tx in (existing_tx_resp.data or []):
+            inv_num = tx.get("invoice_number")
+            if not inv_num: continue
+            if tx["transaction_type"] == "INVOICE":
+                existing_invoices[inv_num] = tx
+            elif tx["transaction_type"] == "PAYMENT":
+                existing_payments[inv_num] = tx
+
+        # 4. Fetch existing vendor ledgers
         ledgers_resp = db.client.table("vendor_ledgers") \
             .select("id, vendor_name, balance_due") \
             .eq("username", username) \
@@ -1188,29 +1186,26 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
         ledgers_created = 0
         transactions_created = 0
 
-        for inv in missing_invoices:
-            vendor_name_raw = str(inv.get("vendor_name") or "").strip()
+        for inv_num, data in unique_missing.items():
+            vendor_name_raw = str(data.get("vendor_name") or "").strip()
             if not vendor_name_raw:
-                logger.warning(f"Skipping invoice {inv.get('invoice_number')} - no vendor name")
+                logger.warning(f"Skipping invoice {inv_num} - no vendor name")
                 continue
 
             vendor_key = vendor_name_raw.lower()
-            balance_owed = float(inv.get("balance_owed") or 0)
+            
+            # Use original total if balance_owed was just the remaining.
+            full_amount = float(data.get("total_amount") or data.get("balance_owed") or 0)
+            amount_paid = float(data.get("amount_paid") or 0)
 
             if vendor_key in ledger_map:
                 ledger = ledger_map[vendor_key]
                 ledger_id = ledger["id"]
-                new_balance = float(ledger.get("balance_due") or 0) + balance_owed
-                db.client.table("vendor_ledgers").update({
-                    "balance_due": new_balance,
-                    "updated_at": now,
-                }).eq("id", ledger_id).execute()
-                ledger_map[vendor_key]["balance_due"] = new_balance
             else:
                 new_ledger_resp = db.client.table("vendor_ledgers").insert({
                     "username": username,
                     "vendor_name": vendor_name_raw,
-                    "balance_due": balance_owed,
+                    "balance_due": 0.0,
                 }).execute()
 
                 if not new_ledger_resp.data:
@@ -1221,21 +1216,68 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                 ledger_map[vendor_key] = {
                     "id": ledger_id,
                     "vendor_name": vendor_name_raw,
-                    "balance_due": balance_owed,
+                    "balance_due": 0.0,
                 }
                 ledgers_created += 1
 
-            # Record transaction
-            db.client.table("vendor_ledger_transactions").insert({
-                "username": username,
-                "ledger_id": ledger_id,
-                "transaction_type": "INVOICE",
-                "amount": balance_owed,
-                "invoice_number": inv["invoice_number"],
-                "is_paid": (inv.get("payment_mode") != "Credit" or balance_owed == 0),
-                "created_at": inv.get("invoice_date") or now,
-            }).execute()
-            transactions_created += 1
+            # 1. Record INVOICE transaction
+            is_paid_status = (full_amount - amount_paid) <= 0.01
+            if inv_num in existing_invoices:
+                tx = existing_invoices[inv_num]
+                update_data = {}
+                if tx["vendor_ledger_id"] != ledger_id: update_data["vendor_ledger_id"] = ledger_id
+                if abs(float(tx.get("amount") or 0) - full_amount) > 0.01:
+                    update_data["amount"] = full_amount
+                if bool(tx.get("is_paid")) != is_paid_status:
+                    update_data["is_paid"] = is_paid_status
+                
+                # Sync metadata
+                if tx.get("car_number") != data.get("car_number"): update_data["car_number"] = data.get("car_number")
+                if tx.get("vehicle_number") != data.get("vehicle_number"): update_data["vehicle_number"] = data.get("vehicle_number")
+                if tx.get("extra_fields") != data.get("extra_fields"): update_data["extra_fields"] = data.get("extra_fields")
+
+                if update_data:
+                    db.client.table("vendor_ledger_transactions").update(update_data).eq("id", tx["id"]).execute()
+            else:
+                db.client.table("vendor_ledger_transactions").insert({
+                    "username": username,
+                    "vendor_ledger_id": ledger_id,
+                    "transaction_type": "INVOICE",
+                    "amount": full_amount,
+                    "invoice_number": inv_num,
+                    "is_paid": is_paid_status,
+                    "created_at": data.get("invoice_date") or now,
+                    "car_number": data.get("car_number"),
+                    "vehicle_number": data.get("vehicle_number"),
+                    "extra_fields": data.get("extra_fields") or {}
+                }).execute()
+                transactions_created += 1
+
+            # 2. Record PAYMENT transaction
+            if amount_paid > 0:
+                if inv_num in existing_payments:
+                    tx = existing_payments[inv_num]
+                    update_data = {}
+                    if tx["vendor_ledger_id"] != ledger_id: update_data["vendor_ledger_id"] = ledger_id
+                    if abs(float(tx.get("amount") or 0) - amount_paid) > 0.01:
+                        update_data["amount"] = amount_paid
+                    if update_data:
+                        db.client.table("vendor_ledger_transactions").update(update_data).eq("id", tx["id"]).execute()
+                else:
+                    db.client.table("vendor_ledger_transactions").insert({
+                        "username": username,
+                        "vendor_ledger_id": ledger_id,
+                        "transaction_type": "PAYMENT",
+                        "amount": amount_paid,
+                        "invoice_number": inv_num,
+                        "is_paid": True,
+                        "created_at": data.get("invoice_date") or now,
+                        "notes": f"Auto-sync payment from invoice {inv_num}",
+                        "car_number": data.get("car_number"),
+                        "vehicle_number": data.get("vehicle_number"),
+                        "extra_fields": data.get("extra_fields") or {}
+                    }).execute()
+                    transactions_created += 1
 
         logger.info(
             f"Sync complete for {username}: "
@@ -1285,7 +1327,7 @@ async def reconcile_all_ledger_balances(current_user: Dict = Depends(get_current
 
         # 2. Fetch all transactions
         tx_resp = db.client.table("vendor_ledger_transactions") \
-            .select("ledger_id, amount, transaction_type") \
+            .select("vendor_ledger_id, amount, transaction_type, is_paid") \
             .eq("username", username) \
             .execute()
 
@@ -1293,7 +1335,7 @@ async def reconcile_all_ledger_balances(current_user: Dict = Depends(get_current
         expected_balances = {ld["id"]: 0.0 for ld in ledgers_resp.data}
         
         for tx in (tx_resp.data or []):
-            lid = tx["ledger_id"]
+            lid = tx["vendor_ledger_id"] # Note: in vendor_ledger_transactions it's vendor_ledger_id
             if lid in expected_balances:
                 amt = float(tx.get("amount", 0))
                 ttype = tx.get("transaction_type")

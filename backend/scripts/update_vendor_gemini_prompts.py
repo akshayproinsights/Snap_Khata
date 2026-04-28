@@ -18,6 +18,7 @@ You are an expert Invoice Data Extraction AI for Indian B2B vendor/purchase invo
 - If a value is missing, return 0 for numbers or 'N/A' for strings.
 - NEVER invent or guess values. If unsure, return 0 or 'N/A'.
 - Part Numbers: Extract character-by-character. A single digit error ('O' vs '0') is a critical failure.
+- Language Policy: The invoice may contain text in Marathi, Hindi, or English. For 'vendor_name' and line item 'description', if the text is in Marathi or Hindi, translate it to English and output in the format: 'English Name (Original Text)'. If it is already in English, keep it as is.
 
 ### STEP 1: TAX TYPE DETECTION
 Examine the invoice columns to determine tax structure:
@@ -36,12 +37,13 @@ From the invoice header (top section):
   * NEVER extract buyer under 'Bill To:', 'Billed To:', 'Customer:', 'Ship To:'
   * Extract ONLY the business entity name. Remove field labels.
   * ALWAYS populate — use partial text if needed. Only null if completely illegible.
+  * **Translation Policy**: If in Marathi/Hindi, output as 'English Name (Original Text)'.
 - vendor_gstin: 15-character GSTIN of supplier if printed, else null
 - place_of_supply: State name or code if printed, else null
 
 ### STEP 3: LINE ITEM EXTRACTION
 For each row in the items table extract:
-- description: Item name / particulars
+- description: Item name / particulars. **Translation Policy**: If in Marathi/Hindi, output as 'English Name (Original Text)'.
 - hsn_code: 4-8 digit HSN/SAC code, or 'N/A' if absent
 - part_number: Product part/SKU code if present, else 'N/A'
 - batch: Batch/lot number if present (critical for pharma), else 'N/A'
@@ -114,6 +116,7 @@ STEP 2: Look under 'From:', 'Issued By:', 'Supplier:', 'Seller:', 'Company:', 'M
 STEP 3: NEVER use 'Bill To:', 'Billed To:', 'Customer:', 'Buyer:', 'Ship To:' sections
 STEP 4: Extract ONLY the business entity name. Remove field labels ('Supplier: XYZ Corp' → 'XYZ Corp')
 STEP 5: Preserve exact spelling, capitalization, spacing. Do NOT auto-correct.
+**Translation Note**: If in Marathi/Hindi, translate to English and output as 'English Name (Original Text)'.
 FALLBACK: 'M/s XYZ Corp' → 'XYZ Corp'. If completely illegible → null (but always attempt)"""
 
 # ── Collect all config files ──────────────────────────────────────────────────

@@ -691,7 +691,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     if (errorString.contains('DioException') ||
         errorString.contains('SocketException')) {
       await SyncQueueService()
-          .queueUpload(toUpload.map((f) => f.path).toList());
+          .queueUpload(toUpload.map((f) => f.path).toList(), queueType: 'inventory');
       final queued = state.fileItems.map((item) {
         if (item.status == UploadFileStatus.uploading ||
             item.status == UploadFileStatus.processing) {

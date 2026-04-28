@@ -646,10 +646,15 @@ class _VendorLedgerDetailPageState
                 const SizedBox(height: 8),
                 Builder(
                   builder: (context) {
-                    final isPending = currentLedger.balanceDue > 0;
-                    final statusColor = isPending ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.tertiary;
-                    final statusText = isPending ? 'Pending' : 'Settled';
-                    final statusIcon = isPending ? LucideIcons.clock : LucideIcons.checkCircle2;
+                    final isPending = currentLedger.balanceDue > 0.01;
+                    final isAdvance = currentLedger.balanceDue < -0.01;
+                    
+                    final statusColor = isPending 
+                        ? Theme.of(context).colorScheme.error 
+                        : (isAdvance ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant);
+                    
+                    final statusText = isPending ? 'YOU GIVE' : (isAdvance ? 'ADVANCE' : 'SETTLED');
+                    final statusIcon = isPending ? LucideIcons.clock : (isAdvance ? LucideIcons.arrowDownLeft : LucideIcons.checkCircle2);
 
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

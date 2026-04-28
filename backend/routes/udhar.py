@@ -22,216 +22,18 @@ async def process_ledgers_for_verified_invoices(username: str, final_records: Li
     """
     Called from verification.py during Sync & Finish.
     Checks for credit records and updates customer ledgers and creates transactions.
-
-    OPTIMIZED: Pre-fetches all ledgers and existing transactions in 2 bulk queries
-    instead of 2 sequential queries per record, reducing DB round-trips from O(N) to O(1).
+    
+    Now delegates to sync_customer_ledgers_from_invoices for consistent reconciliation.
     """
     if not final_records:
         return
 
-    db = get_database_client()
-    db.set_user_context(username)
-
-    # ── 1. Filter to only Credit records that need processing ─────────────────
-    credit_records = []
-    for record in final_records:
-        payment_mode = record.get('payment_mode', 'Cash')
-        balance_due = record.get('balance_due')
-        
-        raw_name = str(record.get('customer_name') or '').strip()
-        raw_details = str(record.get('customer_details') or '').strip()
-        
-        # Heuristic: if name is empty or generic, prefer details for ledger name
-        if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
-            customer_name = raw_details if raw_details else raw_name
-        else:
-            customer_name = raw_name
-
-        # Process all invoices with a customer name to ensure they appear in the Parties list
-        if customer_name and balance_due is not None:
-            try:
-                bal = float(balance_due)
-            except (TypeError, ValueError):
-                continue
-            
-            clean_name = str(customer_name).strip()
-            # Determine if this invoice is settled (Cash or zero balance Credit)
-            is_settled = (payment_mode != 'Credit') or (bal == 0)
-            
-            credit_records.append({
-                **record,
-                '_customer_clean': clean_name,
-                '_balance_due_float': bal,
-                '_is_paid': is_settled
-            })
-
-    if not credit_records:
-        logger.info("No Credit records to process for ledgers")
-        return
-
-    customer_names = list({r['_customer_clean'] for r in credit_records if r['_customer_clean']})
-
-    # ── 2. Bulk-fetch all relevant ledgers in ONE query ───────────────────────
-    ledger_resp = db.client.table('customer_ledgers') \
-        .select('id, customer_name, balance_due') \
-        .eq('username', username) \
-        .in_('customer_name', customer_names) \
-        .execute()
-
-    # Map: customer_name -> ledger row
-    ledger_map: Dict[str, Dict] = {}
-    for row in (ledger_resp.data or []):
-        ledger_map[row['customer_name']] = row
-
-    # ── 3. Bulk-fetch all existing INVOICE transactions for ALL ledger IDs ────
-    existing_ledger_ids = [row['id'] for row in ledger_map.values()]
-    existing_tx_set: set = set()  # (ledger_id, receipt_number)
-
-    if existing_ledger_ids:
-        tx_resp = db.client.table('ledger_transactions') \
-            .select('ledger_id, receipt_number') \
-            .eq('username', username) \
-            .eq('transaction_type', 'INVOICE') \
-            .in_('ledger_id', existing_ledger_ids) \
-            .execute()
-        for tx in (tx_resp.data or []):
-            if tx.get('receipt_number'):
-                existing_tx_set.add((tx['ledger_id'], str(tx['receipt_number'])))
-
-    # ── 4. Process each record entirely in-memory, collect writes ─────────────
-    ledger_updates: Dict[str, float] = {}   # ledger_id -> new balance
-    new_ledgers: List[Dict] = []            # rows to INSERT into customer_ledgers
-    new_transactions: List[Dict] = []       # rows to INSERT into ledger_transactions
-
-    # Track ledgers we are creating mid-loop so siblings share the same pending ledger
-    pending_new_ledgers: Dict[str, Dict] = {}  # customer_name -> {balance_due, transactions[]}
-
-    # ── 4. Group by (ledger_id, receipt_number) to handle multi-line invoices ──
-    # First, group all items for the same invoice together
-    invoice_groups: Dict[tuple, Dict[str, Any]] = {}
-    
-    for record in credit_records:
-        customer_name_clean = record['_customer_clean']
-        balance_due_float = record['_balance_due_float']
-        receipt_number = str(record.get('receipt_number') or "NO_RECEIPT")
-        
-        existing_ledger = ledger_map.get(customer_name_clean)
-        ledger_id = existing_ledger['id'] if existing_ledger else None
-        
-        group_key = (ledger_id, customer_name_clean, receipt_number)
-        
-        if group_key not in invoice_groups:
-            invoice_groups[group_key] = {
-                'ledger_id': ledger_id,
-                'customer_name': customer_name_clean,
-                'receipt_number': record.get('receipt_number'),
-                'total_balance': 0.0,
-                'is_paid': record.get('_is_paid', False),
-                'notes': record.get('customer_details', ''),
-                'items_count': 0
-            }
-        
-        invoice_groups[group_key]['total_balance'] += balance_due_float
-        invoice_groups[group_key]['items_count'] += 1
-
-    # Now process each grouped invoice
-    for key, group in invoice_groups.items():
-        ledger_id, customer_name_clean, receipt_number = key
-        total_balance = group['total_balance']
-        orig_receipt_number = group['receipt_number']
-
-        if ledger_id:
-            # Dedup check (in-memory, no DB round-trip)
-            if orig_receipt_number and (ledger_id, str(orig_receipt_number)) in existing_tx_set:
-                logger.info(f"Transaction for invoice {orig_receipt_number} already exists, skipping duplicate ledger addition")
-                continue
-                
-            if orig_receipt_number:
-                existing_tx_set.add((ledger_id, str(orig_receipt_number)))
-
-            # Accumulate balance delta
-            ledger_updates[ledger_id] = ledger_updates.get(ledger_id, float(ledger_map[customer_name_clean].get('balance_due', 0))) + total_balance
-
-            new_transactions.append({
-                'username': username,
-                'ledger_id': ledger_id,
-                'transaction_type': 'INVOICE',
-                'amount': total_balance,
-                'receipt_number': orig_receipt_number,
-                'is_paid': group['is_paid'],
-                'notes': f"{group['notes']} ({group['items_count']} items)" if group['items_count'] > 1 else group['notes'],
-            })
-        else:
-            # No ledger yet — group by customer to avoid duplicate creates for siblings
-            if customer_name_clean not in pending_new_ledgers:
-                pending_new_ledgers[customer_name_clean] = {
-                    'balance_due': 0.0,
-                    'transactions': [],
-                    'receipts_processed': set()
-                }
-            
-            # Dedup for new ledgers
-            if orig_receipt_number:
-                if orig_receipt_number in pending_new_ledgers[customer_name_clean]['receipts_processed']:
-                    continue
-                pending_new_ledgers[customer_name_clean]['receipts_processed'].add(orig_receipt_number)
-
-            pending_new_ledgers[customer_name_clean]['balance_due'] += total_balance
-            pending_new_ledgers[customer_name_clean]['transactions'].append({
-                'receipt_number': orig_receipt_number,
-                'amount': total_balance,
-                'is_paid': group['is_paid'],
-                'notes': f"{group['notes']} ({group['items_count']} items)" if group['items_count'] > 1 else group['notes'],
-            })
-
-    # ── 5. Write ledger balance updates (one UPDATE per ledger) ───────────────
-    now_iso = datetime.utcnow().isoformat()
-    for ledger_id, new_balance in ledger_updates.items():
-        try:
-            db.client.table('customer_ledgers').update({
-                'balance_due': new_balance,
-                'updated_at': now_iso,
-            }).eq('id', ledger_id).execute()
-        except Exception as e:
-            logger.error(f"Error updating ledger {ledger_id}: {e}")
-
-    # ── 6. Create new ledgers + their transactions ────────────────────────────
-    for customer_name_clean, info in pending_new_ledgers.items():
-        try:
-            new_ledger_resp = db.client.table('customer_ledgers').insert({
-                'username': username,
-                'customer_name': customer_name_clean,
-                'balance_due': info['balance_due'],
-            }).execute()
-
-            if new_ledger_resp.data:
-                new_ledger_id = new_ledger_resp.data[0]['id']
-                for tx in info['transactions']:
-                    new_transactions.append({
-                        'username': username,
-                        'ledger_id': new_ledger_id,
-                        'transaction_type': 'INVOICE',
-                        'amount': tx['amount'],
-                        'receipt_number': tx['receipt_number'],
-                        'is_paid': tx.get('is_paid', False),
-                        'notes': tx['notes'],
-                    })
-            else:
-                logger.error(f"Failed to create ledger for {customer_name_clean}")
-        except Exception as e:
-            logger.error(f"Error creating ledger for {customer_name_clean}: {e}")
-
-    # ── 7. Batch-insert all new transactions in ONE query ─────────────────────
-    if new_transactions:
-        try:
-            db.client.table('ledger_transactions').insert(new_transactions).execute()
-            logger.info(f"✅ Inserted {len(new_transactions)} ledger transactions in batch")
-        except Exception as e:
-            logger.error(f"Error batch-inserting ledger transactions: {e}")
+    # Trigger a full sync for the user to reconcile everything, including renames and edits
+    await sync_customer_ledgers_from_invoices({"username": username})
 
 @router.get("/ledgers")
 async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
-    """Get all customer ledgers for the current user."""
+    """Get all customer ledgers for the current user, reconciled from transaction history."""
     username = current_user.get("username")
     if not username:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
@@ -240,15 +42,63 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
     db.set_user_context(username)
     
     try:
-        response = db.client.table('customer_ledgers') \
+        # Sync new invoices → ledgers before serving
+        await sync_customer_ledgers_from_invoices(current_user)
+
+        # Fetch all ledgers
+        ledger_resp = db.client.table('customer_ledgers') \
             .select('*') \
             .eq('username', username) \
-            .order('balance_due', desc=True) \
             .execute()
-            
+        
+        ledgers = ledger_resp.data or []
+        if not ledgers:
+            return {"status": "success", "data": []}
+
+        ledger_ids = [ld['id'] for ld in ledgers]
+
+        # Fetch all transactions for these ledgers in one query
+        tx_resp = db.client.table('ledger_transactions') \
+            .select('ledger_id, amount, transaction_type') \
+            .eq('username', username) \
+            .in_('ledger_id', ledger_ids) \
+            .execute()
+
+        # Recompute expected balance for each ledger from transactions
+        expected: Dict[int, float] = {ld['id']: 0.0 for ld in ledgers}
+        for tx in (tx_resp.data or []):
+            lid = tx.get('ledger_id')
+            if lid not in expected:
+                continue
+            amt = float(tx.get('amount') or 0)
+            ttype = tx.get('transaction_type')
+            if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                expected[lid] += amt
+            elif ttype == 'PAYMENT':
+                expected[lid] -= amt
+
+        # Patch stale balance_due values in DB and in-memory
+        now = datetime.utcnow().isoformat()
+        for ld in ledgers:
+            lid = ld['id']
+            stored = float(ld.get('balance_due') or 0)
+            computed = expected[lid]
+            if abs(stored - computed) > 0.01:
+                try:
+                    db.client.table('customer_ledgers').update({
+                        'balance_due': computed,
+                        'updated_at': now,
+                    }).eq('id', lid).execute()
+                    ld['balance_due'] = computed
+                except Exception as patch_err:
+                    logger.warning(f"Could not patch balance for ledger {lid}: {patch_err}")
+
+        # Sort by balance_due descending (highest owed first)
+        ledgers.sort(key=lambda x: float(x.get('balance_due') or 0), reverse=True)
+
         return {
             "status": "success",
-            "data": response.data
+            "data": ledgers
         }
     except Exception as e:
         logger.error(f"Error fetching ledgers: {e}")
@@ -306,45 +156,75 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         enrichment = {}
         if receipt_numbers:
             # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
-            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, receipt_link').in_('receipt_number', receipt_numbers).eq('username', username).execute()
+            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, payment_mode, receipt_link').in_('receipt_number', receipt_numbers).eq('username', username).execute()
             
             for vi in vi_resp.data:
                 rn = vi.get('receipt_number')
                 if not rn:
                     continue
                 if rn not in enrichment:
-                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'receipt_link': ''}
+                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'payment_mode': 'Cash', 'receipt_link': ''}
                 enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
-                enrichment[rn]['received_amount'] = float(vi.get('received_amount', 0) or 0)
-                enrichment[rn]['balance_due'] = float(vi.get('balance_due', 0) or 0)
+                # Take the max non-zero value across rows (balance_due/received_amount may only be on one row)
+                row_received = float(vi.get('received_amount', 0) or 0)
+                row_balance = float(vi.get('balance_due', 0) or 0)
+                if row_received > enrichment[rn]['received_amount']:
+                    enrichment[rn]['received_amount'] = row_received
+                if row_balance > enrichment[rn]['balance_due']:
+                    enrichment[rn]['balance_due'] = row_balance
+                if vi.get('payment_mode'):
+                    enrichment[rn]['payment_mode'] = vi['payment_mode']
                 if vi.get('receipt_link'):
                     enrichment[rn]['receipt_link'] = vi['receipt_link']
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
                 enr = enrichment[tx['receipt_number']]
-                grand_total = enr['received_amount'] + enr['balance_due']
+                line_item_total = enr['amount_sum']
                 
-                # Update the INVOICE amount to grand_total for display purposes
-                # We copy it so we don't mutate shared references unexpectedly
+                # Determine effective values
+                meta_received = float(enr.get('received_amount') or 0)
+                meta_balance = float(enr.get('balance_due') or 0)
+                payment_mode = enr.get('payment_mode') or 'Cash'
+                
+                # 1. Calculate grand_total: use metadata if sum > 0, else line items
+                grand_total = meta_received + meta_balance
+                if grand_total == 0 and line_item_total > 0:
+                    grand_total = line_item_total
+                
+                # 2. Determine effective financial state
+                if payment_mode.lower() != 'credit':
+                    # Cash, Online, etc. are treated as fully paid if balance is 0 or metadata missing
+                    effective_received = meta_received if (meta_received > 0 or meta_balance > 0) else grand_total
+                    effective_balance = max(0, grand_total - effective_received)
+                    is_paid = (effective_balance <= 0)
+                else:
+                    # Credit: handle missing metadata (both 0)
+                    if meta_received == 0 and meta_balance == 0 and line_item_total > 0:
+                        effective_received = 0.0
+                        effective_balance = line_item_total
+                        is_paid = False
+                    else:
+                        effective_received = meta_received
+                        effective_balance = meta_balance
+                        is_paid = (meta_balance <= 0)
+                
                 enriched_tx = dict(tx)
-                if grand_total > 0:
-                    enriched_tx['amount'] = grand_total 
+                enriched_tx['amount'] = grand_total
                 enriched_tx['receipt_link'] = enr.get('receipt_link') or ''
-                # Crucial: Determine is_paid status from the source of truth (verified_invoices)
-                # This fixes the issue where ledger says 'Paid' even when balance exists.
-                enriched_tx['is_paid'] = (enr['balance_due'] <= 0)
-                enriched_tx['balance_due'] = enr['balance_due']
+                enriched_tx['is_paid'] = is_paid
+                enriched_tx['balance_due'] = effective_balance
+                enriched_tx['received_amount'] = effective_received
                 enriched_transactions.append(enriched_tx)
                 
                 # If there was an initial payment, construct a dummy PAYMENT transaction
-                if enr['received_amount'] > 0:
+                if effective_received > 0:
                     dummy_payment = {
                         # Use a predictable negative ID bounded by loop index to avoid React/Flutter key collisions
                         'id': -(tx['id'] * 1000 + i), 
                         'ledger_id': ledger_id,
                         'transaction_type': 'PAYMENT',
-                        'amount': enr['received_amount'],
+                        'amount': effective_received,
                         'receipt_number': tx['receipt_number'],
                         'notes': f"Initial payment for Invoice {tx['receipt_number']}",
                         'created_at': tx['created_at'],
@@ -355,10 +235,46 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             else:
                 enriched_transactions.append(tx)
                 
-        # Re-sort because injected dummy payments will be out of order 
-        # (they share the same created_at as their parent invoice, but sort ensures stable display)
+        # Re-sort because injected dummy payments will be out of order
         enriched_transactions.sort(key=lambda x: x['created_at'], reverse=True)
-            
+        
+        # Recompute ledger summary from enriched transactions to ensure consistency
+        computed_total_billed = 0.0
+        computed_total_paid = 0.0
+        
+        for tx in enriched_transactions:
+            amt = float(tx.get('amount') or 0)
+            ttype = tx.get('transaction_type')
+            if ttype == 'INVOICE':
+                computed_total_billed += amt
+                # If the invoice is enriched with received_amount, that's part of paid
+                computed_total_paid += float(tx.get('received_amount') or 0)
+            elif ttype == 'MANUAL_CREDIT':
+                computed_total_billed += amt
+            elif ttype == 'PAYMENT':
+                # Note: dummy payments are already accounted for in received_amount above?
+                # Actually, dummy payments are added to the list. 
+                # Let's be careful not to double count.
+                # If we use the enriched_transactions list, we should only count INVOICE + MANUAL_CREDIT vs PAYMENT.
+                pass
+
+        # Robust calculation: Sum of all INVOICE/MANUAL_CREDIT amounts minus all PAYMENT amounts
+        # We'll use the final list which includes dummy payments.
+        final_billed = 0.0
+        final_paid = 0.0
+        for tx in enriched_transactions:
+            amt = float(tx.get('amount') or 0)
+            ttype = tx.get('transaction_type')
+            if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                final_billed += amt
+            elif ttype == 'PAYMENT':
+                final_paid += amt
+        
+        ledger['balance_due'] = max(0, final_billed - final_paid)
+        # Add extra info for the UI header
+        ledger['total_billed'] = final_billed
+        ledger['total_paid'] = final_paid
+
         return {
             "status": "success",
             "ledger": ledger,
@@ -445,14 +361,52 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
             rn = tx.get('receipt_number')
             if tx.get('transaction_type') == 'INVOICE' and rn and rn in invoice_meta:
                 meta = invoice_meta[rn]
+                items = invoice_items_map.get(rn, [])
+                
+                # Compute accurate total from line items (reliable even when balance_due not stored)
+                items_total = sum(float(i.get('amount') or 0) for i in items)
+                # Determine accurate total and effective financial state
+                meta_received = float(meta.get('received_amount') or 0)
+                meta_balance = float(meta.get('balance_due') or 0)
+                payment_mode = meta.get('payment_mode') or 'Cash'
+                
+                grand_total = meta_received + meta_balance
+                if grand_total == 0 and items_total > 0:
+                    grand_total = items_total
+
+                if payment_mode.lower() != 'credit':
+                    # Cash/Online: default to fully paid if metadata missing
+                    effective_received = meta_received if (meta_received > 0 or meta_balance > 0) else grand_total
+                    effective_balance = max(0, grand_total - effective_received)
+                    effective_is_paid = (effective_balance <= 0)
+                else:
+                    # Credit: handle missing metadata
+                    if meta_received == 0 and meta_balance == 0 and items_total > 0:
+                        effective_received = 0.0
+                        effective_balance = items_total
+                        effective_is_paid = False
+                    else:
+                        effective_received = meta_received
+                        effective_balance = meta_balance
+                        effective_is_paid = (meta_balance <= 0)
+                
+                # Fix amount=0 stored in ledger_transactions
+                if float(tx.get('amount') or 0) == 0 and grand_total > 0:
+                    tx['amount'] = grand_total
+                
                 tx['receipt_link'] = meta.get('receipt_link') or ''
                 tx['invoice_date'] = meta.get('date') or ''
                 tx['upload_date'] = meta.get('upload_date') or ''
-                tx['mobile_number'] = meta.get('mobile_number') or ''
-                tx['payment_mode'] = meta.get('payment_mode') or 'Cash'
-                tx['invoice_balance_due'] = meta.get('balance_due') or 0.0
-                tx['received_amount'] = meta.get('received_amount') or 0.0
-                tx['items'] = invoice_items_map.get(rn, [])
+                tx['mobile_number'] = str(meta.get('mobile_number') or '')
+                tx['vehicle_number'] = meta.get('vehicle_number') or ''
+                tx['customer_details'] = meta.get('customer_details') or ''
+                tx['gst_mode'] = meta.get('gst_mode') or 'none'
+                tx['type'] = meta.get('type') or 'Credit'
+                tx['payment_mode'] = payment_mode
+                tx['invoice_balance_due'] = effective_balance
+                tx['received_amount'] = effective_received
+                tx['is_paid'] = effective_is_paid
+                tx['items'] = items
                 if not (tx.get('customer_ledgers') or {}).get('customer_name'):
                     tx['_enriched_customer_name'] = meta.get('customer_name') or ''
             else:
@@ -479,7 +433,7 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
             
             # Find valid receipt_link and mobile_number
             receipt_link = next((i.get('receipt_link') for i in items if i.get('receipt_link')), '')
-            mobile_number = next((i.get('mobile_number') for i in items if i.get('mobile_number')), '')
+            mobile_number = str(next((i.get('mobile_number') for i in items if i.get('mobile_number')), ''))
 
             grouped_cash_invoices[rn] = {
                 'id': first_item.get('id', 0),
@@ -498,6 +452,10 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 'payment_mode': first_item.get('payment_mode') or 'Cash',
                 'invoice_balance_due': float(first_item.get('balance_due') or 0.0),
                 'received_amount': float(first_item.get('received_amount') or total_amount or 0.0),
+                'vehicle_number': first_item.get('vehicle_number') or '',
+                'customer_details': first_item.get('customer_details') or '',
+                'gst_mode': first_item.get('gst_mode') or 'none',
+                'type': first_item.get('type') or 'Cash',
                 '_enriched_customer_name': first_item.get('customer_name') or '',
                 'customer_ledgers': {
                     'customer_name': first_item.get('customer_name') or '',
@@ -646,8 +604,8 @@ class ManualUdharEntry(BaseModel):
 async def sync_customer_ledgers_from_invoices(current_user: Dict):
     """
     Reconcile customer_ledgers against verified_invoices.
-    Scans all Credit verified_invoices with balance_due > 0 and ensures
-    a matching customer_ledger + INVOICE transaction exists.
+    Scans all verified_invoices and ensures a matching customer_ledger + INVOICE transaction exists.
+    Updates existing transactions if amount, payment_mode, or customer_name changed.
     """
     username = current_user.get("username")
     if not username:
@@ -657,9 +615,9 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
     db.set_user_context(username)
 
     try:
-        # 1. Fetch all invoices to ensure all customers are onboarded to ledgers
+        # 1. Fetch all verified invoices
         invoices_resp = db.client.table("verified_invoices") \
-            .select("id, receipt_number, customer_name, customer_details, balance_due, created_at, payment_mode") \
+            .select("id, receipt_number, date, customer_name, customer_details, amount, received_amount, created_at, car_number, vehicle_number, extra_fields, mobile_number") \
             .eq("username", username) \
             .execute()
 
@@ -667,102 +625,211 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
         if not invoices:
             return
 
-        receipt_numbers = [inv["receipt_number"] for inv in invoices if inv.get("receipt_number")]
+        receipt_numbers = list(set([inv["receipt_number"] for inv in invoices if inv.get("receipt_number")]))
 
-        # 2. Fetch existing INVOICE transactions
-        existing_tx_resp = db.client.table("ledger_transactions") \
-            .select("receipt_number") \
+        # Group invoices by receipt number to handle multi-line invoices
+        grouped_invoices = {}
+        for inv in invoices:
+            rn = inv.get("receipt_number")
+            if not rn: continue
+            
+            if rn not in grouped_invoices:
+                raw_name = str(inv.get("customer_name") or "").strip()
+                raw_details = str(inv.get("customer_details") or "").strip()
+                
+                # Determine final name for grouping/ledger
+                final_name = inv.get("customer_name")
+                if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
+                    final_name = raw_details if raw_details else raw_name
+
+                grouped_invoices[rn] = {
+                    "total_amount": 0.0,
+                    "received_amount": float(inv.get("received_amount") or 0),
+                    "customer_name": final_name,
+                    "date": inv.get("date") or inv.get("created_at"),
+                    "notes": inv.get("customer_details"),
+                    "car_number": inv.get("car_number") or inv.get("vehicle_number"),
+                    "extra_fields": inv.get("extra_fields") or {},
+                    "mobile_number": inv.get("mobile_number")
+                }
+            
+            grouped_invoices[rn]["total_amount"] += float(inv.get("amount") or 0)
+            
+            # Ensure we keep the latest metadata if multiple lines have different metadata
+            if inv.get("car_number") or inv.get("vehicle_number"):
+                grouped_invoices[rn]["car_number"] = inv.get("car_number") or inv.get("vehicle_number")
+            if inv.get("extra_fields"):
+                grouped_invoices[rn]["extra_fields"].update(inv.get("extra_fields"))
+            if inv.get("mobile_number"):
+                grouped_invoices[rn]["mobile_number"] = inv.get("mobile_number")
+            
+            # DEBUG: Log if we have mobile number
+            if grouped_invoices[rn].get("mobile_number"):
+                logger.debug(f"🔍 Found mobile_number for receipt {rn}: {grouped_invoices[rn]['mobile_number']}")
+            else:
+                logger.debug(f"ℹ️ No mobile_number for receipt {rn} yet")
+
+        # 2. Fetch all existing ledgers and ensure new ones exist
+        customer_names = list(set([g["customer_name"] for g in grouped_invoices.values() if g["customer_name"]]))
+        
+        ledgers_resp = db.client.table("customer_ledgers") \
+            .select("id, customer_name") \
             .eq("username", username) \
-            .eq("transaction_type", "INVOICE") \
+            .in_("customer_name", customer_names) \
+            .execute()
+
+        ledger_map = {str(row["customer_name"]).strip().lower(): row["id"] for row in (ledgers_resp.data or [])}
+        
+        for name in customer_names:
+            key = str(name).strip().lower()
+            if key not in ledger_map:
+                new_ledger_resp = db.client.table("customer_ledgers").insert({
+                    "username": username,
+                    "customer_name": name,
+                    "balance_due": 0.0,
+                }).execute()
+                if new_ledger_resp.data:
+                    ledger_map[key] = new_ledger_resp.data[0]["id"]
+
+        # 3. Fetch existing transactions for these receipt numbers
+        receipt_numbers = list(grouped_invoices.keys())
+        existing_tx_resp = db.client.table("ledger_transactions") \
+            .select("id, receipt_number, ledger_id, amount, is_paid, transaction_type, car_number, extra_fields, notes") \
+            .eq("username", username) \
             .in_("receipt_number", receipt_numbers) \
             .execute()
 
-        already_synced = {tx["receipt_number"] for tx in (existing_tx_resp.data or []) if tx.get("receipt_number")}
-
-        # 3. Only process invoices not yet fully synced, SUMMING items for the same receipt
-        unique_missing = {}
-        for inv in invoices:
-            rn = inv.get("receipt_number")
-            if rn and rn not in already_synced:
-                if rn not in unique_missing:
-                    # Initialize with a copy to avoid modifying original
-                    unique_missing[rn] = dict(inv)
-                    unique_missing[rn]["balance_due"] = float(inv.get("balance_due") or 0)
-                else:
-                    # Balance due is consistent across multi-line invoices, no need to sum
-                    pass
-        
-        missing_invoices = list(unique_missing.values())
-
-        if not missing_invoices:
-            return
-
-        # 4. Fetch existing customer ledgers
-        ledgers_resp = db.client.table("customer_ledgers") \
-            .select("id, customer_name, balance_due") \
-            .eq("username", username) \
-            .execute()
-
-        ledger_map: Dict[str, Dict] = {}
-        for row in (ledgers_resp.data or []):
-            ledger_map[str(row["customer_name"]).strip().lower()] = row
+        existing_invoices = {}
+        existing_payments = {}
+        for tx in (existing_tx_resp.data or []):
+            rn = tx.get("receipt_number")
+            if not rn: continue
+            if tx["transaction_type"] == "INVOICE":
+                existing_invoices[rn] = tx
+            elif tx["transaction_type"] == "PAYMENT":
+                existing_payments[rn] = tx
 
         now = datetime.utcnow().isoformat()
         
-        for inv in missing_invoices:
-            raw_name = str(inv.get("customer_name") or "").strip()
-            raw_details = str(inv.get("customer_details") or "").strip()
+        for rn, data in grouped_invoices.items():
+            customer_name = data["customer_name"]
+            key = str(customer_name).strip().lower()
+            ledger_id = ledger_map.get(key)
+            if not ledger_id: continue
+
+            # 1. Handle the INVOICE transaction (Full billing amount)
+            total_amount = data["total_amount"]
+            is_paid_status = (total_amount - data["received_amount"]) <= 0.01
             
-            if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
-                customer_name_raw = raw_details if raw_details else raw_name
+            if rn in existing_invoices:
+                tx = existing_invoices[rn]
+                update_data = {}
+                if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
+                if abs(float(tx.get("amount") or 0) - total_amount) > 0.01: 
+                    update_data["amount"] = total_amount
+                if bool(tx.get("is_paid")) != is_paid_status: 
+                    update_data["is_paid"] = is_paid_status
+                
+                # Sync metadata
+                if tx.get("car_number") != data["car_number"]:
+                    update_data["car_number"] = data["car_number"]
+                    update_data["vehicle_number"] = data["car_number"]
+                if tx.get("notes") != data["notes"]:
+                    update_data["notes"] = data["notes"]
+                
+                # Sync date (created_at in ledger_transactions represents the transaction date)
+                new_date = data.get("date")
+                if new_date and tx.get("created_at") != new_date:
+                    update_data["created_at"] = new_date
+                
+                # Merge mobile_number into extra_fields for ledger_transactions
+                current_extra = tx.get("extra_fields") or {}
+                new_extra = dict(data["extra_fields"])
+                if data.get("mobile_number"):
+                    new_extra["mobile_number"] = str(data["mobile_number"])
+                    logger.debug(f"✅ Propagating mobile_number {new_extra['mobile_number']} to ledger_transactions for receipt {rn}")
+                else:
+                    logger.debug(f"⚠️ Missing mobile_number for receipt {rn} during ledger sync")
+                
+                if current_extra != new_extra:
+                    update_data["extra_fields"] = new_extra
+                    
+                if update_data:
+                    db.client.table("ledger_transactions").update(update_data).eq("id", tx["id"]).execute()
+                else:
+                    # Optional logging for debugging specific receipts
+                    pass
             else:
-                customer_name_raw = raw_name
+                # Prepare extra_fields including mobile_number
+                final_extra = dict(data["extra_fields"])
+                if data.get("mobile_number"):
+                    final_extra["mobile_number"] = str(data["mobile_number"])
 
-            if not customer_name_raw:
-                continue
-
-            customer_key = customer_name_raw.lower()
-            balance_due = float(inv.get("balance_due") or 0)
-
-            if customer_key in ledger_map:
-                ledger = ledger_map[customer_key]
-                ledger_id = ledger["id"]
-                new_balance = float(ledger.get("balance_due") or 0) + balance_due
-                db.client.table("customer_ledgers").update({
-                    "balance_due": new_balance,
-                    "updated_at": now,
-                }).eq("id", ledger_id).execute()
-                ledger_map[customer_key]["balance_due"] = new_balance
-            else:
-                new_ledger_resp = db.client.table("customer_ledgers").insert({
+                db.client.table("ledger_transactions").insert({
                     "username": username,
-                    "customer_name": customer_name_raw,
-                    "balance_due": balance_due,
+                    "ledger_id": ledger_id,
+                    "transaction_type": "INVOICE",
+                    "amount": total_amount,
+                    "receipt_number": rn,
+                    "is_paid": is_paid_status,
+                    "created_at": data["date"] or now,
+                    "notes": data["notes"],
+                    "car_number": data["car_number"],
+                    "vehicle_number": data["car_number"],
+                    "extra_fields": final_extra
                 }).execute()
 
-                if not new_ledger_resp.data:
-                    continue
+            # 2. Handle the PAYMENT transaction (Received amount)
+            received_amount = data["received_amount"]
+            if received_amount > 0:
+                if rn in existing_payments:
+                    tx = existing_payments[rn]
+                    update_data = {}
+                    if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
+                    if abs(float(tx.get("amount") or 0) - received_amount) > 0.01:
+                        update_data["amount"] = received_amount
+                    
+                    # Sync metadata for payment too
+                    if tx.get("car_number") != data["car_number"]:
+                        update_data["car_number"] = data["car_number"]
+                        update_data["vehicle_number"] = data["car_number"]
+                    
+                    # Sync date
+                    new_date = data.get("date")
+                    if new_date and tx.get("created_at") != new_date:
+                        update_data["created_at"] = new_date
 
-                ledger_id = new_ledger_resp.data[0]["id"]
-                ledger_map[customer_key] = {
-                    "id": ledger_id,
-                    "customer_name": customer_name_raw,
-                    "balance_due": balance_due,
-                }
+                    current_extra = tx.get("extra_fields") or {}
+                    new_extra = dict(data["extra_fields"])
+                    if data.get("mobile_number"):
+                        new_extra["mobile_number"] = data["mobile_number"]
 
-            db.client.table("ledger_transactions").insert({
-                "username": username,
-                "ledger_id": ledger_id,
-                "transaction_type": "INVOICE",
-                "amount": balance_due,
-                "receipt_number": inv["receipt_number"],
-                "is_paid": (str(inv.get("payment_mode") or "").lower() != "credit" or balance_due == 0),
-                "created_at": inv.get("created_at") or now,
-                "notes": raw_details,
-            }).execute()
+                    if current_extra != new_extra:
+                        update_data["extra_fields"] = new_extra
+
+                    if update_data:
+                        db.client.table("ledger_transactions").update(update_data).eq("id", tx["id"]).execute()
+                else:
+                    db.client.table("ledger_transactions").insert({
+                        "username": username,
+                        "ledger_id": ledger_id,
+                        "transaction_type": "PAYMENT",
+                        "amount": received_amount,
+                        "receipt_number": rn,
+                        "is_paid": True,
+                        "created_at": data["date"] or now,
+                        "notes": f"Auto-sync payment from receipt {rn}",
+                        "car_number": data["car_number"],
+                        "vehicle_number": data["car_number"],
+                        "extra_fields": data["extra_fields"]
+                    }).execute()
+                
+        # 4. Reconcile all balances efficiently
+        await reconcile_all_customer_ledger_balances(current_user)
 
     except Exception as e:
         logger.error(f"Error syncing customer ledgers from invoices: {e}")
+
 
 @router.get("/dashboard-summary")
 async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
@@ -780,21 +847,96 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
         # Trigger sync from verified invoices to ensure customer ledgers are up to date
         await sync_customer_ledgers_from_invoices(current_user)
 
-        # Calculate Total Receivable (customer ledgers balance > 0)
-        receivable_resp = db.client.table('customer_ledgers') \
-            .select('balance_due') \
+        # --- Compute total_receivable from actual ledger_transactions (not stale balance_due column) ---
+        # This avoids the race condition where /ledgers reconciliation hasn't run yet.
+        ledger_resp = db.client.table('customer_ledgers') \
+            .select('id, balance_due') \
             .eq('username', username) \
-            .gt('balance_due', 0) \
             .execute()
-        total_receivable = sum(item['balance_due'] for item in receivable_resp.data) if receivable_resp.data else 0.0
+        ledgers = ledger_resp.data or []
+        total_receivable = 0.0
+        if ledgers:
+            ledger_ids = [ld['id'] for ld in ledgers]
+            cust_tx_resp = db.client.table('ledger_transactions') \
+                .select('ledger_id, amount, transaction_type, is_paid') \
+                .eq('username', username) \
+                .in_('ledger_id', ledger_ids) \
+                .execute()
+            expected: Dict[int, float] = {ld['id']: 0.0 for ld in ledgers}
+            for tx in (cust_tx_resp.data or []):
+                lid = tx.get('ledger_id')
+                if lid not in expected:
+                    continue
+                amt = float(tx.get('amount') or 0)
+                ttype = tx.get('transaction_type')
+                if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                    expected[lid] += amt
+                elif ttype == 'PAYMENT':
+                    expected[lid] -= amt
+            now_str = datetime.utcnow().isoformat()
+            for ld in ledgers:
+                lid = ld['id']
+                computed = expected[lid]
+                stored = float(ld.get('balance_due') or 0)
+                if abs(stored - computed) > 0.01:
+                    try:
+                        db.client.table('customer_ledgers').update({
+                            'balance_due': computed,
+                            'updated_at': now_str,
+                        }).eq('id', lid).execute()
+                    except Exception as patch_err:
+                        logger.warning(f"Could not patch ledger {lid}: {patch_err}")
+                if computed > 0:
+                    total_receivable += computed
 
-        # Calculate Total Payable (vendor ledgers balance > 0)
-        payable_resp = db.client.table('vendor_ledgers') \
-            .select('balance_due') \
+        total_receivable = round(total_receivable, 2)
+
+        # --- Compute total_payable from actual vendor_ledger_transactions ---
+        # This avoids the race condition where /vendor-ledgers reconciliation hasn't run yet.
+        v_ledger_resp = db.client.table('vendor_ledgers') \
+            .select('id, balance_due') \
             .eq('username', username) \
-            .gt('balance_due', 0) \
             .execute()
-        total_payable = sum(item['balance_due'] for item in payable_resp.data) if payable_resp.data else 0.0
+        v_ledgers = v_ledger_resp.data or []
+        total_payable = 0.0
+        if v_ledgers:
+            v_ledger_ids = [ld['id'] for ld in v_ledgers]
+            vend_tx_resp = db.client.table('vendor_ledger_transactions') \
+                .select('vendor_ledger_id, amount, transaction_type, is_paid') \
+                .eq('username', username) \
+                .in_('vendor_ledger_id', v_ledger_ids) \
+                .execute()
+            v_expected: Dict[int, float] = {ld['id']: 0.0 for ld in v_ledgers}
+            for tx in (vend_tx_resp.data or []):
+                lid = tx.get('vendor_ledger_id')
+                if lid not in v_expected:
+                    continue
+                amt = float(tx.get('amount') or 0)
+                ttype = tx.get('transaction_type')
+                if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                    v_expected[lid] += amt
+                elif ttype == 'PAYMENT':
+                    v_expected[lid] -= amt
+            
+            if 'now_str' not in locals():
+                now_str = datetime.utcnow().isoformat()
+                
+            for ld in v_ledgers:
+                lid = ld['id']
+                computed = v_expected[lid]
+                stored = float(ld.get('balance_due') or 0)
+                if abs(stored - computed) > 0.01:
+                    try:
+                        db.client.table('vendor_ledgers').update({
+                            'balance_due': computed,
+                            'updated_at': now_str,
+                        }).eq('id', lid).execute()
+                    except Exception as patch_err:
+                        logger.warning(f"Could not patch vendor ledger {lid}: {patch_err}")
+                if computed > 0:
+                    total_payable += computed
+
+        total_payable = round(total_payable, 2)
 
         # Chart Data Aggregation (all time)
         
@@ -877,7 +1019,7 @@ async def reconcile_all_customer_ledger_balances(current_user: Dict = Depends(ge
 
         # 2. Fetch all transactions
         tx_resp = db.client.table("ledger_transactions") \
-            .select("ledger_id, amount, transaction_type") \
+            .select("ledger_id, amount, transaction_type, is_paid") \
             .eq("username", username) \
             .execute()
 
@@ -901,17 +1043,19 @@ async def reconcile_all_customer_ledger_balances(current_user: Dict = Depends(ge
         
         for ld in ledgers_resp.data:
             lid = ld["id"]
+            ledger_name = ld.get("customer_name", "Unknown")
             current_bal = float(ld.get("balance_due", 0))
             expected_bal = float(expected_balances[lid])
             
             # Use small epsilon for float comparison
             if abs(current_bal - expected_bal) > 0.01:
+                logger.info(f"Reconciling ledger {lid} ({ledger_name}): {current_bal} -> {expected_bal}")
                 db.client.table("customer_ledgers").update({
                     "balance_due": expected_bal,
                     "updated_at": now
                 }).eq("id", lid).execute()
                 updated_count += 1
-                drifts_found.append({"ledger_id": lid, "old": current_bal, "new": expected_bal})
+                drifts_found.append({"ledger_id": lid, "customer": ledger_name, "old": current_bal, "new": expected_bal})
 
         return {
             "status": "success",

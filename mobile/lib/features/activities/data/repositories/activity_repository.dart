@@ -60,7 +60,7 @@ class ActivityRepository {
         // Navigation context from verified_invoices enrichment
         receiptLink: json['receipt_link'] as String? ?? '',
         invoiceDate: json['invoice_date'] as String? ?? '',
-        mobileNumber: json['mobile_number'] as String? ?? '',
+        mobileNumber: json['mobile_number']?.toString() ?? '',
         paymentMode: json['payment_mode'] as String? ?? 'Cash',
         invoiceBalanceDue: (json['invoice_balance_due'] as num?)?.toDouble() ?? 0.0,
         receivedAmount: (json['received_amount'] as num?)?.toDouble() ?? 0.0,

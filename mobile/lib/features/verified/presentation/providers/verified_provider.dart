@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/verified/data/verified_repository.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
@@ -80,7 +81,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.updateVerifiedInvoice(record);
       ref.invalidate(udharProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to update record: $e');
       await fetchRecords(); // Revert
@@ -104,7 +105,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.updateVerifiedInvoicesBulk(recordsToUpdate);
       ref.invalidate(udharProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to update records in bulk: $e');
       await fetchRecords(); // Revert
@@ -120,7 +121,7 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
 
       await _repository.deleteBulk(ids);
       ref.invalidate(udharProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete records: $e');
       await fetchRecords(); // Revert

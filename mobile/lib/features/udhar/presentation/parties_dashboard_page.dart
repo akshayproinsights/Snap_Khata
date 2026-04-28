@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/presentation/parties_list_page.dart' as mobile;
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
-import 'package:mobile/features/udhar/presentation/providers/unified_ledger_provider.dart';
+
 import 'package:mobile/features/udhar/presentation/widgets/add_party_entry_sheet.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/services.dart';
@@ -21,7 +22,6 @@ class PartiesDashboardPage extends ConsumerWidget {
     final dashboardAsync = ref.watch(dashboardTotalsProvider);
     final filterMode = ref.watch(udharFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final ledgersLoading = ref.watch(unifiedLedgerLoadingProvider);
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
@@ -51,8 +51,10 @@ class PartiesDashboardPage extends ConsumerWidget {
         key: const Key('parties_dashboard_visibility'),
         onVisibilityChanged: (info) {
           if (info.visibleFraction > 0.1) {
-            // Silently refresh dashboard totals and ledgers in background
-            ref.read(dashboardTotalsProvider.notifier).refreshSilent();
+            // Force-invalidate dashboard totals so top cards always show fresh values.
+            // This triggers a full reload (with loading indicator) ensuring no stale ₹0.
+            unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
+            // Silently refresh lists in the background (no spinner flash on list)
             ref.read(udharProvider.notifier).fetchLedgersSilent();
             ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
           }
@@ -74,9 +76,7 @@ class PartiesDashboardPage extends ConsumerWidget {
               ],
             ),
           ),
-          data: (summary) => ledgersLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
+          data: (summary) => Column(
                   children: [
                     // Summary Section
                     _buildSummaryCard(
@@ -210,64 +210,6 @@ class PartiesDashboardPage extends ConsumerWidget {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              // PAYABLE
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        context.errorColor.withValues(alpha: isDark ? 0.05 : 0.02),
-                        context.surfaceColor,
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(LucideIcons.arrowUpRight, color: context.errorColor, size: 14),
-                          const SizedBox(width: 6),
-                          Text(
-                            'TO PAY',
-                            style: TextStyle(
-                              color: context.errorColor,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 10,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          CurrencyFormatter.format(payable),
-                          style: TextStyle(
-                            color: context.errorColor,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 24,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: context.borderColor.withValues(alpha: 0.5),
-                indent: 20,
-                endIndent: 20,
-              ),
-              
               // RECEIVABLE
               Expanded(
                 child: Container(
@@ -307,6 +249,64 @@ class PartiesDashboardPage extends ConsumerWidget {
                           CurrencyFormatter.format(receivable),
                           style: TextStyle(
                             color: context.successColor,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: context.borderColor.withValues(alpha: 0.5),
+                indent: 20,
+                endIndent: 20,
+              ),
+              
+              // PAYABLE
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        context.errorColor.withValues(alpha: isDark ? 0.05 : 0.02),
+                        context.surfaceColor,
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(LucideIcons.arrowUpRight, color: context.errorColor, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'TO PAY',
+                            style: TextStyle(
+                              color: context.errorColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 10,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          CurrencyFormatter.format(payable),
+                          style: TextStyle(
+                            color: context.errorColor,
                             fontWeight: FontWeight.w900,
                             fontSize: 24,
                             letterSpacing: -0.5,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/activities/data/repositories/activity_repository.dart';
 import 'package:mobile/features/activities/domain/models/activity_item.dart';
@@ -40,7 +41,7 @@ class RecentActivitiesNotifier extends AsyncNotifier<List<ActivityItem>> {
   Future<void> refreshData() async {
     ref.invalidateSelf();
     // Also invalidate dashboard totals as transactions affect balances
-    ref.invalidate(dashboardTotalsProvider);
+    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     await future;
   }
 

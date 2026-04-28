@@ -4,6 +4,8 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/udhar/domain/models/unified_ledger.dart';
 import 'package:mobile/features/udhar/presentation/providers/unified_ledger_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +17,14 @@ class PartiesListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgers = ref.watch(unifiedLedgerProvider);
+    final udharState = ref.watch(udharProvider);
+    final vendorState = ref.watch(vendorLedgerProvider);
+    final isLoading = udharState.isLoading || vendorState.isLoading;
+
+    // Show spinner while either provider is still loading AND we have no data yet
+    if (isLoading && ledgers.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     if (ledgers.isEmpty) {
       return Center(
@@ -65,11 +75,18 @@ class PartiesListPage extends ConsumerWidget {
 
   Widget _buildLedgerCard(BuildContext context, UnifiedLedger ledger) {
     final bool isCustomer = ledger.type == LedgerType.customer;
-    final bool isDue = ledger.balanceDue > 0;
+    final bool isDue = ledger.balanceDue > 0.01;
+    final bool isAdvance = ledger.balanceDue < -0.01;
     
-    final Color statusColor = isCustomer 
-        ? (isDue ? context.successColor : context.textSecondaryColor)
-        : (isDue ? context.errorColor : context.textSecondaryColor);
+    final String statusLabel = isCustomer 
+        ? (isDue ? 'YOU GET' : (isAdvance ? 'ADVANCE' : 'SETTLED'))
+        : (isDue ? 'YOU GIVE' : (isAdvance ? 'ADVANCE' : 'SETTLED'));
+
+    final Color statusColor = isDue 
+        ? (isCustomer ? context.successColor : context.errorColor)
+        : (isAdvance 
+            ? (isCustomer ? context.errorColor : context.successColor)
+            : context.textSecondaryColor);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -211,7 +228,7 @@ class PartiesListPage extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        isCustomer ? (isDue ? 'YOU GET' : 'SETTLED') : (isDue ? 'YOU GIVE' : 'SETTLED'),
+                        statusLabel,
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 10,

@@ -12,7 +12,6 @@ import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
@@ -234,7 +233,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                               if (success && context.mounted) {
                                 ref.invalidate(verifiedProvider);
-                                ref.invalidate(dashboardTotalsProvider);
                                 Navigator.pop(context);
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -623,7 +621,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
   Widget _buildHeaderCard(CustomerLedger currentLedger) {
     final balance = _isLoading ? currentLedger.balanceDue : _computedBalance;
-    final isPositive = balance >= 0;
+    final isPositive = balance > 0.01;
+    final isNegative = balance < -0.01;
+
+    String headerLabel = 'TOTAL BALANCE DUE';
+    if (isNegative) headerLabel = 'ADVANCE';
+    if (!isPositive && !isNegative) headerLabel = 'SETTLED';
 
     return Container(
       width: double.infinity,
@@ -666,7 +669,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               child: Column(
                 children: [
                   Text(
-                    isPositive ? 'TOTAL BALANCE DUE' : 'OVERPAID AMOUNT',
+                    headerLabel,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 12,
@@ -827,7 +830,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
       if (success) {
         ref.invalidate(verifiedProvider);
-        ref.invalidate(dashboardTotalsProvider);
         _loadTransactions();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

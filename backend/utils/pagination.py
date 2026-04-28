@@ -240,7 +240,7 @@ class OptimizedQueries:
         query = db_client.table('inventory_items') \
             .select(
                 'id, invoice_number, vendor_name, invoice_date, '
-                'quantity, rate, hsn_code, product_name'
+                'quantity, rate, hsn_code, description'
             ) \
             .eq('username', username)
 

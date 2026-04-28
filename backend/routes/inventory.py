@@ -92,6 +92,11 @@ class InventoryInvoiceVerifyRequest(BaseModel):
     item_ids: List[int]
     final_total: Optional[float] = None
     adjustments: Optional[List[Dict[str, Any]]] = None
+    car_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    extra_fields: Optional[Dict[str, Any]] = None
+    odometer: Optional[str] = None
+    taxable_row_ids: Optional[List[int]] = None
 
 
 class InventoryUploadHistoryItem(BaseModel):
@@ -1154,7 +1159,10 @@ async def verify_inventory_invoice(
             "payment_date": request.payment_date,
             "amount_paid": request.amount_paid,
             "balance_owed": request.balance_owed,
-            "vendor_notes": request.vendor_notes
+            "vendor_notes": request.vendor_notes,
+            "car_number": request.car_number,
+            "vehicle_number": request.vehicle_number,
+            "extra_fields": request.extra_fields or {}
         }
         
         from datetime import datetime
@@ -1302,7 +1310,10 @@ async def verify_inventory_invoice(
                         'amount': balance_owed_float,
                         'invoice_number': request.invoice_number,
                         'is_paid': (request.payment_mode != 'Credit' or balance_owed_float == 0),
-                        'notes': request.vendor_notes
+                        'notes': request.vendor_notes,
+                        'car_number': request.car_number,
+                        'vehicle_number': request.vehicle_number,
+                        'extra_fields': request.extra_fields or {}
                     }).execute()
             
         return {

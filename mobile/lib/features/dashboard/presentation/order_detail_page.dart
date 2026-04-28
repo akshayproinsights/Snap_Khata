@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -275,9 +276,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     if (updatedItems.isNotEmpty) {
       await notifier.updateRecordsBulk(updatedItems);
-      // Invalidate udhar providers to refresh credit ledger and dashboard totals
+      // Eagerly re-fetch dashboard totals so top cards update immediately on return.
       ref.invalidate(udharProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     }
 
     widget.group.receiptNumber = receiptCtrl.text;
@@ -944,28 +945,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         ),
                       ],
 
-                      // ── Notes / Additional Details ──
-                      if (isEditing || _creditDetailsController.text.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text('Notes / Additional Details',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: context.textSecondaryColor,
-                                letterSpacing: 0.5)),
-                        const SizedBox(height: 4),
-                        if (isEditing)
-                          _buildTextField(context, _creditDetailsController, 'Enter any additional notes here...', maxLines: 2)
-                        else
-                          Text(
-                              _creditDetailsController.text,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: context.textColor),
-                              maxLines: 5,
-                              overflow: TextOverflow.ellipsis),
-                      ],
+                      // Notes / Additional Details section removed as per user request to save space
+
                     ],
                   ),
                 ),

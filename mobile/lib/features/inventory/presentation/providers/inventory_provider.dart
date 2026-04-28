@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/features/inventory/data/inventory_repository.dart';
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
@@ -108,7 +109,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.updateInventoryItem(id, updates);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to update item: $e');
       await fetchItems(); // Revert
@@ -124,7 +125,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.deleteInventoryItem(id);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete item: $e');
       await fetchItems(); // Revert
@@ -141,7 +142,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.deleteBulkInventoryItems(ids);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete items: $e');
       await fetchItems(); // Revert
@@ -154,7 +155,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await _repository.verifyInvoice(data);
       ref.invalidate(inventoryItemsProvider);
       ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
       await fetchItems(); // Refresh the items to remove the verified ones
     } catch (e) {
       state = state.copyWith(
@@ -247,7 +248,7 @@ class InventoryNotifier extends Notifier<InventoryState> {
       await Future.wait(futures);
       
       ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
 
       // Finally, fetch items to ensure we are up to date
       await fetchItems();

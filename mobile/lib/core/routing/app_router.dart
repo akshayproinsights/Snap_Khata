@@ -94,7 +94,10 @@ class AppRouter {
               GoRoute(
                 path: '/settings',
                 name: 'settings',
-                builder: (context, state) => const SettingsPage(),
+                builder: (context, state) {
+                  final openShopDetails = state.uri.queryParameters['shop'] == 'details';
+                  return SettingsPage(openShopDetails: openShopDetails);
+                },
               ),
             ],
           ),

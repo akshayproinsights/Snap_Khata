@@ -204,27 +204,24 @@ async def update_single_review_date(
         if not isinstance(extra_fields, dict):
             extra_fields = {}
         
-        # CORE columns that are guaranteed to exist in verification_dates
         CORE_VERIFICATION_COLS = {
             'username', 'receipt_number', 'date', 'audit_findings',
             'verification_status', 'receipt_link', 'upload_date',
             'created_at', 'model_used', 'model_accuracy', 'input_tokens',
             'output_tokens', 'total_tokens', 'cost_inr', 'extra_fields',
-            'date_and_receipt_combined_bbox', 'receipt_number_bbox', 'date_bbox'
-        }
-        
-        # Columns that might be missing from older schemas (we'll move these to extra_fields if they don't exist as columns)
-        # For now, we'll proactively move them to extra_fields to be safe.
-        optional_cols = {
-            'fallback_attempted', 'fallback_reason', 'processing_errors', 
+            'date_and_receipt_combined_bbox', 'receipt_number_bbox', 'date_bbox',
             'customer_name', 'mobile_number', 'payment_mode', 'received_amount', 
-            'balance_due', 'customer_details', 'vehicle_number', 'gst_mode'
+            'balance_due', 'customer_details', 'vehicle_number', 'car_number', 'gst_mode',
+            'taxable_row_ids', 'fallback_attempted', 'fallback_reason', 
+            'processing_errors'
         }
         
-        # Move optional columns into extra_fields
-        for col in optional_cols:
-            if col in record and record[col] is not None:
-                extra_fields[col] = record[col]
+        # Handle extra_fields promotion: if any keys in extra_fields are valid top-level columns,
+        # promote them so they get picked up by the update filter below.
+        if isinstance(extra_fields, dict):
+            for k, v in extra_fields.items():
+                if k in CORE_VERIFICATION_COLS and (k not in record or record[k] is None):
+                    record[k] = v
         
         record['extra_fields'] = extra_fields
         
@@ -598,7 +595,7 @@ async def update_single_review_amount(
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'type', 'vehicle_number', 'gst_mode'
+            'type', 'vehicle_number', 'car_number', 'gst_mode', 'extra_fields'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         

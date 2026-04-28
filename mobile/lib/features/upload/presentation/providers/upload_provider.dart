@@ -681,7 +681,7 @@ class UploadNotifier extends Notifier<UploadState> {
       clearActiveTaskId: true,
       lastCompletedStatus: completedStatus,
     );
-    ref.invalidate(dashboardTotalsProvider);
+    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     _backgroundTask.completeTaskWithAction(
       'Orders ready to review!',
       'Review',
@@ -832,7 +832,7 @@ class UploadNotifier extends Notifier<UploadState> {
     if (errorString.contains('DioException') ||
         errorString.contains('SocketException')) {
       await SyncQueueService()
-          .queueUpload(toUpload.map((f) => f.path).toList());
+          .queueUpload(toUpload.map((f) => f.path).toList(), queueType: 'sales');
       final queued = state.fileItems.map((item) {
         if (item.status == UploadFileStatus.uploading ||
             item.status == UploadFileStatus.processing) {

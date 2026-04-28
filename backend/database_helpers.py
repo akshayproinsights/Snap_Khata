@@ -32,7 +32,7 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     - Floats with decimals: convert to float
     - Remove .0 suffix from string representations
     """
-    integer_fields = ['mobile_number', 'input_tokens', 'output_tokens', 'total_tokens']  # Industry-specific numeric fields are now in extra_fields
+    integer_fields = ['input_tokens', 'output_tokens', 'total_tokens']  # Industry-specific numeric fields are now in extra_fields
     float_fields = ['quantity', 'rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch', 'received_amount', 'balance_due', 'model_accuracy', 'cost_inr']
     
     for key, value in row_dict.items():
@@ -55,6 +55,8 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
         # Handle float fields
         elif key in float_fields:
             try:
+                if isinstance(value, str):
+                    value = value.replace(',', '').strip()
                 row_dict[key] = float(value)
             except (ValueError, TypeError):
                 row_dict[key] = None
@@ -215,7 +217,7 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
             query = query.limit(limit)
             result = query.execute()
             logger.info(f"✅ Fetched {len(result.data) if result.data else 0} verified invoice records")
-            return result.data if result.data else []
+            return flatten_extra_fields(result.data) if result.data else []
         
         # Otherwise, fetch ALL records using pagination (for searches/filters)
         all_records = []
@@ -267,7 +269,7 @@ def get_verification_dates(username: str) -> List[Dict[str, Any]]:
     try:
         db = get_database_client()
         result = db.query('verification_dates').eq('username', username).order('created_at', desc=True).execute()
-        return result.data if result.data else []
+        return flatten_extra_fields(result.data) if result.data else []
     
     except Exception as e:
         logger.error(f"Error getting verification dates for {username}: {e}")
@@ -288,7 +290,7 @@ def get_verification_amounts(username: str) -> List[Dict[str, Any]]:
         db = get_database_client()
         # Sort by receipt_number to keep items together
         result = db.query('verification_amounts').eq('username', username).order('receipt_number').execute()
-        records = result.data if result.data else []
+        records = flatten_extra_fields(result.data) if result.data else []
         
         # Deduplicate by id if needed
         seen_ids: dict = {}
@@ -342,8 +344,23 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
             'receipt_link', 'type', 'customer_name', 'upload_date',
             'received_amount', 'balance_due', 'payment_mode', 'mobile_number',
             'customer_details', 'car_number', 'vehicle_number', 
-            'total_bill_amount', 'gst_mode', 'odometer', 'quantity', 'rate'
+            'total_bill_amount', 'gst_mode', 'odometer', 'quantity', 'rate',
+            'taxable_row_ids'
         }
+        
+        # Columns for the raw 'invoices' table
+        INVOICE_TABLE_COLS = {
+            'id', 'created_at', 'username', 'receipt_number', 'date', 'customer', 
+            'vehicle_number', 'description', 'amount', 'r2_file_path', 'image_hash', 
+            'row_id', 'header_id', 'model_used', 'model_accuracy', 'input_tokens', 
+            'output_tokens', 'total_tokens', 'cost_inr', 'extra_fields', 'receipt_link', 
+            'quantity', 'rate', 'upload_date', 'fallback_attempted', 'fallback_reason', 
+            'processing_errors', 'gst_mode', 'payment_mode', 'received_amount', 
+            'balance_due', 'customer_details', 'taxable_row_ids'
+        }
+        
+        verified_records = []
+        raw_invoice_updates = []
         
         for record in data:
             record['username'] = username  # Ensure username is set
@@ -354,30 +371,67 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
                 
             record = convert_numeric_types(record)
             
-            # Handle extra_fields resilience
-            extra_fields = record.get('extra_fields', {})
-            if not isinstance(extra_fields, dict):
-                extra_fields = {}
+            # 1. Prepare record for verified_invoices
+            extra_fields_verified = record.get('extra_fields', {})
+            if not isinstance(extra_fields_verified, dict):
+                extra_fields_verified = {}
             
-            # Move non-core columns to extra_fields
-            # We skip 'id' and 'row_id' as they are keys
-            cleaned_record = {}
+            cleaned_verified = {}
             for k, v in record.items():
                 if k in CORE_VERIFIED_COLS or k in ['id', 'row_id']:
-                    cleaned_record[k] = v
+                    cleaned_verified[k] = v
                 elif v is not None:
-                    extra_fields[k] = v
+                    extra_fields_verified[k] = v
             
-            cleaned_record['extra_fields'] = extra_fields
-            records.append(cleaned_record)
+            cleaned_verified['extra_fields'] = extra_fields_verified
+            verified_records.append(cleaned_verified)
+
+            # 2. Prepare record for raw invoices table (synchronization)
+            if 'row_id' in record:
+                extra_fields_raw = dict(extra_fields_verified)
+                cleaned_raw = {}
+                for k, v in record.items():
+                    if k == 'customer_name' and 'customer' in INVOICE_TABLE_COLS:
+                        cleaned_raw['customer'] = v
+                    elif k in INVOICE_TABLE_COLS:
+                        cleaned_raw[k] = v
+                    elif v is not None and k not in ['id', 'extra_fields']:
+                        extra_fields_raw[k] = v
+                
+                cleaned_raw['extra_fields'] = extra_fields_raw
+                cleaned_raw['username'] = username
+                cleaned_raw['row_id'] = record['row_id']
+                raw_invoice_updates.append(cleaned_raw)
         
-        # OPTIMIZED: Use batch upsert with row_id as conflict resolution
-        count = db.batch_upsert('verified_invoices', records, batch_size=500, on_conflict='username,row_id')
-        logger.info(f"✅ Upserted {count} verified invoices for {username} (preserving existing data)")
+        # 1. Upsert to verified_invoices
+        count_verified = db.batch_upsert('verified_invoices', verified_records, batch_size=500, on_conflict='username,row_id')
+        logger.info(f"✅ Upserted {count_verified} verified invoices for {username}")
+        
+        # 2. Sync to raw invoices table (Optional but keeps data consistent)
+        # Since invoices doesn't have a unique constraint on row_id, we update one by one or find IDs
+        if raw_invoice_updates:
+            try:
+                # Find existing invoice IDs for these row_ids to perform targeted updates
+                row_ids = [r['row_id'] for r in raw_invoice_updates]
+                existing_resp = db.client.table('invoices').select('id, row_id').eq('username', username).in_('row_id', row_ids).execute()
+                id_map = {row['row_id']: row['id'] for row in (existing_resp.data or [])}
+                
+                updates_with_ids = []
+                for upd in raw_invoice_updates:
+                    if upd['row_id'] in id_map:
+                        upd['id'] = id_map[upd['row_id']]
+                        updates_with_ids.append(upd)
+                
+                if updates_with_ids:
+                    db.batch_upsert('invoices', updates_with_ids, batch_size=500)
+                    logger.info(f"✅ Synced {len(updates_with_ids)} edits back to raw invoices table")
+            except Exception as sync_err:
+                logger.warning(f"Failed to sync edits back to raw invoices: {sync_err}")
+
         return True
     
     except Exception as e:
-        logger.error(f"Error upserting verified invoices for {username}: {e}")
+        logger.error(f"Error updating invoices for {username}: {e}")
         return False
 
 

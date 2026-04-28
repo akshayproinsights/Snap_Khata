@@ -221,43 +221,55 @@ class HomeDashboardPage extends ConsumerWidget {
 
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: context.primaryColor.withValues(alpha: 0.2), width: 2),
-          ),
-          child: CircleAvatar(
-            radius: 20,
-            backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
-            child: const Icon(LucideIcons.user, color: Colors.white, size: 20),
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            context.push('/settings?shop=details');
+          },
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: context.primaryColor.withValues(alpha: 0.2), width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: context.isDark ? context.borderColor : const Color(0xFF2B3A4A),
+              child: const Icon(LucideIcons.user, color: Colors.white, size: 20),
+            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting.toUpperCase(),
-                style: TextStyle(
-                  color: context.textSecondaryColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push('/settings?shop=details');
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting.toUpperCase(),
+                  style: TextStyle(
+                    color: context.textSecondaryColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                username,
-                style: TextStyle(
-                  color: context.textColor,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                const SizedBox(height: 1),
+                Text(
+                  username,
+                  style: TextStyle(
+                    color: context.textColor,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         Container(

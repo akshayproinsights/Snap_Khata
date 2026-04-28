@@ -12,7 +12,9 @@ import 'package:mobile/features/settings/domain/models/shop_profile.dart';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  final bool openShopDetails;
+
+  const SettingsPage({super.key, this.openShopDetails = false});
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -30,6 +32,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void initState() {
     super.initState();
     _loadShopDetails();
+    // Auto-open shop details sheet if requested
+    if (widget.openShopDetails) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showShopDetailsSheet();
+      });
+    }
   }
 
   /// Load from provider

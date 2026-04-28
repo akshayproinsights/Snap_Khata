@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,19 +59,20 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
       );
 
       if (response.data['status'] == 'success') {
+        // Eagerly kick off data refresh BEFORE closing the sheet
+        // so the fetch is in-flight while the UI animates away.
+        unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
+        if (_partyType == 'customer') {
+          ref.read(udharProvider.notifier).fetchLedgers();
+        } else {
+          ref.read(vendorLedgerProvider.notifier).fetchLedgers();
+        }
+
         if (mounted) {
           Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Entry added successfully! 🎉')),
           );
-        }
-        
-        // Refresh relevant lists and dashboard
-        ref.read(dashboardTotalsProvider.notifier).refresh();
-        if (_partyType == 'customer') {
-          ref.read(udharProvider.notifier).fetchLedgers();
-        } else {
-          ref.read(vendorLedgerProvider.notifier).fetchLedgers();
         }
       }
     } catch (e) {
@@ -268,17 +270,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
                 ),
                 const SizedBox(height: 24),
 
-                // Notes
-                TextFormField(
-                  controller: _notesController,
-                  decoration: InputDecoration(
-                    labelText: 'Notes (Optional)',
-                    hintText: 'Bill number, item details etc.',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    prefixIcon: const Icon(LucideIcons.pencil, size: 20),
-                  ),
-                  maxLines: 2,
-                ),
+                // Notes field removed as per user request to save space
+
                 const SizedBox(height: 32),
 
                 // Submit Button
