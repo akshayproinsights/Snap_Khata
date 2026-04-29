@@ -38,7 +38,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   VendorLedgerState build() {
     _dio = ApiClient().dio;
     Future.microtask(() => fetchLedgers());
-    return VendorLedgerState();
+    // Start as loading=true so the spinner shows immediately on first render.
+    return VendorLedgerState(isLoading: true);
   }
 
   Future<void> fetchLedgers() async {

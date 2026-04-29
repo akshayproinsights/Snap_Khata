@@ -11,17 +11,21 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
-class PartiesListPage extends ConsumerWidget {
+class PartiesListPage extends ConsumerStatefulWidget {
   const PartiesListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PartiesListPage> createState() => _PartiesListPageState();
+}
+
+class _PartiesListPageState extends ConsumerState<PartiesListPage> {
+  @override
+  Widget build(BuildContext context) {
     final ledgers = ref.watch(unifiedLedgerProvider);
     final udharState = ref.watch(udharProvider);
     final vendorState = ref.watch(vendorLedgerProvider);
     final isLoading = udharState.isLoading || vendorState.isLoading;
 
-    // Show spinner while either provider is still loading AND we have no data yet
     if (isLoading && ledgers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -73,6 +77,226 @@ class PartiesListPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _showDeleteConfirmation(
+    BuildContext context,
+    UnifiedLedger ledger,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 32,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.borderColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  // Danger icon circle
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: context.errorColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      LucideIcons.trash2,
+                      color: context.errorColor,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Delete Party?',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: context.textColor,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Party name badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.textSecondaryColor.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color:
+                                context.primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              ledger.name.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
+                                color: context.primaryColor,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          ledger.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: context.textColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This will permanently delete all transactions\nand payment history for this party.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Delete CTA
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: isDeleting
+                          ? null
+                          : () async {
+                              setSheetState(() => isDeleting = true);
+                              HapticFeedback.heavyImpact();
+                              bool success;
+                              if (ledger.type == LedgerType.customer) {
+                                success = await ref
+                                    .read(udharProvider.notifier)
+                                    .deleteLedger(ledger.id);
+                              } else {
+                                success = await ref
+                                    .read(vendorLedgerProvider.notifier)
+                                    .deleteLedger(ledger.id);
+                              }
+                              if (!sheetCtx.mounted) return;
+                              Navigator.pop(sheetCtx);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      success
+                                          ? '${ledger.name} deleted'
+                                          : 'Failed to delete. Try again.',
+                                    ),
+                                    backgroundColor: success
+                                        ? context.errorColor
+                                        : Colors.orange,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.errorColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: isDeleting
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(LucideIcons.trash2, size: 18),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Yes, Delete Party',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Cancel
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: TextButton(
+                      onPressed:
+                          isDeleting ? null : () => Navigator.pop(sheetCtx),
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildLedgerCard(BuildContext context, UnifiedLedger ledger) {
     final bool isCustomer = ledger.type == LedgerType.customer;
     final bool isDue = ledger.balanceDue > 0.01;
@@ -100,6 +324,10 @@ class PartiesListPage extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
+          onLongPress: () {
+            HapticFeedback.heavyImpact();
+            _showDeleteConfirmation(context, ledger);
+          },
           onTap: () {
             HapticFeedback.lightImpact();
             if (isCustomer) {
@@ -120,7 +348,6 @@ class PartiesListPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar with character
                 Container(
                   width: 52,
                   height: 52,
@@ -144,10 +371,7 @@ class PartiesListPage extends ConsumerWidget {
                     ),
                   ),
                 ),
-                
                 const SizedBox(width: 16),
-                
-                // Details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,8 +430,6 @@ class PartiesListPage extends ConsumerWidget {
                     ],
                   ),
                 ),
-                
-                // Balance
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -239,7 +461,6 @@ class PartiesListPage extends ConsumerWidget {
                     ),
                   ],
                 ),
-                
                 const SizedBox(width: 4),
                 Icon(
                   LucideIcons.chevronRight, 

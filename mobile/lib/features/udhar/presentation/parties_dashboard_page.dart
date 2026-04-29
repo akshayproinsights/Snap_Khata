@@ -14,11 +14,44 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
-class PartiesDashboardPage extends ConsumerWidget {
+class PartiesDashboardPage extends ConsumerStatefulWidget {
   const PartiesDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PartiesDashboardPage> createState() => _PartiesDashboardPageState();
+}
+
+class _PartiesDashboardPageState extends ConsumerState<PartiesDashboardPage> {
+  Timer? _refreshDebounce;
+  // Track if we've done the initial fetch for this session so we don't
+  // re-trigger a full fetch every time the page becomes visible.
+  bool _initialFetchDone = false;
+
+  @override
+  void dispose() {
+    _refreshDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onPageVisible() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      if (!_initialFetchDone) {
+        // First visit — providers already fire via microtask in build().
+        // Just mark done so subsequent navigations use silent refresh.
+        _initialFetchDone = true;
+        return;
+      }
+      // Subsequent navigations: silent refresh (no spinner).
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      ref.read(udharProvider.notifier).fetchLedgersSilent();
+      ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(dashboardTotalsProvider);
     final filterMode = ref.watch(udharFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -51,11 +84,7 @@ class PartiesDashboardPage extends ConsumerWidget {
         key: const Key('parties_dashboard_visibility'),
         onVisibilityChanged: (info) {
           if (info.visibleFraction > 0.1) {
-            // Always use silent refresh — never flash a loading spinner on navigation.
-            // This keeps the list visible at all times while data refreshes in background.
-            unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-            ref.read(udharProvider.notifier).fetchLedgersSilent();
-            ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
+            _onPageVisible();
           }
         },
         // Column is ALWAYS rendered — dashboardAsync only controls the summary card,
