@@ -391,12 +391,10 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
     amount_done_df = amount[amount["Verification Status_clean"] == "done"].copy()
     
     # Metadata columns to merge from verification_amounts
-    exclude_amt_cols = [
-        "Verification Status", "Verification Status_clean", "username", "id", "Database_Id", 
-        "Upload Date_dt", "Row_Id", "audit_findings", "Amount Mismatch",
-        "line_item_row_bbox", "date_and_receipt_combined_bbox", "description_bbox"
-    ]
-    amt_apply_cols = [c for c in amount_done_df.columns if c not in exclude_amt_cols]
+    # We strictly limit this to line-item specifics to prevent overwriting header 
+    # details (like Payment Mode) that belong to verification_dates
+    allowed_amt_cols = ["Quantity", "Rate", "Amount", "Description"]
+    amt_apply_cols = [c for c in amount_done_df.columns if c in allowed_amt_cols]
     
     if not amount_done_df.empty:
         # ROBUSTNESS: Handle commas in Amount string before converting to numeric
@@ -771,28 +769,6 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                         if _is_valid_scalar(new_amt) and str(new_amt) != '':
                             df_raw.loc[mask, 'Amount'] = new_amt
                         
-                        # Apply header-level edits from amount screen just in case
-                        if 'Customer Name' in row and _is_valid_scalar(row['Customer Name']) and str(row['Customer Name']).strip() != '':
-                            df_raw.loc[mask, 'Customer Name'] = row['Customer Name']
-                        if 'Car Number' in row and _is_valid_scalar(row['Car Number']) and str(row['Car Number']).strip() != '':
-                            df_raw.loc[mask, 'Car Number'] = row['Car Number']
-                        if 'Mobile Number' in row and _is_valid_scalar(row['Mobile Number']) and str(row['Mobile Number']).strip() != '':
-                            df_raw.loc[mask, 'Mobile Number'] = row['Mobile Number']
-                        if 'Type' in row and _is_valid_scalar(row['Type']) and str(row['Type']).strip() != '':
-                            df_raw.loc[mask, 'Type'] = row['Type']
-                        if 'Payment Mode' in row and _is_valid_scalar(row['Payment Mode']):
-                            pm = row['Payment Mode']
-                            if not (isinstance(pm, (list, dict)) and len(pm) == 0):
-                                df_raw.loc[mask, 'Payment Mode'] = pm
-                        if 'Received Amount' in row and _is_valid_scalar(row['Received Amount']):
-                            ra = row['Received Amount']
-                            if not (isinstance(ra, (list, dict)) and len(ra) == 0):
-                                df_raw.loc[mask, 'Received Amount'] = ra
-                        if 'Balance Due' in row and _is_valid_scalar(row['Balance Due']):
-                            bd = row['Balance Due']
-                            if not (isinstance(bd, (list, dict)) and len(bd) == 0):
-                                df_raw.loc[mask, 'Balance Due'] = bd
-                            
                         corrections_made = True
                     else:
                         logger.warning(f"No matching invoice for amount correction: link='{link}', receipt='{receipt_num}', desc='{desc[:30]}'")

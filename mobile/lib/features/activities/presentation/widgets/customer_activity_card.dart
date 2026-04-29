@@ -9,7 +9,6 @@ import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/verified/domain/models/verified_models.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 /// Renders a customer (receivable) transaction row.
 /// Amounts are formatted with zero decimal digits per SnapKhata UI guidelines.
@@ -219,19 +218,7 @@ class CustomerActivityCard extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 12),
                               ],
-                              if (mobileNumber.isNotEmpty) ...[
-                                Icon(LucideIcons.phone, size: 13, color: context.textSecondaryColor),
-                                const SizedBox(width: 4),
-                                Text(
-                                  mobileNumber,
-                                  style: TextStyle(
-                                    color: context.textSecondaryColor,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                              ],
+                              // Mobile number omitted to keep UI clean.
                               Text(
                                 isPayment 
                                     ? 'MODE: $paymentMode'

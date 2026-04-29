@@ -4,7 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:mobile/shared/widgets/robust_receipt_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
@@ -35,12 +35,9 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
           body: InteractiveViewer(
             maxScale: 5.0,
             child: Center(
-              child: CachedNetworkImage(
+              child: RobustReceiptImageFullScreen(
                 imageUrl: bundle.receiptLink,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                    child: CircularProgressIndicator(color: Colors.white)),
-                errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.white),
+                maxRetries: 3,
               ),
             ),
           ),

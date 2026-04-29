@@ -409,12 +409,19 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 tx['items'] = items
                 if not (tx.get('customer_ledgers') or {}).get('customer_name'):
                     tx['_enriched_customer_name'] = meta.get('customer_name') or ''
+                # Use upload_date as the activity timestamp for INVOICE txs.
+                # This ensures recently processed invoices appear at the top
+                # regardless of the invoice's own date field.
+                upload_ts = meta.get('upload_date') or ''
+                tx['activity_ts'] = upload_ts if upload_ts else tx.get('created_at') or ''
             else:
                 tx.setdefault('receipt_link', '')
                 tx.setdefault('invoice_date', '')
                 tx.setdefault('upload_date', '')
                 tx.setdefault('mobile_number', '')
                 tx.setdefault('items', [])
+                # For PAYMENT transactions, created_at IS the actual activity time.
+                tx['activity_ts'] = tx.get('created_at') or ''
             unified_txs.append(tx)
 
         # 4. Add verified invoices that are NOT in ledger_txs
@@ -427,9 +434,16 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
             first_item = items[0]
             total_amount = sum(float(i.get('amount') or 0.0) for i in items)
             
-            # Find earliest created_at for stable sorting
-            timestamps = [i.get('created_at') for i in items if i.get('created_at')]
-            earliest_ts = min(timestamps) if timestamps else first_item.get('created_at')
+            # Use LATEST upload_date as the activity timestamp for cash invoices.
+            # This ensures newly processed cash invoices appear at the top.
+            upload_timestamps = [i.get('upload_date') for i in items if i.get('upload_date')]
+            latest_upload_ts = max(upload_timestamps) if upload_timestamps else None
+
+            # Fallback to latest created_at (DB insert time) if upload_date is missing
+            created_timestamps = [i.get('created_at') for i in items if i.get('created_at')]
+            latest_created_ts = max(created_timestamps) if created_timestamps else first_item.get('created_at')
+
+            activity_ts = latest_upload_ts or latest_created_ts or ''
             
             # Find valid receipt_link and mobile_number
             receipt_link = next((i.get('receipt_link') for i in items if i.get('receipt_link')), '')
@@ -443,7 +457,8 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 'amount': total_amount,
                 'notes': first_item.get('notes') or '',
                 'receipt_number': rn,
-                'created_at': earliest_ts,
+                'created_at': latest_created_ts,
+                'activity_ts': activity_ts,
                 'is_paid': True,
                 'receipt_link': receipt_link,
                 'invoice_date': first_item.get('date') or '',
@@ -466,8 +481,11 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
 
         unified_txs.extend(grouped_cash_invoices.values())
 
-        # Sort combined list by created_at descending
-        unified_txs.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        # Sort combined list by activity_ts descending.
+        # activity_ts = upload_date for INVOICE records (when it was processed),
+        # and created_at for PAYMENT records (when payment was actually made).
+        # This ensures: recent uploads > recent payments > old invoices.
+        unified_txs.sort(key=lambda x: x.get('activity_ts') or x.get('created_at') or '', reverse=True)
 
         return {
             "status": "success",
@@ -617,7 +635,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
     try:
         # 1. Fetch all verified invoices
         invoices_resp = db.client.table("verified_invoices") \
-            .select("id, receipt_number, date, customer_name, customer_details, amount, received_amount, created_at, car_number, vehicle_number, extra_fields, mobile_number") \
+            .select("id, receipt_number, date, customer_name, customer_details, amount, received_amount, balance_due, payment_mode, created_at, car_number, vehicle_number, extra_fields, mobile_number") \
             .eq("username", username) \
             .execute()
 
@@ -645,6 +663,9 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 grouped_invoices[rn] = {
                     "total_amount": 0.0,
                     "received_amount": float(inv.get("received_amount") or 0),
+                    "balance_due": float(inv.get("balance_due") or 0),
+                    # payment_mode is a header-level field — take from first line item
+                    "payment_mode": inv.get("payment_mode") or "Cash",
                     "customer_name": final_name,
                     "date": inv.get("date") or inv.get("created_at"),
                     "notes": inv.get("customer_details"),
@@ -662,6 +683,13 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 grouped_invoices[rn]["extra_fields"].update(inv.get("extra_fields"))
             if inv.get("mobile_number"):
                 grouped_invoices[rn]["mobile_number"] = inv.get("mobile_number")
+            # payment_mode: if any line on the invoice is Credit, treat whole invoice as Credit
+            existing_pm = grouped_invoices[rn].get("payment_mode", "Cash")
+            incoming_pm = inv.get("payment_mode") or "Cash"
+            if incoming_pm.strip().lower() == "credit":
+                grouped_invoices[rn]["payment_mode"] = incoming_pm
+            elif existing_pm.strip().lower() == "cash" and incoming_pm:
+                grouped_invoices[rn]["payment_mode"] = incoming_pm
             
             # DEBUG: Log if we have mobile number
             if grouped_invoices[rn].get("mobile_number"):
@@ -694,7 +722,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
         # 3. Fetch existing transactions for these receipt numbers
         receipt_numbers = list(grouped_invoices.keys())
         existing_tx_resp = db.client.table("ledger_transactions") \
-            .select("id, receipt_number, ledger_id, amount, is_paid, transaction_type, car_number, extra_fields, notes") \
+            .select("id, receipt_number, ledger_id, amount, is_paid, payment_mode, transaction_type, car_number, extra_fields, notes, created_at") \
             .eq("username", username) \
             .in_("receipt_number", receipt_numbers) \
             .execute()
@@ -719,7 +747,17 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
 
             # 1. Handle the INVOICE transaction (Full billing amount)
             total_amount = data["total_amount"]
-            is_paid_status = (total_amount - data["received_amount"]) <= 0.01
+            payment_mode = data.get("payment_mode") or "Cash"
+            is_credit = payment_mode.strip().lower() == "credit"
+            
+            # Compute is_paid correctly based on payment_mode:
+            # - Credit: paid only when balance_due is 0 (i.e. fully settled)
+            # - Cash/Online: always treated as paid at time of invoice
+            if is_credit:
+                balance_due = data.get("balance_due", total_amount - data["received_amount"])
+                is_paid_status = balance_due <= 0.01
+            else:
+                is_paid_status = True
             
             if rn in existing_invoices:
                 tx = existing_invoices[rn]
@@ -729,6 +767,10 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     update_data["amount"] = total_amount
                 if bool(tx.get("is_paid")) != is_paid_status: 
                     update_data["is_paid"] = is_paid_status
+                # Always sync payment_mode — this is the core fix
+                if tx.get("payment_mode") != payment_mode:
+                    update_data["payment_mode"] = payment_mode
+                    logger.info(f"🔄 Updating payment_mode for receipt {rn}: {tx.get('payment_mode')!r} → {payment_mode!r}")
                 
                 # Sync metadata
                 if tx.get("car_number") != data["car_number"]:
@@ -772,6 +814,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     "amount": total_amount,
                     "receipt_number": rn,
                     "is_paid": is_paid_status,
+                    "payment_mode": payment_mode,
                     "created_at": data["date"] or now,
                     "notes": data["notes"],
                     "car_number": data["car_number"],

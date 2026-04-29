@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:mobile/shared/widgets/robust_receipt_image.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
@@ -184,36 +184,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           ),
           body: InteractiveViewer(
             child: Center(
-              child: Hero(
-                tag: 'receipt_image_${widget.group.receiptNumber}',
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  httpHeaders: const {
-                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                  },
-                  placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(color: Colors.white)),
-                  errorWidget: (context, url, error) => const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          LucideIcons.imageOff,
-                          color: Colors.white54,
-                          size: 60),
-                        SizedBox(height: 16),
-                        Text(
-                          'Image unavailable',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              child: RobustReceiptImageFullScreen(
+                imageUrl: imageUrl,
+                heroTag: 'receipt_image_${widget.group.receiptNumber}',
+                maxRetries: 3,
               ),
             ),
           ),
@@ -412,39 +386,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Hero(
-                      tag: 'receipt_image_${group.receiptNumber}',
-                      child: CachedNetworkImage(
-                        imageUrl: header.receiptLink,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        httpHeaders: const {
-                          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                        },
-                        placeholder: (context, url) => const Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white)),
-                        errorWidget: (context, url, error) => Container(
-                          color: context.surfaceColor,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                LucideIcons.imageOff,
-                                color: Colors.white54,
-                                size: 40),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Image unavailable',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 12,
-                                  ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    RobustReceiptImage(
+                      imageUrl: header.receiptLink,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      heroTag: 'receipt_image_${group.receiptNumber}',
+                      maxRetries: 3,
                     ),
                     Positioned(
                       bottom: 8,

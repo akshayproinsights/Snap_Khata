@@ -51,130 +51,153 @@ class PartiesDashboardPage extends ConsumerWidget {
         key: const Key('parties_dashboard_visibility'),
         onVisibilityChanged: (info) {
           if (info.visibleFraction > 0.1) {
-            // Force-invalidate dashboard totals so top cards always show fresh values.
-            // This triggers a full reload (with loading indicator) ensuring no stale ₹0.
-            unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-            // Silently refresh lists in the background (no spinner flash on list)
+            // Always use silent refresh — never flash a loading spinner on navigation.
+            // This keeps the list visible at all times while data refreshes in background.
+            unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
             ref.read(udharProvider.notifier).fetchLedgersSilent();
             ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
           }
         },
-        child: dashboardAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
-                const SizedBox(height: 16),
-                Text(error.toString(), style: TextStyle(color: context.textColor)),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
-                  child: const Text('Retry'),
+        // Column is ALWAYS rendered — dashboardAsync only controls the summary card,
+        // NOT the party list. This prevents the grey-screen race condition.
+        child: Column(
+          children: [
+            // ── Summary Card (independent loading skeleton) ──────────────────
+            dashboardAsync.when(
+              loading: () => _buildSummaryCardSkeleton(context),
+              error: (error, stack) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: context.surfaceColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: context.errorColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.alertCircle, color: context.errorColor, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Could not load totals',
+                          style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
+              data: (summary) => _buildSummaryCard(
+                context,
+                summary.totalReceivable,
+                summary.totalPayable,
+                isDark,
+              ),
             ),
-          ),
-          data: (summary) => Column(
-                  children: [
-                    // Summary Section
-                    _buildSummaryCard(
-                      context, 
-                      summary.totalReceivable,
-                      summary.totalPayable,
-                      isDark,
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Search Bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: context.premiumShadow,
-                        ),
-                        child: TextField(
-                          onChanged: (value) => ref.read(udharSearchQueryProvider.notifier).setQuery(value),
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                          decoration: InputDecoration(
-                            hintText: 'Search Customers, Suppliers...',
-                            hintStyle: TextStyle(
-                              color: context.textSecondaryColor,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            prefixIcon: Icon(
-                              LucideIcons.search, 
-                              size: 20, 
-                              color: context.textSecondaryColor
-                            ),
-                            filled: true,
-                            fillColor: context.surfaceColor,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(color: context.borderColor),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(color: context.borderColor),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(color: context.primaryColor, width: 2),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                        ),
-                      ),
-                    ),
-  
-                    const SizedBox(height: 16),
-  
-                    // Filter Pills
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: [
-                          _FilterChip(
-                            label: 'All', 
-                            isSelected: filterMode == UdharFilterMode.all,
-                            onTap: () => ref.read(udharFilterProvider.notifier).setFilter(UdharFilterMode.all),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Customers', 
-                            isSelected: filterMode == UdharFilterMode.customers,
-                            onTap: () => ref.read(udharFilterProvider.notifier).setFilter(UdharFilterMode.customers),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Suppliers', 
-                            isSelected: filterMode == UdharFilterMode.suppliers,
-                            onTap: () => ref.read(udharFilterProvider.notifier).setFilter(UdharFilterMode.suppliers),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Pending', 
-                            isSelected: filterMode == UdharFilterMode.pending,
-                            activeColor: context.warningColor,
-                            onTap: () => ref.read(udharFilterProvider.notifier).setFilter(UdharFilterMode.pending),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Unified List View
-                    const Expanded(
-                      child: mobile.PartiesListPage(),
-                    ),
-                  ],
+
+            const SizedBox(height: 16),
+
+            // ── Search Bar ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: context.premiumShadow,
                 ),
+                child: TextField(
+                  onChanged: (value) =>
+                      ref.read(udharSearchQueryProvider.notifier).setQuery(value),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    hintText: 'Search Customers, Suppliers...',
+                    hintStyle: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    prefixIcon: Icon(
+                      LucideIcons.search,
+                      size: 20,
+                      color: context.textSecondaryColor,
+                    ),
+                    filled: true,
+                    fillColor: context.surfaceColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: context.borderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: context.borderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: context.primaryColor, width: 2),
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Filter Pills ─────────────────────────────────────────────────
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: filterMode == UdharFilterMode.all,
+                    onTap: () => ref
+                        .read(udharFilterProvider.notifier)
+                        .setFilter(UdharFilterMode.all),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Customers',
+                    isSelected: filterMode == UdharFilterMode.customers,
+                    onTap: () => ref
+                        .read(udharFilterProvider.notifier)
+                        .setFilter(UdharFilterMode.customers),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Suppliers',
+                    isSelected: filterMode == UdharFilterMode.suppliers,
+                    onTap: () => ref
+                        .read(udharFilterProvider.notifier)
+                        .setFilter(UdharFilterMode.suppliers),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Pending',
+                    isSelected: filterMode == UdharFilterMode.pending,
+                    activeColor: context.warningColor,
+                    onTap: () => ref
+                        .read(udharFilterProvider.notifier)
+                        .setFilter(UdharFilterMode.pending),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Party List — ALWAYS rendered, never gated on dashboard load ──
+            const Expanded(
+              child: mobile.PartiesListPage(),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -192,6 +215,55 @@ class PartiesDashboardPage extends ConsumerWidget {
         icon: const Icon(LucideIcons.plus),
         label: const Text('Add Party', style: TextStyle(fontWeight: FontWeight.w700)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCardSkeleton(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      height: 96,
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: context.premiumShadow,
+        border: Border.all(color: context.borderColor, width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(height: 10, width: 70, decoration: BoxDecoration(color: context.borderColor.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(6))),
+                    const SizedBox(height: 12),
+                    Container(height: 22, width: 100, decoration: BoxDecoration(color: context.borderColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(6))),
+                  ],
+                ),
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1, color: context.borderColor.withValues(alpha: 0.5), indent: 20, endIndent: 20),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(height: 10, width: 60, decoration: BoxDecoration(color: context.borderColor.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(6))),
+                    const SizedBox(height: 12),
+                    Container(height: 22, width: 80, decoration: BoxDecoration(color: context.borderColor.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(6))),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

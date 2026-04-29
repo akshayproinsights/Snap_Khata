@@ -116,6 +116,14 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
     } else {
       return CachedNetworkImage(
         imageUrl: url,
+        cacheKey: () {
+          try {
+            final uri = Uri.parse(url);
+            return '${uri.scheme}://${uri.host}${uri.path}';
+          } catch (_) {
+            return url;
+          }
+        }(),
         fit: BoxFit.contain,
         placeholder: (context, url) => const Center(
           child: CircularProgressIndicator(color: AppTheme.primary),

@@ -52,7 +52,11 @@ class ActivityRepository {
         entityName: ledger?['customer_name']
             ?? json['_enriched_customer_name']
             ?? 'Unknown Customer',
-        transactionDate: DateTime.parse(json['created_at']),
+        // Use activity_ts (upload_date for invoices, created_at for payments)
+        // so the card's "Today/Yesterday" label reflects actual activity time.
+        transactionDate: DateTime.parse(
+          json['activity_ts'] as String? ?? json['created_at'] as String,
+        ),
         amount: (json['amount'] as num).toDouble(),
         displayId: json['receipt_number']?.toString(),
         transactionType: json['transaction_type'] ?? 'INVOICE',
