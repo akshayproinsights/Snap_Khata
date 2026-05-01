@@ -3,12 +3,18 @@ class VendorLedger {
   final String vendorName;
   final double balanceDue;
   final DateTime? lastPaymentDate;
+  final String? latestBillNumber;
+  final double? latestBillAmount;
+  final DateTime? latestBillDate;
 
   VendorLedger({
     required this.id,
     required this.vendorName,
     required this.balanceDue,
     this.lastPaymentDate,
+    this.latestBillNumber,
+    this.latestBillAmount,
+    this.latestBillDate,
   });
 
   factory VendorLedger.fromJson(Map<String, dynamic> json) {
@@ -18,6 +24,13 @@ class VendorLedger {
       balanceDue: double.tryParse(json['balance_due']?.toString() ?? '0') ?? 0.0,
       lastPaymentDate: json['last_payment_date'] != null 
           ? DateTime.parse(json['last_payment_date']) 
+          : null,
+      latestBillNumber: json['latest_bill_number'],
+      latestBillAmount: json['latest_bill_amount'] != null 
+          ? double.tryParse(json['latest_bill_amount'].toString()) 
+          : null,
+      latestBillDate: json['latest_bill_date'] != null 
+          ? DateTime.parse(json['latest_bill_date']) 
           : null,
     );
   }

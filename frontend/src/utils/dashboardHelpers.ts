@@ -84,6 +84,27 @@ export function formatDateLong(dateStr: string): string {
 }
 
 /**
+ * Format date for activity feed (e.g., Today • 5:43 PM)
+ */
+export function formatActivityDate(dateStr: string): string {
+    try {
+        const date = new Date(dateStr);
+        const now = new Date();
+        
+        const isToday = format(date, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd');
+        const isYesterday = format(date, 'yyyy-MM-dd') === format(subDays(now, 1), 'yyyy-MM-dd');
+        
+        let dayPart = format(date, 'MMM dd');
+        if (isToday) dayPart = 'Today';
+        if (isYesterday) dayPart = 'Yesterday';
+        
+        return `${dayPart} • ${format(date, 'h:mm a')}`;
+    } catch {
+        return dateStr;
+    }
+}
+
+/**
  * Check if visual should be shown based on config
  */
 export function shouldShowVisual(

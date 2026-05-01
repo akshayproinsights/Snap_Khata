@@ -863,7 +863,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final Color bgColor = accentColor.withValues(alpha: 0.08);
     
     final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
-    final String txTitle = isPayment ? 'Payment Received' : 'Credit Sale';
+    final String txTitle = isPayment 
+        ? 'Payment Received' 
+        : (tx.paymentMode != null && tx.paymentMode!.toLowerCase() != 'credit' 
+            ? '${tx.paymentMode} Sale' 
+            : 'Credit Sale');
 
     return Container(
       decoration: BoxDecoration(
@@ -983,7 +987,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   _buildClarityItem('Bill Amount', CurrencyFormatter.format(tx.amount)),
                   _buildClarityItem(
                     'Paid', 
-                    CurrencyFormatter.format(tx.amount - (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)))
+                    CurrencyFormatter.format(tx.receivedAmount ?? (tx.amount - (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))))
                   ),
                   _buildClarityItem(
                     'Balance', 

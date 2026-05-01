@@ -1,186 +1,80 @@
-name: Deploy App to Hetzner
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+name: Deploy SnapKhata to Contabo
 
 on:
   push:
-    branches:
-      - main
-      - stable
+    branches: [ main, master ]
 
 jobs:
-  # ── BUILD JOB: Build all frontend assets on GitHub Actions ───────────────
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
+
+      # ─── BUILD REACT FRONTEND ───
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 1
-          persist-credentials: false
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
+      - name: Build React Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
 
-      # ── 1. Setup Flutter ──────────────────────────────────────────────────
+      # ─── BUILD FLUTTER PWA ───
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
-      - name: Get Flutter dependencies
-        working-directory: ./mobile
-        run: flutter pub get
-
       - name: Build Flutter Web
-        working-directory: ./mobile
-        run: flutter build web --release
-
-      # ── 2. Setup Node.js for React frontend ─────────────────────────────
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-
-      - name: Install dependencies and build React
-        working-directory: ./frontend
         run: |
-          npm ci
-          npm run build
+          cd mobile
+          flutter pub get
+          flutter build web --release --no-tree-shake-icons
 
-      # ── 3. Upload build artifacts ────────────────────────────────────────
-      - name: Upload Flutter Web build
-        uses: actions/upload-artifact@v4
+      # ─── DEPLOY TO CONTABO ───
+      - name: Deploy to Server via SSH
+        uses: appleboy/scp-action@master
         with:
-          name: flutter-web-build
-          path: mobile/build/web/
-          retention-days: 1
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "backend/**,frontend/dist/**,mobile/build/web/**,ecosystem.config.js,package.json"
+          target: "/root/Snap_Khata_Temp"
+          strip_components: 0
 
-      - name: Upload React build
-        uses: actions/upload-artifact@v4
+      - name: Finalize Deployment on Server
+        uses: appleboy/ssh-action@master
         with:
-          name: react-web-build
-          path: frontend/dist/
-          retention-days: 1
-
-  # ── DEPLOY JOB: Transfer files and restart services on server ────────────
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-
-      # ── 1. Download build artifacts ───────────────────────────────────────
-      - name: Download Flutter Web build
-        uses: actions/download-artifact@v4
-        with:
-          name: flutter-web-build
-          path: mobile/build/web/
-
-      - name: Download React build
-        uses: actions/download-artifact@v4
-        with:
-          name: react-web-build
-          path: frontend/dist/
-
-      # ── 2. Deploy Flutter Web files via SCP ─────────────────────────────
-      - name: Deploy Flutter Web to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: deploy
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "mobile/build/web/*"
-          target: "/home/deploy/Snap_Khata/mobile/build/web/"
-          strip_components: 3
-          overwrite: true
-
-      # ── 3. Deploy React frontend files via SCP ────────────────────────────
-      - name: Deploy React Web to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: deploy
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "frontend/dist/*"
-          target: "/home/deploy/Snap_Khata/frontend/dist/"
-          strip_components: 2
-          overwrite: true
-
-      # ── 4. Update backend code and restart services via SSH ─────────────
-      - name: Deploy backend and restart services
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: deploy
-          key: ${{ secrets.HETZNER_SSH_KEY }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/Snap_Khata
+            # 1. Sync files to the main directory
+            rsync -avz /root/Snap_Khata_Temp/ /root/Snap_Khata/
+            rm -rf /root/Snap_Khata_Temp
             
-            # Ensure safe directory to avoid Git 128 errors
-            git config --global --add safe.directory /home/deploy/Snap_Khata
-
-            # Pull latest code (the branch that triggered this workflow)
-            git pull origin ${{ github.ref_name }}
-
-
-            # Update .env file with secrets from GitHub
-            if [ -f backend/.env ]; then
-              sed -i "s/\${GOOGLE_API_KEY}/${{ secrets.GOOGLE_API_KEY }}/g" backend/.env
-            fi
-
-            # ── Frontend Dependencies ─────────────────────────────────
-            cd frontend
-            npm ci
-            cd ..
-
-            # ── Python Backend ────────────────────────────────────────────
+            cd /root/Snap_Khata
+            
+            # 2. Setup Backend VirtualEnv & Dependencies
             cd backend
-            
-            # Fix permissions and update dependencies
-            if [ -d venv ]; then
-              # Ensure venv is owned by deploy user and has correct permissions
-              sudo chown -R deploy:deploy venv/
-              chmod -R u+rwX venv/
-              
-              # Activate and update
-              source venv/bin/activate
-              pip install --upgrade pip
-              pip install -r requirements.txt
-            else
-              echo "WARNING: Virtual environment not found. Creating new venv..."
+            if [ ! -d "venv" ]; then
               python3 -m venv venv
-              source venv/bin/activate
-              pip install --upgrade pip
-              pip install -r requirements.txt
             fi
+            source venv/bin/activate
+            pip install -r requirements.txt
             cd ..
-
-            # ── Nginx Setup (idempotent) ────────────────────────────────
-            # Install Nginx if not present
-            which nginx || (sudo apt-get update -qq && sudo apt-get install -y -qq nginx)
-
-            # Link our config if not already linked
-            CONF_SRC="$HOME/Snap_Khata/nginx/mydigientry.conf"
-            CONF_DST="/etc/nginx/sites-enabled/mydigientry.conf"
-            if [ ! -f "$CONF_DST" ]; then
-              sudo cp "$CONF_SRC" "$CONF_DST"
-              # Disable default site to avoid conflicts
-              sudo rm -f /etc/nginx/sites-enabled/default
-            fi
-
-            # Test config then reload
-            sudo nginx -t && sudo systemctl reload nginx
-
-            # ── Restart all PM2 Services ───────────────────────────────
-            pm2 restart ecosystem.config.js --update-env
+            
+            # 3. Restart Services with PM2
+            pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
             pm2 save
+            
+            echo "Deployment Successful!"

@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/features/activities/presentation/providers/activity_provider.dart';
-import 'package:mobile/features/activities/presentation/widgets/customer_activity_card.dart';
-import 'package:mobile/features/activities/presentation/widgets/vendor_activity_card.dart';
-import 'package:mobile/features/activities/domain/models/activity_item.dart';
+import 'package:mobile/features/udhar/presentation/providers/unified_party_provider.dart';
+import 'package:mobile/features/udhar/domain/models/unified_party.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
+import 'package:mobile/features/udhar/presentation/widgets/party_activity_card.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/bill_type_selection_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/review_center_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
@@ -21,8 +23,9 @@ class HomeDashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filteredActivitiesAsync = ref.watch(filteredActivitiesProvider);
-    final currentFilter = ref.watch(activeFilterProvider);
+    final parties = ref.watch(unifiedPartiesProvider);
+    final isLoading = ref.watch(unifiedPartiesLoadingProvider);
+    final currentFilter = ref.watch(homePartyFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -37,17 +40,19 @@ class HomeDashboardPage extends ConsumerWidget {
         key: const Key('home_dashboard_visibility'),
         onVisibilityChanged: (info) {
           if (info.visibleFraction > 0.1) {
-            // Silently refresh dashboard totals and recent activity in background
+            // Refresh totals and ledgers in background
             ref.read(dashboardTotalsProvider.notifier).refreshSilent();
-            ref.read(recentActivitiesProvider.notifier).refreshSilent();
+            ref.read(udharProvider.notifier).fetchLedgersSilent();
+            ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
           }
         },
         child: SafeArea(
           child: RefreshIndicator(
             onRefresh: () async {
               await Future.wait([
-                ref.refresh(recentActivitiesProvider.future),
-                ref.refresh(dashboardTotalsProvider.future),
+                ref.read(udharProvider.notifier).fetchLedgers(),
+                ref.read(vendorLedgerProvider.notifier).fetchLedgers(),
+                ref.read(dashboardTotalsProvider.notifier).refresh(),
               ]);
             },
             child: CustomScrollView(
@@ -60,25 +65,19 @@ class HomeDashboardPage extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildHeaderRow(context, ref, currentFilter),
+                        _buildHeaderRow(context, ref),
                         const SizedBox(height: 20),
                         _buildSummaryCards(context, ref, isDark),
                         const SizedBox(height: 28),
-                        _buildSearchBar(context, ref, isDark),
+                        _buildSearchBar(context, ref),
                         const SizedBox(height: 16),
-                        _buildFilterChips(context, ref, currentFilter, isDark),
+                        _buildFilterChips(context, ref, currentFilter),
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              currentFilter == ActivityFilter.all 
-                                  ? 'RECENT ACTIVITY' 
-                                  : currentFilter == ActivityFilter.customers 
-                                      ? 'RECENT SALES' 
-                                      : currentFilter == ActivityFilter.suppliers
-                                          ? 'RECENT PURCHASES'
-                                          : 'RECENT ITEMS',
+                              'PARTIES (KHATA)',
                               style: TextStyle(
                                 color: context.textColor,
                                 fontSize: 12,
@@ -86,6 +85,15 @@ class HomeDashboardPage extends ConsumerWidget {
                                 letterSpacing: 1.0,
                               ),
                             ),
+                            if (parties.isNotEmpty)
+                              Text(
+                                '${parties.length} TOTAL',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -94,101 +102,75 @@ class HomeDashboardPage extends ConsumerWidget {
                   ),
                 ),
   
-                // ── Activity List ──
-                filteredActivitiesAsync.when(
-                  loading: () => const SliverFillRemaining(
+                // ── Parties List ──
+                if (isLoading)
+                  const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (error, stack) => SliverFillRemaining(
+                  )
+                else if (parties.isEmpty)
+                  SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.alertCircle, color: context.errorColor, size: 48),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Failed to load activities',
-                              style: TextStyle(fontWeight: FontWeight.w600, color: context.textColor),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: context.primaryColor.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(height: 8),
-                            Text(error.toString(), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondaryColor)),
-                            const SizedBox(height: 24),
-                            ElevatedButton(
-                              onPressed: () => ref.read(recentActivitiesProvider.notifier).refreshData(),
-                              child: const Text('RETRY'),
+                            child: Icon(
+                              LucideIcons.users,
+                              size: 48,
+                              color: context.primaryColor,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'No parties found',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: context.textColor,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Add customers or suppliers to track Khata.',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: context.textSecondaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final party = parties[index];
+                          return PartyActivityCard(
+                            party: party,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              if (party.type == PartyType.customer) {
+                                context.push('/udhar/ledger/${party.id}');
+                              } else {
+                                context.push('/inventory/vendor-ledger/${party.id}');
+                              }
+                            },
+                          );
+                        },
+                        childCount: parties.length,
                       ),
                     ),
                   ),
-                  data: (activities) {
-                    if (activities.isEmpty) {
-                      return SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  color: context.primaryColor.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  LucideIcons.scan,
-                                  size: 48,
-                                  color: context.primaryColor,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'No transactions yet',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                  color: context.textColor,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Start by scanning your first bill.',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: context.textSecondaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-  
-                    return SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final item = activities[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: item.map(
-                                customer: (c) => CustomerActivityCard(item: c),
-                                vendor: (v) => VendorActivityCard(item: v),
-                              ),
-                            );
-                          },
-                          childCount: activities.length,
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -199,7 +181,7 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeaderRow(BuildContext context, WidgetRef ref, ActivityFilter currentFilter) {
+  Widget _buildHeaderRow(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final username = authState.user?.username ?? 'Merchant';
     final supplierPending = ref.watch(pendingSupplierReviewsProvider);
@@ -210,14 +192,7 @@ class HomeDashboardPage extends ConsumerWidget {
     if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON';
     if (hour >= 17) greeting = 'GOOD EVENING';
 
-    int pendingCount = 0;
-    if (currentFilter == ActivityFilter.suppliers) {
-      pendingCount = supplierPending;
-    } else if (currentFilter == ActivityFilter.customers) {
-      pendingCount = customerPending;
-    } else {
-      pendingCount = supplierPending + customerPending;
-    }
+    int pendingCount = supplierPending + customerPending;
 
     return Row(
       children: [
@@ -288,13 +263,7 @@ class HomeDashboardPage extends ConsumerWidget {
             ),
             onPressed: () {
               HapticFeedback.lightImpact();
-              if (currentFilter == ActivityFilter.suppliers) {
-                context.push('/inventory-review');
-              } else if (currentFilter == ActivityFilter.customers) {
-                context.push('/review');
-              } else {
-                _showReviewSelectionDialog(context);
-              }
+              _showReviewSelectionDialog(context);
             },
             color: context.textColor,
             tooltip: 'Review pending invoices',
@@ -312,7 +281,7 @@ class HomeDashboardPage extends ConsumerWidget {
         children: [
           Expanded(
             child: _SummaryCard(
-              label: 'YOU WILL GET',
+              label: 'TO COLLECT',
               amount: CurrencyFormatter.format(totals.totalReceivable),
               color: context.successColor,
               isDark: isDark,
@@ -321,7 +290,7 @@ class HomeDashboardPage extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             child: _SummaryCard(
-              label: 'YOU WILL GIVE',
+              label: 'TO GIVE',
               amount: CurrencyFormatter.format(totals.totalPayable),
               color: context.errorColor,
               isDark: isDark,
@@ -333,7 +302,7 @@ class HomeDashboardPage extends ConsumerWidget {
         children: [
           Expanded(
             child: _SummaryCard(
-              label: 'YOU WILL GET',
+              label: 'TO COLLECT',
               amount: '...',
               isLoading: true,
               color: context.successColor,
@@ -343,7 +312,7 @@ class HomeDashboardPage extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             child: _SummaryCard(
-              label: 'YOU WILL GIVE',
+              label: 'TO GIVE',
               amount: '...',
               isLoading: true,
               color: context.errorColor,
@@ -358,8 +327,8 @@ class HomeDashboardPage extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
               child: _SummaryCard(
-                label: 'YOU WILL GET',
-                amount: 'Tap to retry',
+                label: 'TO COLLECT',
+                amount: 'Retry',
                 color: context.errorColor,
                 isDark: isDark,
               ),
@@ -370,8 +339,8 @@ class HomeDashboardPage extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
               child: _SummaryCard(
-                label: 'YOU WILL GIVE',
-                amount: 'Tap to retry',
+                label: 'TO GIVE',
+                amount: 'Retry',
                 color: context.errorColor,
                 isDark: isDark,
               ),
@@ -382,14 +351,14 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSearchBar(BuildContext context, WidgetRef ref, bool isDark) {
+  Widget _buildSearchBar(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: context.premiumShadow,
       ),
       child: TextField(
-        onChanged: (value) => ref.read(activitiesSearchQueryProvider.notifier).updateQuery(value),
+        onChanged: (value) => ref.read(udharSearchQueryProvider.notifier).setQuery(value),
         style: const TextStyle(fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: 'Search Customers, vendors...',
@@ -422,28 +391,28 @@ class HomeDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilterChips(BuildContext context, WidgetRef ref, ActivityFilter currentFilter, bool isDark) {
+  Widget _buildFilterChips(BuildContext context, WidgetRef ref, HomePartyFilter currentFilter) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
           _FilterChip(
-            label: 'All',
-            isSelected: currentFilter == ActivityFilter.all,
-            onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.all),
+            label: 'All Parties',
+            isSelected: currentFilter == HomePartyFilter.all,
+            onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.all),
           ),
           const SizedBox(width: 8),
           _FilterChip(
             label: 'Customers',
-            isSelected: currentFilter == ActivityFilter.customers,
-            onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.customers),
+            isSelected: currentFilter == HomePartyFilter.customers,
+            onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.customers),
           ),
           const SizedBox(width: 8),
           _FilterChip(
             label: 'Suppliers',
-            isSelected: currentFilter == ActivityFilter.suppliers,
-            onTap: () => ref.read(activeFilterProvider.notifier).setFilter(ActivityFilter.suppliers),
+            isSelected: currentFilter == HomePartyFilter.suppliers,
+            onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.suppliers),
           ),
         ],
       ),
@@ -504,7 +473,6 @@ class HomeDashboardPage extends ConsumerWidget {
   }
 }
 
-
 class _SummaryCard extends StatelessWidget {
   final String label;
   final String amount;
@@ -539,7 +507,7 @@ class _SummaryCard extends StatelessWidget {
             right: -10,
             top: -10,
             child: Icon(
-              label.contains('GET') ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
+              label.contains('GET') || label.contains('COLLECT') ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
               color: color.withValues(alpha: 0.05),
               size: 64,
             ),

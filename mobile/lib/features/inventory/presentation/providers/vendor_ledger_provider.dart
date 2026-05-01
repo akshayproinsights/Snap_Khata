@@ -228,13 +228,20 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   }
 
   Future<bool> deleteLedger(int ledgerId) async {
+    // Optimistic removal — remove from UI immediately.
+    final previousLedgers = state.ledgers;
+    state = state.copyWith(
+      ledgers: state.ledgers.where((l) => l.id != ledgerId).toList(),
+    );
     try {
       await _dio.delete('/api/vendor-ledgers/vendor-ledgers/$ledgerId');
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
+      // Roll back optimistic removal on failure.
+      state = state.copyWith(ledgers: previousLedgers);
       return false;
     }
   }

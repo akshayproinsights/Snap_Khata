@@ -103,13 +103,23 @@ class UdharNotifier extends Notifier<UdharState> {
   }
 
   Future<bool> deleteLedger(int ledgerId) async {
+    // Optimistic removal — remove from UI immediately so the party
+    // disappears the instant the user confirms, without waiting for re-fetch.
+    final previousLedgers = state.ledgers;
+    state = state.copyWith(
+      ledgers: state.ledgers.where((l) => l.id != ledgerId).toList(),
+    );
     try {
       await _dio.delete('/api/udhar/ledgers/$ledgerId');
       ref.invalidate(verifiedProvider);
+      // Refresh dashboard totals in background — don't block UI.
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      // Silent re-fetch to sync any server-side changes (new balance, etc.)
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
+      // Roll back optimistic removal on failure.
+      state = state.copyWith(ledgers: previousLedgers);
       return false;
     }
   }

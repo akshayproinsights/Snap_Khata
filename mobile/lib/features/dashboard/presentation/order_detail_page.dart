@@ -80,12 +80,22 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   bool _isReceivedChecked = false;
   late TextEditingController _receivedAmountController;
   late TextEditingController _creditDetailsController;
+  String? _preFetchedShareUrl;
 
   @override
   void initState() {
     super.initState();
     _initControllers();
     _loadPersistedSettings();
+    _preFetchShareLink();
+  }
+
+  void _preFetchShareLink() async {
+    try {
+      _preFetchedShareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+        receiptNumber: widget.group.receiptNumber,
+      );
+    } catch (_) {}
   }
 
 
@@ -368,102 +378,71 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 onPressed: () async {
                   HapticFeedback.lightImpact();
 
-                  // Ensure all changes are saved before generating and sharing the receipt link
-                  await _saveChanges();
+                  // Save changes first if editing
+                  if (isEditing) {
+                    // Start background save but don't await to preserve gesture context on iOS.
+                    // Local variables are updated synchronously inside _saveChanges before the first await.
+                    _saveChanges();
+                  }
 
                   final double totalAmount = _totalAfterGst(widget.group);
                   final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
-                  OrderPaymentStatus status;
-                  if (_paymentMode == 'Cash') {
-                    status = OrderPaymentStatus.fullyPaid;
-                  } else {
-                    if (_receivedAmount >= totalAmount) {
-                      status = OrderPaymentStatus.fullyPaid;
-                    } else if (_receivedAmount > 0) {
-                      status = OrderPaymentStatus.partiallyPaid;
-                    } else {
-                      status = OrderPaymentStatus.unpaid;
-                    }
-                  }
+                  OrderPaymentStatus status = _paymentMode == 'Cash' 
+                      ? OrderPaymentStatus.fullyPaid 
+                      : (_receivedAmount >= totalAmount ? OrderPaymentStatus.fullyPaid : (_receivedAmount > 0 ? OrderPaymentStatus.partiallyPaid : OrderPaymentStatus.unpaid));
 
                   final authState = ref.read(authProvider);
                   final username = authState.user?.username;
 
-                  final Set<String> ignoredExtraFields = {
-                    'total_bill_amount',
-                    'total bill amount',
-                    'amount',
-                    'calculated_amount',
-                    'amount_mismatch',
-                    'receipt_number',
-                    'date',
-                    'customer_name',
-                    'mobile_number',
-                    'mobile number',
-                    'mobile',
-                    'receipt_link',
-                    'audit_findings',
-                    'taxable_row_ids',
-                    'gst_mode',
-                  };
+                  // Use pre-fetched link or fetch now
+                  String? link = _preFetchedShareUrl;
+                  if (link == null) {
+                    link = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                      receiptNumber: widget.group.receiptNumber,
+                      username: username,
+                      gstMode: _gstMode.name,
+                    );
+                  } else if (_gstMode != GstMode.none) {
+                    final parsed = Uri.parse(link);
+                    final mergedQuery = Map<String, String>.from(parsed.queryParameters);
+                    mergedQuery['g'] = _gstMode.name;
+                    link = parsed.replace(queryParameters: mergedQuery).toString();
+                  }
 
-                  // Build non-empty extra fields for WhatsApp message (dynamic, industry-agnostic)
-                  final extraFieldsForWa = <String, String>{
-                    for (final e in _extraFieldCtrls.entries)
-                      if (e.value.text.isNotEmpty &&
-                          !ignoredExtraFields.contains(e.key.toLowerCase()) &&
-                          !ignoredExtraFields.contains(_formatFieldLabel(e.key).toLowerCase()))
-                        _formatFieldLabel(e.key): e.value.text,
-                  };
-
-                  final link = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-                    receiptNumber: widget.group.receiptNumber,
-                    username: username,
-                    gstMode: _gstMode.name,
-                  );
                   if (link == null) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not generate secure receipt link. Please try again.'),
-                        ),
+                        const SnackBar(content: Text('Could not generate receipt link.')),
                       );
                     }
                     return;
                   }
 
-                  final customerNameMsg = widget
-                              .group.customerName.isNotEmpty &&
-                          widget.group.customerName.toLowerCase() != 'unknown'
-                      ? widget.group.customerName
-                      : 'Customer';
+                  final customerNameMsg = widget.group.customerName.isNotEmpty && widget.group.customerName.toLowerCase() != 'unknown' ? widget.group.customerName : 'Customer';
+                  final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 
-                  final shopName = shopProfile.name.isNotEmpty
-                      ? shopProfile.name
-                      : 'Our Shop';
-
-                  // Log shop name for debugging
-                  debugPrint('WhatsApp message - Shop name: "$shopName" (from shopProfile.name: "${shopProfile.name}")');
-                  debugPrint('WhatsApp message - Payment mode: $_paymentMode');
-                  debugPrint('WhatsApp message - GST mode: $_gstMode');
+                  final Map<String, String> extraFieldsForWa = {};
+                  for (final e in _extraFieldCtrls.entries) {
+                    if (e.value.text.isNotEmpty) {
+                      extraFieldsForWa[_formatFieldLabel(e.key)] = e.value.text;
+                    }
+                  }
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
                     status: status,
                     customerName: customerNameMsg,
                     businessName: shopName,
-                    orderNumber: widget.group.receiptNumber.isNotEmpty
-                        ? widget.group.receiptNumber
-                        : 'Recent',
+                    orderNumber: widget.group.receiptNumber.isNotEmpty ? widget.group.receiptNumber : 'Recent',
                     totalAmount: totalAmount,
                     paidAmount: _paymentMode == 'Credit' ? _receivedAmount : totalAmount,
                     pendingAmount: balanceDue,
                     extraFields: extraFieldsForWa.isNotEmpty ? extraFieldsForWa : null,
                   );
-                  final message =
-                      '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
+                  final message = '$caption\n\nView details:\n$link\n\nThank you!\n— *${shopName.trim()}*';
 
                   if (!context.mounted) return;
+                  // shareReceipt now handles the gesture-friendly launch inside the dialog
                   await WhatsAppUtils.shareReceipt(
                     context,
                     phone: widget.group.mobileNumber,

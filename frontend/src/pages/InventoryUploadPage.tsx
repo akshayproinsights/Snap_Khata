@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import DuplicateWarningModal from '../components/DuplicateWarningModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import { useGlobalStatus } from '../contexts/GlobalStatusContext';
-import imageCompression from 'browser-image-compression';
+import { compressImagesParallel } from '../utils/imageUtils';
 import InventoryResumeBanner from '../components/InventoryResumeBanner';
 import InventoryRecentUploadsTable from '../components/InventoryRecentUploadsTable';
 
@@ -17,6 +17,7 @@ const InventoryUploadPage: React.FC = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isCompressing, setIsCompressing] = useState(false);
     const [processingStatus, setProcessingStatus] = useState<any>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [pollingInterval, setPollingInterval] = useState<number | null>(null);
@@ -411,36 +412,10 @@ const InventoryUploadPage: React.FC = () => {
             for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
                 const rawBatch = files.slice(i, i + BATCH_SIZE);
 
-                // Compress batch
-                const batch: File[] = [];
-                for (const file of rawBatch) {
-                    if (file.type.startsWith('image/')) {
-                        try {
-                            console.log(`📉 [COMPRESS] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
-                            const options = {
-                                maxSizeMB: 0.5,           // Target 500KB
-                                maxWidthOrHeight: 1920,   // Backend limit
-                                useWebWorker: true,
-                                fileType: 'image/jpeg'
-                            };
-                            const compressedBlob = await imageCompression(file, options);
-
-                            // Re-create File object
-                            const compressedFile = new File([compressedBlob], file.name, {
-                                type: compressedBlob.type,
-                                lastModified: Date.now()
-                            });
-
-                            console.log(`📉 [COMPRESS] Success: ${file.name} -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
-                            batch.push(compressedFile);
-                        } catch (error) {
-                            console.error(`❌ [COMPRESS] Failed for ${file.name}, using original:`, error);
-                            batch.push(file);
-                        }
-                    } else {
-                        batch.push(file);
-                    }
-                }
+                // Compress batch in parallel
+                setIsCompressing(true);
+                const batch = await compressImagesParallel(rawBatch);
+                setIsCompressing(false);
 
                 const response = await inventoryAPI.uploadFiles(batch, (progressEvent) => {
                     const batchPercent = progressEvent.loaded / progressEvent.total;
@@ -947,13 +922,11 @@ const InventoryUploadPage: React.FC = () => {
                             {/* Upload Progress Bar */}
                             {isUploading && uploadProgress > 0 && (
                                 <div className="mb-3">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-xs font-medium text-gray-700">
-                                            Uploading... {uploadedCount}/{totalToUpload}
+                                    <div className="flex justify-between text-xs mb-1">
+                                        <span className="text-blue-600 font-medium">
+                                            {isCompressing ? 'Compressing images...' : 'Uploading to Cloud...'}
                                         </span>
-                                        <span className="text-xs font-medium text-blue-600">
-                                            {uploadProgress}%
-                                        </span>
+                                        <span className="text-gray-600">{uploadProgress}%</span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                                         <div
@@ -981,7 +954,7 @@ const InventoryUploadPage: React.FC = () => {
                                     {isUploading && <Loader2 className="animate-spin mr-2" size={18} />}
                                     {isProcessing && <Loader2 className="animate-spin mr-2" size={18} />}
                                     {isUploading
-                                        ? `Uploading... ${uploadProgress}%`
+                                        ? (isCompressing ? 'Compressing...' : `Uploading ${uploadedCount}/${totalToUpload}...`)
                                         : isProcessing
                                             ? 'Processing...'
                                             : 'Upload & Process'}

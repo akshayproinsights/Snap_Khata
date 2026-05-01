@@ -27,38 +27,62 @@ class _PartiesListPageState extends ConsumerState<PartiesListPage> {
     final isLoading = udharState.isLoading || vendorState.isLoading;
 
     if (isLoading && ledgers.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (ledgers.isEmpty) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                shape: BoxShape.circle,
-                boxShadow: context.premiumShadow,
-              ),
-              child: Icon(LucideIcons.users, size: 48, color: context.borderColor),
-            ),
-            const SizedBox(height: 24),
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
             Text(
-              'No parties found',
-              style: TextStyle(
-                color: context.textSecondaryColor,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+              'Loading your parties...',
+              style: TextStyle(color: Colors.grey),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Add your first customer or supplier',
-              style: TextStyle(
-                color: context.textSecondaryColor.withValues(alpha: 0.7),
-                fontSize: 14,
+          ],
+        ),
+      );
+    }
+
+    if (ledgers.isEmpty && !isLoading) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(udharProvider.notifier).fetchLedgers();
+          await ref.read(vendorLedgerProvider.notifier).fetchLedgers();
+        },
+        child: ListView(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      shape: BoxShape.circle,
+                      boxShadow: context.premiumShadow,
+                    ),
+                    child: Icon(LucideIcons.users,
+                        size: 48, color: context.borderColor),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'No parties found',
+                    style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first customer or supplier',
+                    style: TextStyle(
+                      color: context.textSecondaryColor.withValues(alpha: 0.7),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

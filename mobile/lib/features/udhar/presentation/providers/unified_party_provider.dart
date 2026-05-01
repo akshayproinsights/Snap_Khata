@@ -1,0 +1,64 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile/features/udhar/domain/models/unified_party.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
+
+// Track loading state for unified parties
+final unifiedPartiesLoadingProvider = Provider<bool>((ref) {
+  final udharState = ref.watch(udharProvider);
+  final vendorState = ref.watch(vendorLedgerProvider);
+  
+  return (udharState.isLoading || vendorState.isLoading) && 
+         (udharState.ledgers.isEmpty && vendorState.ledgers.isEmpty);
+});
+
+// Enum for filtering on Home page
+enum HomePartyFilter { all, customers, suppliers }
+
+class HomePartyFilterNotifier extends Notifier<HomePartyFilter> {
+  @override
+  HomePartyFilter build() => HomePartyFilter.all;
+
+  void setFilter(HomePartyFilter filter) {
+    state = filter;
+  }
+}
+
+final homePartyFilterProvider = NotifierProvider<HomePartyFilterNotifier, HomePartyFilter>(HomePartyFilterNotifier.new);
+
+final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
+  final udharState = ref.watch(udharProvider);
+  final vendorState = ref.watch(vendorLedgerProvider);
+  final filter = ref.watch(homePartyFilterProvider);
+  final searchQuery = ref.watch(udharSearchQueryProvider).toLowerCase();
+
+  List<UnifiedParty> unifiedList = [];
+
+  // Add Customers
+  if (filter == HomePartyFilter.all || filter == HomePartyFilter.customers) {
+    for (var ledger in udharState.ledgers) {
+      if (searchQuery.isNotEmpty && !ledger.customerName.toLowerCase().contains(searchQuery)) continue;
+
+      unifiedList.add(UnifiedParty.fromCustomer(ledger));
+    }
+  }
+
+  // Add Suppliers
+  if (filter == HomePartyFilter.all || filter == HomePartyFilter.suppliers) {
+    for (var ledger in vendorState.ledgers) {
+      if (searchQuery.isNotEmpty && !ledger.vendorName.toLowerCase().contains(searchQuery)) continue;
+
+      unifiedList.add(UnifiedParty.fromVendor(ledger));
+    }
+  }
+
+  // Sort by recent activity (latestBillDate or lastPaymentDate)
+  unifiedList.sort((a, b) {
+    final dateA = a.lastTransactionDate ?? DateTime(0);
+    final dateB = b.lastTransactionDate ?? DateTime(0);
+    return dateB.compareTo(dateA);
+  });
+
+  return unifiedList;
+});

@@ -5,10 +5,15 @@ import apiClient from '../lib/api';
 
 export interface Ledger {
     id: number;
-    customer_name: string;
+    customer_name?: string;
+    vendor_name?: string;
     balance_due: number;
     last_payment_date?: string;
     updated_at: string;
+    party_type: 'CUSTOMER' | 'SUPPLIER';
+    latest_bill_number?: string;
+    latest_bill_amount?: number;
+    latest_bill_date?: string;
 }
 
 export interface Transaction {
@@ -17,6 +22,7 @@ export interface Transaction {
     transaction_type: 'INVOICE' | 'PAYMENT';
     amount: number;
     receipt_number?: string;
+    invoice_number?: string;
     notes?: string;
     created_at: string;
     is_paid?: boolean;
@@ -25,7 +31,6 @@ export interface Transaction {
 export interface DashboardSummary {
     total_receivable: number;
     total_payable: number;
-    // Add other fields if needed
 }
 
 export const udharAPI = {
@@ -42,6 +47,14 @@ export const udharAPI = {
      */
     getLedgers: async (): Promise<Ledger[]> => {
         const response = await apiClient.get('/api/udhar/ledgers');
+        return response.data.data;
+    },
+
+    /**
+     * Get all vendor ledgers
+     */
+    getVendorLedgers: async (): Promise<Ledger[]> => {
+        const response = await apiClient.get('/api/vendor-ledgers');
         return response.data.data;
     },
 

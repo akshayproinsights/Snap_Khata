@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Optimization settings tuned for Gemini handwriting recognition from Mobile devices
 OPTIMAL_MAX_DIMENSION = 1280  # Max width or height in pixels (Optimized for mobile portrait)
-OPTIMAL_QUALITY = 85  # JPEG quality (1-100)
+OPTIMAL_QUALITY = 80  # JPEG/WebP quality (1-100) - 80 is balanced for OCR
 MIN_DPI = 150  # Minimum DPI for OCR accuracy
 TARGET_FILE_SIZE_KB = 350  # Target max file size in KB
 
@@ -53,10 +53,10 @@ def optimize_image_for_gemini(
     # FAST PATH: Skip processed optimization if frontend already did it
     # -----------------------------------------------------------
     size_kb = original_size / 1024
-    if size_kb <= 600 and original_format == 'JPEG':
+    if size_kb <= 600 and original_format in ('JPEG', 'WEBP'):
         width, height = original_dimensions
         if width <= max_dimension and height <= max_dimension:
-            logger.info(f"⚡ Fast Path: Image already optimized ({size_kb:.2f}KB, {width}x{height}, JPEG). Skipping re-processing.")
+            logger.info(f"⚡ Fast Path: Image already optimized ({size_kb:.2f}KB, {width}x{height}, {original_format}). Skipping re-processing.")
             metadata = {
                 'original_size_kb': round(size_kb, 2),
                 'optimized_size_kb': round(size_kb, 2),
@@ -64,8 +64,8 @@ def optimize_image_for_gemini(
                 'final_dimensions': original_dimensions,
                 'compression_ratio': 0.0,
                 'quality': 'original',
-                'original_format': 'JPEG',
-                'optimized_format': 'JPEG'
+                'original_format': original_format,
+                'optimized_format': original_format
             }
             return image_data, metadata
     

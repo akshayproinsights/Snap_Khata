@@ -4,6 +4,9 @@ class CustomerLedger {
   final String? customerPhone;
   final double balanceDue;
   final DateTime? lastPaymentDate;
+  final String? latestBillNumber;
+  final double? latestBillAmount;
+  final DateTime? latestBillDate;
 
   CustomerLedger({
     required this.id,
@@ -11,6 +14,9 @@ class CustomerLedger {
     this.customerPhone,
     required this.balanceDue,
     this.lastPaymentDate,
+    this.latestBillNumber,
+    this.latestBillAmount,
+    this.latestBillDate,
   });
 
   factory CustomerLedger.fromJson(Map<String, dynamic> json) {
@@ -21,6 +27,13 @@ class CustomerLedger {
       balanceDue: double.tryParse(json['balance_due']?.toString() ?? '0') ?? 0.0,
       lastPaymentDate: json['last_payment_date'] != null 
           ? DateTime.parse(json['last_payment_date']) 
+          : null,
+      latestBillNumber: json['latest_bill_number'],
+      latestBillAmount: json['latest_bill_amount'] != null 
+          ? double.tryParse(json['latest_bill_amount'].toString()) 
+          : null,
+      latestBillDate: json['latest_bill_date'] != null 
+          ? DateTime.parse(json['latest_bill_date']) 
           : null,
     );
   }
@@ -38,6 +51,8 @@ class LedgerTransaction {
   final int? linkedTransactionId;
   final String? receiptLink;
   final double? balanceDue;
+  final String? paymentMode;
+  final double? receivedAmount;
 
   LedgerTransaction({
     required this.id,
@@ -51,6 +66,8 @@ class LedgerTransaction {
     this.linkedTransactionId,
     this.receiptLink,
     this.balanceDue,
+    this.paymentMode,
+    this.receivedAmount,
   });
 
   // Getters for backwards compatibility
@@ -72,6 +89,10 @@ class LedgerTransaction {
       receiptLink: json['receipt_link'],
       balanceDue: json['balance_due'] != null 
           ? double.tryParse(json['balance_due'].toString()) 
+          : null,
+      paymentMode: json['payment_mode'],
+      receivedAmount: json['received_amount'] != null
+          ? double.tryParse(json['received_amount'].toString())
           : null,
     );
   }

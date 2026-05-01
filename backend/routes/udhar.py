@@ -1,4 +1,6 @@
 import logging
+import asyncio
+from collections import defaultdict
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -10,6 +12,11 @@ from database import get_database_client
 from routes.vendor_ledgers import sync_vendor_ledgers_from_invoices
 
 logger = logging.getLogger(__name__)
+
+# Global state for managing synchronization to prevent race conditions
+user_sync_locks = defaultdict(asyncio.Lock)
+user_last_sync = {} # username -> timestamp
+SYNC_DEBOUNCE_SECONDS = 30 # Only auto-sync every 30 seconds per user
 
 router = APIRouter()
 
@@ -42,8 +49,18 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
     db.set_user_context(username)
     
     try:
-        # Sync new invoices → ledgers before serving
-        await sync_customer_ledgers_from_invoices(current_user)
+        # Prevent parallel syncs for the same user
+        async with user_sync_locks[username]:
+            # Debounce sync: only run if not synced recently
+            now = datetime.utcnow().timestamp()
+            last_sync = user_last_sync.get(username, 0)
+            
+            if now - last_sync > SYNC_DEBOUNCE_SECONDS:
+                logger.info(f"🔄 Starting debounced ledger sync for {username}")
+                await sync_customer_ledgers_from_invoices(current_user)
+                user_last_sync[username] = now
+            else:
+                logger.debug(f"⏭️ Skipping ledger sync for {username} (last sync {int(now - last_sync)}s ago)")
 
         # Fetch all ledgers
         ledger_resp = db.client.table('customer_ledgers') \
@@ -58,24 +75,96 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         ledger_ids = [ld['id'] for ld in ledgers]
 
         # Fetch all transactions for these ledgers in one query
+        # Include receipt_number so we can cross-reference with verified_invoices
         tx_resp = db.client.table('ledger_transactions') \
-            .select('ledger_id, amount, transaction_type') \
+            .select('ledger_id, amount, transaction_type, receipt_number, created_at') \
             .eq('username', username) \
             .in_('ledger_id', ledger_ids) \
+            .order('created_at', desc=True) \
             .execute()
 
-        # Recompute expected balance for each ledger from transactions
+        all_txs = tx_resp.data or []
+
+        # Collect receipt numbers from INVOICE transactions so we can fetch
+        # the authoritative received_amount from verified_invoices.  This is
+        # the same enrichment the detail endpoint performs, ensuring the list
+        # and detail views always agree on the outstanding balance.
+        invoice_receipt_numbers = [
+            tx['receipt_number']
+            for tx in all_txs
+            if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number')
+        ]
+
+        # Map receipt_number → total received_amount (from verified_invoices)
+        # Also map receipt_number → payment_mode to handle 'Cash' invoices properly
+        vi_received: Dict[str, float] = {}
+        vi_modes: Dict[str, str] = {}
+        if invoice_receipt_numbers:
+            try:
+                vi_resp = db.client.table('verified_invoices') \
+                    .select('receipt_number, received_amount, payment_mode') \
+                    .eq('username', username) \
+                    .in_('receipt_number', invoice_receipt_numbers) \
+                    .execute()
+                for vi in (vi_resp.data or []):
+                    rn = vi.get('receipt_number')
+                    if not rn:
+                        continue
+                    if rn not in vi_received:
+                        vi_received[rn] = 0.0
+                    vi_received[rn] = max(
+                        vi_received[rn],
+                        float(vi.get('received_amount') or 0)
+                    )
+                    # Last row's mode wins, matching detail endpoint
+                    if vi.get('payment_mode'):
+                        vi_modes[rn] = vi['payment_mode']
+            except Exception as vi_err:
+                logger.warning(f"Could not fetch verified_invoices for balance enrichment: {vi_err}")
+
+        # Track which receipt_numbers already have a PAYMENT row in
+        # ledger_transactions so we don't double-count the received_amount.
+        receipts_with_payment_tx: set = {
+            tx['receipt_number']
+            for tx in all_txs
+            if tx.get('transaction_type') == 'PAYMENT' and tx.get('receipt_number')
+        }
+
+        # Recompute expected balance for each ledger.
+        # For INVOICE rows: if no matching PAYMENT tx exists yet (race condition
+        # before sync creates it), subtract the received_amount directly from
+        # verified_invoices so the balance matches the authoritative detail view.
+        # CRITICAL: Cash/Online invoices are assumed fully paid, so if received_amount
+        # is 0 but it's Cash, treat the full amt as received.
         expected: Dict[int, float] = {ld['id']: 0.0 for ld in ledgers}
-        for tx in (tx_resp.data or []):
+        for tx in all_txs:
             lid = tx.get('ledger_id')
             if lid not in expected:
                 continue
             amt = float(tx.get('amount') or 0)
             ttype = tx.get('transaction_type')
+            rn = tx.get('receipt_number')
             if ttype in ('INVOICE', 'MANUAL_CREDIT'):
                 expected[lid] += amt
+                # If this INVOICE has a received_amount in verified_invoices
+                # but no corresponding PAYMENT transaction yet, deduct it now
+                # so the list balance matches what the detail view computes.
+                if rn and rn not in receipts_with_payment_tx:
+                    already_received = vi_received.get(rn, 0.0)
+                    pmode = vi_modes.get(rn, 'Cash')
+                    if pmode.strip().lower() != 'credit' and already_received == 0:
+                        already_received = amt  # Treat Cash as fully paid
+                    
+                    if already_received > 0:
+                        expected[lid] -= already_received
             elif ttype == 'PAYMENT':
                 expected[lid] -= amt
+
+        # Clamp to 0 — same as the detail endpoint uses max(0, billed - paid).
+        # A negative balance (overpayment) should never appear as a positive
+        # "YOU GET" amount on the Parties list; show 0 (settled) instead.
+        for lid in expected:
+            expected[lid] = max(0.0, expected[lid])
 
         # Patch stale balance_due values in DB and in-memory
         now = datetime.utcnow().isoformat()
@@ -90,8 +179,29 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                         'updated_at': now,
                     }).eq('id', lid).execute()
                     ld['balance_due'] = computed
+                    logger.info(f"Patched stale balance for ledger {lid}: {stored:.2f} → {computed:.2f}")
                 except Exception as patch_err:
                     logger.warning(f"Could not patch balance for ledger {lid}: {patch_err}")
+            else:
+                # Always write the clamped value in-memory even if no DB patch needed
+                ld['balance_due'] = computed
+            
+            # Find latest bill for each ledger
+            ledger_txs = [tx for tx in all_txs if tx['ledger_id'] == lid]
+            latest_invoice = next((tx for tx in ledger_txs if tx.get('transaction_type') == 'INVOICE'), None)
+            
+            ld['party_type'] = 'CUSTOMER'
+            if latest_invoice:
+                ld['latest_bill_number'] = latest_invoice.get('receipt_number')
+                ld['latest_bill_amount'] = latest_invoice.get('amount')
+                ld['latest_bill_date'] = latest_invoice.get('created_at')
+            else:
+                # Fallback to latest transaction if no invoice
+                latest_tx = ledger_txs[0] if ledger_txs else None
+                if latest_tx:
+                    ld['latest_bill_number'] = latest_tx.get('receipt_number') or "N/A"
+                    ld['latest_bill_amount'] = latest_tx.get('amount')
+                    ld['latest_bill_date'] = latest_tx.get('created_at')
 
         # Sort by balance_due descending (highest owed first)
         ledgers.sort(key=lambda x: float(x.get('balance_due') or 0), reverse=True)
@@ -215,23 +325,8 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 enriched_tx['is_paid'] = is_paid
                 enriched_tx['balance_due'] = effective_balance
                 enriched_tx['received_amount'] = effective_received
+                enriched_tx['payment_mode'] = payment_mode
                 enriched_transactions.append(enriched_tx)
-                
-                # If there was an initial payment, construct a dummy PAYMENT transaction
-                if effective_received > 0:
-                    dummy_payment = {
-                        # Use a predictable negative ID bounded by loop index to avoid React/Flutter key collisions
-                        'id': -(tx['id'] * 1000 + i), 
-                        'ledger_id': ledger_id,
-                        'transaction_type': 'PAYMENT',
-                        'amount': effective_received,
-                        'receipt_number': tx['receipt_number'],
-                        'notes': f"Initial payment for Invoice {tx['receipt_number']}",
-                        'created_at': tx['created_at'],
-                        'is_paid': False,
-                        'linked_transaction_id': None # Standalone so it is visible
-                    }
-                    enriched_transactions.append(dummy_payment)
             else:
                 enriched_transactions.append(tx)
                 
@@ -521,32 +616,50 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
         # Delete the ledger (transactions will be deleted by CASCADE)
         db.client.table('customer_ledgers').delete().eq('id', ledger_id).execute()
         
-        # Prevent "Sync & Finish" from resurrecting this deleted ledger by
-        # converting active credit invoices for this customer to Cash.
+        # Record a tombstone so sync never auto-resurrects this party.
+        # We use upsert so repeated deletes of the same name are idempotent.
         if customer_name:
             try:
+                db.client.table('deleted_ledger_tombstones').upsert({
+                    'username': username,
+                    'customer_name': customer_name,
+                    'deleted_at': datetime.utcnow().isoformat(),
+                }, on_conflict='username,customer_name').execute()
+            except Exception as tomb_err:
+                # Table may not exist on older deployments — log and continue.
+                logger.warning(f"Could not write tombstone for {customer_name}: {tomb_err}")
+        
+        # Permanently delete records from sync source tables to prevent resurrection
+        if customer_name:
+            try:
+                # Delete from source invoices table
                 db.client.table('invoices') \
-                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
+                    .delete() \
                     .eq('username', username) \
                     .eq('customer', customer_name) \
-                    .eq('payment_mode', 'Credit') \
                     .execute()
                     
+                # Delete from review/verification tables
                 db.client.table('verification_dates') \
-                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
-                    .eq('username', username) \
-                    .eq('customer_details', customer_name) \
-                    .eq('payment_mode', 'Credit') \
-                    .execute()
-                    
-                db.client.table('verified_invoices') \
-                    .update({'payment_mode': 'Cash', 'balance_due': 0}) \
+                    .delete() \
                     .eq('username', username) \
                     .eq('customer_name', customer_name) \
-                    .eq('payment_mode', 'Credit') \
                     .execute()
-            except Exception as update_err:
-                logger.warning(f"Failed to clear credit status on invoices when deleting ledger: {update_err}")
+                
+                db.client.table('verification_amounts') \
+                    .delete() \
+                    .eq('username', username) \
+                    .eq('customer_name', customer_name) \
+                    .execute()
+                    
+                # Delete from verified_invoices (the immediate source for Udhar sync)
+                db.client.table('verified_invoices') \
+                    .delete() \
+                    .eq('username', username) \
+                    .eq('customer_name', customer_name) \
+                    .execute()
+            except Exception as delete_err:
+                logger.warning(f"Failed to clear history from source tables when deleting ledger: {delete_err}")
         
         return {
             "status": "success",
@@ -580,18 +693,8 @@ async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: D
             
         if not ledger_resp.data:
             raise HTTPException(status_code=404, detail="Ledger not found")
-            
-        ledger = ledger_resp.data[0]
-        current_balance = float(ledger.get('balance_due', 0))
-        
-        new_balance = current_balance - payment.amount
+
         now = datetime.utcnow().isoformat()
-        
-        db.client.table('customer_ledgers').update({
-            'balance_due': new_balance,
-            'last_payment_date': now,
-            'updated_at': now
-        }).eq('id', ledger_id).execute()
         
         db.client.table('ledger_transactions').insert({
             'username': username,
@@ -600,6 +703,57 @@ async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: D
             'amount': payment.amount,
             'notes': payment.notes
         }).execute()
+
+        tx_resp = db.client.table('ledger_transactions') \
+            .select('amount, transaction_type, receipt_number') \
+            .eq('ledger_id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+
+        computed_balance = 0.0
+        invoice_rns = []
+        receipts_with_payment: set = set()
+        for tx in (tx_resp.data or []):
+            amt = float(tx.get('amount') or 0)
+            ttype = tx.get('transaction_type')
+            rn = tx.get('receipt_number')
+            if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                computed_balance += amt
+                if rn:
+                    invoice_rns.append(rn)
+            elif ttype == 'PAYMENT':
+                computed_balance -= amt
+                if rn:
+                    receipts_with_payment.add(rn)
+
+        if invoice_rns:
+            try:
+                vi_resp = db.client.table('verified_invoices') \
+                    .select('receipt_number, received_amount') \
+                    .eq('username', username) \
+                    .in_('receipt_number', invoice_rns) \
+                    .execute()
+                vi_received_map: Dict[str, float] = {}
+                for vi in (vi_resp.data or []):
+                    rn = vi.get('receipt_number')
+                    if rn:
+                        vi_received_map[rn] = max(
+                            vi_received_map.get(rn, 0.0),
+                            float(vi.get('received_amount') or 0)
+                        )
+                for rn, received in vi_received_map.items():
+                    if rn not in receipts_with_payment and received > 0:
+                        computed_balance -= received
+            except Exception:
+                pass
+
+        new_balance = max(0.0, computed_balance)
+        
+        db.client.table('customer_ledgers').update({
+            'balance_due': new_balance,
+            'last_payment_date': now,
+            'updated_at': now
+        }).eq('id', ledger_id).execute()
         
         return {
             "status": "success",
@@ -707,9 +861,62 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             .execute()
 
         ledger_map = {str(row["customer_name"]).strip().lower(): row["id"] for row in (ledgers_resp.data or [])}
+
+        # Fetch tombstone list of manually deleted customer names so we never
+        # auto-resurrect a party the user explicitly deleted UNLESS they have new activity.
+        try:
+            tombstone_resp = db.client.table("deleted_ledger_tombstones") \
+                .select("customer_name") \
+                .eq("username", username) \
+                .execute()
+            
+            all_tombstones = {str(row["customer_name"]).strip().lower() for row in (tombstone_resp.data or [])}
+            
+            # If a tombstoned customer has a verified invoice in the current batch,
+            # we SHOULD resurrect them because they have returned as an active customer.
+            names_to_resurrect = [name for name in customer_names if name.strip().lower() in all_tombstones]
+            
+            if names_to_resurrect:
+                logger.info(f"Resurrecting {len(names_to_resurrect)} deleted parties due to new activity: {names_to_resurrect}")
+                # Remove from tombstones
+                for name in names_to_resurrect:
+                    db.client.table("deleted_ledger_tombstones") \
+                        .delete() \
+                        .eq("username", username) \
+                        .eq("customer_name", name) \
+                        .execute()
+                
+                # Update our local set of deleted names so they are processed below
+                deleted_names_set = all_tombstones - {n.strip().lower() for n in names_to_resurrect}
+            else:
+                deleted_names_set = all_tombstones
+        except Exception as e:
+            logger.error(f"Error fetching/clearing tombstones: {e}")
+            deleted_names_set = set()
         
+        # Build a name → dominant payment_mode map.
+        # A customer is "credit" if ANY of their invoices is Credit mode.
+        name_to_payment_mode: Dict[str, str] = {}
+        for data in grouped_invoices.values():
+            cname = str(data.get("customer_name") or "").strip().lower()
+            if not cname:
+                continue
+            pm = str(data.get("payment_mode") or "Cash").strip().lower()
+            existing_pm = name_to_payment_mode.get(cname, "cash")
+            # If any receipt is Credit, mark the whole customer as Credit
+            if pm == "credit" or existing_pm == "credit":
+                name_to_payment_mode[cname] = "credit"
+            else:
+                name_to_payment_mode[cname] = pm
+
         for name in customer_names:
             key = str(name).strip().lower()
+            # CRITICAL: Never auto-create a ledger for a party the user explicitly deleted.
+            if key in deleted_names_set:
+                continue
+            
+            # Auto-create ledgers for ALL customers found in invoices (Cash or Credit).
+            # This ensures that even fully settled parties appear in the "PARTIES" list.
             if key not in ledger_map:
                 new_ledger_resp = db.client.table("customer_ledgers").insert({
                     "username": username,
@@ -750,6 +957,15 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             payment_mode = data.get("payment_mode") or "Cash"
             is_credit = payment_mode.strip().lower() == "credit"
             
+            # DEFENSIVE FIX: If it's Cash/Online and received_amount is missing/zero,
+            # but balance_due is 0, we must treat it as fully paid.
+            raw_received = float(data.get("received_amount") or 0)
+            if not is_credit and raw_received <= 0.01:
+                received_amount = total_amount
+                logger.info(f"Settling Cash/Online invoice {rn} with full amount {total_amount}")
+            else:
+                received_amount = raw_received
+
             # Compute is_paid correctly based on payment_mode:
             # - Credit: paid only when balance_due is 0 (i.e. fully settled)
             # - Cash/Online: always treated as paid at time of invoice
@@ -759,8 +975,10 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             else:
                 is_paid_status = True
             
+            invoice_id = None
             if rn in existing_invoices:
                 tx = existing_invoices[rn]
+                invoice_id = tx["id"]
                 update_data = {}
                 if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
                 if abs(float(tx.get("amount") or 0) - total_amount) > 0.01: 
@@ -789,25 +1007,19 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 new_extra = dict(data["extra_fields"])
                 if data.get("mobile_number"):
                     new_extra["mobile_number"] = str(data["mobile_number"])
-                    logger.debug(f"✅ Propagating mobile_number {new_extra['mobile_number']} to ledger_transactions for receipt {rn}")
-                else:
-                    logger.debug(f"⚠️ Missing mobile_number for receipt {rn} during ledger sync")
                 
                 if current_extra != new_extra:
                     update_data["extra_fields"] = new_extra
                     
                 if update_data:
                     db.client.table("ledger_transactions").update(update_data).eq("id", tx["id"]).execute()
-                else:
-                    # Optional logging for debugging specific receipts
-                    pass
             else:
                 # Prepare extra_fields including mobile_number
                 final_extra = dict(data["extra_fields"])
                 if data.get("mobile_number"):
                     final_extra["mobile_number"] = str(data["mobile_number"])
 
-                db.client.table("ledger_transactions").insert({
+                ins_resp = db.client.table("ledger_transactions").insert({
                     "username": username,
                     "ledger_id": ledger_id,
                     "transaction_type": "INVOICE",
@@ -821,9 +1033,11 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     "vehicle_number": data["car_number"],
                     "extra_fields": final_extra
                 }).execute()
+                if ins_resp.data:
+                    invoice_id = ins_resp.data[0]["id"]
 
             # 2. Handle the PAYMENT transaction (Received amount)
-            received_amount = data["received_amount"]
+            # received_amount was calculated above to handle defensive Cash/Online settling
             if received_amount > 0:
                 if rn in existing_payments:
                     tx = existing_payments[rn]
@@ -831,6 +1045,10 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
                     if abs(float(tx.get("amount") or 0) - received_amount) > 0.01:
                         update_data["amount"] = received_amount
+                    
+                    # Link to invoice if not already linked
+                    if tx.get("linked_transaction_id") != invoice_id:
+                        update_data["linked_transaction_id"] = invoice_id
                     
                     # Sync metadata for payment too
                     if tx.get("car_number") != data["car_number"]:
@@ -864,7 +1082,8 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                         "notes": f"Auto-sync payment from receipt {rn}",
                         "car_number": data["car_number"],
                         "vehicle_number": data["car_number"],
-                        "extra_fields": data["extra_fields"]
+                        "extra_fields": data["extra_fields"],
+                        "linked_transaction_id": invoice_id
                     }).execute()
                 
         # 4. Reconcile all balances efficiently
@@ -885,10 +1104,20 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
     db.set_user_context(username)
     
     try:
-        # Trigger sync from inventory invoices to ensure vendor ledgers are up to date
-        await sync_vendor_ledgers_from_invoices(current_user)
-        # Trigger sync from verified invoices to ensure customer ledgers are up to date
-        await sync_customer_ledgers_from_invoices(current_user)
+        # Prevent parallel syncs for the same user
+        async with user_sync_locks[username]:
+            now_ts = datetime.utcnow().timestamp()
+            last_sync = user_last_sync.get(username, 0)
+            
+            if now_ts - last_sync > SYNC_DEBOUNCE_SECONDS:
+                logger.info(f"🔄 Starting debounced dashboard summary sync for {username}")
+                # Trigger sync from inventory invoices to ensure vendor ledgers are up to date
+                await sync_vendor_ledgers_from_invoices(current_user)
+                # Trigger sync from verified invoices to ensure customer ledgers are up to date
+                await sync_customer_ledgers_from_invoices(current_user)
+                user_last_sync[username] = now_ts
+            else:
+                logger.debug(f"⏭️ Skipping dashboard sync for {username} (last sync {int(now_ts - last_sync)}s ago)")
 
         # --- Compute total_receivable from actual ledger_transactions (not stale balance_due column) ---
         # This avoids the race condition where /ledgers reconciliation hasn't run yet.
@@ -919,7 +1148,7 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
             now_str = datetime.utcnow().isoformat()
             for ld in ledgers:
                 lid = ld['id']
-                computed = expected[lid]
+                computed = max(0.0, expected[lid])
                 stored = float(ld.get('balance_due') or 0)
                 if abs(stored - computed) > 0.01:
                     try:
@@ -1053,7 +1282,7 @@ async def reconcile_all_customer_ledger_balances(current_user: Dict = Depends(ge
     try:
         # 1. Fetch all ledgers
         ledgers_resp = db.client.table("customer_ledgers") \
-            .select("id, balance_due") \
+            .select("id, balance_due, customer_name") \
             .eq("username", username) \
             .execute()
             
@@ -1088,7 +1317,11 @@ async def reconcile_all_customer_ledger_balances(current_user: Dict = Depends(ge
             lid = ld["id"]
             ledger_name = ld.get("customer_name", "Unknown")
             current_bal = float(ld.get("balance_due", 0))
-            expected_bal = float(expected_balances[lid])
+            # Clamp to 0: a negative balance means the account is overpaid
+            # (settled or in advance). Never store negatives — the UI shows 0
+            # as "SETTLED" which is correct and prevents the sign-flip bug
+            # where a negative DB value appears as positive on the Parties list.
+            expected_bal = max(0.0, float(expected_balances[lid]))
             
             # Use small epsilon for float comparison
             if abs(current_bal - expected_bal) > 0.01:

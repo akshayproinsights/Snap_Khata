@@ -26,6 +26,7 @@ class _PartiesDashboardPageState extends ConsumerState<PartiesDashboardPage> {
   // Track if we've done the initial fetch for this session so we don't
   // re-trigger a full fetch every time the page becomes visible.
   bool _initialFetchDone = false;
+  bool _isRefreshing = false;
 
   @override
   void dispose() {
@@ -35,16 +36,19 @@ class _PartiesDashboardPageState extends ConsumerState<PartiesDashboardPage> {
 
   void _onPageVisible() {
     _refreshDebounce?.cancel();
-    _refreshDebounce = Timer(const Duration(milliseconds: 800), () {
+    // Reduce from 800ms to 300ms for faster feedback on PWA
+    _refreshDebounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
+
       if (!_initialFetchDone) {
-        // First visit — providers already fire via microtask in build().
-        // Just mark done so subsequent navigations use silent refresh.
         _initialFetchDone = true;
         return;
       }
-      // Subsequent navigations: silent refresh (no spinner).
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+
+      if (_isRefreshing) return;
+      _isRefreshing = true;
+
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent().whenComplete(() => _isRefreshing = false));
       ref.read(udharProvider.notifier).fetchLedgersSilent();
       ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
     });

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { udharAPI } from '../services/udharAPI';
-import { formatCurrency } from '../utils/dashboardHelpers';
+import { udharAPI, Ledger } from '../services/udharAPI';
+import { formatCurrency, formatActivityDate } from '../utils/dashboardHelpers';
 import {
     Users,
     Truck,
@@ -11,7 +11,12 @@ import {
     MoreVertical,
     Plus,
     Filter,
-    CheckCircle2
+    CheckCircle2,
+    Clock,
+    FileText,
+    ChevronRight,
+    ArrowUpRight,
+    ArrowDownLeft
 } from 'lucide-react';
 
 const UdharDashboardPage: React.FC = () => {
@@ -40,9 +45,16 @@ const UdharDashboardPage: React.FC = () => {
     });
 
     // Fetch customer ledgers
-    const { data: ledgers, isLoading: ledgersLoading, refetch: refetchLedgers } = useQuery({
+    const { data: customerLedgers, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
         queryKey: ['customerLedgers'],
         queryFn: udharAPI.getLedgers,
+        staleTime: 0,
+    });
+
+    // Fetch vendor ledgers
+    const { data: vendorLedgers, isLoading: vendorsLoading, refetch: refetchVendors } = useQuery({
+        queryKey: ['vendorLedgers'],
+        queryFn: udharAPI.getVendorLedgers,
         staleTime: 0,
     });
 
@@ -50,11 +62,12 @@ const UdharDashboardPage: React.FC = () => {
     useEffect(() => {
         const interval = setInterval(() => {
             refetchSummary();
-            refetchLedgers();
+            refetchCustomers();
+            refetchVendors();
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [refetchSummary, refetchLedgers]);
+    }, [refetchSummary, refetchCustomers, refetchVendors]);
 
     // Mutations
     const recordPaymentMutation = useMutation({
@@ -62,6 +75,7 @@ const UdharDashboardPage: React.FC = () => {
             udharAPI.recordPayment(ledgerId, amount, "Full payment"),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['customerLedgers'] });
+            queryClient.invalidateQueries({ queryKey: ['vendorLedgers'] });
             queryClient.invalidateQueries({ queryKey: ['udharSummary'] });
             toast.success("Payment recorded successfully!");
         },
@@ -77,17 +91,19 @@ const UdharDashboardPage: React.FC = () => {
     };
 
     // Filtering logic
-    const filteredLedgers = (ledgers || []).filter(ledger => {
-        // Search filter
-        const matchesSearch = ledger.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredLedgers = useMemo(() => {
+        const baseLedgers = activeTab === 'customers' ? (customerLedgers || []) : (vendorLedgers || []);
         
-        // Paid/Hidden filter
-        // If showPaidBills is false, hide ledgers with 0 balance
-        const isPaid = ledger.balance_due <= 0;
-        const matchesPaidFilter = showPaidBills || !isPaid;
-        
-        return matchesSearch && matchesPaidFilter;
-    });
+        return baseLedgers.filter(ledger => {
+            const name = (ledger.customer_name || ledger.vendor_name || '').toLowerCase();
+            const matchesSearch = name.includes(searchTerm.toLowerCase());
+            
+            const isPaid = ledger.balance_due <= 0;
+            const matchesPaidFilter = showPaidBills || !isPaid;
+            
+            return matchesSearch && matchesPaidFilter;
+        });
+    }, [customerLedgers, vendorLedgers, activeTab, searchTerm, showPaidBills]);
 
     // Set header actions
     useEffect(() => {
@@ -95,218 +111,234 @@ const UdharDashboardPage: React.FC = () => {
             <div className="flex items-center gap-2">
                 <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-medium">
                     <Plus size={18} />
-                    New Khata Entry
+                    Add Party
                 </button>
             </div>
         );
     }, [setHeaderActions]);
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
-            {/* Credit Summary Cards - Horizontal Style like Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* TO PAY (Payable) - RED */}
-                <div className="bg-white rounded-lg shadow-sm border border-red-200 hover:shadow-md transition-all duration-300 h-[90px]">
-                    <div className="flex items-center h-full px-4 py-2.5 gap-4">
-                        <div className="bg-red-100 text-red-600 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Truck size={24} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 leading-tight">
-                                To Pay
-                            </h3>
-                            <p className="text-3xl font-bold text-red-500 tabular-nums leading-none">
-                                {summaryLoading ? '...' : formatCurrency(summary?.total_payable || 0)}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
+        <div className="max-w-4xl mx-auto space-y-6 pb-20">
+            {/* Credit Summary Cards - horizontal Style */}
+            <div className="grid grid-cols-2 gap-3 px-1">
                 {/* TO COLLECT (Receivable) - GREEN */}
-                <div className="bg-white rounded-lg shadow-sm border border-green-200 hover:shadow-md transition-all duration-300 h-[90px]">
-                    <div className="flex items-center h-full px-4 py-2.5 gap-4">
-                        <div className="bg-green-100 text-green-600 w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Users size={24} />
+                <div className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl p-4 border border-emerald-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-600">
+                            <ArrowDownLeft size={16} />
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 leading-tight">
-                                To Collect
-                            </h3>
-                            <p className="text-3xl font-bold text-green-600 tabular-nums leading-none">
-                                {summaryLoading ? '...' : formatCurrency(summary?.total_receivable || 0)}
-                            </p>
-                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">To Collect</span>
                     </div>
+                    <p className="text-2xl font-black text-emerald-600 tabular-nums">
+                        {summaryLoading ? '...' : formatCurrency(summary?.total_receivable || 0)}
+                    </p>
+                </div>
+
+                {/* TO PAY (Payable) - RED */}
+                <div className="bg-gradient-to-br from-rose-50 to-white rounded-2xl p-4 border border-rose-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="bg-rose-100 p-1.5 rounded-lg text-rose-600">
+                            <ArrowUpRight size={16} />
+                        </div>
+                        <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">To Pay</span>
+                    </div>
+                    <p className="text-2xl font-black text-rose-600 tabular-nums">
+                        {summaryLoading ? '...' : formatCurrency(summary?.total_payable || 0)}
+                    </p>
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-                {/* Tabs */}
-                <div className="flex border-b border-gray-100">
-                    <button 
-                        onClick={() => setActiveTab('customers')}
-                        className={`flex-1 py-4 font-semibold text-sm transition-all relative ${
-                            activeTab === 'customers' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        <div className="flex items-center justify-center gap-2">
-                            <Users size={18} />
-                            Customers
-                        </div>
-                        {activeTab === 'customers' && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full" />
-                        )}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('suppliers')}
-                        className={`flex-1 py-4 font-semibold text-sm transition-all relative ${
-                            activeTab === 'suppliers' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        <div className="flex items-center justify-center gap-2">
-                            <Truck size={18} />
-                            Suppliers
-                        </div>
-                        {activeTab === 'suppliers' && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full" />
-                        )}
-                    </button>
-                </div>
-
-                {/* Filters Row */}
-                <div className="p-4 border-b border-gray-100 space-y-4">
-                    {/* Show Paid Bills Toggle - Prominent for SMB Owners */}
-                    <div className="flex items-center justify-between bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                                <Filter size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 leading-tight">Show Paid Bills</h3>
-                                <p className="text-xs text-gray-500">View Khata with zero balance</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                className="sr-only peer" 
-                                checked={showPaidBills}
-                                onChange={(e) => setShowPaidBills(e.target.checked)}
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/50 overflow-hidden flex flex-col min-h-[600px]">
+                {/* Search & Filters */}
+                <div className="p-4 space-y-4 bg-gray-50/50 border-b border-gray-100">
+                    <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                        <input 
+                            type="text"
+                            placeholder="Search Customers or Suppliers..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-base transition-all shadow-sm"
+                        />
                     </div>
 
-                    {/* Search Bar */}
                     <div className="flex gap-2">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                            <input 
-                                type="text"
-                                placeholder="Search Khata Name..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition-all"
-                            />
-                        </div>
-                        <button className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors">
-                            <Filter size={18} />
+                        <button 
+                            onClick={() => setActiveTab('customers')}
+                            className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                activeTab === 'customers' 
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                                    : 'bg-white text-gray-600 border border-gray-200'
+                            }`}
+                        >
+                            <Users size={18} />
+                            Customers
                         </button>
+                        <button 
+                            onClick={() => setActiveTab('suppliers')}
+                            className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                activeTab === 'suppliers' 
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                                    : 'bg-white text-gray-600 border border-gray-200'
+                            }`}
+                        >
+                            <Truck size={18} />
+                            Suppliers
+                        </button>
+                    </div>
+
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">Show Paid Bills</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer" 
+                                    checked={showPaidBills}
+                                    onChange={(e) => setShowPaidBills(e.target.checked)}
+                                />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md uppercase tracking-wider">
+                            {filteredLedgers.length} {activeTab}
+                        </span>
                     </div>
                 </div>
 
                 {/* Ledger List */}
-                <div className="flex-1 overflow-auto bg-gray-50/30 p-4">
-                    {ledgersLoading ? (
-                        <div className="flex flex-col items-center justify-center py-20 space-y-3">
-                            <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-                            <p className="text-sm text-gray-500 font-medium">Loading Khata entries...</p>
+                <div className="flex-1 overflow-auto p-3 space-y-3">
+                    {(customersLoading || vendorsLoading) ? (
+                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                            <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                            <p className="text-sm text-gray-500 font-bold tracking-tight">Loading your Khata...</p>
                         </div>
                     ) : filteredLedgers.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-                            <div className="bg-gray-100 p-4 rounded-full text-gray-400 mb-4">
-                                <Users size={32} />
+                            <div className="bg-gray-100 p-6 rounded-full text-gray-300 mb-6 border-4 border-white shadow-inner">
+                                <Users size={48} />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-1">No Khata Found</h3>
-                            <p className="text-sm text-gray-500 max-w-[250px]">
+                            <h3 className="text-xl font-black text-gray-900 mb-2">No {activeTab} Found</h3>
+                            <p className="text-sm text-gray-500 max-w-[280px] leading-relaxed">
                                 {searchTerm 
-                                    ? `No Khata matching "${searchTerm}"`
-                                    : showPaidBills 
-                                        ? "You haven't added any Khata entries yet."
-                                        : "All your bills are paid! Turn on 'Show Paid Bills' to see history."
+                                    ? `Could not find any match for "${searchTerm}"`
+                                    : "Start by adding your first party to track bills and payments."
                                 }
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {filteredLedgers.map((ledger) => (
-                                <div 
-                                    key={ledger.id}
-                                    className={`bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-blue-200 transition-all cursor-pointer group flex items-center justify-between ${
-                                        ledger.balance_due <= 0 ? 'opacity-70 bg-gray-50/50' : ''
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
-                                            ledger.balance_due <= 0 
-                                                ? 'bg-gray-100 text-gray-500' 
-                                                : 'bg-blue-50 text-blue-600'
-                                        }`}>
-                                            {ledger.customer_name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                {ledger.customer_name}
-                                            </h4>
-                                            <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                                                {ledger.balance_due <= 0 ? (
-                                                    <span className="flex items-center gap-1 text-green-600 font-bold">
-                                                        <CheckCircle2 size={12} />
-                                                        All Paid
-                                                    </span>
-                                                ) : (
-                                                    <span>No payments yet</span>
-                                                )}
-                                                <span className="text-gray-300">•</span>
-                                                <span>Just now</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-4">
-                                        <div className="text-right">
-                                            <div className={`text-lg font-bold ${
-                                                ledger.balance_due <= 0 ? 'text-green-600' : 'text-green-600'
-                                            }`}>
-                                                {formatCurrency(ledger.balance_due)}
-                                            </div>
-                                            <div className="text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                                                You will get
-                                            </div>
-                                        </div>
-                                        
-                                        {ledger.balance_due > 0 && (
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRecordPayment(ledger.id, ledger.balance_due);
-                                                }}
-                                                disabled={recordPaymentMutation.isPending}
-                                                className="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors disabled:opacity-50"
-                                            >
-                                                {recordPaymentMutation.isPending ? '...' : 'PAY'}
-                                            </button>
-                                        )}
-                                        
-                                        <button className="p-1 text-gray-400 hover:text-gray-600">
-                                            <MoreVertical size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        filteredLedgers.map((ledger) => (
+                            <PartyCard 
+                                key={`${ledger.party_type}-${ledger.id}`}
+                                ledger={ledger}
+                                onPay={handleRecordPayment}
+                            />
+                        ))
                     )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface PartyCardProps {
+    ledger: Ledger;
+    onPay: (id: number, amount: number) => void;
+}
+
+const PartyCard: React.FC<PartyCardProps> = ({ ledger, onPay }) => {
+    const isDue = ledger.balance_due > 0;
+    const name = ledger.customer_name || ledger.vendor_name || 'Unnamed Party';
+    
+    return (
+        <div className={`relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all active:scale-[0.98] group overflow-hidden ${!isDue ? 'opacity-90' : ''}`}>
+            {/* Status Bar */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isDue ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+            
+            <div className="p-4 pl-5">
+                {/* Top Row: Type & Time */}
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest uppercase ${
+                            ledger.party_type === 'CUSTOMER' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
+                        }`}>
+                            {ledger.party_type}
+                        </span>
+                        {ledger.latest_bill_date && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                                <Clock size={10} />
+                                <span>{formatActivityDate(ledger.latest_bill_date)}</span>
+                            </div>
+                        )}
+                    </div>
+                    {isDue ? (
+                        <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md uppercase tracking-widest">Due</span>
+                    ) : (
+                        <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md uppercase tracking-widest">Settled</span>
+                    )}
+                </div>
+
+                {/* Middle Row: Name & Balance */}
+                <div className="flex items-center justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black ${
+                            isDue ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                            {name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-black text-gray-900 group-hover:text-indigo-600 transition-colors leading-tight">
+                                {name}
+                            </h4>
+                            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">
+                                {ledger.party_type === 'CUSTOMER' ? 'Receivable' : 'Payable'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <div className={`text-xl font-black tabular-nums leading-none mb-1 ${
+                            isDue ? (ledger.party_type === 'CUSTOMER' ? 'text-emerald-600' : 'text-rose-600') : 'text-gray-400'
+                        }`}>
+                            {formatCurrency(ledger.balance_due)}
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Balance</p>
+                    </div>
+                </div>
+
+                {/* Bottom Row: Bill Details */}
+                <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                    <div className="flex items-center gap-4">
+                        {ledger.latest_bill_number && (
+                            <div className="flex items-center gap-1.5 text-gray-500">
+                                <FileText size={14} className="text-gray-300" />
+                                <span className="text-[11px] font-bold tracking-tight">#{ledger.latest_bill_number}</span>
+                            </div>
+                        )}
+                        {ledger.latest_bill_amount && (
+                            <div className="text-[11px] font-bold text-gray-500">
+                                <span className="text-gray-300 uppercase text-[9px] mr-1">Bill Total:</span>
+                                {formatCurrency(ledger.latest_bill_amount)}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        {isDue && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPay(ledger.id, ledger.balance_due);
+                                }}
+                                className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-xl text-xs font-black hover:bg-indigo-600 hover:text-white transition-all uppercase tracking-wider"
+                            >
+                                {ledger.party_type === 'CUSTOMER' ? 'Collect' : 'Pay'}
+                            </button>
+                        )}
+                        <button className="p-2 text-gray-300 hover:text-gray-600 transition-colors">
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

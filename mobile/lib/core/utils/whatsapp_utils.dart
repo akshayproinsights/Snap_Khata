@@ -84,7 +84,8 @@ class WhatsAppUtils {
   }) {
     final encodedMessage = Uri.encodeComponent(message);
     if (phone == null || phone.trim().isEmpty) {
-      return Uri.parse('whatsapp://send?text=$encodedMessage');
+      // Use https://wa.me/ consistently as it's a valid universal link for web/PWA
+      return Uri.parse('https://wa.me/?text=$encodedMessage');
     }
     final normalized = normalizeIndianPhone(phone);
     return Uri.parse('https://wa.me/$normalized?text=$encodedMessage');
@@ -98,16 +99,25 @@ class WhatsAppUtils {
     required String message,
   }) async {
     final uri = buildWaMeUri(phone: phone, message: message);
-    if (await canLaunchUrl(uri)) {
-      return launchUrl(uri, mode: LaunchMode.externalApplication);
+    
+    // For universal links (https://wa.me), LaunchMode.platformDefault is often 
+    // more reliable on iOS PWA as it allows the system to handle the handoff.
+    try {
+      if (await canLaunchUrl(uri)) {
+        return await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      debugPrint('Error launching WhatsApp: $e');
     }
     
     // Fallback if the primary uri fails, and we didn't specify a phone
     if (phone == null || phone.trim().isEmpty) {
       final webUri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
-      if (await canLaunchUrl(webUri)) {
-        return launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
+      try {
+        if (await canLaunchUrl(webUri)) {
+          return await launchUrl(webUri, mode: LaunchMode.platformDefault);
+        }
+      } catch (_) {}
     }
     return false;
   }
@@ -127,7 +137,7 @@ class WhatsAppUtils {
       final phoneController = TextEditingController();
       if (!context.mounted) return;
 
-      final result = await showDialog<String?>(
+      await showDialog<String?>(
         context: context,
         builder: (context) => AlertDialog(
           title: Text(dialogTitle),
@@ -157,21 +167,28 @@ class WhatsAppUtils {
               child: const Text('Cancel'),
             ),
             FilledButton.tonal(
-              onPressed: () => Navigator.pop(context, ''), // Escapes with empty string
+              onPressed: () async {
+                // Launch WhatsApp IMMEDIATELY inside the handler to preserve user gesture on iOS
+                await openWhatsAppChat(phone: '', message: message);
+                if (context.mounted) Navigator.pop(context, ''); 
+              },
               child: const Text('Skip'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, phoneController.text.trim()),
+              onPressed: () async {
+                final enteredPhone = phoneController.text.trim();
+                // Launch WhatsApp IMMEDIATELY inside the handler to preserve user gesture on iOS
+                await openWhatsAppChat(phone: enteredPhone, message: message);
+                if (context.mounted) Navigator.pop(context, enteredPhone);
+              },
               child: const Text('Share'),
             ),
           ],
         ),
       );
 
-      if (result == null) {
-        return; // User intentionally cancelled
-      }
-      finalPhone = result;
+      // If result is null, user cancelled. If not null, we already launched WhatsApp.
+      return;
     }
 
     if (!context.mounted) return;

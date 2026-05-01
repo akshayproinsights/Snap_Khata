@@ -117,9 +117,45 @@ async def get_vendor_ledgers(current_user: Dict = Depends(get_current_user)):
             .order('balance_due', desc=True) \
             .execute()
             
+        ledgers = response.data or []
+        if not ledgers:
+            return {"status": "success", "data": []}
+            
+        ledger_ids = [ld['id'] for ld in ledgers]
+        
+        # Fetch latest transactions for these ledgers
+        tx_resp = db.client.table('vendor_ledger_transactions') \
+            .select('ledger_id, amount, transaction_type, invoice_number, created_at') \
+            .eq('username', username) \
+            .in_('ledger_id', ledger_ids) \
+            .order('created_at', desc=True) \
+            .execute()
+            
+        all_txs = tx_resp.data or []
+        
+        for ld in ledgers:
+            lid = ld['id']
+            ld['party_type'] = 'SUPPLIER'
+            
+            # Find latest bill for each ledger
+            ledger_txs = [tx for tx in all_txs if tx['ledger_id'] == lid]
+            latest_invoice = next((tx for tx in ledger_txs if tx.get('transaction_type') == 'INVOICE'), None)
+            
+            if latest_invoice:
+                ld['latest_bill_number'] = latest_invoice.get('invoice_number')
+                ld['latest_bill_amount'] = latest_invoice.get('amount')
+                ld['latest_bill_date'] = latest_invoice.get('created_at')
+            else:
+                # Fallback to latest transaction if no invoice
+                latest_tx = ledger_txs[0] if ledger_txs else None
+                if latest_tx:
+                    ld['latest_bill_number'] = latest_tx.get('invoice_number') or "N/A"
+                    ld['latest_bill_amount'] = latest_tx.get('amount')
+                    ld['latest_bill_date'] = latest_tx.get('created_at')
+            
         return {
             "status": "success",
-            "data": response.data
+            "data": ledgers
         }
     except Exception as e:
         logger.error(f"Error fetching vendor ledgers: {e}")

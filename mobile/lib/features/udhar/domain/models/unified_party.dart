@@ -11,6 +11,9 @@ class UnifiedParty {
   final PartyType type;
   final DateTime? lastPaymentDate;
   final DateTime? lastTransactionDate;
+  final String? latestBillNumber;
+  final double? latestBillAmount;
+  final DateTime? latestBillDate;
   final dynamic originalLedger;
 
   UnifiedParty({
@@ -21,6 +24,9 @@ class UnifiedParty {
     required this.type,
     this.lastPaymentDate,
     this.lastTransactionDate,
+    this.latestBillNumber,
+    this.latestBillAmount,
+    this.latestBillDate,
     required this.originalLedger,
   });
 
@@ -36,6 +42,11 @@ class UnifiedParty {
           : null,
       lastTransactionDate: json['last_transaction_date'] != null
           ? DateTime.parse(json['last_transaction_date'])
+          : null,
+      latestBillNumber: json['latest_bill_number'],
+      latestBillAmount: (json['latest_bill_amount'] as num?)?.toDouble(),
+      latestBillDate: json['latest_bill_date'] != null
+          ? DateTime.parse(json['latest_bill_date'])
           : null,
       originalLedger: null,
     );
@@ -53,7 +64,10 @@ class UnifiedParty {
       balance: ledger.balanceDue,
       type: PartyType.customer,
       lastPaymentDate: ledger.lastPaymentDate,
-      lastTransactionDate: ledger.lastPaymentDate,
+      lastTransactionDate: ledger.latestBillDate ?? ledger.lastPaymentDate,
+      latestBillNumber: ledger.latestBillNumber,
+      latestBillAmount: ledger.latestBillAmount,
+      latestBillDate: ledger.latestBillDate,
       originalLedger: ledger,
     );
   }
@@ -62,11 +76,14 @@ class UnifiedParty {
     return UnifiedParty(
       id: ledger.id,
       name: ledger.vendorName,
-      phone: null, // VendorLedger doesn't have a phone number in the current model
+      phone: null,
       balance: -ledger.balanceDue, // Negative for Payable
       type: PartyType.supplier,
       lastPaymentDate: ledger.lastPaymentDate,
-      lastTransactionDate: ledger.lastPaymentDate,
+      lastTransactionDate: ledger.latestBillDate ?? ledger.lastPaymentDate,
+      latestBillNumber: ledger.latestBillNumber,
+      latestBillAmount: ledger.latestBillAmount,
+      latestBillDate: ledger.latestBillDate,
       originalLedger: ledger,
     );
   }

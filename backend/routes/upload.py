@@ -208,10 +208,10 @@ async def upload_files(
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_id = uuid.uuid4().hex[:6]
             sales_folder = get_sales_folder(username)
-            # Ensure file has an extension, default to .jpg since our optimizer always outputs JPEG
+            # Ensure file has an extension, default to .webp if not provided
             filename = file.filename or ""
             if not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-                filename = f"{filename}.jpg"
+                filename = f"{filename}.webp"
             
             file_key = f"{sales_folder}{timestamp}_{unique_id}_{filename}"
             file_data_list.append({
@@ -318,8 +318,10 @@ def upload_single_file_sync(
         else:
             logger.info(f"Skipping optimization for {filename} (already optimal)")
         
-        # Determine content type (always JPEG after optimization)
-        content_type = "image/jpeg"  # Our optimizer always outputs JPEG
+        # Determine content type based on extension
+        ext = filename.lower().split('.')[-1]
+        content_type = "image/webp" if ext == "webp" else "image/jpeg"
+        if ext == "png": content_type = "image/png"
         
         # Upload to R2 using pre-generated key
         success = storage.upload_file(

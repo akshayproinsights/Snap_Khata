@@ -1,0 +1,11 @@
+INFO:     Started server process [30486]
+INFO:     Waiting for application startup.
+2026-05-01 13:07:12,191 - main - INFO - SnapKhata API starting up...
+2026-05-01 13:07:12,191 - main - INFO - CORS origins: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://snapkhata-prod.web.app', 'https://snapkhata-app.web.app', 'https://snapkhata.com', 'https://www.snapkhata.com', 'https://api.snapkhata.com', 'https://mydigientry.com', 'https://www.mydigientry.com', 'http://192.168.1.18:8000', 'http://192.168.1.18:3000', 'http://192.168.1.18:5173', 'http://localhost:8080', 'http://127.0.0.1:8080']
+2026-05-01 13:07:12,318 - database - INFO - Supabase client initialized
+2026-05-01 13:07:12,726 - main - INFO - Orphaned task cleanup complete
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+2026-05-01 13:07:12,731 - main - INFO - SnapKhata API shutting down...
+INFO:     Application shutdown complete.

@@ -19,6 +19,7 @@ import 'package:mobile/features/config/presentation/providers/config_provider.da
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
+import 'package:mobile/shared/widgets/app_toast.dart';
 
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
@@ -49,11 +50,21 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   final TextEditingController _receivedAmountController = TextEditingController();
   final TextEditingController _creditDetailsController = TextEditingController();
   double _receivedAmount = 0.0;
+  String? _preFetchedShareUrl;
 
   @override
   void initState() {
     super.initState();
     _loadPersistedSettings();
+    _preFetchShareLink();
+  }
+
+  void _preFetchShareLink() async {
+    try {
+      _preFetchedShareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+        receiptNumber: widget.group.receiptNumber,
+      );
+    } catch (_) {}
   }
 
   @override
@@ -256,11 +267,34 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   void _markAllDone() async {
     await _saveCurrentState();
-    if (mounted) context.pop();
+    if (!mounted) return;
+
+    final isLast = widget.currentIndex == -1 || 
+                   widget.currentIndex == widget.allGroups.length - 1;
+
+    if (isLast) {
+      await ref.read(reviewProvider.notifier).syncAndFinish();
+      if (mounted) {
+        final state = ref.read(reviewProvider);
+        if (state.error == null) {
+          AppToast.showSuccess(context, 'Receipts synced successfully!',
+              title: 'Sync Complete');
+          context.go('/');
+        } else {
+          // Error is handled by ref.listen in build
+          context.pop();
+        }
+      }
+    } else {
+      await _goToNextReceipt();
+    }
   }
 
-  /// Navigate to the next receipt in the list WITHOUT saving this one.
-  void _goToNextReceipt() {
+  /// Navigate to the next receipt in the list, saving this one first.
+  Future<void> _goToNextReceipt() async {
+    await _saveCurrentState();
+    if (!mounted) return;
+    
     final nextIndex = widget.currentIndex + 1;
     if (nextIndex >= widget.allGroups.length) return;
     final nextGroup = widget.allGroups[nextIndex];
@@ -284,6 +318,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final configAsync = ref.watch(configProvider);
     final config = configAsync.value ?? {};
     final isAutomobile = config['industry'] == 'automobile';
+
+    ref.listen<ReviewState>(reviewProvider, (previous, next) {
+      if (next.error != null && next.error != previous?.error) {
+        AppToast.showError(context, next.error!, title: 'Sync Failed');
+      }
+    });
     
     final group = state.groups.firstWhere(
         (g) => g.receiptNumber == widget.group.receiptNumber,
@@ -429,6 +469,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (header != null) _buildHeaderCard(header, invoiceColumns, isAutomobile),
+                const SizedBox(height: 12),
+                _buildPaymentSection(_totalAfterGst(group)),
                 const SizedBox(height: 16),
                 Text('Line Items',
                     style: TextStyle(
@@ -475,7 +517,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       (_partsSubtotal(group) + _laborSubtotal(group)),
                   onGstModeChanged: _saveGstMode,
                 ),
-                _buildPaymentSection(_totalAfterGst(group)),
                 const SizedBox(height: 24),
               ],
             ),
@@ -551,7 +592,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: _markAllDone,
+                    onPressed: state.isSyncing ? null : _markAllDone,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: hasAnyError
                           ? context.warningColor
@@ -562,11 +603,25 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: hasAnyError
-                        ? const Icon(LucideIcons.alertTriangle, size: 18)
-                        : const Icon(LucideIcons.checkCircle, size: 18),
+                    icon: state.isSyncing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : (hasAnyError
+                            ? const Icon(LucideIcons.alertTriangle, size: 18)
+                            : const Icon(LucideIcons.checkCircle, size: 18)),
                     label: Text(
-                      hasAnyError ? 'Save with Errors' : 'Confirm & Save ✨',
+                      state.isSyncing
+                          ? 'Syncing... ${state.syncProgress?.percentage ?? 0}%'
+                          : (hasAnyError
+                              ? 'Save with Errors'
+                              : (widget.currentIndex == -1 ||
+                                      widget.currentIndex ==
+                                          widget.allGroups.length - 1
+                                  ? 'Confirm & Finish ✨'
+                                  : 'Confirm & Save ✨')),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                     ),
@@ -586,14 +641,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
                 label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 onPressed: () async {
-                  // ── Step 1: Flush any pending debounced edits ──────────────
-                  // Dismissing the keyboard triggers _onFocusChange → _saveCurrentValue()
-                  // immediately so state has the latest typed values.
+                  // ── Step 1: Save current state immediately ─────────────────
                   FocusScope.of(context).unfocus();
-                  await Future.delayed(const Duration(milliseconds: 150));
-                  if (!context.mounted) return;
-
-                  // ── Step 2: Re-read freshest state after flush ─────────────
+                  // Trigger background save but don't await to preserve gesture context on iOS
+                  _saveCurrentState(); 
+                  
+                  // Re-read fresh state after local save
                   final freshState = ref.read(reviewProvider);
                   final freshGroup = freshState.groups.firstWhere(
                     (g) => g.receiptNumber == widget.group.receiptNumber,
@@ -601,136 +654,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   );
                   final freshHeader = freshGroup.header;
 
-                  // ── Step 3: Determine phone number & Ask if missing ────────
+                  // ── Step 2: Determine phone number & Prepare message ───────
                   String phoneNumber = freshHeader
                           ?.extraFields['mobile_number']
                           ?.toString()
                           .trim() ??
                       '';
-                  String? updatedPhoneNumber;
-
-                  if (phoneNumber.isEmpty) {
-                    final phoneController = TextEditingController();
-                    // null → Cancelled | '' → Skip | '<digits>' → entered
-                    final result = await showDialog<String?>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (ctx) => StatefulBuilder(
-                        builder: (ctx, setDialogState) => AlertDialog(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          title: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF25D366)
-                                      .withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const FaIcon(
-                                    FontAwesomeIcons.whatsapp,
-                                    color: Color(0xFF25D366),
-                                    size: 20),
-                              ),
-                              const SizedBox(width: 10),
-                              const Expanded(
-                                child: Text('Send via WhatsApp',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'No mobile number found for '
-                                '${freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : "this customer"}.'
-                                '\nEnter a number to share directly, or skip.',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: context.textSecondaryColor,
-                                    height: 1.5),
-                              ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                controller: phoneController,
-                                keyboardType: TextInputType.phone,
-                                autofocus: true,
-                                decoration: InputDecoration(
-                                  labelText: 'Mobile Number',
-                                  hintText: '9876543210',
-                                  prefixIcon: const Icon(
-                                      LucideIcons.phone, size: 18),
-                                  prefixText: '+91  ',
-                                  border: OutlineInputBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10)),
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(
-                                          vertical: 12, horizontal: 12),
-                                ),
-                                onChanged: (_) => setDialogState(() {}),
-                              ),
-                            ],
-                          ),
-                          actionsPadding:
-                              const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, null),
-                              child: const Text('Cancel'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => Navigator.pop(ctx, ''),
-                              icon: const Icon(LucideIcons.skipForward,
-                                  size: 14),
-                              label: const Text('Skip'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: context.textSecondaryColor,
-                                side: BorderSide(
-                                    color: context.borderColor),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(8)),
-                              ),
-                            ),
-                            FilledButton.icon(
-                              onPressed: phoneController.text
-                                      .trim()
-                                      .isEmpty
-                                  ? null
-                                  : () => Navigator.pop(
-                                      ctx, phoneController.text.trim()),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF25D366),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(8)),
-                              ),
-                              icon: const FaIcon(
-                                  FontAwesomeIcons.whatsapp, size: 14),
-                              label: const Text('Share'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-
-                    if (result == null) return; // Cancelled — abort
-
-                    if (result.isNotEmpty) {
-                      phoneNumber = result;
-                      updatedPhoneNumber = result;
-                    }
-                    // result == '' → Skip: phoneNumber stays '' so WhatsApp
-                    // opens the contact/share picker instead of a direct chat.
-                  }
-
-                  // ── Step 4: Build the WhatsApp message ────────────────────
+                  
                   double totalAmount = _totalAfterGst(freshGroup);
                   if (totalAmount == 0.0 && freshGroup.header != null) {
                     totalAmount = freshGroup.header!.amount;
@@ -738,71 +668,51 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
                   final authState = ref.read(authProvider);
                   final username = authState.user?.username;
+                  final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
 
-                  final double balanceDue =
-                      _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
+                  // Use pre-fetched link or fetch now (pre-fetching covers 99% of cases)
+                  String? shareUrl = _preFetchedShareUrl;
+                  if (shareUrl == null) {
+                    shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                      receiptNumber: freshGroup.receiptNumber,
+                      username: username,
+                      gstMode: _gstMode.name,
+                    );
+                  } else if (_gstMode != GstMode.none) {
+                    // Append GST mode to pre-fetched base link
+                    final parsed = Uri.parse(shareUrl);
+                    final mergedQuery = Map<String, String>.from(parsed.queryParameters);
+                    mergedQuery['g'] = _gstMode.name;
+                    shareUrl = parsed.replace(queryParameters: mergedQuery).toString();
+                  }
 
-                  final shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-                    receiptNumber: freshGroup.receiptNumber,
-                    username: username,
-                    gstMode: _gstMode.name,
-                  );
                   if (shareUrl == null) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not generate secure receipt link. Please try again.'),
-                        ),
+                        const SnackBar(content: Text('Could not generate receipt link.')),
                       );
                     }
                     return;
                   }
 
                   final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
-
-                  OrderPaymentStatus status;
-                  if (_paymentMode == 'Cash') {
-                    status = OrderPaymentStatus.fullyPaid;
-                  } else {
-                    if (_receivedAmount >= totalAmount) {
-                      status = OrderPaymentStatus.fullyPaid;
-                    } else if (_receivedAmount > 0) {
-                      status = OrderPaymentStatus.partiallyPaid;
-                    } else {
-                      status = OrderPaymentStatus.unpaid;
-                    }
-                  }
-
-                  final Set<String> ignoredExtraFields = {
-                    'total_bill_amount', 'total bill amount', 'amount',
-                    'calculated_amount', 'amount_mismatch', 'receipt_number',
-                    'date', 'customer_name', 'mobile_number', 'mobile number',
-                    'mobile', 'receipt_link', 'audit_findings',
-                    'taxable_row_ids', 'gst_mode',
-                  };
+                  OrderPaymentStatus status = _paymentMode == 'Cash' 
+                      ? OrderPaymentStatus.fullyPaid 
+                      : (_receivedAmount >= totalAmount ? OrderPaymentStatus.fullyPaid : (_receivedAmount > 0 ? OrderPaymentStatus.partiallyPaid : OrderPaymentStatus.unpaid));
 
                   final Map<String, String> resolvedExtraFields = {};
                   if (freshHeader?.extraFields != null) {
+                    final Set<String> ignored = {'total_bill_amount', 'amount', 'receipt_number', 'date', 'customer_name', 'mobile_number', 'receipt_link', 'gst_mode'};
                     freshHeader!.extraFields.forEach((key, value) {
-                      final configLabel = invoiceColumns.firstWhere(
-                        (c) => c['db_column'] == key,
-                        orElse: () => {'label': key},
-                      )['label'].toString();
-                      final lowerKey = key.toString().toLowerCase();
-                      final lowerLabel = configLabel.toLowerCase();
-                      if (value != null && value.toString().isNotEmpty &&
-                          !ignoredExtraFields.contains(lowerKey) &&
-                          !ignoredExtraFields.contains(lowerLabel)) {
-                        resolvedExtraFields[configLabel] = value.toString();
+                      if (value != null && value.toString().isNotEmpty && !ignored.contains(key.toString().toLowerCase())) {
+                        resolvedExtraFields[key.toString()] = value.toString();
                       }
                     });
                   }
 
                   final caption = WhatsAppUtils.getWhatsAppCaption(
                     status: status,
-                    customerName: freshHeader?.customerName?.isNotEmpty == true
-                        ? freshHeader!.customerName!
-                        : 'Customer',
+                    customerName: freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : 'Customer',
                     businessName: shopName,
                     orderNumber: freshGroup.receiptNumber,
                     totalAmount: totalAmount,
@@ -810,26 +720,55 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     pendingAmount: balanceDue,
                     extraFields: resolvedExtraFields,
                   );
-                  final message =
-                      '$caption\n\nView your complete digital receipt and order details here:\n$shareUrl\n\nThank you for your business!\n— *${shopName.trim()}*';
+                  final message = '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
 
-                  // ── Step 5: Open WhatsApp ──────────────────────────────────
-                  if (!context.mounted) return;
-                  final opened = await WhatsAppUtils.openWhatsAppChat(
-                    phone: phoneNumber,
-                    message: message,
-                  );
-                  if (!opened && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Could not open WhatsApp. Please ensure it is installed.')),
+                  // ── Step 3: Handle Phone Dialog or Launch ──────────────────
+                  if (phoneNumber.isEmpty) {
+                    final phoneController = TextEditingController();
+                    if (!context.mounted) return;
+                    await showDialog<String?>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Send via WhatsApp'),
+                        content: TextField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(labelText: 'Mobile Number', prefixText: '+91 '),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                          OutlinedButton(
+                            onPressed: () async {
+                              // Launch IMMEDIATELY to preserve gesture
+                              await WhatsAppUtils.openWhatsAppChat(phone: '', message: message);
+                              if (ctx.mounted) Navigator.pop(ctx, '');
+                            },
+                            child: const Text('Skip'),
+                          ),
+                          FilledButton(
+                            onPressed: () async {
+                              final phone = phoneController.text.trim();
+                              if (phone.isNotEmpty) {
+                                // Launch IMMEDIATELY to preserve gesture
+                                await WhatsAppUtils.openWhatsAppChat(phone: phone, message: message);
+                                if (ctx.mounted) Navigator.pop(ctx, phone);
+                              }
+                            },
+                            child: const Text('Share'),
+                          ),
+                        ],
+                      ),
                     );
+
+                    if (!context.mounted) return;
+                  } else {
+                    // Direct launch if phone exists
+                    await WhatsAppUtils.openWhatsAppChat(phone: phoneNumber, message: message);
                   }
 
-                  // ── Step 6: Sync & Finish (Save in background & Pop) ────────
-                  _saveCurrentState(updatePhoneNumber: updatedPhoneNumber);
-                  
+                  // ── Step 4: Finalize ──────────────────────────────────────
+                  _saveCurrentState();
                   if (context.mounted) {
                     if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
                       _goToNextReceipt();
