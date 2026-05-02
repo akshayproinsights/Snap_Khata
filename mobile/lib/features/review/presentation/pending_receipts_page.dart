@@ -131,6 +131,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (state.error == null) {
       AppToast.showSuccess(context, 'Receipts synced successfully!',
           title: 'Sync Complete');
+      ref.read(uploadProvider.notifier).clearFiles();
       context.go('/');
     } else {
       AppToast.showError(context, state.error!, title: 'Sync Failed');

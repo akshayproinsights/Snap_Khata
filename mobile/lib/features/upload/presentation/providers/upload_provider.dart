@@ -243,13 +243,18 @@ class UploadNotifier extends Notifier<UploadState> {
       historyError: state.historyError,
       isRestoringState: false,
     );
+    // Belt-and-suspenders disk cleanup
+    UploadPersistenceService.clearTask();
+    UploadPersistenceService.clearUploadPhase();
   }
 
   /// Force-clear regardless of active state (used in error/duplicate/cancel flows).
   Future<void> forceReset() async {
     _pollingTimer?.cancel();
     _consecutivePollingErrors = 0;
+    _backgroundTask.completeTask('Upload cancelled');
     await UploadPersistenceService.clearTask();
+    await UploadPersistenceService.clearUploadPhase();
     state = UploadState(
       historyData: state.historyData,
       isLoadingHistory: state.isLoadingHistory,
@@ -345,6 +350,7 @@ class UploadNotifier extends Notifier<UploadState> {
         error: null,
         isRestoringState: false,
       );
+      await UploadPersistenceService.clearUploadPhase(); // ensure disk is clean too
       return;
     }
 
@@ -394,6 +400,13 @@ class UploadNotifier extends Notifier<UploadState> {
           error: null,
           isRestoringState: false,
         );
+        
+        // Final guard: only auto-retry if we aren't already done
+        if (state.allDone) {
+           await forceReset();
+           return;
+        }
+
         // Auto-retry — the user already tapped "Upload"
         await uploadAndProcess();
         return;
@@ -677,6 +690,7 @@ class UploadNotifier extends Notifier<UploadState> {
     }).toList();
     state = state.copyWith(
       fileItems: done,
+      isUploading: false, // Explicitly clear
       isProcessing: false,
       clearActiveTaskId: true,
       lastCompletedStatus: completedStatus,

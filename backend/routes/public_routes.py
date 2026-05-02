@@ -202,6 +202,7 @@ async def get_public_receipt(
                     items.append({
                         "name": item.get("description") or "Item",
                         "quantity": qty if qty > 0 else 1,
+                        "qty": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
                         "amount": amount,
                         "type": item.get("type") or "part"
@@ -225,6 +226,7 @@ async def get_public_receipt(
                     items.append({
                         "name": row.get("description") or "Item",
                         "quantity": qty if qty > 0 else 1,
+                        "qty": qty if qty > 0 else 1,
                         "rate": rate if rate > 0 else amount,
                         "amount": amount,
                         "type": row.get("type") or "part"
@@ -253,6 +255,7 @@ async def get_public_receipt(
                     items.append({
                         "name": display_name,
                         "qty": 1,
+                        "quantity": 1,
                         "rate": amount,
                         "amount": amount,
                         "type": t_type,

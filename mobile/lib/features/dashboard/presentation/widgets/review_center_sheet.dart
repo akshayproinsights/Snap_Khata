@@ -88,28 +88,28 @@ class ReviewCenterSheet extends ConsumerWidget {
             child: Column(
               children: [
                 _ReviewCard(
-                  title: 'Supplier (Purchases)',
-                  subtitle: 'Verify items bought from suppliers to update your stock.',
-                  count: supplierCount,
-                  icon: LucideIcons.shoppingCart,
-                  color: context.errorColor,
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    Navigator.pop(context);
-                    context.push('/inventory-review');
-                  },
-                ),
-                const SizedBox(height: 16),
-                _ReviewCard(
                   title: 'Customer (Receipts)',
                   subtitle: 'Verify items sold to customers to track your earnings.',
                   count: customerCount,
-                  icon: LucideIcons.banknote,
+                  icon: LucideIcons.user,
                   color: context.successColor,
                   onTap: () {
                     HapticFeedback.mediumImpact();
                     Navigator.pop(context);
                     context.push('/review');
+                  },
+                ),
+                const SizedBox(height: 16),
+                _ReviewCard(
+                  title: 'Supplier (Purchases)',
+                  subtitle: 'Verify items bought from suppliers to update your stock.',
+                  count: supplierCount,
+                  icon: LucideIcons.truck,
+                  color: context.errorColor,
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    Navigator.pop(context);
+                    context.push('/inventory-review');
                   },
                 ),
               ],

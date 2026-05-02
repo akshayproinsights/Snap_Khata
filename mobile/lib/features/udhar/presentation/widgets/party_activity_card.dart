@@ -8,11 +8,17 @@ import 'package:intl/intl.dart';
 class PartyActivityCard extends StatelessWidget {
   final UnifiedParty party;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelected;
+  final bool isSelectionMode;
 
   const PartyActivityCard({
     super.key,
     required this.party,
     this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isSelectionMode = false,
   });
 
   @override
@@ -39,8 +45,16 @@ class PartyActivityCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Stack(
             children: [
+              // Selection background
+              if (isSelected)
+                Positioned.fill(
+                  child: Container(
+                    color: context.primaryColor.withValues(alpha: 0.05),
+                  ),
+                ),
               // Status Bar
               Positioned(
                 left: 0,
@@ -63,10 +77,18 @@ class PartyActivityCard extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            _buildTypeBadge(context),
-                            if (party.lastTransactionDate != null) ...[
+                            if (isSelectionMode) ...[
+                              Icon(
+                                isSelected ? LucideIcons.checkCircle2 : LucideIcons.circle,
+                                color: isSelected ? context.primaryColor : context.textSecondaryColor.withValues(alpha: 0.3),
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
-                              _buildTimestamp(context, party.lastTransactionDate!),
+                            ],
+                            _buildTypeBadge(context),
+                            if (party.latestUploadDate != null || party.lastTransactionDate != null) ...[
+                              const SizedBox(width: 8),
+                              _buildTimestamp(context, party.latestUploadDate ?? party.lastTransactionDate!),
                             ],
                           ],
                         ),

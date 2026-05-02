@@ -7,6 +7,7 @@ class CustomerLedger {
   final String? latestBillNumber;
   final double? latestBillAmount;
   final DateTime? latestBillDate;
+  final DateTime? latestUploadDate;
 
   CustomerLedger({
     required this.id,
@@ -17,6 +18,7 @@ class CustomerLedger {
     this.latestBillNumber,
     this.latestBillAmount,
     this.latestBillDate,
+    this.latestUploadDate,
   });
 
   factory CustomerLedger.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,9 @@ class CustomerLedger {
           : null,
       latestBillDate: json['latest_bill_date'] != null 
           ? DateTime.parse(json['latest_bill_date']) 
+          : null,
+      latestUploadDate: json['latest_upload_date'] != null 
+          ? DateTime.parse(json['latest_upload_date']) 
           : null,
     );
   }

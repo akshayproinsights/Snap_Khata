@@ -20,6 +20,7 @@ import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
@@ -757,6 +758,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
                       _goToNextReceipt();
                     } else {
+                      ref.read(uploadProvider.notifier).clearFiles();
                       context.go('/');
                     }
                   });

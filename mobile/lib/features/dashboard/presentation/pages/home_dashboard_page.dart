@@ -17,6 +17,24 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+class SelectedPartiesNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => {};
+
+  void toggle(String uniqueId) {
+    if (state.contains(uniqueId)) {
+      state = {...state}..remove(uniqueId);
+    } else {
+      state = {...state, uniqueId};
+    }
+  }
+
+  void clear() {
+    state = {};
+  }
+}
+
+final selectedPartiesProvider = NotifierProvider<SelectedPartiesNotifier, Set<String>>(SelectedPartiesNotifier.new);
 
 class HomeDashboardPage extends ConsumerWidget {
   const HomeDashboardPage({super.key});
@@ -27,10 +45,55 @@ class HomeDashboardPage extends ConsumerWidget {
     final isLoading = ref.watch(unifiedPartiesLoadingProvider);
     final currentFilter = ref.watch(homePartyFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedParties = ref.watch(selectedPartiesProvider);
+    final isSelectionMode = selectedParties.isNotEmpty;
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      appBar: AppBar(
+      appBar: isSelectionMode ? AppBar(
+        backgroundColor: context.surfaceColor,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.x),
+          onPressed: () => ref.read(selectedPartiesProvider.notifier).clear(),
+        ),
+        title: Text('${selectedParties.length} Selected'),
+        actions: [
+          IconButton(
+            icon: Icon(LucideIcons.trash2, color: context.errorColor),
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete Parties'),
+                  content: Text('Are you sure you want to delete ${selectedParties.length} parties?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text('Delete', style: TextStyle(color: context.errorColor)),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true) {
+                for (final uniqueId in selectedParties) {
+                  final party = parties.firstWhere((p) => p.uniqueId == uniqueId);
+                  if (party.type == PartyType.customer) {
+                    await ref.read(udharProvider.notifier).deleteLedger(party.id);
+                  } else {
+                    await ref.read(vendorLedgerProvider.notifier).deleteLedger(party.id);
+                  }
+                }
+                ref.read(selectedPartiesProvider.notifier).clear();
+              }
+            },
+          ),
+        ],
+      ) : AppBar(
         backgroundColor: context.backgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -157,21 +220,32 @@ class HomeDashboardPage extends ConsumerWidget {
                           final party = parties[index];
                           return PartyActivityCard(
                             party: party,
+                            isSelected: selectedParties.contains(party.uniqueId),
+                            isSelectionMode: isSelectionMode,
                             onTap: () {
-                              HapticFeedback.lightImpact();
-                              if (party.type == PartyType.customer) {
-                                context.pushNamed(
-                                  'party-detail',
-                                  pathParameters: {'id': party.id.toString()},
-                                  extra: party.originalLedger,
-                                );
+                              if (isSelectionMode) {
+                                HapticFeedback.selectionClick();
+                                ref.read(selectedPartiesProvider.notifier).toggle(party.uniqueId);
                               } else {
-                                context.pushNamed(
-                                  'vendor-ledger-detail',
-                                  pathParameters: {'id': party.id.toString()},
-                                  extra: party.originalLedger,
-                                );
+                                HapticFeedback.lightImpact();
+                                if (party.type == PartyType.customer) {
+                                  context.pushNamed(
+                                    'party-detail',
+                                    pathParameters: {'id': party.id.toString()},
+                                    extra: party.originalLedger,
+                                  );
+                                } else {
+                                  context.pushNamed(
+                                    'vendor-ledger-detail',
+                                    pathParameters: {'id': party.id.toString()},
+                                    extra: party.originalLedger,
+                                  );
+                                }
                               }
+                            },
+                            onLongPress: () {
+                              HapticFeedback.heavyImpact();
+                              ref.read(selectedPartiesProvider.notifier).toggle(party.uniqueId);
                             },
                           );
                         },

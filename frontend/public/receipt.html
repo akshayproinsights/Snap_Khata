@@ -654,7 +654,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                     taxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || 1);
+                        const qty = Number(item.qty || item.quantity || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         itemsHtml += `
@@ -671,7 +671,7 @@
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                     nonTaxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || 1);
+                        const qty = Number(item.qty || item.quantity || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         itemsHtml += `
@@ -686,7 +686,7 @@
                 }
             } else {
                 items.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
+                    const qty = Number(item.qty || item.quantity || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
                     itemsHtml += `
@@ -700,7 +700,7 @@
                 });
             }
             
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
             if (items.length > 0) {
                 itemsHtml += `
                 <tr>
@@ -884,7 +884,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                     taxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || 1);
+                        const qty = Number(item.qty || item.quantity || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -907,7 +907,7 @@
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                     nonTaxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || 1);
+                        const qty = Number(item.qty || item.quantity || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -928,7 +928,7 @@
                 }
             } else {
                 items.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
+                    const qty = Number(item.qty || item.quantity || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
                     const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -948,7 +948,7 @@
                 });
             }
             
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
             if (items.length > 0) {
                 itemsHtml += `
                 <tr>

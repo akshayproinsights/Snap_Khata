@@ -87,7 +87,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Choose Customer or Supplier before scanning.',
+            'Choose Customer or Supplier to start scanning.',
             style: TextStyle(
               color: Colors.grey,
               fontSize: 15,
@@ -124,82 +124,40 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     isDark: isDark,
                   ),
                   // Add a small bottom padding to the scrollable area
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 32),
                 ],
-              ),
-            ),
-          ),
-
-          // Dynamic Action Button
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16, bottom: 8),
-              child: SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: selectedType == null
-                      ? null
-                      : () async {
-                          final router = GoRouter.of(context);
-                          
-                          // Close the bottom sheet first
-                          Navigator.pop(context);
-                          
-                          // Navigate and wait for result
-                          final result = selectedType == BillScanType.customer
-                              ? await router.pushNamed('upload')
-                            : await router.pushNamed('inventory-upload');
-                          // If the user successfully completed a scan/save, result should be true
-                          if (result == true && mounted) {
-                            // Trigger global refresh via providers
-                            ref.invalidate(recentActivitiesProvider);
-                            ref.invalidate(dashboardTotalsProvider);
-                            
-                            // Optional: Small feedback toast could be added here later
-                          }
-                        },
-                  icon: Icon(
-                    selectedType == null
-                        ? LucideIcons.scan
-                        : selectedType == BillScanType.customer
-                            ? Icons.camera_alt_outlined
-                            : Icons.camera_alt_rounded,
-                  ),
-                  label: Text(
-                    selectedType == null
-                        ? 'Select an option'
-                        : selectedType == BillScanType.customer
-                            ? 'Snap New Order'
-                            : 'Scan Supplier Purchase',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selectedType == null
-                        ? context.textSecondaryColor.withValues(alpha: 0.5)
-                        : selectedType == BillScanType.customer
-                            ? context.successColor // Green for customer
-                            : context.errorColor, // Red for supplier
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: context.textSecondaryColor.withValues(alpha: 0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                    shadowColor: (selectedType == BillScanType.customer 
-                            ? context.successColor 
-                            : context.errorColor).withValues(alpha: 0.3),
-                  ),
-                ),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleAction(BillScanType type) async {
+    setState(() => selectedType = type);
+    
+    // Give a small delay for the selection animation to be visible
+    await Future.delayed(const Duration(milliseconds: 150));
+    
+    if (!mounted) return;
+
+    final router = GoRouter.of(context);
+    
+    // Close the bottom sheet first
+    Navigator.pop(context);
+    
+    // Navigate and wait for result
+    final result = type == BillScanType.customer
+        ? await router.pushNamed('upload')
+        : await router.pushNamed('inventory-upload');
+    
+    // If the user successfully completed a scan/save, result should be true
+    if (result == true && mounted) {
+      // Trigger global refresh via providers
+      ref.invalidate(recentActivitiesProvider);
+      ref.invalidate(dashboardTotalsProvider);
+    }
   }
 
   Widget _buildTypeCard({
@@ -213,7 +171,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     required bool isDark,
   }) {
     return GestureDetector(
-      onTap: () => setState(() => selectedType = type),
+      onTap: () => _handleAction(type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),

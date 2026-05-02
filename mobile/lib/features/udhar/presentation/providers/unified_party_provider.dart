@@ -53,10 +53,10 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
     }
   }
 
-  // Sort by recent activity (latestBillDate or lastPaymentDate)
+  // Sort by latest upload date descending
   unifiedList.sort((a, b) {
-    final dateA = a.lastTransactionDate ?? DateTime(0);
-    final dateB = b.lastTransactionDate ?? DateTime(0);
+    final dateA = a.latestUploadDate ?? a.lastTransactionDate ?? DateTime(0);
+    final dateB = b.latestUploadDate ?? b.lastTransactionDate ?? DateTime(0);
     return dateB.compareTo(dateA);
   });
 

@@ -99,10 +99,11 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         # Also map receipt_number → payment_mode to handle 'Cash' invoices properly
         vi_received: Dict[str, float] = {}
         vi_modes: Dict[str, str] = {}
+        vi_uploads: Dict[str, str] = {}
         if invoice_receipt_numbers:
             try:
                 vi_resp = db.client.table('verified_invoices') \
-                    .select('receipt_number, received_amount, payment_mode') \
+                    .select('receipt_number, received_amount, payment_mode, upload_date') \
                     .eq('username', username) \
                     .in_('receipt_number', invoice_receipt_numbers) \
                     .execute()
@@ -119,6 +120,8 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                     # Last row's mode wins, matching detail endpoint
                     if vi.get('payment_mode'):
                         vi_modes[rn] = vi['payment_mode']
+                    if vi.get('upload_date'):
+                        vi_uploads[rn] = vi['upload_date']
             except Exception as vi_err:
                 logger.warning(f"Could not fetch verified_invoices for balance enrichment: {vi_err}")
 
@@ -203,8 +206,15 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                     ld['latest_bill_amount'] = latest_tx.get('amount')
                     ld['latest_bill_date'] = latest_tx.get('created_at')
 
-        # Sort by balance_due descending (highest owed first)
-        ledgers.sort(key=lambda x: float(x.get('balance_due') or 0), reverse=True)
+            # Calculate latest upload date for sorting and display
+            # We prefer upload_date from verified_invoices, fallback to created_at
+            ledger_upload_dates = [vi_uploads.get(tx['receipt_number']) for tx in ledger_txs if tx.get('receipt_number') in vi_uploads]
+            ledger_fallback_dates = [tx['created_at'] for tx in ledger_txs]
+            all_possible_dates = [d for d in (ledger_upload_dates + ledger_fallback_dates) if d]
+            ld['latest_upload_date'] = max(all_possible_dates) if all_possible_dates else ld.get('updated_at') or ld.get('created_at')
+
+        # Sort by latest_upload_date descending (latest activity/upload first)
+        ledgers.sort(key=lambda x: x.get('latest_upload_date') or '', reverse=True)
 
         return {
             "status": "success",

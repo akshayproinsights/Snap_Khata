@@ -153,6 +153,14 @@ async def get_vendor_ledgers(current_user: Dict = Depends(get_current_user)):
                     ld['latest_bill_amount'] = latest_tx.get('amount')
                     ld['latest_bill_date'] = latest_tx.get('created_at')
             
+            # Calculate latest upload date for sorting and display
+            # In vendor ledgers, created_at represents the upload/entry time
+            ledger_fallback_dates = [tx['created_at'] for tx in ledger_txs]
+            ld['latest_upload_date'] = max(ledger_fallback_dates) if ledger_fallback_dates else ld.get('updated_at') or ld.get('created_at')
+            
+        # Sort by latest_upload_date descending (latest activity/upload first)
+        ledgers.sort(key=lambda x: x.get('latest_upload_date') or '', reverse=True)
+
         return {
             "status": "success",
             "data": ledgers
