@@ -5,6 +5,7 @@ Handles user login, token generation, and authentication middleware.
 Auth lookup order:
   1. Supabase `users` table  (self-registered users)
   2. secrets.toml / USERS_CONFIG_JSON  (legacy admin accounts)
+  Let's test this 
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any

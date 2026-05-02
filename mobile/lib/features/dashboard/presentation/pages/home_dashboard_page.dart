@@ -160,9 +160,17 @@ class HomeDashboardPage extends ConsumerWidget {
                             onTap: () {
                               HapticFeedback.lightImpact();
                               if (party.type == PartyType.customer) {
-                                context.push('/udhar/ledger/${party.id}');
+                                context.pushNamed(
+                                  'party-detail',
+                                  pathParameters: {'id': party.id.toString()},
+                                  extra: party.originalLedger,
+                                );
                               } else {
-                                context.push('/inventory/vendor-ledger/${party.id}');
+                                context.pushNamed(
+                                  'vendor-ledger-detail',
+                                  pathParameters: {'id': party.id.toString()},
+                                  extra: party.originalLedger,
+                                );
                               }
                             },
                           );

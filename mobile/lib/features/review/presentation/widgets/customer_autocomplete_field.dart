@@ -11,6 +11,7 @@ class CustomerAutocompleteField extends ConsumerStatefulWidget {
   final ValueChanged<String> onSaved;
   final ValueChanged<CustomerLedger>? onCustomerSelected;
   final String label;
+  final bool hasError;
 
   const CustomerAutocompleteField({
     super.key,
@@ -18,6 +19,7 @@ class CustomerAutocompleteField extends ConsumerStatefulWidget {
     required this.onSaved,
     this.onCustomerSelected,
     required this.label,
+    this.hasError = false,
   });
 
   @override
@@ -130,16 +132,20 @@ class _CustomerAutocompleteFieldState
             labelText: widget.label,
             labelStyle: TextStyle(fontSize: 12, color: context.textSecondaryColor),
             filled: true,
-            fillColor: context.surfaceColor,
+            fillColor: widget.hasError ? context.errorColor.withValues(alpha: 0.1) : context.surfaceColor,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: context.borderColor),
+              borderSide: BorderSide(
+                  color: widget.hasError ? context.errorColor : context.borderColor,
+                  width: widget.hasError ? 1.5 : 1.0),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: context.primaryColor, width: 1.5),
+              borderSide: BorderSide(
+                  color: widget.hasError ? context.errorColor : context.primaryColor, 
+                  width: widget.hasError ? 2.0 : 1.5),
             ),
             suffixIcon: _isNew && _controller.text.isNotEmpty
                 ? Container(

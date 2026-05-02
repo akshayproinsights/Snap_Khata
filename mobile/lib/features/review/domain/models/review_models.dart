@@ -49,10 +49,10 @@ class ReviewRecord {
     if (amountMismatch != null && amountMismatch!.abs() >= 1.0) {
       return true;
     }
-    if (receiptNumber.trim().isEmpty) {
+    if (isHeader && date.trim().isEmpty) {
       return true;
     }
-    if (isHeader && date.trim().isEmpty) {
+    if (isHeader && (customerName == null || customerName!.trim().isEmpty)) {
       return true;
     }
     return false;

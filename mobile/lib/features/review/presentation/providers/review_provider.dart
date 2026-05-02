@@ -104,32 +104,49 @@ class ReviewNotifier extends Notifier<ReviewState> {
       List<ReviewRecord> dates, List<ReviewRecord> amounts) {
     final Map<String, InvoiceReviewGroup> map = {};
 
+    int missingCounter = 1;
     for (var date in dates) {
-      map[date.receiptNumber] = InvoiceReviewGroup(
-        receiptNumber: date.receiptNumber,
+      String receiptNo = date.receiptNumber;
+      if (receiptNo.trim().isEmpty) {
+        // Auto-generate receipt number so it's not a duplicate
+        receiptNo = 'AUTO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}-$missingCounter';
+        missingCounter++;
+        date = date.copyWith(receiptNumber: receiptNo);
+        // Fire and forget update to save it to DB immediately so it persists
+        _repository.updateSingleDate(date).catchError((_) {});
+      }
+      // Group by receiptLink (the image file) because receiptNumber might have been empty and changed
+      final groupKey = date.receiptLink.isNotEmpty ? date.receiptLink : receiptNo;
+      
+      map[groupKey] = InvoiceReviewGroup(
+        receiptNumber: receiptNo,
         header: date,
       );
     }
 
-    // Deduplicate amounts by rowId — if two concurrent tasks processed the same
-    // image, the same row_id may appear twice in verification_amounts.
-    // Keep the last occurrence (latest DB order = most up-to-date state).
     final Map<String, ReviewRecord> deduplicatedAmounts = {};
     for (final amount in amounts) {
       deduplicatedAmounts[amount.rowId] = amount;
     }
 
     for (var amount in deduplicatedAmounts.values) {
-      if (map.containsKey(amount.receiptNumber)) {
-        final existing = map[amount.receiptNumber]!;
-        map[amount.receiptNumber] = InvoiceReviewGroup(
+      final groupKey = amount.receiptLink.isNotEmpty ? amount.receiptLink : amount.receiptNumber;
+      
+      if (map.containsKey(groupKey)) {
+        final existing = map[groupKey]!;
+        // Update the amount's receipt number to match the header's auto-generated one
+        if (amount.receiptNumber != existing.receiptNumber) {
+           amount = amount.copyWith(receiptNumber: existing.receiptNumber);
+           _repository.updateSingleAmount(amount).catchError((_) {});
+        }
+        
+        map[groupKey] = InvoiceReviewGroup(
           receiptNumber: existing.receiptNumber,
           header: existing.header,
           lineItems: [...existing.lineItems, amount],
         );
       } else {
-        // Technically shouldn't happen without a header, but handle gracefully
-        map[amount.receiptNumber] = InvoiceReviewGroup(
+        map[groupKey] = InvoiceReviewGroup(
           receiptNumber: amount.receiptNumber,
           lineItems: [amount],
         );

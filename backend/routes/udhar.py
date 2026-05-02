@@ -1527,9 +1527,31 @@ async def toggle_transaction_paid_status(
         
         if request.is_paid:
             # MARKING AS PAID
-            # Use actual outstanding due (for receipt-based invoices) to avoid accidental overpayment.
-            settlement_amount = tx_amount
             receipt_number = tx.get('receipt_number')
+            
+            # 1. Calculate how much has already been paid for this specific invoice
+            already_paid = 0.0
+            if receipt_number:
+                payment_resp = db.client.table('ledger_transactions') \
+                    .select('amount') \
+                    .eq('username', username) \
+                    .eq('transaction_type', 'PAYMENT') \
+                    .eq('receipt_number', receipt_number) \
+                    .execute()
+            else:
+                payment_resp = db.client.table('ledger_transactions') \
+                    .select('amount') \
+                    .eq('username', username) \
+                    .eq('transaction_type', 'PAYMENT') \
+                    .eq('linked_transaction_id', transaction_id) \
+                    .execute()
+
+            for p_tx in (payment_resp.data or []):
+                already_paid += float(p_tx.get('amount') or 0)
+                
+            settlement_amount = max(0.0, tx_amount - already_paid)
+
+            # 2. Fetch old values from verified_invoices so we can safely update it later
             old_balance_due = 0.0
             old_received = 0.0
             if receipt_number:
@@ -1544,12 +1566,8 @@ async def toggle_transaction_paid_status(
                     if invoice_rows_resp.data:
                         old_balance_due = float(invoice_rows_resp.data[0].get('balance_due', 0) or 0)
                         old_received = float(invoice_rows_resp.data[0].get('received_amount', 0) or 0)
-                        if old_balance_due > 0:
-                            settlement_amount = old_balance_due
                 except Exception as due_err:
-                    logger.warning(
-                        f"Could not resolve outstanding due for receipt {receipt_number}: {due_err}"
-                    )
+                    logger.warning(f"Could not fetch verified_invoices for receipt {receipt_number}: {due_err}")
 
             # If nothing is due, just mark invoice as paid without creating synthetic payment.
             if settlement_amount <= 0:

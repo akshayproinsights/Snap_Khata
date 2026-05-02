@@ -405,10 +405,11 @@ def build_verified(df_raw: pd.DataFrame, df_date: pd.DataFrame, df_amount: pd.Da
         for col in amt_apply_cols:
             if rowid_col_amount and rowid_col_amount in amount_done_df.columns:
                 corr_map = amount_done_df.set_index(rowid_col_amount)[col].to_dict()
+                mapped_series = included_rows[rowid_col_raw].astype(str).map(corr_map)
                 if col in included_rows.columns:
-                    included_rows[col] = included_rows[rowid_col_raw].map(corr_map).combine_first(included_rows[col])
+                    included_rows[col] = mapped_series.combine_first(included_rows[col])
                 else:
-                    included_rows[col] = included_rows[rowid_col_raw].map(corr_map)
+                    included_rows[col] = mapped_series
 
     included_rows["Review Status"] = "Verified"
 

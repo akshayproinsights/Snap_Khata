@@ -193,7 +193,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
         await Future.delayed(const Duration(milliseconds: 600));
         if (!context.mounted) return;
         ref.read(uploadProvider.notifier).clearFiles();
-        context.go('/review');
+        context.go('/review', extra: {'autoLaunchReview': true});
       }
     });
 

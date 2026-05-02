@@ -235,8 +235,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       var newRecord = header.copyWith(
           verificationStatus: 'Done',
           paymentMode: _paymentMode,
-          receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : null,
-          balanceDue: _paymentMode == 'Credit' ? balanceDue : null,
+          receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
+          balanceDue: _paymentMode == 'Credit' ? balanceDue : 0.0,
           customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
       );
@@ -564,33 +564,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             // ── Action buttons row ──────────────────────────────────
             Row(
               children: [
-                // "Next Receipt →" — only shown when there is a next receipt
-                if (widget.currentIndex >= 0 &&
-                    widget.currentIndex < widget.allGroups.length - 1) ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _goToNextReceipt,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: context.textSecondaryColor,
-                        side: BorderSide(color: context.borderColor),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(LucideIcons.chevronsRight, size: 16),
-                      label: const Text(
-                        'Next Receipt',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                // "Confirm & Save" — always shown
+                // "Save & Next" / "Sync & Finish" — always shown
                 Expanded(
-                  flex: 2,
                   child: ElevatedButton.icon(
                     onPressed: state.isSyncing ? null : _markAllDone,
                     style: ElevatedButton.styleFrom(
@@ -614,14 +589,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             : const Icon(LucideIcons.checkCircle, size: 18)),
                     label: Text(
                       state.isSyncing
-                          ? 'Syncing... ${state.syncProgress?.percentage ?? 0}%'
+                          ? 'Saving... ${state.syncProgress?.percentage ?? 0}%'
                           : (hasAnyError
                               ? 'Save with Errors'
                               : (widget.currentIndex == -1 ||
                                       widget.currentIndex ==
                                           widget.allGroups.length - 1
-                                  ? 'Confirm & Finish ✨'
-                                  : 'Confirm & Save ✨')),
+                                  ? 'Sync & Finish ✨'
+                                  : 'Save & Next ✨')),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                     ),
@@ -630,17 +605,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               ],
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
-                label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                onPressed: () async {
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
+                    label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    onPressed: state.isSyncing ? null : () async {
                   // ── Step 1: Save current state immediately ─────────────────
                   FocusScope.of(context).unfocus();
                   // Trigger background save but don't await to preserve gesture context on iOS
@@ -768,14 +743,23 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   }
 
                   // ── Step 4: Finalize ──────────────────────────────────────
-                  _saveCurrentState();
-                  if (context.mounted) {
+                  // Trigger sync and navigate asynchronously to not block the gesture
+                  Future.microtask(() async {
+                    await _saveCurrentState();
+                    if (!context.mounted) return;
+                    
+                    await ref.read(reviewProvider.notifier).syncAndFinish();
+                    if (!context.mounted) return;
+
+                    final syncState = ref.read(reviewProvider);
+                    if (syncState.error != null) return;
+
                     if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
                       _goToNextReceipt();
                     } else {
-                      context.pop();
+                      context.go('/');
                     }
-                  }
+                  });
                 },
               ),
             ),
@@ -1115,21 +1099,21 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                         errorText:
                             header.date.trim().isEmpty ? 'Required' : null,
                         suffixIcon: const Icon(LucideIcons.calendar, size: 16),
-                        enabledBorder: header.hasDateDoubt
+                        enabledBorder: header.hasDateDoubt || header.date.trim().isEmpty
                             ? OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: BorderSide(
                                     color: context.errorColor, width: 1.5),
                               )
                             : null,
-                        focusedBorder: header.hasDateDoubt
+                        focusedBorder: header.hasDateDoubt || header.date.trim().isEmpty
                             ? OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: BorderSide(
                                     color: context.errorColor, width: 2),
                               )
                             : null,
-                        fillColor: header.hasDateDoubt
+                        fillColor: header.hasDateDoubt || header.date.trim().isEmpty
                             ? context.errorColor.withValues(alpha: 0.1)
                             : context.surfaceColor,
                       ),
@@ -1163,6 +1147,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     ? CustomerAutocompleteField(
                         initialValue: value,
                         label: label,
+                        hasError: header.customerName == null || header.customerName!.trim().isEmpty,
                         onSaved: (val) {
                           if (val != value) {
                             final newRecord = header.copyWith(customerName: val);
@@ -1387,7 +1372,26 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   textAlign: TextAlign.right,
                   style: TextStyle(
                       fontWeight: FontWeight.bold, color: context.primaryColor),
-                  decoration: _inputDecoration('Total (₹)'),
+                  decoration: _inputDecoration('Total (₹)').copyWith(
+                    errorText: hasMismatch ? 'Mismatch' : null,
+                    enabledBorder: hasMismatch
+                        ? OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: context.errorColor, width: 1.5),
+                          )
+                        : null,
+                    focusedBorder: hasMismatch
+                        ? OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: context.errorColor, width: 2),
+                          )
+                        : null,
+                    fillColor: hasMismatch
+                        ? context.errorColor.withValues(alpha: 0.1)
+                        : context.surfaceColor,
+                  ),
                   onSaved: (val) {
                     final newAmount = double.tryParse(val);
                     if (newAmount != null && newAmount != item.amount) {

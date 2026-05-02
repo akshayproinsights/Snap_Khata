@@ -14,10 +14,12 @@ import 'package:mobile/features/shared/presentation/providers/background_task_pr
 
 class PendingReceiptsPage extends ConsumerStatefulWidget {
   final int skippedCount;
+  final bool autoLaunchReview;
 
   const PendingReceiptsPage({
     super.key,
     this.skippedCount = 0,
+    this.autoLaunchReview = false,
   });
 
   @override
@@ -26,6 +28,8 @@ class PendingReceiptsPage extends ConsumerStatefulWidget {
 }
 
 class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
+  bool _autoLaunched = false;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +147,19 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     final state = ref.watch(reviewProvider);
     final uploadState = ref.watch(uploadProvider);
     final groups = state.groups;
+
+    if (widget.autoLaunchReview && !_autoLaunched && !state.isLoading && groups.isNotEmpty) {
+      _autoLaunched = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.push('/receipt-review', extra: {
+            'group': groups.first,
+            'allGroups': groups,
+            'currentIndex': 0,
+          });
+        }
+      });
+    }
 
     final allDone = groups.isNotEmpty && groups.every((g) => g.isComplete);
     final pendingCount = groups.where((g) => g.status == 'Pending').length;

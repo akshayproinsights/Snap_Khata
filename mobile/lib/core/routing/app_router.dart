@@ -116,7 +116,11 @@ class AppRouter {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final skippedCount = extra?['skippedCount'] as int? ?? 0;
-          return PendingReceiptsPage(skippedCount: skippedCount);
+          final autoLaunchReview = extra?['autoLaunchReview'] as bool? ?? false;
+          return PendingReceiptsPage(
+            skippedCount: skippedCount,
+            autoLaunchReview: autoLaunchReview,
+          );
         },
       ),
       GoRoute(
