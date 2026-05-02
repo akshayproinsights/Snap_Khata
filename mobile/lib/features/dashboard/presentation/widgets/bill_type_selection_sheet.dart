@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/activities/presentation/providers/activity_provider.dart';
+import 'package:mobile/features/udhar/presentation/widgets/add_party_entry_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 enum BillScanType { customer, supplier }
@@ -123,8 +124,64 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     selectedColor: context.errorColor,
                     isDark: isDark,
                   ),
-                  // Add a small bottom padding to the scrollable area
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
+                  // Manual Entry Divider
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: context.borderColor.withValues(alpha: 0.5))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'OR',
+                          style: TextStyle(
+                            color: context.textSecondaryColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: context.borderColor.withValues(alpha: 0.5))),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Manual Entry Button
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: InkWell(
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => const AddPartyEntrySheet(),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: context.borderColor),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.edit3, size: 18, color: context.primaryColor),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Record Manual Entry',
+                              style: TextStyle(
+                                color: context.textColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -14,7 +14,7 @@ final unifiedPartiesLoadingProvider = Provider<bool>((ref) {
 });
 
 // Enum for filtering on Home page
-enum HomePartyFilter { all, customers, suppliers }
+enum HomePartyFilter { all, pending, customers, suppliers }
 
 class HomePartyFilterNotifier extends Notifier<HomePartyFilter> {
   @override
@@ -36,18 +36,24 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
   List<UnifiedParty> unifiedList = [];
 
   // Add Customers
-  if (filter == HomePartyFilter.all || filter == HomePartyFilter.customers) {
+  if (filter == HomePartyFilter.all || filter == HomePartyFilter.customers || filter == HomePartyFilter.pending) {
     for (var ledger in udharState.ledgers) {
       if (searchQuery.isNotEmpty && !ledger.customerName.toLowerCase().contains(searchQuery)) continue;
+      
+      // Filter for pending: balanceDue > 0
+      if (filter == HomePartyFilter.pending && ledger.balanceDue.abs() < 0.01) continue;
 
       unifiedList.add(UnifiedParty.fromCustomer(ledger));
     }
   }
 
   // Add Suppliers
-  if (filter == HomePartyFilter.all || filter == HomePartyFilter.suppliers) {
+  if (filter == HomePartyFilter.all || filter == HomePartyFilter.suppliers || filter == HomePartyFilter.pending) {
     for (var ledger in vendorState.ledgers) {
       if (searchQuery.isNotEmpty && !ledger.vendorName.toLowerCase().contains(searchQuery)) continue;
+
+      // Filter for pending: balanceDue > 0 (vendor balanceDue is positive for what we owe)
+      if (filter == HomePartyFilter.pending && ledger.balanceDue.abs() < 0.01) continue;
 
       unifiedList.add(UnifiedParty.fromVendor(ledger));
     }

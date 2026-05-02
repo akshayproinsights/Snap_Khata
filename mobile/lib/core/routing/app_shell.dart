@@ -19,8 +19,8 @@ class AppShell extends ConsumerWidget {
     // Block navigation while file upload is in-flight
     if (uploadState.isUploading) return;
 
-    // Background refresh totals when switching to main data tabs (Home or Parties)
-    if (index == 0 || index == 1) {
+    // Background refresh totals when switching to main data tab (Home)
+    if (index == 0) {
       ref.read(dashboardTotalsProvider.notifier).refreshSilent();
     }
 
@@ -80,11 +80,6 @@ class AppShell extends ConsumerWidget {
                 icon: Icon(LucideIcons.home),
                 selectedIcon: Icon(LucideIcons.home, color: AppTheme.primary),
                 label: 'HOME',
-              ),
-              NavigationDestination(
-                icon: Icon(LucideIcons.users),
-                selectedIcon: Icon(LucideIcons.users, color: AppTheme.primary),
-                label: 'PARTIES',
               ),
               // NavigationDestination(
               //   icon: Icon(LucideIcons.box),

@@ -8,9 +8,10 @@ import 'package:mobile/features/udhar/domain/models/unified_party.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_search_provider.dart';
-import 'package:mobile/features/udhar/presentation/widgets/party_activity_card.dart';
+import 'package:mobile/features/udhar/presentation/widgets/swipeable_party_card.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/bill_type_selection_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/review_center_sheet.dart';
+import 'package:mobile/features/dashboard/presentation/widgets/smart_insights_banner.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:go_router/go_router.dart';
@@ -129,8 +130,10 @@ class HomeDashboardPage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildHeaderRow(context, ref),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
                         _buildSummaryCards(context, ref, isDark),
+                        const SizedBox(height: 24),
+                        const SmartInsightsBanner(),
                         const SizedBox(height: 28),
                         _buildSearchBar(context, ref),
                         const SizedBox(height: 16),
@@ -218,7 +221,7 @@ class HomeDashboardPage extends ConsumerWidget {
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           final party = parties[index];
-                          return PartyActivityCard(
+                          return SwipeablePartyCard(
                             party: party,
                             isSelected: selectedParties.contains(party.uniqueId),
                             isSelectionMode: isSelectionMode,
@@ -474,30 +477,44 @@ class HomeDashboardPage extends ConsumerWidget {
   }
 
   Widget _buildFilterChips(BuildContext context, WidgetRef ref, HomePartyFilter currentFilter) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: [
-          _FilterChip(
-            label: 'All Parties',
+    return Row(
+      children: [
+        Expanded(
+          child: _FilterChip(
+            label: 'All',
             isSelected: currentFilter == HomePartyFilter.all,
             onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.all),
           ),
-          const SizedBox(width: 8),
-          _FilterChip(
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _FilterChip(
+            label: 'Pending',
+            isSelected: currentFilter == HomePartyFilter.pending,
+            onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.pending),
+            highlightColor: context.warningColor,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _FilterChip(
             label: 'Customers',
             isSelected: currentFilter == HomePartyFilter.customers,
             onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.customers),
           ),
-          const SizedBox(width: 8),
-          _FilterChip(
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _FilterChip(
             label: 'Suppliers',
             isSelected: currentFilter == HomePartyFilter.suppliers,
             onTap: () => ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.suppliers),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -573,17 +590,25 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: context.premiumShadow,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          ...context.premiumShadow,
+        ],
         border: Border.all(
-          color: context.borderColor,
-          width: 1,
+          color: color.withValues(alpha: 0.1),
+          width: 1.5,
         ),
       ),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
             right: -10,
@@ -656,15 +681,19 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
+  final Color? highlightColor;
 
   const _FilterChip({
     required this.label,
     required this.isSelected,
     required this.onTap,
+    this.highlightColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = highlightColor ?? context.primaryColor;
+    
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -672,21 +701,22 @@ class _FilterChip extends StatelessWidget {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected
-              ? context.primaryColor
+              ? activeColor
               : context.surfaceColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? context.primaryColor
+                ? activeColor
                 : context.borderColor,
             width: 1.5,
           ),
           boxShadow: isSelected ? [
             BoxShadow(
-              color: context.primaryColor.withValues(alpha: 0.2),
+              color: activeColor.withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 4),
             )
@@ -694,11 +724,13 @@ class _FilterChip extends StatelessWidget {
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: isSelected
                 ? Colors.white
                 : context.textSecondaryColor,
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
           ),
         ),

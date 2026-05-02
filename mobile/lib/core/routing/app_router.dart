@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/auth/presentation/login_page.dart';
 import 'package:mobile/features/auth/presentation/registration_page.dart';
-import 'package:mobile/features/udhar/presentation/parties_dashboard_page.dart';
 import 'package:mobile/features/upload/presentation/upload_page.dart';
 import 'package:mobile/features/review/presentation/pending_receipts_page.dart';
 import 'package:mobile/features/review/presentation/receipt_review_page.dart';
@@ -31,7 +30,6 @@ import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
-import 'package:mobile/features/udhar/presentation/parties_list_page.dart';
 import 'package:mobile/features/udhar/presentation/party_detail_page.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_list_page.dart';
@@ -68,15 +66,6 @@ class AppRouter {
                 path: '/',
                 name: 'home',
                 builder: (context, state) => const HomeDashboardPage(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/udhar-dashboard',
-                name: 'udhar-dashboard',
-                builder: (context, state) => const PartiesDashboardPage(),
               ),
             ],
           ),
@@ -252,12 +241,6 @@ class AppRouter {
         name: 'notifications',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const NotificationsPage(),
-      ),
-      GoRoute(
-        path: '/parties',
-        name: 'party-list',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const PartiesListPage(),
       ),
       GoRoute(
         path: '/party/:id',
