@@ -11,11 +11,7 @@ class UdharState {
   final List<CustomerLedger> ledgers;
   final String? error;
 
-  UdharState({
-    this.isLoading = false,
-    this.ledgers = const [],
-    this.error,
-  });
+  UdharState({this.isLoading = false, this.ledgers = const [], this.error});
 
   UdharState copyWith({
     bool? isLoading,
@@ -37,23 +33,36 @@ class UdharNotifier extends Notifier<UdharState> {
   @override
   UdharState build() {
     _dio = ApiClient().dio;
+    // Kick off the initial fetch. If there's already cached data (state has
+    // ledgers from a previous build), isLoading stays false so the list
+    // stays visible while refreshing in the background.
     Future.microtask(() => fetchLedgers());
-    // Start as loading=true so the spinner shows immediately on first render
-    // instead of briefly flashing "No parties found" before microtask fires.
     return UdharState(isLoading: true);
   }
 
   Future<void> fetchLedgers() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // KEY: only show the loading spinner when the list is truly empty.
+    // When there's already cached data, keep showing it while the network
+    // call runs in the background. Zero blank-screen flashes.
+    final hasCache = state.ledgers.isNotEmpty;
+    if (!hasCache) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
     try {
       final response = await _dio.get('/api/udhar/ledgers');
       final data = response.data['data'] as List?;
       if (data != null) {
         final ledgers = data.map((e) => CustomerLedger.fromJson(e)).toList();
-        state = state.copyWith(isLoading: false, ledgers: ledgers);
+        state = state.copyWith(
+          isLoading: false,
+          ledgers: ledgers,
+          clearError: true,
+        );
       } else {
         state = state.copyWith(
-            isLoading: false, error: 'Failed to parse ledgers');
+          isLoading: false,
+          error: 'Failed to parse ledgers',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -66,7 +75,11 @@ class UdharNotifier extends Notifier<UdharState> {
       final data = response.data['data'] as List?;
       if (data != null) {
         final ledgers = data.map((e) => CustomerLedger.fromJson(e)).toList();
-        state = state.copyWith(isLoading: false, ledgers: ledgers, clearError: true);
+        state = state.copyWith(
+          isLoading: false,
+          ledgers: ledgers,
+          clearError: true,
+        );
       }
     } catch (e) {
       // Ignore errors for silent refresh
@@ -75,7 +88,9 @@ class UdharNotifier extends Notifier<UdharState> {
 
   Future<List<LedgerTransaction>> fetchTransactions(int ledgerId) async {
     try {
-      final response = await _dio.get('/api/udhar/ledgers/$ledgerId/transactions');
+      final response = await _dio.get(
+        '/api/udhar/ledgers/$ledgerId/transactions',
+      );
       final data = response.data['data'] as List?;
       if (data != null) {
         return data.map((e) => LedgerTransaction.fromJson(e)).toList();
@@ -86,18 +101,69 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
-  Future<bool> recordPayment(int ledgerId, double amount, String notes) async {
+  /// Fetches transactions AND the backend-computed ledger summary
+  /// (total_billed, total_paid, balance_due) in one call.
+  /// Use this on PartyDetailPage to avoid double-counting paid amounts.
+  Future<(List<LedgerTransaction>, Map<String, double>)>
+  fetchLedgerWithTransactions(int ledgerId) async {
+    final emptySummary = <String, double>{
+      'total_billed': 0,
+      'total_paid': 0,
+      'balance_due': 0,
+    };
     try {
-      await _dio.post('/api/udhar/ledgers/$ledgerId/pay', data: {
-        'amount': amount,
-        'notes': notes,
-      });
-      // Eagerly re-fetch dashboard totals (don't just invalidate — that's lazy)
+      final response = await _dio.get(
+        '/api/udhar/ledgers/$ledgerId/transactions',
+      );
+      final data = response.data['data'] as List?;
+      final ledgerData = response.data['ledger'] as Map<String, dynamic>?;
+
+      final transactions = data != null
+          ? data.map((e) => LedgerTransaction.fromJson(e)).toList()
+          : <LedgerTransaction>[];
+
+      final summary = <String, double>{
+        'total_billed':
+            double.tryParse(ledgerData?['total_billed']?.toString() ?? '0') ??
+            0.0,
+        'total_paid':
+            double.tryParse(ledgerData?['total_paid']?.toString() ?? '0') ??
+            0.0,
+        'balance_due':
+            double.tryParse(ledgerData?['balance_due']?.toString() ?? '0') ??
+            0.0,
+      };
+      return (transactions, summary);
+    } catch (e) {
+      return (<LedgerTransaction>[], emptySummary);
+    }
+  }
+
+  Future<bool> recordPayment(int ledgerId, double amount, String notes) async {
+    // Optimistic update — immediately reduce the displayed balance so the
+    // user sees the change before the network round-trip completes.
+    final prevLedgers = state.ledgers;
+    state = state.copyWith(
+      ledgers: state.ledgers.map((l) {
+        if (l.id != ledgerId) return l;
+        return l.copyWith(
+          balanceDue: (l.balanceDue - amount).clamp(0, double.infinity),
+        );
+      }).toList(),
+    );
+    try {
+      await _dio.post(
+        '/api/udhar/ledgers/$ledgerId/pay',
+        data: {'amount': amount, 'notes': notes},
+      );
       ref.invalidate(verifiedProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      // Silent re-fetch to get authoritative server data.
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
+      // Roll back optimistic change on failure.
+      state = state.copyWith(ledgers: prevLedgers);
       return false;
     }
   }
@@ -124,15 +190,20 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
-  Future<bool> toggleTransactionPaidStatus(int ledgerId, int transactionId, bool isPaid) async {
+  Future<bool> toggleTransactionPaidStatus(
+    int ledgerId,
+    int transactionId,
+    bool isPaid,
+  ) async {
     try {
       await _dio.post(
         '/api/udhar/ledgers/$ledgerId/transactions/$transactionId/toggle-paid',
         data: {'is_paid': isPaid},
       );
       ref.invalidate(verifiedProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      // Silent refresh so UI doesn't flicker during the re-fetch.
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
@@ -141,7 +212,9 @@ class UdharNotifier extends Notifier<UdharState> {
 
   Future<List<OrderLineItem>> fetchOrderItems(String receiptNumber) async {
     try {
-      final response = await _dio.get('/api/invoices/receipt/$receiptNumber/items');
+      final response = await _dio.get(
+        '/api/invoices/receipt/$receiptNumber/items',
+      );
       final data = response.data['items'] as List?;
       if (data != null) {
         return data.map((e) => OrderLineItem.fromJson(e)).toList();
@@ -153,5 +226,6 @@ class UdharNotifier extends Notifier<UdharState> {
   }
 }
 
-final udharProvider =
-    NotifierProvider<UdharNotifier, UdharState>(UdharNotifier.new);
+final udharProvider = NotifierProvider<UdharNotifier, UdharState>(
+  UdharNotifier.new,
+);

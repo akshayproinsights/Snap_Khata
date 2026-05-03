@@ -21,24 +21,49 @@ class CustomerLedger {
     this.latestUploadDate,
   });
 
+  CustomerLedger copyWith({
+    int? id,
+    String? customerName,
+    String? customerPhone,
+    double? balanceDue,
+    DateTime? lastPaymentDate,
+    String? latestBillNumber,
+    double? latestBillAmount,
+    DateTime? latestBillDate,
+    DateTime? latestUploadDate,
+  }) {
+    return CustomerLedger(
+      id: id ?? this.id,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      balanceDue: balanceDue ?? this.balanceDue,
+      lastPaymentDate: lastPaymentDate ?? this.lastPaymentDate,
+      latestBillNumber: latestBillNumber ?? this.latestBillNumber,
+      latestBillAmount: latestBillAmount ?? this.latestBillAmount,
+      latestBillDate: latestBillDate ?? this.latestBillDate,
+      latestUploadDate: latestUploadDate ?? this.latestUploadDate,
+    );
+  }
+
   factory CustomerLedger.fromJson(Map<String, dynamic> json) {
     return CustomerLedger(
       id: json['id'],
       customerName: json['customer_name'] ?? 'Unknown',
       customerPhone: json['customer_phone'],
-      balanceDue: double.tryParse(json['balance_due']?.toString() ?? '0') ?? 0.0,
-      lastPaymentDate: json['last_payment_date'] != null 
-          ? DateTime.parse(json['last_payment_date']) 
+      balanceDue:
+          double.tryParse(json['balance_due']?.toString() ?? '0') ?? 0.0,
+      lastPaymentDate: json['last_payment_date'] != null
+          ? DateTime.parse(json['last_payment_date'])
           : null,
       latestBillNumber: json['latest_bill_number'],
-      latestBillAmount: json['latest_bill_amount'] != null 
-          ? double.tryParse(json['latest_bill_amount'].toString()) 
+      latestBillAmount: json['latest_bill_amount'] != null
+          ? double.tryParse(json['latest_bill_amount'].toString())
           : null,
-      latestBillDate: json['latest_bill_date'] != null 
-          ? DateTime.parse(json['latest_bill_date']) 
+      latestBillDate: json['latest_bill_date'] != null
+          ? DateTime.parse(json['latest_bill_date'])
           : null,
-      latestUploadDate: json['latest_upload_date'] != null 
-          ? DateTime.parse(json['latest_upload_date']) 
+      latestUploadDate: json['latest_upload_date'] != null
+          ? DateTime.parse(json['latest_upload_date'])
           : null,
     );
   }
@@ -92,8 +117,8 @@ class LedgerTransaction {
       isPaid: json['is_paid'] ?? false,
       linkedTransactionId: json['linked_transaction_id'],
       receiptLink: json['receipt_link'],
-      balanceDue: json['balance_due'] != null 
-          ? double.tryParse(json['balance_due'].toString()) 
+      balanceDue: json['balance_due'] != null
+          ? double.tryParse(json['balance_due'].toString())
           : null,
       paymentMode: json['payment_mode'],
       receivedAmount: json['received_amount'] != null

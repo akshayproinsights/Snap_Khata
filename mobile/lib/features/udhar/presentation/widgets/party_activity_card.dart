@@ -34,12 +34,19 @@ class PartyActivityCard extends StatelessWidget {
         : context.textSecondaryColor.withValues(alpha: 0.5);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: context.premiumShadow,
-        border: Border.all(color: context.borderColor, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          ...context.premiumShadow,
+        ],
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -113,18 +120,19 @@ class PartyActivityCard extends StatelessWidget {
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
                                   color: context.textColor,
-                                  letterSpacing: -0.5,
+                                  letterSpacing: -0.8,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              const SizedBox(height: 1),
                               Text(
                                 isPayable ? 'YOU GIVE' : 'YOU GET',
                                 style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: context.textSecondaryColor,
-                                  letterSpacing: 0.5,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: context.textSecondaryColor.withValues(alpha: 0.7),
+                                  letterSpacing: 0.8,
                                 ),
                               ),
                             ],
@@ -139,16 +147,17 @@ class PartyActivityCard extends StatelessWidget {
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
                                 color: statusColor,
-                                letterSpacing: -0.5,
+                                letterSpacing: -0.8,
                               ),
                             ),
+                            const SizedBox(height: 1),
                             Text(
                               'BALANCE',
                               style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: context.textSecondaryColor,
-                                letterSpacing: 0.5,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: context.textSecondaryColor.withValues(alpha: 0.7),
+                                letterSpacing: 0.8,
                               ),
                             ),
                           ],
@@ -218,18 +227,18 @@ class PartyActivityCard extends StatelessWidget {
   Widget _buildTypeBadge(BuildContext context) {
     final isCustomer = party.type == PartyType.customer;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: (isCustomer ? Colors.blue : Colors.orange).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
+        color: (isCustomer ? Colors.indigo : Colors.amber).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         isCustomer ? 'CUSTOMER' : 'SUPPLIER',
         style: TextStyle(
-          fontSize: 9,
+          fontSize: 8.5,
           fontWeight: FontWeight.w900,
-          color: isCustomer ? Colors.blue : Colors.orange,
-          letterSpacing: 0.5,
+          color: isCustomer ? Colors.indigo : Colors.amber.shade800,
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -259,36 +268,36 @@ class PartyActivityCard extends StatelessWidget {
   Widget _buildStatusBadge(BuildContext context, bool isDue, bool isPayable) {
     if (!isDue) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: context.successColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           'SETTLED',
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 8.5,
             fontWeight: FontWeight.w900,
             color: context.successColor,
-            letterSpacing: 0.5,
+            letterSpacing: 0.8,
           ),
         ),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: (isPayable ? context.errorColor : context.successColor).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         'DUE',
         style: TextStyle(
-          fontSize: 9,
+          fontSize: 8.5,
           fontWeight: FontWeight.w900,
           color: isPayable ? context.errorColor : context.successColor,
-          letterSpacing: 0.5,
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -296,19 +305,29 @@ class PartyActivityCard extends StatelessWidget {
 
   Widget _buildAvatar(BuildContext context, bool isDue) {
     return Container(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: isDue ? context.textColor : context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.borderColor, width: 1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDue ? context.textColor : context.borderColor.withValues(alpha: 0.5),
+          width: 1,
+        ),
+        boxShadow: isDue ? [
+          BoxShadow(
+            color: context.textColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ] : null,
       ),
       child: Center(
         child: Text(
           party.name.isNotEmpty ? party.name[0].toUpperCase() : '?',
           style: TextStyle(
             color: isDue ? context.backgroundColor : context.textSecondaryColor,
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.w900,
           ),
         ),

@@ -65,7 +65,21 @@ class AppRouter {
               GoRoute(
                 path: '/',
                 name: 'home',
-                builder: (context, state) => const HomeDashboardPage(),
+                pageBuilder: (context, state) => CustomTransitionPage(
+                  key: state.pageKey,
+                  child: const HomeDashboardPage(),
+                  transitionDuration: const Duration(milliseconds: 150),
+                  reverseTransitionDuration: const Duration(milliseconds: 120),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        return FadeTransition(
+                          opacity: CurveTween(
+                            curve: Curves.easeIn,
+                          ).animate(animation),
+                          child: child,
+                        );
+                      },
+                ),
               ),
             ],
           ),
@@ -83,9 +97,26 @@ class AppRouter {
               GoRoute(
                 path: '/settings',
                 name: 'settings',
-                builder: (context, state) {
-                  final openShopDetails = state.uri.queryParameters['shop'] == 'details';
-                  return SettingsPage(openShopDetails: openShopDetails);
+                pageBuilder: (context, state) {
+                  final openShopDetails =
+                      state.uri.queryParameters['shop'] == 'details';
+                  return CustomTransitionPage(
+                    key: state.pageKey,
+                    child: SettingsPage(openShopDetails: openShopDetails),
+                    transitionDuration: const Duration(milliseconds: 150),
+                    reverseTransitionDuration: const Duration(
+                      milliseconds: 120,
+                    ),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                          return FadeTransition(
+                            opacity: CurveTween(
+                              curve: Curves.easeIn,
+                            ).animate(animation),
+                            child: child,
+                          );
+                        },
+                  );
                 },
               ),
             ],
@@ -122,7 +153,9 @@ class AppRouter {
           if (extra is Map<String, dynamic>) {
             return ReceiptReviewPage(
               group: extra['group'] as InvoiceReviewGroup,
-              allGroups: (extra['allGroups'] as List?)?.cast<InvoiceReviewGroup>() ?? const [],
+              allGroups:
+                  (extra['allGroups'] as List?)?.cast<InvoiceReviewGroup>() ??
+                  const [],
               currentIndex: extra['currentIndex'] as int? ?? -1,
             );
           }

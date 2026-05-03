@@ -43,16 +43,27 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   }
 
   Future<void> fetchLedgers() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // Cache-first: only show loading spinner when the list is truly empty.
+    // This prevents the screen from going blank during background refreshes.
+    final hasCache = state.ledgers.isNotEmpty;
+    if (!hasCache) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
     try {
       final response = await _dio.get('/api/vendor-ledgers/vendor-ledgers');
       final data = response.data['data'] as List?;
       if (data != null) {
         final ledgers = data.map((e) => VendorLedger.fromJson(e)).toList();
-        state = state.copyWith(isLoading: false, ledgers: ledgers);
+        state = state.copyWith(
+          isLoading: false,
+          ledgers: ledgers,
+          clearError: true,
+        );
       } else {
         state = state.copyWith(
-            isLoading: false, error: 'Failed to parse vendor ledgers');
+          isLoading: false,
+          error: 'Failed to parse vendor ledgers',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -65,7 +76,11 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       final data = response.data['data'] as List?;
       if (data != null) {
         final ledgers = data.map((e) => VendorLedger.fromJson(e)).toList();
-        state = state.copyWith(isLoading: false, ledgers: ledgers, clearError: true);
+        state = state.copyWith(
+          isLoading: false,
+          ledgers: ledgers,
+          clearError: true,
+        );
       }
     } catch (e) {
       // Ignore errors for silent refresh
@@ -74,7 +89,9 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 
   Future<List<VendorLedgerTransaction>> fetchTransactions(int ledgerId) async {
     try {
-      final response = await _dio.get('/api/vendor-ledgers/vendor-ledgers/$ledgerId/transactions');
+      final response = await _dio.get(
+        '/api/vendor-ledgers/vendor-ledgers/$ledgerId/transactions',
+      );
       final data = response.data['data'] as List?;
       if (data != null) {
         return data.map((e) => VendorLedgerTransaction.fromJson(e)).toList();
@@ -85,14 +102,22 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     }
   }
 
-  Future<bool> recordPayment(int ledgerId, double amount, String notes, {String? vendorName}) async {
+  Future<bool> recordPayment(
+    int ledgerId,
+    double amount,
+    String notes, {
+    String? vendorName,
+  }) async {
     try {
       int effectiveLedgerId = ledgerId;
 
-      if (effectiveLedgerId == -1 && vendorName != null && vendorName.isNotEmpty) {
-        final createResponse = await _dio.post('/api/vendor-ledgers/vendor-ledgers', data: {
-          'vendor_name': vendorName,
-        });
+      if (effectiveLedgerId == -1 &&
+          vendorName != null &&
+          vendorName.isNotEmpty) {
+        final createResponse = await _dio.post(
+          '/api/vendor-ledgers/vendor-ledgers',
+          data: {'vendor_name': vendorName},
+        );
         final data = createResponse.data['data'];
         if (data != null && data['id'] != null) {
           effectiveLedgerId = data['id'];
@@ -105,29 +130,32 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
         return false;
       }
 
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/$effectiveLedgerId/pay', data: {
-        'amount': amount,
-        'notes': notes,
-      });
-      // Eagerly refresh dashboard totals
+      await _dio.post(
+        '/api/vendor-ledgers/vendor-ledgers/$effectiveLedgerId/pay',
+        data: {'amount': amount, 'notes': notes},
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      // Silent re-fetch so the list stays visible while updating.
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  Future<bool> toggleTransactionPaidStatus(int transactionId, bool markAsPaid) async {
+  Future<bool> toggleTransactionPaidStatus(
+    int transactionId,
+    bool markAsPaid,
+  ) async {
     try {
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId/toggle-paid', data: {
-        'is_paid': markAsPaid,
-      });
-      // Eagerly refresh dashboard totals
+      await _dio.post(
+        '/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId/toggle-paid',
+        data: {'is_paid': markAsPaid},
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
@@ -136,25 +164,30 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 
   Future<bool> deleteTransaction(int transactionId) async {
     try {
-      await _dio.delete('/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId');
+      await _dio.delete(
+        '/api/vendor-ledgers/vendor-ledgers/transactions/$transactionId',
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  Future<bool> batchTogglePaidStatus(List<int> transactionIds, bool markAsPaid) async {
+  Future<bool> batchTogglePaidStatus(
+    List<int> transactionIds,
+    bool markAsPaid,
+  ) async {
     try {
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/batch-toggle-paid', data: {
-        'transaction_ids': transactionIds,
-        'is_paid': markAsPaid,
-      });
+      await _dio.post(
+        '/api/vendor-ledgers/vendor-ledgers/transactions/batch-toggle-paid',
+        data: {'transaction_ids': transactionIds, 'is_paid': markAsPaid},
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
@@ -163,12 +196,13 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 
   Future<bool> batchDeleteTransactions(List<int> transactionIds) async {
     try {
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/transactions/batch-delete', data: {
-        'transaction_ids': transactionIds,
-      });
+      await _dio.post(
+        '/api/vendor-ledgers/vendor-ledgers/transactions/batch-delete',
+        data: {'transaction_ids': transactionIds},
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
@@ -182,15 +216,18 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
     String? date,
   }) async {
     try {
-      await _dio.post('/api/vendor-ledgers/vendor-ledgers/onboard-invoice-paid', data: {
-        'vendor_name': vendorName,
-        'invoice_number': invoiceNumber,
-        'amount': amount,
-        'date': date,
-      });
+      await _dio.post(
+        '/api/vendor-ledgers/vendor-ledgers/onboard-invoice-paid',
+        data: {
+          'vendor_name': vendorName,
+          'invoice_number': invoiceNumber,
+          'amount': amount,
+          'date': date,
+        },
+      );
       ref.invalidate(inventoryItemsProvider);
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      await fetchLedgers();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
       return true;
     } catch (e) {
       return false;
@@ -199,10 +236,10 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 
   Future<List<dynamic>> fetchInvoiceItems(String invoiceNumber) async {
     try {
-      final response = await _dio.get('/api/inventory/items', queryParameters: {
-        'invoice_number': invoiceNumber,
-        'show_all': true,
-      });
+      final response = await _dio.get(
+        '/api/inventory/items',
+        queryParameters: {'invoice_number': invoiceNumber, 'show_all': true},
+      );
       return response.data['items'] ?? [];
     } catch (e) {
       return [];
@@ -212,10 +249,10 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
   /// Fetches the receipt_link (original photo URL) for a given invoice number.
   Future<String?> fetchReceiptLink(String invoiceNumber) async {
     try {
-      final response = await _dio.get('/api/inventory/items', queryParameters: {
-        'invoice_number': invoiceNumber,
-        'show_all': true,
-      });
+      final response = await _dio.get(
+        '/api/inventory/items',
+        queryParameters: {'invoice_number': invoiceNumber, 'show_all': true},
+      );
       final items = response.data['items'] as List?;
       if (items != null && items.isNotEmpty) {
         final link = items.first['receipt_link'] as String?;
@@ -248,27 +285,32 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 
   /// Fetches all inventory items (purchase invoices) for a specific vendor.
   /// This combines with ledger transactions to show complete vendor history.
-  Future<List<Map<String, dynamic>>> fetchInventoryItemsByVendor(String vendorName) async {
+  Future<List<Map<String, dynamic>>> fetchInventoryItemsByVendor(
+    String vendorName,
+  ) async {
     try {
-      final response = await _dio.get('/api/inventory/items', queryParameters: {
-        'show_all': true,
-      });
+      final response = await _dio.get(
+        '/api/inventory/items',
+        queryParameters: {'show_all': true},
+      );
       final items = response.data['items'] as List? ?? [];
-      
+
       // Filter items by vendor name (case-insensitive match)
       final vendorItems = items.where((item) {
         final itemVendor = item['vendor_name']?.toString().toLowerCase() ?? '';
         final searchVendor = vendorName.toLowerCase();
         return itemVendor == searchVendor || itemVendor.contains(searchVendor);
       }).toList();
-      
+
       // Group by invoice number to create invoice-level summary
       final Map<String, Map<String, dynamic>> invoiceGroups = {};
       for (final item in vendorItems) {
         final invoiceNum = item['invoice_number']?.toString() ?? '';
         final invoiceDate = item['invoice_date']?.toString() ?? '';
-        final key = invoiceNum.isNotEmpty ? invoiceNum : '${invoiceDate}_${item['id']}';
-        
+        final key = invoiceNum.isNotEmpty
+            ? invoiceNum
+            : '${invoiceDate}_${item['id']}';
+
         if (!invoiceGroups.containsKey(key)) {
           invoiceGroups[key] = {
             'invoice_number': invoiceNum,
@@ -281,21 +323,30 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
             'items': <Map<String, dynamic>>[],
           };
         }
-        
-        final netBill = double.tryParse(item['net_bill']?.toString() ?? '0') ?? 0.0;
-        invoiceGroups[key]!['total_amount'] = (invoiceGroups[key]!['total_amount'] as double) + netBill;
-        invoiceGroups[key]!['item_count'] = (invoiceGroups[key]!['item_count'] as int) + 1;
-        (invoiceGroups[key]!['items'] as List<Map<String, dynamic>>).add(item as Map<String, dynamic>);
+
+        final netBill =
+            double.tryParse(item['net_bill']?.toString() ?? '0') ?? 0.0;
+        invoiceGroups[key]!['total_amount'] =
+            (invoiceGroups[key]!['total_amount'] as double) + netBill;
+        invoiceGroups[key]!['item_count'] =
+            (invoiceGroups[key]!['item_count'] as int) + 1;
+        (invoiceGroups[key]!['items'] as List<Map<String, dynamic>>).add(
+          item as Map<String, dynamic>,
+        );
       }
-      
+
       // Convert to list and sort by date (newest first)
       final invoices = invoiceGroups.values.toList();
       invoices.sort((a, b) {
-        final dateA = DateTime.tryParse(a['invoice_date']?.toString() ?? '') ?? DateTime(0);
-        final dateB = DateTime.tryParse(b['invoice_date']?.toString() ?? '') ?? DateTime(0);
+        final dateA =
+            DateTime.tryParse(a['invoice_date']?.toString() ?? '') ??
+            DateTime(0);
+        final dateB =
+            DateTime.tryParse(b['invoice_date']?.toString() ?? '') ??
+            DateTime(0);
         return dateB.compareTo(dateA);
       });
-      
+
       return invoices;
     } catch (e) {
       return [];
@@ -304,4 +355,6 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
 }
 
 final vendorLedgerProvider =
-    NotifierProvider<VendorLedgerNotifier, VendorLedgerState>(VendorLedgerNotifier.new);
+    NotifierProvider<VendorLedgerNotifier, VendorLedgerState>(
+      VendorLedgerNotifier.new,
+    );

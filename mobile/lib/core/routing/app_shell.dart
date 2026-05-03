@@ -43,8 +43,14 @@ class AppShell extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
+          // Explicit background fill — prevents a single grey/transparent frame
+          // showing through while the NavigationShell branch is being laid out.
+          Positioned.fill(
+            child: ColoredBox(color: Theme.of(context).scaffoldBackgroundColor),
+          ),
           Column(
             children: [
               const GlobalTaskBanner(),
@@ -71,24 +77,21 @@ class AppShell extends ConsumerWidget {
           NavigationBar(
             selectedIndex: navigationShell.currentIndex,
             onDestinationSelected: (int index) => _onTap(context, ref, index),
-            backgroundColor: Theme.of(context).colorScheme.surface,
+            backgroundColor: context.surfaceColor,
+            elevation: 0,
+            height: 65,
             indicatorColor: isUploading
                 ? Colors.amber.withValues(alpha: 0.15)
-                : AppTheme.primary.withValues(alpha: 0.15),
-            destinations: const [
+                : context.primaryColor.withValues(alpha: 0.1),
+            destinations: [
               NavigationDestination(
-                icon: Icon(LucideIcons.home),
-                selectedIcon: Icon(LucideIcons.home, color: AppTheme.primary),
+                icon: const Icon(LucideIcons.home, size: 22),
+                selectedIcon: Icon(LucideIcons.home, color: context.primaryColor, size: 22),
                 label: 'HOME',
               ),
-              // NavigationDestination(
-              //   icon: Icon(LucideIcons.box),
-              //   selectedIcon: Icon(LucideIcons.box, color: AppTheme.primary),
-              //   label: 'Track Items',
-              // ),
               NavigationDestination(
-                icon: Icon(LucideIcons.user),
-                selectedIcon: Icon(LucideIcons.user, color: AppTheme.primary),
+                icon: const Icon(LucideIcons.user, size: 22),
+                selectedIcon: Icon(LucideIcons.user, color: context.primaryColor, size: 22),
                 label: 'SETTINGS',
               ),
             ],
@@ -101,10 +104,7 @@ class AppShell extends ConsumerWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     border: Border(
-                      top: BorderSide(
-                        color: Colors.amber.shade600,
-                        width: 2.5,
-                      ),
+                      top: BorderSide(color: Colors.amber.shade600, width: 2.5),
                     ),
                   ),
                 ),
@@ -126,9 +126,7 @@ class _UploadLockOverlay extends ConsumerWidget {
         // Blur the content behind
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.55),
-          ),
+          child: Container(color: Colors.black.withValues(alpha: 0.55)),
         ),
         // Warning card in the center
         Center(
@@ -136,7 +134,9 @@ class _UploadLockOverlay extends ConsumerWidget {
             margin: const EdgeInsets.symmetric(horizontal: 32),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             decoration: BoxDecoration(
-              color: context.isDark ? Colors.amber.shade900 : Colors.amber.shade700,
+              color: context.isDark
+                  ? Colors.amber.shade900
+                  : Colors.amber.shade700,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
@@ -155,7 +155,11 @@ class _UploadLockOverlay extends ConsumerWidget {
                     color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.lock_rounded, color: Colors.white, size: 32),
+                  child: const Icon(
+                    Icons.lock_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -180,7 +184,7 @@ class _UploadLockOverlay extends ConsumerWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 28),
-                
+
                 // ── ESCAPE HATCHES ──
                 Column(
                   children: [
@@ -192,37 +196,39 @@ class _UploadLockOverlay extends ConsumerWidget {
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.amber.shade900,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           elevation: 0,
                         ),
-                        child: const Text('View Upload Progress', 
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'View Upload Progress',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () {
-                        // Double check with user before cancelling? 
+                        // Double check with user before cancelling?
                         // For a quick fix, we just allow force-reset.
                         ref.read(uploadProvider.notifier).forceReset();
                       },
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white.withValues(alpha: 0.8),
                       ),
-                      child: const Text('Cancel & Unlock App', 
-                        style: TextStyle(decoration: TextDecoration.underline)),
+                      child: const Text(
+                        'Cancel & Unlock App',
+                        style: TextStyle(decoration: TextDecoration.underline),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
-          ).animate().scale(
-                duration: 400.ms,
-                curve: Curves.easeOutBack,
-              ).fadeIn(),
+          ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack).fadeIn(),
         ),
       ],
     );
   }
 }
-

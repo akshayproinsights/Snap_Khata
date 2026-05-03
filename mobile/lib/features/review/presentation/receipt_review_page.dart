@@ -47,10 +47,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   // ── Payment Mode state ───────────────────────────────────────────────────
   String _paymentMode = 'Cash';
-  bool _isReceivedChecked = false;
-  final TextEditingController _receivedAmountController = TextEditingController();
+
   final TextEditingController _creditDetailsController = TextEditingController();
   double _receivedAmount = 0.0;
+  double? _manualTotalAmount;
+  bool _isTotalManuallyEdited = false;
   String? _preFetchedShareUrl;
 
   @override
@@ -70,7 +71,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   @override
   void dispose() {
-    _receivedAmountController.dispose();
     _creditDetailsController.dispose();
     super.dispose();
   }
@@ -85,6 +85,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       setState(() {
         _paymentMode = savedPaymentMode;
       });
+    } else if (widget.group.header?.balanceDue != null && widget.group.header!.balanceDue! > 0 && mounted) {
+      setState(() {
+        _paymentMode = 'Credit';
+      });
+    } else if (widget.group.header?.paymentMode != null && mounted) {
+      setState(() {
+        _paymentMode = widget.group.header!.paymentMode!;
+      });
     }
 
     // Load received amount
@@ -92,8 +100,24 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     if (savedReceivedAmount != null && mounted) {
       setState(() {
         _receivedAmount = savedReceivedAmount;
-        _isReceivedChecked = savedReceivedAmount > 0;
-        _receivedAmountController.text = _formatInput(savedReceivedAmount);
+      });
+    } else if (widget.group.header?.receivedAmount != null && mounted) {
+      setState(() {
+        _receivedAmount = widget.group.header!.receivedAmount!;
+      });
+    }
+
+    // Load manual total amount
+    final savedTotalAmount = prefs.getDouble('total_amount_$receipt');
+    if (savedTotalAmount != null && mounted) {
+      setState(() {
+        _manualTotalAmount = savedTotalAmount;
+        _isTotalManuallyEdited = true;
+      });
+    } else if (widget.group.header?.totalBillAmount != null && widget.group.header!.totalBillAmount! > 0 && mounted) {
+      setState(() {
+        _manualTotalAmount = widget.group.header!.totalBillAmount;
+        _isTotalManuallyEdited = true;
       });
     }
 
@@ -128,10 +152,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await prefs.setDouble('received_amount_${widget.group.receiptNumber}', amount);
   }
 
-  Future<void> _saveCreditDetails(String details) async {
+  Future<void> _saveTotalAmount(double amount) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('credit_details_${widget.group.receiptNumber}', details);
+    await prefs.setDouble('total_amount_${widget.group.receiptNumber}', amount);
   }
+
+
 
   Future<void> _saveGstMode(GstMode mode) async {
     setState(() => _gstMode = mode);
@@ -183,6 +209,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     return totalSubtotal; // included or none: total unchanged
   }
 
+  double _activeTotalAmount(InvoiceReviewGroup group) {
+    if (_isTotalManuallyEdited && _manualTotalAmount != null) {
+      return _manualTotalAmount!;
+    }
+    return _totalAfterGst(group);
+  }
+
   void _showFullImage(String imageUrl) {
     Navigator.push(
       context,
@@ -230,12 +263,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     // Always save the record, even with errors
     if (header != null) {
-      final grandTotal = _totalAfterGst(group);
+      final grandTotal = _activeTotalAmount(group);
       final balanceDue = _paymentMode == 'Credit' ? grandTotal - _receivedAmount : 0.0;
       
       var newRecord = header.copyWith(
           verificationStatus: 'Done',
           paymentMode: _paymentMode,
+          amount: grandTotal,
           receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
           balanceDue: _paymentMode == 'Credit' ? balanceDue : 0.0,
           customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
@@ -470,8 +504,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (header != null) _buildHeaderCard(header, invoiceColumns, isAutomobile),
-                const SizedBox(height: 12),
-                _buildPaymentSection(_totalAfterGst(group)),
                 const SizedBox(height: 16),
                 Text('Line Items',
                     style: TextStyle(
@@ -513,7 +545,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   partsSubtotal: _partsSubtotal(group),
                   laborSubtotal: _laborSubtotal(group),
                   gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
-                  grandTotal: _totalAfterGst(group),
+                  grandTotal: _activeTotalAmount(group),
                   originalTotal: group.header?.amount ??
                       (_partsSubtotal(group) + _laborSubtotal(group)),
                   onGstModeChanged: _saveGstMode,
@@ -540,29 +572,121 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Total amount label ──────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total Amount',
-                    style: TextStyle(
-                        color: context.textSecondaryColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                Text(
-                  '₹${_formatAmount(_totalAfterGst(group))}',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // ── Action buttons row ──────────────────────────────────
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Payment Type & Balance ─────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.isDark ? context.primaryColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PaymentToggleBtn(
+                          title: 'Credit',
+                          isSelected: _paymentMode == 'Credit',
+                          onTap: () => _savePaymentMode('Credit'),
+                        ),
+                        _PaymentToggleBtn(
+                          title: 'Cash',
+                          isSelected: _paymentMode == 'Cash',
+                          onTap: () {
+                            _savePaymentMode('Cash');
+                            final t = _activeTotalAmount(group);
+                            setState(() {
+                              _receivedAmount = t;
+                            });
+                            _saveReceivedAmount(t);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_paymentMode == 'Credit')
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Balance Due', style: TextStyle(color: context.errorColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text('₹${_formatAmount(_activeTotalAmount(group) - _receivedAmount)}', style: TextStyle(color: context.errorColor, fontSize: 16, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // ── Total & Received Inputs ─────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: DebouncedReviewField(
+                      initialValue: _formatInput(_activeTotalAmount(group)),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Total Amount (₹)',
+                        labelStyle: TextStyle(fontSize: 12, color: context.textSecondaryColor, fontWeight: FontWeight.w600),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.borderColor)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                        fillColor: context.surfaceColor,
+                        filled: true,
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      onSaved: (val) {
+                        final newTotal = double.tryParse(val);
+                        if (newTotal != null) {
+                          setState(() {
+                            _manualTotalAmount = newTotal;
+                            _isTotalManuallyEdited = true;
+                            if (_paymentMode == 'Cash') {
+                              _receivedAmount = newTotal;
+                              _saveReceivedAmount(newTotal);
+                            }
+                          });
+                          _saveTotalAmount(newTotal);
+                        }
+                      },
+                    ),
+                  ),
+                  if (_paymentMode == 'Credit') ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DebouncedReviewField(
+                        initialValue: _formatInput(_receivedAmount),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Received (₹)',
+                          labelStyle: TextStyle(fontSize: 12, color: context.primaryColor, fontWeight: FontWeight.w600),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.5))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                          fillColor: context.primaryColor.withValues(alpha: 0.05),
+                          filled: true,
+                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.primaryColor),
+                        onSaved: (val) {
+                          final newReceived = double.tryParse(val) ?? 0.0;
+                          setState(() {
+                            _receivedAmount = newReceived;
+                          });
+                          _saveReceivedAmount(newReceived);
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              // ── Action buttons row ──────────────────────────────────
             Row(
               children: [
                 // "Save & Next" / "Sync & Finish" — always shown
@@ -637,7 +761,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           .trim() ??
                       '';
                   
-                  double totalAmount = _totalAfterGst(freshGroup);
+                  double totalAmount = _activeTotalAmount(freshGroup);
                   if (totalAmount == 0.0 && freshGroup.header != null) {
                     totalAmount = freshGroup.header!.amount;
                   }
@@ -696,51 +820,99 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     pendingAmount: balanceDue,
                     extraFields: resolvedExtraFields,
                   );
-                  final message = '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
+                  // ── Step 3: Handle Phone Dialog & Share Options ──────────────────
+                  final phoneController = TextEditingController(text: phoneNumber);
+                  bool shareOriginalImage = false; // Default to Standard Receipt
 
-                  // ── Step 3: Handle Phone Dialog or Launch ──────────────────
-                  if (phoneNumber.isEmpty) {
-                    final phoneController = TextEditingController();
-                    if (!context.mounted) return;
-                    await showDialog<String?>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Send via WhatsApp'),
-                        content: TextField(
-                          controller: phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'Mobile Number', prefixText: '+91 '),
-                        ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                          OutlinedButton(
-                            onPressed: () async {
-                              // Launch IMMEDIATELY to preserve gesture
-                              await WhatsAppUtils.openWhatsAppChat(phone: '', message: message);
-                              if (ctx.mounted) Navigator.pop(ctx, '');
-                            },
-                            child: const Text('Skip'),
-                          ),
-                          FilledButton(
-                            onPressed: () async {
-                              final phone = phoneController.text.trim();
-                              if (phone.isNotEmpty) {
-                                // Launch IMMEDIATELY to preserve gesture
-                                await WhatsAppUtils.openWhatsAppChat(phone: phone, message: message);
-                                if (ctx.mounted) Navigator.pop(ctx, phone);
-                              }
-                            },
-                            child: const Text('Share'),
-                          ),
-                        ],
-                      ),
-                    );
+                  if (!context.mounted) return;
+                  
+                  final shareResult = await showDialog<String?>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (ctx) => StatefulBuilder(
+                      builder: (context, setState) {
+                        void executeShare(String phoneToUse) async {
+                          final linkToShare = shareOriginalImage && freshHeader?.receiptLink.isNotEmpty == true
+                              ? freshHeader?.receiptLink
+                              : shareUrl;
+                          
+                          final message = '$caption\n\nView details:\n$linkToShare\n\nThank you!\n— *${shopName.trim()}*';
+                          await WhatsAppUtils.openWhatsAppChat(phone: phoneToUse, message: message);
+                          if (ctx.mounted) Navigator.pop(ctx, phoneToUse);
+                        }
 
-                    if (!context.mounted) return;
-                  } else {
-                    // Direct launch if phone exists
-                    await WhatsAppUtils.openWhatsAppChat(phone: phoneNumber, message: message);
+                        return AlertDialog(
+                          title: const Text('Share Receipt'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Choose what to send:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 12),
+                              SegmentedButton<bool>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: false, 
+                                    label: Text('Digital Receipt', style: TextStyle(fontSize: 12)),
+                                    icon: Icon(LucideIcons.receipt, size: 16),
+                                  ),
+                                  ButtonSegment(
+                                    value: true, 
+                                    label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
+                                    icon: Icon(LucideIcons.image, size: 16),
+                                  ),
+                                ],
+                                selected: {shareOriginalImage},
+                                onSelectionChanged: (Set<bool> newSelection) {
+                                  setState(() {
+                                    shareOriginalImage = newSelection.first;
+                                  });
+                                },
+                                style: SegmentedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                ),
+                                showSelectedIcon: false,
+                              ),
+                              const SizedBox(height: 20),
+                              const Text('Send to:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: 'Mobile Number', 
+                                  prefixText: '+91 ',
+                                  hintText: 'Enter to send direct',
+                                  isDense: true,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                            OutlinedButton(
+                              onPressed: () => executeShare(''),
+                              child: const Text('Skip Number'),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                final phone = phoneController.text.trim();
+                                executeShare(phone);
+                              },
+                              child: const Text('Share'),
+                            ),
+                          ],
+                        );
+                      }
+                    ),
+                  );
+
+                  if (shareResult == null) return; // User cancelled
+                  
+                  if (shareResult.isNotEmpty && shareResult != phoneNumber) {
+                    // Re-save with new phone if provided
+                    _saveCurrentState(updatePhoneNumber: shareResult);
                   }
 
                   // ── Step 4: Finalize ──────────────────────────────────────
@@ -768,199 +940,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPaymentSection(double grandTotal) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(top: 16),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Payment Type',
-                  style: TextStyle(
-                      color: context.textSecondaryColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold)),
-              Container(
-                decoration: BoxDecoration(
-                  color: context.isDark ? context.primaryColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _PaymentToggleBtn(
-                      title: 'Credit',
-                      isSelected: _paymentMode == 'Credit',
-                      onTap: () => _savePaymentMode('Credit'),
-                    ),
-                    _PaymentToggleBtn(
-                      title: 'Cash',
-                      isSelected: _paymentMode == 'Cash',
-                      onTap: () {
-                        _savePaymentMode('Cash');
-                        setState(() {
-                          _receivedAmount = grandTotal;
-                          _receivedAmountController.text =
-                              _formatInput(grandTotal);
-                        });
-                        _saveReceivedAmount(grandTotal);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Text('Total Amount',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              const Text('₹ ',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              SizedBox(
-                width: 100,
-                child: Text(
-                  _formatAmount(grandTotal),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          if (_paymentMode == 'Credit') ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isReceivedChecked = !_isReceivedChecked;
-                      if (!_isReceivedChecked) {
-                        _receivedAmount = 0;
-                        _receivedAmountController.clear();
-                        _saveReceivedAmount(0);
-                      } else {
-                        _receivedAmount = grandTotal;
-                        _receivedAmountController.text =
-                            _formatInput(grandTotal);
-                        _saveReceivedAmount(grandTotal);
-                      }
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isReceivedChecked
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: _isReceivedChecked
-                            ? context.primaryColor
-                            : context.textSecondaryColor.withValues(alpha: 0.3),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Received', style: TextStyle(fontSize: 16)),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                const Text('₹ ',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _receivedAmountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-                      border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: context.borderColor)),
-                      enabledBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: context.borderColor)),
-                      focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: context.primaryColor)),
-                      fillColor: Colors.transparent,
-                    ),
-                    onChanged: (val) {
-                      setState(() {
-                        _receivedAmount = double.tryParse(val) ?? 0.0;
-                        _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
-                      });
-                      _saveReceivedAmount(double.tryParse(val) ?? 0.0);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text('Balance Due',
-                    style: TextStyle(
-                        color: context.errorColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
-                const Spacer(),
-                Text('₹ ',
-                    style: TextStyle(
-                        color: context.errorColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500)),
-                SizedBox(
-                  width: 100,
-                  child: Text(
-                    _formatAmount(grandTotal - _receivedAmount),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        color: context.errorColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _creditDetailsController,
-              onChanged: (val) => _saveCreditDetails(val),
-              decoration: InputDecoration(
-                labelText: 'Customer Details / Notes',
-                labelStyle:
-                    TextStyle(fontSize: 14, color: context.textSecondaryColor),
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: context.borderColor)),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: context.borderColor)),
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
     final isError = header.hasError;

@@ -1538,100 +1538,107 @@ async def toggle_transaction_paid_status(
         if request.is_paid:
             # MARKING AS PAID
             receipt_number = tx.get('receipt_number')
-            
-            # 1. Calculate how much has already been paid for this specific invoice
-            already_paid = 0.0
-            if receipt_number:
-                payment_resp = db.client.table('ledger_transactions') \
-                    .select('amount') \
-                    .eq('username', username) \
-                    .eq('transaction_type', 'PAYMENT') \
-                    .eq('receipt_number', receipt_number) \
-                    .execute()
-            else:
-                payment_resp = db.client.table('ledger_transactions') \
-                    .select('amount') \
-                    .eq('username', username) \
-                    .eq('transaction_type', 'PAYMENT') \
-                    .eq('linked_transaction_id', transaction_id) \
-                    .execute()
 
-            for p_tx in (payment_resp.data or []):
-                already_paid += float(p_tx.get('amount') or 0)
-                
-            settlement_amount = max(0.0, tx_amount - already_paid)
-
-            # 2. Fetch old values from verified_invoices so we can safely update it later
-            old_balance_due = 0.0
+            # ─────────────────────────────────────────────────────────────────
+            # CORE FIX: Use verified_invoices.balance_due as the authoritative
+            # remaining amount. tx_amount in ledger_transactions can be stale
+            # (it may store only the initial received amount, not the full bill).
+            # Example: Bill=₹8k, Day2 partial=₹3k → vi.balance_due=₹5k exactly.
+            # ─────────────────────────────────────────────────────────────────
             old_received = 0.0
+            settlement_amount = 0.0
+
             if receipt_number:
                 try:
-                    invoice_rows_resp = db.client.table('verified_invoices') \
-                        .select('balance_due, received_amount') \
+                    vi_resp = db.client.table('verified_invoices') \
+                        .select('balance_due, received_amount, amount') \
                         .eq('username', username) \
                         .eq('receipt_number', receipt_number) \
-                        .limit(1) \
                         .execute()
+                    vi_rows = vi_resp.data or []
+                    if vi_rows:
+                        # Sum balance_due across all line items of this receipt
+                        vi_balance_due = sum(float(r.get('balance_due') or 0) for r in vi_rows)
+                        old_received = max((float(r.get('received_amount') or 0) for r in vi_rows), default=0.0)
+                        settlement_amount = max(0.0, vi_balance_due)
+                        logger.info(f"MARK PAID: receipt={receipt_number}, "
+                                    f"vi_balance_due={vi_balance_due:.2f}, settlement={settlement_amount:.2f}")
+                except Exception as vi_err:
+                    logger.warning(f"Could not fetch verified_invoices for {receipt_number}: {vi_err}")
 
-                    if invoice_rows_resp.data:
-                        old_balance_due = float(invoice_rows_resp.data[0].get('balance_due', 0) or 0)
-                        old_received = float(invoice_rows_resp.data[0].get('received_amount', 0) or 0)
-                except Exception as due_err:
-                    logger.warning(f"Could not fetch verified_invoices for receipt {receipt_number}: {due_err}")
+            # Fallback: verified_invoices gave us nothing — compute from existing
+            # PAYMENT rows linked to this invoice so we never create a duplicate.
+            if settlement_amount <= 0.01:
+                try:
+                    linked_pmts = db.client.table('ledger_transactions') \
+                        .select('amount') \
+                        .eq('username', username) \
+                        .eq('ledger_id', ledger_id) \
+                        .eq('transaction_type', 'PAYMENT') \
+                        .eq('linked_transaction_id', transaction_id) \
+                        .execute()
+                    total_linked = sum(float(p.get('amount') or 0) for p in (linked_pmts.data or []))
+                    settlement_amount = max(0.0, tx_amount - total_linked)
+                    logger.info(f"MARK PAID fallback: tx_amount={tx_amount:.2f}, "
+                                f"total_linked={total_linked:.2f}, settlement={settlement_amount:.2f}")
+                except Exception as fb_err:
+                    logger.warning(f"Fallback calc failed: {fb_err}")
+                    settlement_amount = max(0.0, tx_amount)
 
-            # If nothing is due, just mark invoice as paid without creating synthetic payment.
-            if settlement_amount <= 0:
+            # If nothing is due, just flag the invoice as paid — no duplicate payment.
+            if settlement_amount <= 0.01:
                 db.client.table('ledger_transactions').update({
                     'is_paid': True,
                     'linked_transaction_id': None
                 }).eq('id', transaction_id).execute()
-
                 return {
                     "status": "success",
-                    "message": "Successfully marked as paid",
+                    "message": "Invoice already fully settled",
                     "new_balance": current_balance,
                     "is_paid": True
                 }
 
-            # Create a PAYMENT transaction for settlement amount
-            payment_resp = db.client.table('ledger_transactions').insert({
+            # Create a PAYMENT transaction for the exact remaining amount
+            human_note = (f"Payment collected for Invoice #{receipt_number}"
+                          if receipt_number else f"Payment collected for transaction #{transaction_id}")
+            payment_insert_resp = db.client.table('ledger_transactions').insert({
                 'username': username,
                 'ledger_id': ledger_id,
                 'transaction_type': 'PAYMENT',
                 'amount': settlement_amount,
-                'notes': f"Auto-generated payment for Invoice {tx.get('receipt_number', '')}",
-                'linked_transaction_id': transaction_id # Link it to the invoice
+                'notes': human_note,
+                'linked_transaction_id': transaction_id
             }).execute()
-            
-            if not payment_resp.data:
+
+            if not payment_insert_resp.data:
                 raise HTTPException(status_code=500, detail="Failed to create payment transaction")
-                
-            payment_id = payment_resp.data[0]['id']
-            
-            # Update the invoice transaction
+
+            payment_id = payment_insert_resp.data[0]['id']
+
+            # Mark the invoice as paid and cross-link to the new payment
             db.client.table('ledger_transactions').update({
                 'is_paid': True,
-                'linked_transaction_id': payment_id # Link invoice to the new payment
+                'linked_transaction_id': payment_id
             }).eq('id', transaction_id).execute()
-            
-            # Update customer balance (PAYMENT decreases balance due)
-            new_balance = current_balance - settlement_amount
+
+            # Update customer ledger balance
+            new_balance = max(0.0, current_balance - settlement_amount)
             db.client.table('customer_ledgers').update({
                 'balance_due': new_balance,
                 'last_payment_date': now,
                 'updated_at': now
             }).eq('id', ledger_id).execute()
-            
-            # Sync to verified_invoices
-            if receipt_number and settlement_amount > 0:
+
+            # Sync settlement to verified_invoices
+            if receipt_number:
                 try:
                     db.client.table('verified_invoices').update({
                         'balance_due': 0,
-                        'received_amount': old_received + old_balance_due,
-                        'payment_mode': 'Cash' # or leave as Credit, but it's paid
+                        'received_amount': old_received + settlement_amount,
+                        'payment_mode': 'Cash'
                     }).eq('username', username).eq('receipt_number', receipt_number).execute()
-                except Exception as e:
-                    logger.warning(f"Could not update verified_invoices for receipt {receipt_number}: {e}")
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync verified_invoices for {receipt_number}: {sync_err}")
             
         else:
             # MARKING AS UNPAID

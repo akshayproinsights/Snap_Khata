@@ -286,8 +286,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     if (updatedItems.isNotEmpty) {
       await notifier.updateRecordsBulk(updatedItems);
-      // Eagerly re-fetch dashboard totals so top cards update immediately on return.
-      ref.invalidate(udharProvider);
+      // Silently refresh udhar ledgers in the background so the Home dashboard
+      // updates without wiping its current state (which causes a blank screen flash).
+      unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     }
 
@@ -1535,8 +1536,13 @@ class _CreditBookButton extends ConsumerWidget {
         if (!context.mounted) return;
 
         if (match == null) {
-          // If still no match, go to dashboard
-          context.push('/udhar-dashboard');
+          // No match found — navigate home and show a helpful message.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No credit book entry found for this customer yet.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
           return;
         }
 

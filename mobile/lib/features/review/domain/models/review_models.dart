@@ -23,6 +23,7 @@ class ReviewRecord {
   final String? paymentMode;
   final double? receivedAmount;
   final double? balanceDue;
+  final double? totalBillAmount;
   final String? customerDetails;
   
   // Tax / Calculation state
@@ -91,6 +92,7 @@ class ReviewRecord {
     this.paymentMode,
     this.receivedAmount,
     this.balanceDue,
+    this.totalBillAmount,
     this.customerDetails,
     this.gstMode,
     this.taxableRowIds,
@@ -136,9 +138,10 @@ class ReviewRecord {
       auditFindings: json['audit_findings']?.toString() ??
           json['Audit Findings']?.toString(),
       type: json['type']?.toString() ?? json['Type']?.toString(),
-      paymentMode: json['payment_mode']?.toString() ?? json['Payment Mode']?.toString(),
-      receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'])?.toString() ?? ''),
-      balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'])?.toString() ?? ''),
+      paymentMode: json['payment_mode']?.toString() ?? json['Payment Mode']?.toString() ?? extra['payment_mode']?.toString(),
+      receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'] ?? extra['received_amount'])?.toString() ?? ''),
+      balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'] ?? extra['balance_due'])?.toString() ?? ''),
+      totalBillAmount: double.tryParse((json['total_bill_amount'] ?? json['Total Bill Amount'] ?? extra['total_bill_amount'])?.toString() ?? ''),
       customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
       gstMode: json['gst_mode']?.toString() ?? json['GST Mode']?.toString(),
       taxableRowIds: json['taxable_row_ids']?.toString() ?? json['Taxable Row Ids']?.toString(),
@@ -202,6 +205,7 @@ class ReviewRecord {
     String? paymentMode,
     double? receivedAmount,
     double? balanceDue,
+    double? totalBillAmount,
     String? customerDetails,
     String? gstMode,
     String? taxableRowIds,
@@ -230,6 +234,7 @@ class ReviewRecord {
       paymentMode: paymentMode ?? this.paymentMode,
       receivedAmount: receivedAmount ?? this.receivedAmount,
       balanceDue: balanceDue ?? this.balanceDue,
+      totalBillAmount: totalBillAmount ?? this.totalBillAmount,
       customerDetails: customerDetails ?? this.customerDetails,
       gstMode: gstMode ?? this.gstMode,
       taxableRowIds: taxableRowIds ?? this.taxableRowIds,
@@ -260,6 +265,7 @@ class ReviewRecord {
       if (paymentMode != null) 'payment_mode': paymentMode,
       if (receivedAmount != null) 'received_amount': receivedAmount,
       if (balanceDue != null) 'balance_due': balanceDue,
+      if (totalBillAmount != null) 'total_bill_amount': totalBillAmount,
       if (customerDetails != null) 'customer_details': customerDetails,
       if (gstMode != null) 'gst_mode': gstMode,
       if (taxableRowIds != null) 'taxable_row_ids': taxableRowIds,

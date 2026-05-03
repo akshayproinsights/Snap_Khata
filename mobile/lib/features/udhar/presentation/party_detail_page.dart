@@ -31,6 +31,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
   List<LedgerTransaction>? _transactions;
   bool _isLoading = true;
+  Map<String, double> _backendSummary = {'total_billed': 0, 'total_paid': 0, 'balance_due': 0};
 
   @override
   void initState() {
@@ -41,12 +42,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   Future<void> _loadTransactions() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    final transactions = await ref
+    final (transactions, summary) = await ref
         .read(udharProvider.notifier)
-        .fetchTransactions(widget.ledger.id);
+        .fetchLedgerWithTransactions(widget.ledger.id);
     if (!mounted) return;
     setState(() {
       _transactions = transactions;
+      _backendSummary = summary;
       _isLoading = false;
     });
   }
@@ -69,6 +71,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   }
 
   double get _totalInvoiced {
+    // Use backend-computed value if available (avoids local recalculation drift)
+    final backendVal = _backendSummary['total_billed'] ?? 0.0;
+    if (backendVal > 0) return backendVal;
     if (_transactions == null) return 0;
     return _transactions!
         .where((tx) =>
@@ -78,7 +83,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   }
 
   double get _totalPaid {
+    // Use backend-computed value — avoids double-counting where an invoice's
+    // receivedAmount (from verified_invoices) would be counted again here.
+    final backendVal = _backendSummary['total_paid'] ?? 0.0;
+    if (backendVal > 0) return backendVal;
     if (_transactions == null) return 0;
+    // Fallback: only count PAYMENT rows that are standalone (not linked to an invoice
+    // whose receivedAmount is already shown in the invoice clarity row).
     return _transactions!
         .where((tx) => tx.transactionType == 'PAYMENT')
         .fold(0.0, (sum, tx) => sum + tx.amount);
@@ -831,27 +842,225 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       if (success) {
         ref.invalidate(verifiedProvider);
         _loadTransactions();
+        if (isPaid) HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               isPaid
-                  ? 'Invoice marked as Paid! 🎉'
-                  : 'Invoice marked as Unpaid.',
+                  ? '✅ Payment collected successfully!'
+                  : 'Invoice marked as unpaid.',
             ),
             backgroundColor:
                 isPaid ? context.successColor : context.warningColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Failed to update status.'),
+            content: const Text('Failed to update status.'),
             backgroundColor: context.errorColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
     }
+  }
+
+  /// Khatabook-style "Collect Payment" confirmation sheet.
+  /// Shows the exact remaining balance and lets user confirm before recording.
+  void _showCollectPaymentSheet(LedgerTransaction tx) {
+    final outstanding = tx.balanceDue ?? (tx.isPaid ? 0.0 : tx.amount);
+    final alreadyPaid = tx.receivedAmount ?? 0.0;
+    final billTotal = tx.amount;
+
+    // If already settled, just toggle without sheet
+    if (outstanding <= 0.01) {
+      _togglePaidStatus(tx, true);
+      return;
+    }
+
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: context.borderColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Header row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.successColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(LucideIcons.indianRupee, color: context.successColor, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Collect Payment',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: context.textColor,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          if (tx.receiptNumber != null)
+                            Text(
+                              'Invoice #${tx.receiptNumber}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.textSecondaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Breakdown card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: context.backgroundColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: context.borderColor),
+                  ),
+                  child: Column(
+                    children: [
+                      _collectSheetRow(ctx, 'Bill Total', CurrencyFormatter.format(billTotal), null),
+                      if (alreadyPaid > 0.01) ...[
+                        const SizedBox(height: 10),
+                        _collectSheetRow(ctx, 'Already Paid', CurrencyFormatter.format(alreadyPaid), context.textSecondaryColor),
+                        const SizedBox(height: 10),
+                        Divider(color: context.borderColor),
+                      ],
+                      const SizedBox(height: 10),
+                      _collectSheetRow(
+                        ctx,
+                        'Collecting Now',
+                        CurrencyFormatter.format(outstanding),
+                        context.successColor,
+                        bold: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Collect button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            setSheet(() => isSubmitting = true);
+                            Navigator.pop(ctx);
+                            await _togglePaidStatus(tx, true);
+                          },
+                    icon: Icon(
+                      isSubmitting ? LucideIcons.loader : LucideIcons.checkCircle2,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    label: Text(
+                      'COLLECT ${CurrencyFormatter.format(outstanding)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: context.successColor,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    'For partial payments, use "RECORD PAYMENT" below',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.textSecondaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _collectSheetRow(BuildContext ctx, String label, String value, Color? valueColor, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
+            color: bold ? context.textColor : context.textSecondaryColor,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: bold ? 18 : 14,
+            fontWeight: FontWeight.w900,
+            color: valueColor ?? context.textColor,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildTransactionCard(LedgerTransaction tx) {
@@ -951,7 +1160,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 const SizedBox(width: 6),
                                 Flexible(
                                   child: Text(
-                                    tx.notes!,
+                                    // Clean up auto-generated notes for SMB readability
+                                    tx.notes!.startsWith('Payment collected for Invoice')
+                                        ? 'Full balance collected'
+                                        : tx.notes!.startsWith('Auto-generated payment')
+                                            ? 'Payment for Invoice #${tx.receiptNumber ?? ""}'
+                                            : tx.notes!,
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.textSecondaryColor,
@@ -1033,19 +1247,62 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         foregroundColor: context.primaryColor,
                       ),
                     ),
-                  if (isInvoice)
-                    TextButton.icon(
-                      onPressed: () => _togglePaidStatus(tx, !tx.isPaid),
-                      icon: Icon(tx.isPaid ? LucideIcons.xCircle : LucideIcons.checkCircle2, size: 14),
-                      label: Text(
-                        tx.isPaid ? 'MARK UNPAID' : 'MARK PAID', 
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)
+                  if (isInvoice) ...[
+                    // SETTLED badge for paid invoices
+                    if (tx.isPaid)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: context.successColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: context.successColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.checkCircle2, size: 10, color: context.successColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              'SETTLED',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: context.successColor,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: tx.isPaid ? context.warningColor : context.successColor,
+                    // COLLECT button for unpaid, MARK UNPAID for paid
+                    if (!tx.isPaid)
+                      TextButton.icon(
+                        onPressed: () => _showCollectPaymentSheet(tx),
+                        icon: const Icon(LucideIcons.checkCircle2, size: 14),
+                        label: const Text(
+                          'COLLECT',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                        ),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: context.successColor,
+                        ),
+                      )
+                    else
+                      TextButton.icon(
+                        onPressed: () => _togglePaidStatus(tx, false),
+                        icon: const Icon(LucideIcons.xCircle, size: 14),
+                        label: const Text(
+                          'UNDO',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+                        ),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: context.textSecondaryColor,
+                        ),
                       ),
-                    ),
+                  ],
                 ],
               ),
             ),

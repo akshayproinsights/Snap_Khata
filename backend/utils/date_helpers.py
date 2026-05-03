@@ -31,11 +31,17 @@ def normalize_date(date_str: str) -> str:
         "%d-%B-%Y",      # 10-December-2025
         "%Y-%m-%d",      # 2025-12-10
         "%m/%d/%Y",      # 12/10/2025
+        "%d-%m",         # 10-12 (default to current year or 2026)
+        "%d/%m",         # 10/12 (default to current year or 2026)
     ]
     
     for fmt in formats_to_try:
         try:
             dt = datetime.strptime(date_str, fmt)
+            # If the format didn't include a year, it defaults to 1900.
+            # User specifically requested 2026 as the default for missing years.
+            if dt.year == 1900:
+                dt = dt.replace(year=2026)
             # Return in DD-MM-YYYY format
             return dt.strftime("%d-%m-%Y")
         except ValueError:
