@@ -440,14 +440,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     pendingAmount: balanceDue,
                     extraFields: extraFieldsForWa.isNotEmpty ? extraFieldsForWa : null,
                   );
-                  final message = '$caption\n\nView details:\n$link\n\nThank you!\n— *${shopName.trim()}*';
-
                   if (!context.mounted) return;
-                  // shareReceipt now handles the gesture-friendly launch inside the dialog
-                  await WhatsAppUtils.shareReceipt(
+                  await WhatsAppUtils.shareReceiptWithOptions(
                     context,
                     phone: widget.group.mobileNumber,
-                    message: message,
+                    shareUrl: link,
+                    imageUrl: widget.group.receiptLink,
+                    caption: caption,
+                    shopName: shopName,
                   );
                 },
               ),

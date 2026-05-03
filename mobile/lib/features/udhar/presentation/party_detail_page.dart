@@ -53,8 +53,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     });
   }
 
-  /// Compute balance from actual transactions: invoices add, payments subtract
+  /// Returns the authoritative balance: prefers backend-computed value (which accounts
+  /// for all transactions including linked initial payments) and only falls back to
+  /// summing local transactions if the backend summary hasn't loaded yet.
   double get _computedBalance {
+    // Primary: server-computed balance_due = final_billed - final_paid
+    // This is authoritative because grand_total is now derived from item amounts, not stale DB fields.
+    final backendVal = _backendSummary['balance_due'] ?? 0.0;
+    if (!_isLoading && _transactions != null) return backendVal;
+    // Fallback during initial load: iterate all transactions
     if (_transactions == null || _transactions!.isEmpty) {
       return widget.ledger.balanceDue;
     }
@@ -533,14 +540,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
-            tooltip: 'Send Reminder',
-            onPressed: () => _sendWhatsAppReminder(context, ref, currentLedger),
-          ),
-          const SizedBox(width: 8),
-        ],
+
       ),
       body: Column(
         children: [
@@ -575,7 +575,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ),
                 if (_transactions != null && _transactions!.isNotEmpty)
                   Text(
-                    '${_transactions!.length} Entries',
+                    '${_transactions!.where((tx) => !(tx.transactionType == 'PAYMENT' && tx.linkedTransactionId != null)).length} Entries',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -611,22 +611,53 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           ),
         ],
       ),
-      floatingActionButton: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: () => _showAddPaymentDialog(context),
-          backgroundColor: context.primaryColor,
-          elevation: 8,
-          icon: const Icon(LucideIcons.indianRupee, color: Colors.white, size: 20),
-          label: const Text(
-            'RECORD PAYMENT',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0),
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(context).padding.bottom),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: OutlinedButton.icon(
+                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 16),
+                label: const Text('REMIND', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 52),
+                  side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
+                  foregroundColor: const Color(0xFF25D366),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => _showWhatsAppReminderSheet(context, ref, currentLedger),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: ElevatedButton.icon(
+                icon: const Icon(LucideIcons.indianRupee, size: 18, color: Colors.white),
+                label: const Text('RECORD PAYMENT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.primaryColor,
+                  minimumSize: const Size(0, 52),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => _showAddPaymentDialog(context),
+              ),
+            ),
+          ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -786,282 +817,346 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  Future<void> _sendWhatsAppReminder(BuildContext context, WidgetRef ref, CustomerLedger ledger) async {
+  void _showWhatsAppReminderSheet(BuildContext context, WidgetRef ref, CustomerLedger ledger) {
     HapticFeedback.lightImpact();
 
-    final customerNameMsg = ledger.customerName.isNotEmpty &&
-            ledger.customerName.toLowerCase() != 'unknown'
-        ? ledger.customerName
-        : 'Customer';
-
     final shopProfile = ref.read(shopProvider);
-    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
-    final pendingFmt = CurrencyFormatter.format(ledger.balanceDue);
-
-    String message = 'Hi $customerNameMsg,\n\n'
-        'This is a gentle reminder from *${shopName.trim()}* regarding your pending balance.\n\n'
-        '⚠️ *Total Amount Due: $pendingFmt*\n\n';
-
-    if (shopProfile.upiId.isNotEmpty) {
-      final upiLink = 'upi://pay?pa=${shopProfile.upiId}&pn=${Uri.encodeComponent(shopName)}&am=${ledger.balanceDue.toStringAsFixed(2)}&cu=INR';
-      message += '💳 *Pay via UPI:* ${shopProfile.upiId}\n'
-                '🔗 *Payment Link:* $upiLink\n\n';
-    }
-
     final authState = ref.read(authProvider);
+    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+    final upiId = shopProfile.upiId.isNotEmpty ? shopProfile.upiId : null;
     final usernameParam = authState.user?.username != null
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
     final statementLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
-    message += '📋 *View your account statement:*\n$statementLink\n\n';
-    message += 'Thank you for your business!\n— *${shopName.trim()}*';
 
-    await WhatsAppUtils.shareReceipt(
-      context,
-      phone: ledger.customerPhone ?? '',
-      message: message,
-      dialogTitle: 'Send Reminder',
-      dialogContent: 'Send a payment reminder statement to ${ledger.customerName} via WhatsApp.',
-    );
-  }
+    // Collect invoices that have a receipt photo
+    final invoicesWithPhotos = (_transactions ?? [])
+        .where((tx) =>
+            (tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT') &&
+            tx.receiptLink != null &&
+            tx.receiptLink!.isNotEmpty &&
+            tx.receiptLink != 'null')
+        .toList();
 
-  Future<void> _togglePaidStatus(LedgerTransaction tx, bool isPaid) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final success = await ref
-        .read(udharProvider.notifier)
-        .toggleTransactionPaidStatus(widget.ledger.id, tx.id, isPaid);
-
-    if (mounted) {
-      Navigator.pop(context);
-
-      if (success) {
-        ref.invalidate(verifiedProvider);
-        _loadTransactions();
-        if (isPaid) HapticFeedback.mediumImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isPaid
-                  ? '✅ Payment collected successfully!'
-                  : 'Invoice marked as unpaid.',
-            ),
-            backgroundColor:
-                isPaid ? context.successColor : context.warningColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to update status.'),
-            backgroundColor: context.errorColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
-    }
-  }
-
-  /// Khatabook-style "Collect Payment" confirmation sheet.
-  /// Shows the exact remaining balance and lets user confirm before recording.
-  void _showCollectPaymentSheet(LedgerTransaction tx) {
-    final outstanding = tx.balanceDue ?? (tx.isPaid ? 0.0 : tx.amount);
-    final alreadyPaid = tx.receivedAmount ?? 0.0;
-    final billTotal = tx.amount;
-
-    // If already settled, just toggle without sheet
-    if (outstanding <= 0.01) {
-      _togglePaidStatus(tx, true);
-      return;
-    }
-
-    bool isSubmitting = false;
+    final phoneController = TextEditingController(text: ledger.customerPhone ?? '');
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-            decoration: BoxDecoration(
-              color: context.surfaceColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
+      builder: (ctx) {
+        bool useReceiptPhoto = false;
+        LedgerTransaction? selectedTx =
+            invoicesWithPhotos.isNotEmpty ? invoicesWithPhotos.first : null;
+
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final message = WhatsAppUtils.buildPartyReminderMessage(
+              customerName: ledger.customerName.isNotEmpty ? ledger.customerName : 'Customer',
+              shopName: shopName,
+              totalBilled: _totalInvoiced,
+              totalPaid: _totalPaid,
+              balanceDue: _computedBalance,
+              statementLink: statementLink,
+              upiId: upiId,
+              useReceiptPhoto: useReceiptPhoto,
+              receiptPhotoUrl: selectedTx?.receiptLink,
+              receiptNumber: selectedTx?.receiptNumber?.toString(),
+            );
+
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.85,
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                children: [
+                  // Drag handle
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: context.borderColor,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                // Header row
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: context.successColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(LucideIcons.indianRupee, color: context.successColor, size: 24),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
+                  // Scrollable body
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Collect Payment',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: context.textColor,
-                              letterSpacing: -0.5,
+                          // Header
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const FaIcon(FontAwesomeIcons.whatsapp, color: Color(0xFF25D366), size: 22),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Send Payment Reminder',
+                                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                                    Text(ledger.customerName,
+                                        style: TextStyle(fontSize: 13, color: context.textSecondaryColor, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
+                                onPressed: () => Navigator.pop(ctx),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Summary strip
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: context.backgroundColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: context.borderColor),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _summaryChip(context, 'Billed', CurrencyFormatter.format(_totalInvoiced), context.textColor),
+                                Container(width: 1, height: 32, color: context.borderColor),
+                                _summaryChip(context, 'Paid', CurrencyFormatter.format(_totalPaid), context.successColor),
+                                Container(width: 1, height: 32, color: context.borderColor),
+                                _summaryChip(context, 'Due', CurrencyFormatter.format(_computedBalance), context.errorColor),
+                              ],
                             ),
                           ),
-                          if (tx.receiptNumber != null)
-                            Text(
-                              'Invoice #${tx.receiptNumber}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.textSecondaryColor,
-                                fontWeight: FontWeight.w600,
+                          const SizedBox(height: 20),
+
+                          // Send As toggle (only if receipt photos exist)
+                          if (invoicesWithPhotos.isNotEmpty) ...[
+                            Text('SEND AS',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
+                                    color: context.textSecondaryColor, letterSpacing: 1.2)),
+                            const SizedBox(height: 10),
+                            SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text('Account Statement', style: TextStyle(fontSize: 12)),
+                                  icon: Icon(LucideIcons.fileText, size: 15),
+                                ),
+                                ButtonSegment(
+                                  value: true,
+                                  label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
+                                  icon: Icon(LucideIcons.image, size: 15),
+                                ),
+                              ],
+                              selected: {useReceiptPhoto},
+                              onSelectionChanged: (s) => setSheet(() => useReceiptPhoto = s.first),
+                              showSelectedIcon: false,
+                              style: SegmentedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                               ),
                             ),
+                            // Receipt picker when multiple invoices have photos
+                            if (useReceiptPhoto && invoicesWithPhotos.length > 1) ...[
+                              const SizedBox(height: 14),
+                              Text('CHOOSE RECEIPT',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
+                                      color: context.textSecondaryColor, letterSpacing: 1.2)),
+                              const SizedBox(height: 6),
+                              ...invoicesWithPhotos.map((tx) => InkWell(
+                                onTap: () => setSheet(() => selectedTx = tx),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: selectedTx == tx
+                                        ? context.primaryColor.withValues(alpha: 0.08)
+                                        : context.backgroundColor,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: selectedTx == tx ? context.primaryColor : context.borderColor,
+                                      width: selectedTx == tx ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(LucideIcons.receipt, size: 16,
+                                          color: selectedTx == tx ? context.primaryColor : context.textSecondaryColor),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Bill #${tx.receiptNumber ?? "N/A"} · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                            color: selectedTx == tx ? context.primaryColor : context.textColor,
+                                          ),
+                                        ),
+                                      ),
+                                      if (selectedTx == tx)
+                                        Icon(LucideIcons.checkCircle2, size: 16, color: context.primaryColor),
+                                    ],
+                                  ),
+                                ),
+                              )),
+                            ],
+                            const SizedBox(height: 20),
+                          ],
+
+                          // Message preview (WhatsApp bubble style)
+                          Text('PREVIEW',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
+                                  color: context.textSecondaryColor, letterSpacing: 1.2)),
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCF8C6),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(18),
+                                bottomLeft: Radius.circular(18),
+                                bottomRight: Radius.circular(18),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                color: Color(0xFF0D0D0D),
+                                fontSize: 13,
+                                height: 1.65,
+                              ),
+                            ),
+                          ),
+
+                          // Phone field if missing
+                          if (ledger.customerPhone == null || ledger.customerPhone!.trim().isEmpty) ...[
+                            const SizedBox(height: 20),
+                            TextField(
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                labelText: 'Customer Mobile Number',
+                                prefixText: '+91 ',
+                                hintText: '9876543210',
+                                prefixIcon: Icon(LucideIcons.phone, color: context.primaryColor),
+                                filled: true,
+                                fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: context.borderColor),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Breakdown card
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: context.backgroundColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: context.borderColor),
                   ),
-                  child: Column(
-                    children: [
-                      _collectSheetRow(ctx, 'Bill Total', CurrencyFormatter.format(billTotal), null),
-                      if (alreadyPaid > 0.01) ...[
-                        const SizedBox(height: 10),
-                        _collectSheetRow(ctx, 'Already Paid', CurrencyFormatter.format(alreadyPaid), context.textSecondaryColor),
-                        const SizedBox(height: 10),
-                        Divider(color: context.borderColor),
+
+                  // Action buttons
+                  Container(
+                    padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(ctx).padding.bottom),
+                    decoration: BoxDecoration(
+                      color: context.surfaceColor,
+                      border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 52),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              side: BorderSide(color: context.borderColor),
+                            ),
+                            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
+                            label: const Text('SEND ON WHATSAPP',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              minimumSize: const Size(0, 52),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: () async {
+                              Navigator.pop(ctx);
+                              final phone = phoneController.text.trim().isNotEmpty
+                                  ? phoneController.text.trim()
+                                  : (ledger.customerPhone ?? '');
+                              await WhatsAppUtils.openWhatsAppChat(
+                                phone: phone,
+                                message: message,
+                              );
+                            },
+                          ),
+                        ),
                       ],
-                      const SizedBox(height: 10),
-                      _collectSheetRow(
-                        ctx,
-                        'Collecting Now',
-                        CurrencyFormatter.format(outstanding),
-                        context.successColor,
-                        bold: true,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Collect button
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: isSubmitting
-                        ? null
-                        : () async {
-                            setSheet(() => isSubmitting = true);
-                            Navigator.pop(ctx);
-                            await _togglePaidStatus(tx, true);
-                          },
-                    icon: Icon(
-                      isSubmitting ? LucideIcons.loader : LucideIcons.checkCircle2,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    label: Text(
-                      'COLLECT ${CurrencyFormatter.format(outstanding)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.successColor,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    'For partial payments, use "RECORD PAYMENT" below',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: context.textSecondaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _collectSheetRow(BuildContext ctx, String label, String value, Color? valueColor, {bool bold = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+  Widget _summaryChip(BuildContext context, String label, String value, Color valueColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
-            color: bold ? context.textColor : context.textSecondaryColor,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: bold ? 18 : 14,
-            fontWeight: FontWeight.w900,
-            color: valueColor ?? context.textColor,
-          ),
-        ),
+        Text(label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: context.textSecondaryColor,
+              letterSpacing: 0.5,
+            )),
+        const SizedBox(height: 4),
+        Text(value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: valueColor,
+            )),
       ],
     );
   }
+
 
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
@@ -1275,33 +1370,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ],
                         ),
                       ),
-                    // COLLECT button for unpaid, MARK UNPAID for paid
-                    if (!tx.isPaid)
-                      TextButton.icon(
-                        onPressed: () => _showCollectPaymentSheet(tx),
-                        icon: const Icon(LucideIcons.checkCircle2, size: 14),
-                        label: const Text(
-                          'COLLECT',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                        ),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: context.successColor,
-                        ),
-                      )
-                    else
-                      TextButton.icon(
-                        onPressed: () => _togglePaidStatus(tx, false),
-                        icon: const Icon(LucideIcons.xCircle, size: 14),
-                        label: const Text(
-                          'UNDO',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-                        ),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: context.textSecondaryColor,
-                        ),
-                      ),
+                    // COLLECT button removed — use RECORD PAYMENT button at bottom instead
                   ],
                 ],
               ),

@@ -440,14 +440,14 @@ class _InvoiceGroupTile extends ConsumerWidget {
                       paidAmount: group.paymentMode == 'Credit' ? (group.receivedAmount ?? 0.0) : group.totalAmount,
                       pendingAmount: group.balanceDue,
                     );
-                    final message =
-                        '$caption\n\nView your complete digital receipt and order details here:\n$link\n\nThank you for your business!\n— *${shopName.trim()}*';
-
                     if (!context.mounted) return;
-                    await WhatsAppUtils.shareReceipt(
+                    await WhatsAppUtils.shareReceiptWithOptions(
                       context,
                       phone: group.mobileNumber,
-                      message: message,
+                      shareUrl: link,
+                      imageUrl: group.receiptLink,
+                      caption: caption,
+                      shopName: shopName,
                     );
                   },
                   child: Padding(

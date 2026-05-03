@@ -7,7 +7,6 @@ import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
-import 'package:intl/intl.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -18,7 +17,6 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
-import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 
@@ -42,11 +40,8 @@ class ReceiptReviewPage extends ConsumerStatefulWidget {
 }
 
 class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
-  // ── GST / Payment Summary state ──────────────────────────────────────────
+  // ── Payment Summary state ──────────────────────────────────────────
   GstMode _gstMode = GstMode.none;
-
-  // ── Payment Mode state ───────────────────────────────────────────────────
-  String _paymentMode = 'Cash';
 
   final TextEditingController _creditDetailsController = TextEditingController();
   double _receivedAmount = 0.0;
@@ -78,22 +73,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Future<void> _loadPersistedSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final receipt = widget.group.receiptNumber;
-
-    // Load payment mode
-    final savedPaymentMode = prefs.getString('payment_mode_$receipt');
-    if (savedPaymentMode != null && mounted) {
-      setState(() {
-        _paymentMode = savedPaymentMode;
-      });
-    } else if (widget.group.header?.balanceDue != null && widget.group.header!.balanceDue! > 0 && mounted) {
-      setState(() {
-        _paymentMode = 'Credit';
-      });
-    } else if (widget.group.header?.paymentMode != null && mounted) {
-      setState(() {
-        _paymentMode = widget.group.header!.paymentMode!;
-      });
-    }
 
     // Load received amount
     final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
@@ -139,12 +118,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         );
       });
     }
-  }
 
-  Future<void> _savePaymentMode(String mode) async {
-    setState(() => _paymentMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('payment_mode_${widget.group.receiptNumber}', mode);
+    // Set default received amount if still zero (fallback for new receipts)
+    if (_receivedAmount == 0 && mounted) {
+      setState(() {
+        _receivedAmount = _activeTotalAmount(widget.group);
+      });
+    }
   }
 
   Future<void> _saveReceivedAmount(double amount) async {
@@ -157,8 +137,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await prefs.setDouble('total_amount_${widget.group.receiptNumber}', amount);
   }
 
-
-
   Future<void> _saveGstMode(GstMode mode) async {
     setState(() => _gstMode = mode);
     final prefs = await SharedPreferences.getInstance();
@@ -166,17 +144,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   // ── GST computed helpers ─────────────────────────────────
-  // Uses positive match for 'PART' — same logic as order_detail_page.dart
-  // and the visual partsItems grouping below.
-  // FALLBACK: if NO items have a recognized type (all null/empty), treat all
-  // items as parts so the Payment Summary is never blank.
   double _partsSubtotal(InvoiceReviewGroup group) {
     final typed = group.lineItems.where((i) {
       final type = i.type?.toUpperCase() ?? '';
       return type.isNotEmpty;
     }).toList();
 
-    // If no items have a type at all, sum every line item as "parts"
     if (typed.isEmpty) {
       return group.lineItems.fold(0.0, (s, i) => s + i.amount);
     }
@@ -184,7 +157,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     return group.lineItems
         .where((i) {
           final type = i.type?.toUpperCase() ?? '';
-          // Untyped items also fall into parts bucket
           return type.contains('PART') || type.isEmpty;
         })
         .fold(0.0, (s, i) => s + i.amount);
@@ -206,7 +178,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   double _totalAfterGst(InvoiceReviewGroup group) {
     final totalSubtotal = _partsSubtotal(group) + _laborSubtotal(group);
     if (_gstMode == GstMode.excluded) return totalSubtotal + _gstAmount(totalSubtotal);
-    return totalSubtotal; // included or none: total unchanged
+    return totalSubtotal;
   }
 
   double _activeTotalAmount(InvoiceReviewGroup group) {
@@ -214,6 +186,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       return _manualTotalAmount!;
     }
     return _totalAfterGst(group);
+  }
+
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/review');
+    }
   }
 
   void _showFullImage(String imageUrl) {
@@ -252,8 +232,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   Future<void> _saveCurrentState({String? updatePhoneNumber}) async {
     final notifier = ref.read(reviewProvider.notifier);
-    // Read the LIVE group from provider state (not widget.group which is the
-    // original navigation argument and may be stale after user edits).
     final liveState = ref.read(reviewProvider);
     final group = liveState.groups.firstWhere(
       (g) => g.receiptNumber == widget.group.receiptNumber,
@@ -261,18 +239,18 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
     final header = group.header;
 
-    // Always save the record, even with errors
     if (header != null) {
       final grandTotal = _activeTotalAmount(group);
-      final balanceDue = _paymentMode == 'Credit' ? grandTotal - _receivedAmount : 0.0;
+      final balanceDue = grandTotal - _receivedAmount;
+      final paymentMode = balanceDue > 0 ? 'Credit' : 'Cash';
       
       var newRecord = header.copyWith(
           verificationStatus: 'Done',
-          paymentMode: _paymentMode,
+          paymentMode: paymentMode,
           amount: grandTotal,
-          receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
-          balanceDue: _paymentMode == 'Credit' ? balanceDue : 0.0,
-          customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
+          receivedAmount: _receivedAmount,
+          balanceDue: balanceDue,
+          customerDetails: balanceDue > 0 ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
       );
 
@@ -315,9 +293,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           AppToast.showSuccess(context, 'Receipts synced successfully!',
               title: 'Sync Complete');
           context.go('/');
-        } else {
-          // Error is handled by ref.listen in build
-          context.pop();
         }
       }
     } else {
@@ -325,7 +300,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     }
   }
 
-  /// Navigate to the next receipt in the list, saving this one first.
   Future<void> _goToNextReceipt() async {
     await _saveCurrentState();
     if (!mounted) return;
@@ -333,8 +307,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final nextIndex = widget.currentIndex + 1;
     if (nextIndex >= widget.allGroups.length) return;
     final nextGroup = widget.allGroups[nextIndex];
-    // Use pushReplacement so the back button goes back to the list, not the
-    // previous receipt — this keeps the nav stack clean.
     context.pushReplacement(
       '/receipt-review',
       extra: {
@@ -347,9 +319,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Read fresh group from state to reflect updates immediately
     final state = ref.watch(reviewProvider);
-    final shopProfile = ref.watch(shopProvider);
     final configAsync = ref.watch(configProvider);
     final config = configAsync.value ?? {};
     final isAutomobile = config['industry'] == 'automobile';
@@ -367,12 +337,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final header = group.header;
     final invoiceColumns = ref.watch(tableColumnsProvider('invoice_all'));
 
-    // Line Item Hoisting: Red items (hasError) at the top!
     final sortedLineItems = List<ReviewRecord>.from(group.lineItems);
     sortedLineItems.sort((a, b) {
       if (a.hasError && !b.hasError) return -1;
       if (!a.hasError && b.hasError) return 1;
-      // Sort in image order (top-to-bottom) using the lineItemBbox y-coordinate (index 1)
       final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
       final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
       
@@ -387,7 +355,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
     }).toList();
 
-    // Items with null/empty type are grouped under Parts (same as _partsSubtotal)
     final partsItems = sortedLineItems.where((i) {
         final type = i.type?.toUpperCase() ?? '';
         return type.contains('PART') || (type.isEmpty && !laborItems.contains(i));
@@ -399,1114 +366,610 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final hasAnyError = group.hasError;
 
-    return Scaffold(
-      backgroundColor: context.backgroundColor,
-      appBar: AppBar(
-        title: Text('Receipt #${group.receiptNumber}'),
-        actions: [
-          IconButton(
-            icon: Icon(LucideIcons.trash2, color: context.errorColor),
-            tooltip: 'Delete Receipt',
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Receipt'),
-                  content: const Text(
-                      'Are you sure you want to delete this receipt? This action cannot be undone.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => context.pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      style:
-                          FilledButton.styleFrom(backgroundColor: context.errorColor),
-                      onPressed: () => context.pop(true),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirmed == true && context.mounted) {
-                await ref
-                    .read(reviewProvider.notifier)
-                    .deleteReceipt(group.receiptNumber);
-                if (context.mounted) {
-                  context.pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Receipt deleted successfully')),
-                  );
-                }
-              }
-            },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: context.backgroundColor,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: _handleBack,
           ),
-
-        ],
-      ),
-      body: Column(
-        children: [
-          // Top Image Viewer
-          if (header != null && header.receiptLink.isNotEmpty)
-            GestureDetector(
-              onTap: () => _showFullImage(header.receiptLink),
-              child: Container(
-                height: MediaQuery.of(context).size.height * 0.25,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    RobustReceiptImage(
-                      imageUrl: header.receiptLink,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      heroTag: 'receipt_image_${group.receiptNumber}',
-                      maxRetries: 3,
-                    ),
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.maximize,
-                                color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text('Tap to expand',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
+          title: Text('Receipt #${group.receiptNumber}'),
+          actions: [
+            IconButton(
+              icon: Icon(LucideIcons.trash2, color: context.errorColor),
+              tooltip: 'Delete Receipt',
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Receipt'),
+                    content: const Text(
+                        'Are you sure you want to delete this receipt? This action cannot be undone.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => context.pop(false),
+                        child: const Text('Cancel'),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Bottom Scrollable Fields
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (header != null) _buildHeaderCard(header, invoiceColumns, isAutomobile),
-                const SizedBox(height: 16),
-                Text('Line Items',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: context.textSecondaryColor)),
-                const SizedBox(height: 8),
-                if (sortedLineItems.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Center(
-                        child: Text('No line items found.',
-                            style: TextStyle(color: context.textSecondaryColor))),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: context.errorColor),
+                        onPressed: () => context.pop(true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
                   ),
-                if (isAutomobile) ...[
-                  if (partsItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
-                    ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                    const SizedBox(height: 12),
-                  ],
-                  if (laborItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
-                    ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                    const SizedBox(height: 12),
-                  ],
-                  if (otherItems.isNotEmpty) ...[
-                    _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
-                    ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                    const SizedBox(height: 12),
-                  ],
-                ] else ...[
-                  ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                  const SizedBox(height: 12),
-                ],
-                // ── Payment Summary ──────────────────────────────────────
-                PaymentSummaryCard(
-                  isAutomobile: isAutomobile,
-                  gstMode: _gstMode,
-                  partsSubtotal: _partsSubtotal(group),
-                  laborSubtotal: _laborSubtotal(group),
-                  gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
-                  grandTotal: _activeTotalAmount(group),
-                  originalTotal: group.header?.amount ??
-                      (_partsSubtotal(group) + _laborSubtotal(group)),
-                  onGstModeChanged: _saveGstMode,
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(context).padding.bottom + 12),
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          boxShadow: [
-            BoxShadow(
-              color: context.textColor.withValues(alpha: context.isDark ? 0.3 : 0.05),
-              offset: const Offset(0, -4),
-              blurRadius: 8,
+                );
+
+                if (confirmed == true && context.mounted) {
+                  await ref
+                      .read(reviewProvider.notifier)
+                      .deleteReceipt(group.receiptNumber);
+                  if (context.mounted) {
+                    _handleBack();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Receipt deleted successfully')),
+                    );
+                  }
+                }
+              },
             ),
           ],
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Payment Type & Balance ─────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: context.isDark ? context.primaryColor.withValues(alpha: 0.1) : context.borderColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _PaymentToggleBtn(
-                          title: 'Credit',
-                          isSelected: _paymentMode == 'Credit',
-                          onTap: () => _savePaymentMode('Credit'),
+        body: Column(
+          children: [
+            if (header != null && header.receiptLink.isNotEmpty)
+              GestureDetector(
+                onTap: () => _showFullImage(header.receiptLink),
+                child: Container(
+                  height: MediaQuery.of(context).size.height * 0.25,
+                  width: double.infinity,
+                  decoration: BoxDecoration(color: context.surfaceColor),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      RobustReceiptImage(
+                        imageUrl: header.receiptLink,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        heroTag: 'receipt_image_${group.receiptNumber}',
+                        maxRetries: 3,
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.maximize, color: Colors.white, size: 14),
+                              SizedBox(width: 6),
+                              Text('Tap to expand', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ),
-                        _PaymentToggleBtn(
-                          title: 'Cash',
-                          isSelected: _paymentMode == 'Cash',
-                          onTap: () {
-                            _savePaymentMode('Cash');
-                            final t = _activeTotalAmount(group);
-                            setState(() {
-                              _receivedAmount = t;
-                            });
-                            _saveReceivedAmount(t);
-                          },
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  if (_paymentMode == 'Credit')
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Balance Due', style: TextStyle(color: context.errorColor, fontSize: 11, fontWeight: FontWeight.bold)),
-                        Text('₹${_formatAmount(_activeTotalAmount(group) - _receivedAmount)}', style: TextStyle(color: context.errorColor, fontSize: 16, fontWeight: FontWeight.w800)),
-                      ],
+                ),
+              ),
+
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (header != null)
+                    _buildHeaderCard(header, invoiceColumns, isAutomobile),
+                  const SizedBox(height: 16),
+                  Text('Line Items',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondaryColor)),
+                  const SizedBox(height: 8),
+                  if (sortedLineItems.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Center(child: Text('No line items found.')),
                     ),
+                  if (isAutomobile) ...[
+                    if (partsItems.isNotEmpty) ...[
+                      _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
+                      ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                      const SizedBox(height: 12),
+                    ],
+                    if (laborItems.isNotEmpty) ...[
+                      _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
+                      ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                      const SizedBox(height: 12),
+                    ],
+                    if (otherItems.isNotEmpty) ...[
+                      _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
+                      ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                      const SizedBox(height: 12),
+                    ],
+                  ] else ...[
+                    ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                    const SizedBox(height: 12),
+                  ],
+                  PaymentSummaryCard(
+                    isAutomobile: isAutomobile,
+                    gstMode: _gstMode,
+                    partsSubtotal: _partsSubtotal(group),
+                    laborSubtotal: _laborSubtotal(group),
+                    gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
+                    grandTotal: _activeTotalAmount(group),
+                    originalTotal: group.header?.amount ?? (_partsSubtotal(group) + _laborSubtotal(group)),
+                    onGstModeChanged: _saveGstMode,
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
-              const SizedBox(height: 12),
-              // ── Total & Received Inputs ─────────────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    child: DebouncedReviewField(
-                      initialValue: _formatInput(_activeTotalAmount(group)),
+            ),
+            _buildActionPanel(group, hasAnyError),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionPanel(InvoiceReviewGroup group, bool hasAnyError) {
+    final state = ref.watch(reviewProvider);
+    final total = _activeTotalAmount(group);
+    final balance = total - _receivedAmount;
+    final isFullPaid = balance.abs() < 0.01;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 12),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: context.textColor.withValues(alpha: context.isDark ? 0.3 : 0.08),
+            offset: const Offset(0, -6),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text('Total Bill (₹)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                    ),
+                    DebouncedReviewField(
+                      initialValue: _formatInput(total),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
-                        labelText: 'Total Amount (₹)',
-                        labelStyle: TextStyle(fontSize: 12, color: context.textSecondaryColor, fontWeight: FontWeight.w600),
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.borderColor)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
                         fillColor: context.surfaceColor,
                         filled: true,
                       ),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
                       onSaved: (val) {
-                        final newTotal = double.tryParse(val);
-                        if (newTotal != null) {
+                        final nt = double.tryParse(val);
+                        if (nt != null) {
+                          final wasPaid = (total - _receivedAmount).abs() < 0.01;
                           setState(() {
-                            _manualTotalAmount = newTotal;
+                            _manualTotalAmount = nt;
                             _isTotalManuallyEdited = true;
-                            if (_paymentMode == 'Cash') {
-                              _receivedAmount = newTotal;
-                              _saveReceivedAmount(newTotal);
-                            }
+                            if (wasPaid) _receivedAmount = nt;
                           });
-                          _saveTotalAmount(newTotal);
+                          _saveTotalAmount(nt);
+                          if (wasPaid) _saveReceivedAmount(nt);
                         }
                       },
                     ),
-                  ),
-                  if (_paymentMode == 'Credit') ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DebouncedReviewField(
-                        initialValue: _formatInput(_receivedAmount),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          labelText: 'Received (₹)',
-                          labelStyle: TextStyle(fontSize: 12, color: context.primaryColor, fontWeight: FontWeight.w600),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.5))),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.primaryColor, width: 2)),
-                          fillColor: context.primaryColor.withValues(alpha: 0.05),
-                          filled: true,
-                        ),
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.primaryColor),
-                        onSaved: (val) {
-                          final newReceived = double.tryParse(val) ?? 0.0;
-                          setState(() {
-                            _receivedAmount = newReceived;
-                          });
-                          _saveReceivedAmount(newReceived);
-                        },
-                      ),
-                    ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 12),
-              // ── Action buttons row ──────────────────────────────────
-            Row(
-              children: [
-                // "Save & Next" / "Sync & Finish" — always shown
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: state.isSyncing ? null : _markAllDone,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: hasAnyError
-                          ? context.warningColor
-                          : context.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: state.isSyncing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                        : (hasAnyError
-                            ? const Icon(LucideIcons.alertTriangle, size: 18)
-                            : const Icon(LucideIcons.checkCircle, size: 18)),
-                    label: Text(
-                      state.isSyncing
-                          ? 'Saving... ${state.syncProgress?.percentage ?? 0}%'
-                          : (hasAnyError
-                              ? 'Save with Errors'
-                              : (widget.currentIndex == -1 ||
-                                      widget.currentIndex ==
-                                          widget.allGroups.length - 1
-                                  ? 'Sync & Finish ✨'
-                                  : 'Save & Next ✨')),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF25D366),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
-                    label: const Text('Sync & Share', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                    onPressed: state.isSyncing ? null : () async {
-                  // ── Step 1: Save current state immediately ─────────────────
-                  FocusScope.of(context).unfocus();
-                  // Trigger background save but don't await to preserve gesture context on iOS
-                  _saveCurrentState(); 
-                  
-                  // Re-read fresh state after local save
-                  final freshState = ref.read(reviewProvider);
-                  final freshGroup = freshState.groups.firstWhere(
-                    (g) => g.receiptNumber == widget.group.receiptNumber,
-                    orElse: () => group,
-                  );
-                  final freshHeader = freshGroup.header;
-
-                  // ── Step 2: Determine phone number & Prepare message ───────
-                  String phoneNumber = freshHeader
-                          ?.extraFields['mobile_number']
-                          ?.toString()
-                          .trim() ??
-                      '';
-                  
-                  double totalAmount = _activeTotalAmount(freshGroup);
-                  if (totalAmount == 0.0 && freshGroup.header != null) {
-                    totalAmount = freshGroup.header!.amount;
-                  }
-
-                  final authState = ref.read(authProvider);
-                  final username = authState.user?.username;
-                  final double balanceDue = _paymentMode == 'Credit' ? totalAmount - _receivedAmount : 0.0;
-
-                  // Use pre-fetched link or fetch now (pre-fetching covers 99% of cases)
-                  String? shareUrl = _preFetchedShareUrl;
-                  if (shareUrl == null) {
-                    shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-                      receiptNumber: freshGroup.receiptNumber,
-                      username: username,
-                      gstMode: _gstMode.name,
-                    );
-                  } else if (_gstMode != GstMode.none) {
-                    // Append GST mode to pre-fetched base link
-                    final parsed = Uri.parse(shareUrl);
-                    final mergedQuery = Map<String, String>.from(parsed.queryParameters);
-                    mergedQuery['g'] = _gstMode.name;
-                    shareUrl = parsed.replace(queryParameters: mergedQuery).toString();
-                  }
-
-                  if (shareUrl == null) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Could not generate receipt link.')),
-                      );
-                    }
-                    return;
-                  }
-
-                  final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
-                  OrderPaymentStatus status = _paymentMode == 'Cash' 
-                      ? OrderPaymentStatus.fullyPaid 
-                      : (_receivedAmount >= totalAmount ? OrderPaymentStatus.fullyPaid : (_receivedAmount > 0 ? OrderPaymentStatus.partiallyPaid : OrderPaymentStatus.unpaid));
-
-                  final Map<String, String> resolvedExtraFields = {};
-                  if (freshHeader?.extraFields != null) {
-                    final Set<String> ignored = {'total_bill_amount', 'amount', 'receipt_number', 'date', 'customer_name', 'mobile_number', 'receipt_link', 'gst_mode'};
-                    freshHeader!.extraFields.forEach((key, value) {
-                      if (value != null && value.toString().isNotEmpty && !ignored.contains(key.toString().toLowerCase())) {
-                        resolvedExtraFields[key.toString()] = value.toString();
-                      }
-                    });
-                  }
-
-                  final caption = WhatsAppUtils.getWhatsAppCaption(
-                    status: status,
-                    customerName: freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : 'Customer',
-                    businessName: shopName,
-                    orderNumber: freshGroup.receiptNumber,
-                    totalAmount: totalAmount,
-                    paidAmount: _receivedAmount,
-                    pendingAmount: balanceDue,
-                    extraFields: resolvedExtraFields,
-                  );
-                  // ── Step 3: Handle Phone Dialog & Share Options ──────────────────
-                  final phoneController = TextEditingController(text: phoneNumber);
-                  bool shareOriginalImage = false; // Default to Standard Receipt
-
-                  if (!context.mounted) return;
-                  
-                  final shareResult = await showDialog<String?>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (ctx) => StatefulBuilder(
-                      builder: (context, setState) {
-                        void executeShare(String phoneToUse) async {
-                          final linkToShare = shareOriginalImage && freshHeader?.receiptLink.isNotEmpty == true
-                              ? freshHeader?.receiptLink
-                              : shareUrl;
-                          
-                          final message = '$caption\n\nView details:\n$linkToShare\n\nThank you!\n— *${shopName.trim()}*';
-                          await WhatsAppUtils.openWhatsAppChat(phone: phoneToUse, message: message);
-                          if (ctx.mounted) Navigator.pop(ctx, phoneToUse);
-                        }
-
-                        return AlertDialog(
-                          title: const Text('Share Receipt'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Choose what to send:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 12),
-                              SegmentedButton<bool>(
-                                segments: const [
-                                  ButtonSegment(
-                                    value: false, 
-                                    label: Text('Digital Receipt', style: TextStyle(fontSize: 12)),
-                                    icon: Icon(LucideIcons.receipt, size: 16),
-                                  ),
-                                  ButtonSegment(
-                                    value: true, 
-                                    label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
-                                    icon: Icon(LucideIcons.image, size: 16),
-                                  ),
-                                ],
-                                selected: {shareOriginalImage},
-                                onSelectionChanged: (Set<bool> newSelection) {
-                                  setState(() {
-                                    shareOriginalImage = newSelection.first;
-                                  });
-                                },
-                                style: SegmentedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                                ),
-                                showSelectedIcon: false,
-                              ),
-                              const SizedBox(height: 20),
-                              const Text('Send to:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: phoneController,
-                                keyboardType: TextInputType.phone,
-                                decoration: InputDecoration(
-                                  labelText: 'Mobile Number', 
-                                  prefixText: '+91 ',
-                                  hintText: 'Enter to send direct',
-                                  isDense: true,
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                            OutlinedButton(
-                              onPressed: () => executeShare(''),
-                              child: const Text('Skip Number'),
-                            ),
-                            FilledButton(
-                              onPressed: () {
-                                final phone = phoneController.text.trim();
-                                executeShare(phone);
-                              },
-                              child: const Text('Share'),
-                            ),
-                          ],
-                        );
-                      }
-                    ),
-                  );
-
-                  if (shareResult == null) return; // User cancelled
-                  
-                  if (shareResult.isNotEmpty && shareResult != phoneNumber) {
-                    // Re-save with new phone if provided
-                    _saveCurrentState(updatePhoneNumber: shareResult);
-                  }
-
-                  // ── Step 4: Finalize ──────────────────────────────────────
-                  // Trigger sync and navigate asynchronously to not block the gesture
-                  Future.microtask(() async {
-                    await _saveCurrentState();
-                    if (!context.mounted) return;
-                    
-                    await ref.read(reviewProvider.notifier).syncAndFinish();
-                    if (!context.mounted) return;
-
-                    final syncState = ref.read(reviewProvider);
-                    if (syncState.error != null) return;
-
-                    if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
-                      _goToNextReceipt();
-                    } else {
-                      ref.read(uploadProvider.notifier).clearFiles();
-                      context.go('/');
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
-    final isError = header.hasError;
-    final isDone = header.verificationStatus == 'Done';
-
-    Color borderColor = context.borderColor;
-    Color bgColor = context.surfaceColor;
-    if (isError) {
-      borderColor = context.errorColor;
-      bgColor = context.errorColor.withValues(alpha: 0.1);
-    } else if (isDone) {
-      borderColor = context.successColor;
-      bgColor = context.successColor.withValues(alpha: 0.1);
-    }
-
-    final dynamicColumns = columns.where((c) {
-      final dbCol = c['db_column'] as String?;
-      final isEditable = c['editable'] == true || c['editable'] == 'true';
-      final isStandardLineItem = ['description', 'quantity', 'rate', 'amount', 'amount_mismatch', 'verification_status', 'audit_findings', 'receipt_link'].contains(dbCol);
-      final isStandardHeader = ['receipt_number', 'date'].contains(dbCol);
-      
-      if (!isAutomobile && dbCol != null && (dbCol.contains('vehicle') || dbCol.contains('car'))) {
-        return false;
-      }
-      
-      return isEditable && dbCol != null && !isStandardLineItem && !isStandardHeader;
-    }).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: borderColor, width: isError || isDone ? 2 : 1),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(LucideIcons.fileText,
-                  size: 16, color: context.textSecondaryColor),
-              const SizedBox(width: 8),
-              Text('Header Details',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: context.textSecondaryColor)),
-              const Spacer(),
-              if (isError)
-                Icon(LucideIcons.alertCircle,
-                    color: context.errorColor, size: 16),
-              if (!isError && isDone)
-                Icon(LucideIcons.checkCircle,
-                    color: context.successColor, size: 16),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                flex: 9,
-                child: DebouncedReviewField(
-                  initialValue: header.receiptNumber,
-                  decoration: _inputDecoration('Receipt No.').copyWith(
-                    errorText:
-                        header.receiptNumber.trim().isEmpty ? 'Required' : null,
-                    enabledBorder: header.hasReceiptDoubt
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: context.errorColor, width: 1.5),
-                          )
-                        : null,
-                    focusedBorder: header.hasReceiptDoubt
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: context.errorColor, width: 2),
-                          )
-                        : null,
-                    fillColor: header.hasReceiptDoubt
-                        ? context.errorColor.withValues(alpha: 0.1)
-                        : context.surfaceColor,
-                  ),
-                  onSaved: (val) {
-                    if (val != header.receiptNumber) {
-                      final newRecord = header.copyWith(receiptNumber: val);
-                      ref
-                          .read(reviewProvider.notifier)
-                          .updateDateRecord(newRecord);
-                    }
-                  },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                flex: 11,
-                child: InkWell(
-                  onTap: () async {
-                    DateTime? initialDate;
-                    try {
-                      if (header.date.isNotEmpty) {
-                        try {
-                          initialDate =
-                              DateFormat('dd-MM-yyyy').parseStrict(header.date);
-                        } catch (e) {
-                          initialDate = DateTime.parse(header.date);
-                        }
-                      }
-                    } catch (_) {}
-
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: initialDate ?? DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-
-                    if (picked != null) {
-                      final formattedDate =
-                          DateFormat('dd-MM-yyyy').format(picked);
-                      if (formattedDate != header.date) {
-                        final newRecord = header.copyWith(date: formattedDate);
-                        ref
-                            .read(reviewProvider.notifier)
-                            .updateDateRecord(newRecord);
-                      }
-                    }
-                  },
-                  child: IgnorePointer(
-                    child: TextFormField(
-                      key: ValueKey('date_${header.date}'),
-                      initialValue: header.date,
-                      readOnly: true,
-                      decoration: _inputDecoration('Date').copyWith(
-                        errorText:
-                            header.date.trim().isEmpty ? 'Required' : null,
-                        suffixIcon: const Icon(LucideIcons.calendar, size: 16),
-                        enabledBorder: header.hasDateDoubt || header.date.trim().isEmpty
-                            ? OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: context.errorColor, width: 1.5),
-                              )
-                            : null,
-                        focusedBorder: header.hasDateDoubt || header.date.trim().isEmpty
-                            ? OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: context.errorColor, width: 2),
-                              )
-                            : null,
-                        fillColor: header.hasDateDoubt || header.date.trim().isEmpty
-                            ? context.errorColor.withValues(alpha: 0.1)
-                            : context.surfaceColor,
-                      ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 4),
+                          child: Text('Received (₹)',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.primaryColor)),
+                        ),
+                        if (!isFullPaid)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text('₹${_formatAmount(balance)} Due',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: context.errorColor)),
+                          ),
+                      ],
                     ),
-                  ),
+                    DebouncedReviewField(
+                      initialValue: _formatInput(_receivedAmount),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.5))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                        fillColor: context.primaryColor.withValues(alpha: 0.05),
+                        filled: true,
+                        prefixIcon: isFullPaid ? Icon(LucideIcons.checkCircle2, size: 16, color: context.successColor) : null,
+                      ),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: context.primaryColor),
+                      onSaved: (val) {
+                        final nr = double.tryParse(val) ?? 0.0;
+                        setState(() => _receivedAmount = nr);
+                        _saveReceivedAmount(nr);
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Dynamic fields
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: dynamicColumns.map((c) {
-              final dbCol = c['db_column'] as String;
-              final label = c['label'] as String;
-              
-              String value = '';
-              if (dbCol == 'customer_name') {
-                value = header.customerName ?? '';
-              } else if (dbCol == 'mobile_number') {
-                value = header.mobileNumber ?? '';
-              } else {
-                value = header.extraFields[dbCol]?.toString() ?? '';
-              }
-
-              return FractionallySizedBox(
-                widthFactor: ['customer_name', 'mobile_number'].contains(dbCol) ? 1.0 : 0.48,
-                child: dbCol == 'customer_name'
-                    ? CustomerAutocompleteField(
-                        initialValue: value,
-                        label: label,
-                        hasError: header.customerName == null || header.customerName!.trim().isEmpty,
-                        onSaved: (val) {
-                          if (val != value) {
-                            final newRecord = header.copyWith(customerName: val);
-                            ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-                          }
-                        },
-                        onCustomerSelected: (CustomerLedger ledger) {
-                          ReviewRecord newRecord = header.copyWith(
-                            customerName: ledger.customerName,
-                            mobileNumber: ledger.customerPhone ?? header.mobileNumber,
-                          );
-                          
-                          // Also sync mobile_number in extraFields if it exists
-                          if (dynamicColumns.any((c) => c['db_column'] == 'mobile_number')) {
-                            final newExtra = Map<String, dynamic>.from(newRecord.extraFields);
-                            newExtra['mobile_number'] = ledger.customerPhone ?? header.mobileNumber;
-                            newRecord = newRecord.copyWith(extraFields: newExtra);
-                          }
-                          
-                          ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-                        },
-                      )
-                    : DebouncedReviewField(
-                        initialValue: value,
-                        keyboardType: (dbCol.contains('mobile') || dbCol.contains('phone'))
-                            ? TextInputType.phone
-                            : TextInputType.text,
-                        decoration: _inputDecoration(label).copyWith(
-                          prefixIcon: (dbCol.contains('vehicle') || dbCol.contains('car'))
-                              ? const Icon(LucideIcons.car, size: 16)
-                              : (dbCol.contains('mobile') || dbCol.contains('phone'))
-                                  ? const Icon(LucideIcons.phone, size: 16)
-                                  : const Icon(LucideIcons.edit2, size: 16),
-                          prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
-                        ),
-                        onSaved: (val) {
-                          if (val != value) {
-                            ReviewRecord newRecord;
-                            if (dbCol == 'mobile_number') {
-                              final newExtra = Map<String, dynamic>.from(header.extraFields);
-                              newExtra[dbCol] = val;
-                              newRecord = header.copyWith(
-                                extraFields: newExtra,
-                                mobileNumber: val, // Sync top-level field
-                              );
-                            } else {
-                              final newExtra = Map<String, dynamic>.from(header.extraFields);
-                              newExtra[dbCol] = val;
-                              newRecord = header.copyWith(extraFields: newExtra);
-                            }
-                            ref.read(reviewProvider.notifier).updateDateRecord(newRecord);
-                          }
-                        },
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 54,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      colors: hasAnyError
+                          ? [context.warningColor, context.warningColor.withValues(alpha: 0.8)]
+                          : [context.primaryColor, context.primaryColor.withValues(alpha: 0.8)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (hasAnyError ? context.warningColor : context.primaryColor).withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-              );
-            }).toList(),
+                    ],
+                  ),
+                  child: ElevatedButton.icon(
+                    onPressed: state.isSyncing ? null : _markAllDone,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: state.isSyncing
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Icon(hasAnyError ? LucideIcons.alertTriangle : LucideIcons.checkCircle, size: 20),
+                    label: Text(
+                      state.isSyncing
+                          ? 'Saving...'
+                          : (hasAnyError
+                              ? 'Save with Errors'
+                              : (widget.currentIndex == -1 || widget.currentIndex == widget.allGroups.length - 1
+                                  ? 'Sync & Finish'
+                                  : 'Save & Next')),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                height: 54,
+                width: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3)),
+                ),
+                child: IconButton(
+                  icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 24, color: Color(0xFF25D366)),
+                  onPressed: state.isSyncing ? null : _handleWhatsAppShare,
+                ),
+              ),
+            ],
           ),
-          if (header.verificationStatus == 'Duplicate Receipt Number')
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text('Error: Duplicate Receipt Number. Please fix it.',
-                  style: TextStyle(
-                      color: context.errorColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold)),
-            )
         ],
       ),
     );
   }
 
+  void _handleWhatsAppShare() async {
+    final state = ref.read(reviewProvider);
+    final group = state.groups.firstWhere(
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => widget.group,
+    );
+    final shopProfile = ref.read(shopProvider);
+
+    FocusScope.of(context).unfocus();
+    await _saveCurrentState();
+
+    final freshState = ref.read(reviewProvider);
+    final freshGroup = freshState.groups.firstWhere(
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => group,
+    );
+    final freshHeader = freshGroup.header;
+
+    String phoneNumber = freshHeader?.extraFields['mobile_number']?.toString().trim() ?? '';
+    double totalAmount = _activeTotalAmount(freshGroup);
+    if (totalAmount == 0.0 && freshGroup.header != null) {
+      totalAmount = freshGroup.header!.amount;
+    }
+
+    final authState = ref.read(authProvider);
+    final username = authState.user?.username;
+    final double balanceDue = totalAmount - _receivedAmount;
+
+    String? shareUrl = _preFetchedShareUrl;
+    shareUrl ??= await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+      receiptNumber: freshGroup.receiptNumber,
+      username: username,
+    );
+
+    if (shareUrl == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not generate receipt link.')));
+      }
+      return;
+    }
+
+    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+    final paymentMode = balanceDue > 0 ? 'Credit' : 'Cash';
+    OrderPaymentStatus status = paymentMode == 'Cash'
+        ? OrderPaymentStatus.fullyPaid
+        : (_receivedAmount > 0 ? OrderPaymentStatus.partiallyPaid : OrderPaymentStatus.unpaid);
+
+    final Map<String, String> resolvedExtraFields = {};
+    if (freshHeader?.extraFields != null) {
+      final Set<String> ignored = {'total_bill_amount', 'amount', 'receipt_number', 'date', 'customer_name', 'mobile_number', 'receipt_link', 'gst_mode'};
+      freshHeader!.extraFields.forEach((key, value) {
+        if (value != null && value.toString().isNotEmpty && !ignored.contains(key.toString().toLowerCase())) {
+          resolvedExtraFields[key.toString()] = value.toString();
+        }
+      });
+    }
+
+    final caption = WhatsAppUtils.getWhatsAppCaption(
+      status: status,
+      customerName: freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : 'Customer',
+      businessName: shopName,
+      orderNumber: freshGroup.receiptNumber,
+      totalAmount: totalAmount,
+      paidAmount: _receivedAmount,
+      pendingAmount: balanceDue,
+      extraFields: resolvedExtraFields,
+    );
+
+    if (!mounted) return;
+    final shareResult = await WhatsAppUtils.shareReceiptWithOptions(
+      context,
+      phone: phoneNumber,
+      shareUrl: shareUrl,
+      imageUrl: freshHeader?.receiptLink,
+      caption: caption,
+      shopName: shopName,
+    );
+
+    if (shareResult == null) return;
+    if (shareResult.isNotEmpty && shareResult != phoneNumber) {
+      await _saveCurrentState(updatePhoneNumber: shareResult);
+    }
+
+    Future.microtask(() async {
+      await _saveCurrentState();
+      if (!mounted) return;
+      await ref.read(reviewProvider.notifier).syncAndFinish();
+      if (!mounted) return;
+      final syncState = ref.read(reviewProvider);
+      if (syncState.error != null) return;
+
+      if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
+        _goToNextReceipt();
+      } else {
+        ref.read(uploadProvider.notifier).clearFiles();
+        context.go('/');
+      }
+    });
+  }
+
   Widget _buildCategoryHeader(String title, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6)),
-            child: Icon(icon, size: 14, color: color),
-          ),
+          Icon(icon, size: 16, color: color),
           const SizedBox(width: 8),
-          Text(title.toUpperCase(),
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: color.withValues(alpha: context.isDark ? 0.9 : 1.0),
-                  letterSpacing: 1.0)),
+          Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+          const SizedBox(width: 8),
+          Expanded(child: Divider(color: color.withValues(alpha: 0.2))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
+    final fields = <Widget>[];
+    for (var col in columns) {
+      final key = col['name'] as String;
+      final label = col['label'] as String;
+      if (key == 'customer_name') {
+        fields.add(_buildCustomerField(header));
+        continue;
+      }
+      if (key == 'mobile_number') continue;
+      if (key == 'amount' || key == 'total_bill_amount') continue;
+      if (key == 'receipt_number' || key == 'date') continue;
+
+      final value = header.extraFields[key]?.toString() ?? '';
+      if (value.isNotEmpty) {
+        fields.add(_buildHeaderField(label, value));
+      }
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16), 
+        side: BorderSide(color: context.borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('DATE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                    Text(header.date, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('RECEIPT #', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                    Text(header.receiptNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            ...fields,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomerField(ReviewRecord header) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: CustomerAutocompleteField(
+        initialValue: header.customerName ?? '',
+        label: 'Customer Name',
+        onSaved: (val) {
+          final notifier = ref.read(reviewProvider.notifier);
+          notifier.updateDateRecord(header.copyWith(customerName: val));
+        },
+        onCustomerSelected: (party) {
+          final notifier = ref.read(reviewProvider.notifier);
+          notifier.updateDateRecord(header.copyWith(
+            customerName: party.customerName,
+            mobileNumber: party.customerPhone,
+          ));
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeaderField(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text(label, style: TextStyle(fontSize: 12, color: context.textSecondaryColor))),
+          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );
   }
 
   Widget _buildLineItemCard(ReviewRecord item, bool isAutomobile) {
-    final isError = item.hasError;
-    final isDone = item.verificationStatus == 'Done';
-
-    Color borderColor = context.borderColor;
-    Color bgColor = context.surfaceColor;
-    if (isError) {
-      borderColor = context.errorColor;
-      bgColor = context.errorColor.withValues(alpha: 0.1);
-    } else if (isDone) {
-      borderColor = context.successColor;
-      bgColor = context.successColor.withValues(alpha: 0.1);
-    }
-
-    // Checking if amount mismatch exists
-    final hasMismatch =
-        item.amountMismatch != null && item.amountMismatch!.abs() >= 1.0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: bgColor,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: item.hasError ? context.errorColor.withValues(alpha: 0.05) : context.surfaceColor,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: isError ? 2 : 1),
-        boxShadow: context.premiumShadow,
+        side: BorderSide(color: item.hasError ? context.errorColor.withValues(alpha: 0.3) : context.borderColor),
       ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: context.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Item #${item.rowId}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: context.primaryColor,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Delete Item'),
-                      content: const Text(
-                          'Are you sure you want to delete this item?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => context.pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                              backgroundColor: context.errorColor),
-                          onPressed: () => context.pop(true),
-                          child: const Text('Delete'),
-                        ),
-                      ],
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DebouncedReviewField(
+                    initialValue: item.description,
+                    decoration: InputDecoration(
+                      hintText: 'Description',
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: context.textSecondaryColor.withValues(alpha: 0.5)),
                     ),
-                  );
-
-                  if (confirmed == true && mounted) {
-                    await ref
-                        .read(reviewProvider.notifier)
-                        .deleteRecord(item.rowId, item.receiptNumber);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Item deleted'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: context.errorColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    onSaved: (val) {
+                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(description: val));
+                    },
                   ),
-                  child: Icon(LucideIcons.trash2, size: 14, color: context.errorColor),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: DebouncedReviewField(
-                  initialValue: item.description,
-                  decoration: _inputDecoration('Description').copyWith(
-                    errorText:
-                        item.description.trim().isEmpty ? 'Required' : null,
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 80,
+                  child: DebouncedReviewField(
+                    initialValue: _formatInput(item.amount),
+                    textAlign: TextAlign.right,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.primaryColor),
+                    onSaved: (val) {
+                      final amt = double.tryParse(val) ?? 0.0;
+                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
+                    },
                   ),
-                  maxLines: null,
-                  onSaved: (val) {
-                    if (val != item.description) {
-                      final newRecord = item.copyWith(description: val);
-                      ref
-                          .read(reviewProvider.notifier)
-                          .updateAmountRecord(newRecord);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: DebouncedReviewField(
-                  initialValue: _formatInput(item.amount),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, color: context.primaryColor),
-                  decoration: _inputDecoration('Total (₹)').copyWith(
-                    errorText: hasMismatch ? 'Mismatch' : null,
-                    enabledBorder: hasMismatch
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: context.errorColor, width: 1.5),
-                          )
-                        : null,
-                    focusedBorder: hasMismatch
-                        ? OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                                color: context.errorColor, width: 2),
-                          )
-                        : null,
-                    fillColor: hasMismatch
-                        ? context.errorColor.withValues(alpha: 0.1)
-                        : context.surfaceColor,
-                  ),
-                  onSaved: (val) {
-                    final newAmount = double.tryParse(val);
-                    if (newAmount != null && newAmount != item.amount) {
-                      final newRecord = item.copyWith(amount: newAmount, amountMismatch: 0);
-                      ref
-                          .read(reviewProvider.notifier)
-                          .updateAmountRecord(newRecord);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          if (item.quantity != null && item.rate != null && item.rate! > 0) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                    child: DebouncedReviewField(
-                  initialValue: _formatInput(item.quantity),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _inputDecoration('Qty'),
-                  onSaved: (val) {
-                    final newQty = double.tryParse(val);
-                    if (newQty != null) {
-                      // recalculate mismatch
-                      final newMismatch = (newQty * item.rate!) - item.amount;
-                      final newRecord = item.copyWith(quantity: newQty, amountMismatch: newMismatch);
-                      ref
-                          .read(reviewProvider.notifier)
-                          .updateAmountRecord(newRecord);
-                    }
-                  },
-                )),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text('×',
-                      style: TextStyle(color: context.textSecondaryColor)),
-                ),
-                Expanded(
-                    child: DebouncedReviewField(
-                  initialValue: _formatInput(item.rate),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _inputDecoration('Rate (₹)'),
-                  onSaved: (val) {
-                    final newRate = double.tryParse(val);
-                    if (newRate != null && item.quantity != null) {
-                      final newMismatch =
-                          (item.quantity! * newRate) - item.amount;
-                      final newRecord = item.copyWith(rate: newRate, amountMismatch: newMismatch);
-                      ref
-                          .read(reviewProvider.notifier)
-                          .updateAmountRecord(newRecord);
-                    }
-                  },
-                )),
-                const Spacer(),
-              ],
-            ),
-          ],
-          if (isError) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(LucideIcons.alertTriangle,
-                    size: 14, color: context.errorColor),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                      hasMismatch
-                          ? 'Math Error: Qty × Rate ≠ Total'
-                          : 'Missing required fields',
-                      style: TextStyle(
-                          color: context.errorColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
+            if (isAutomobile)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _PartLaborToggle(
+                    isPart: true,
+                    selected: item.type?.toUpperCase().contains('PART') ?? false,
+                    onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'PART')),
+                  ),
+                  const SizedBox(width: 8),
+                  _PartLaborToggle(
+                    isPart: false,
+                    selected: (item.type?.toUpperCase().contains('LABOR') ?? false) || (item.type?.toUpperCase().contains('LABOUR') ?? false) || (item.type?.toUpperCase().contains('SERVICE') ?? false),
+                    onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'LABOR')),
+                  ),
+                ],
+              ),
           ],
-          if (isAutomobile) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _PartLaborToggle(
-                  isPart: true,
-                  selected: (item.type?.toLowerCase() ?? '') != 'labor' && 
-                            (item.type?.toLowerCase() ?? '') != 'labour' && 
-                            (item.type?.toLowerCase() ?? '') != 'service',
-                  onTap: () {
-                    final newRecord = item.copyWith(type: 'Part');
-                    ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _PartLaborToggle(
-                  isPart: false,
-                  selected: (item.type?.toLowerCase() ?? '') == 'labor' || 
-                            (item.type?.toLowerCase() ?? '') == 'labour' || 
-                            (item.type?.toLowerCase() ?? '') == 'service',
-                  onTap: () {
-                    final newRecord = item.copyWith(type: 'Labor');
-                    ref.read(reviewProvider.notifier).updateAmountRecord(newRecord);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ],
+        ),
       ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(fontSize: 12, color: context.textSecondaryColor),
-      filled: true,
-      fillColor: context.surfaceColor,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: context.borderColor),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: context.borderColor),
-      ),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
     );
   }
 }
@@ -1550,23 +1013,16 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
   }
 
   @override
-  void didUpdateWidget(covariant DebouncedReviewField oldWidget) {
+  void didUpdateWidget(DebouncedReviewField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialValue != widget.initialValue &&
-        _lastSavedValue != widget.initialValue) {
-      if (!_focusNode.hasFocus) {
-        _controller.text = widget.initialValue;
-        _lastSavedValue = widget.initialValue;
-      }
+    if (widget.initialValue != oldWidget.initialValue && widget.initialValue != _controller.text) {
+      _controller.text = widget.initialValue;
+      _lastSavedValue = widget.initialValue;
     }
   }
 
   @override
   void dispose() {
-    // Flush any pending edit before the widget is removed from the tree.
-    // This covers the case where the debounce timer hasn't fired yet and the
-    // user navigates away or the list rebuilds, which would otherwise silently
-    // discard the last keystroke(s).
     _saveCurrentValue();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
@@ -1619,56 +1075,8 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// END
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PaymentToggleBtn extends StatelessWidget {
-  final String title;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PaymentToggleBtn({
-    required this.title,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? context.successColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: context.successColor.withValues(alpha: 0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ]
-              : null,
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : context.textSecondaryColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PartLaborToggle extends StatelessWidget {
-  final bool isPart; // true = Part, false = Labor
+  final bool isPart;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1681,8 +1089,7 @@ class _PartLaborToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = isPart ? '\u2699\uFE0F Part' : '\uD83D\uDD27 Labor';
-    final selectedColor =
-        isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
+    final selectedColor = isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
 
     return GestureDetector(
       onTap: onTap,
@@ -1690,13 +1097,9 @@ class _PartLaborToggle extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color:
-              selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
+          color: selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: selected ? selectedColor : context.borderColor,
-            width: 1,
-          ),
+          border: Border.all(color: selected ? selectedColor : context.borderColor, width: 1),
         ),
         child: Text(
           label,
@@ -1710,3 +1113,7 @@ class _PartLaborToggle extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// END
+// ─────────────────────────────────────────────────────────────────────────────

@@ -205,4 +205,156 @@ class WhatsAppUtils {
       );
     }
   }
+
+  /// Helper to share a receipt visually with options for Digital Receipt vs Receipt Photo.
+  /// This presents a dialog for the user to select the sharing mode and enter/confirm the phone number.
+  static Future<String?> shareReceiptWithOptions(
+    BuildContext context, {
+    required String phone,
+    required String shareUrl,
+    String? imageUrl,
+    required String caption,
+    required String shopName,
+  }) async {
+    final phoneController = TextEditingController(text: phone);
+    bool shareOriginalImage = false;
+
+    if (!context.mounted) return null;
+
+    final shareResult = await showDialog<String?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          void executeShare(String phoneToUse) async {
+            final linkToShare = (shareOriginalImage && imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null')
+                ? imageUrl
+                : shareUrl;
+
+            final message = '$caption\n\nView details:\n$linkToShare\n\nThank you!\n— *${shopName.trim()}*';
+            await openWhatsAppChat(phone: phoneToUse, message: message);
+            if (ctx.mounted) Navigator.pop(ctx, phoneToUse);
+          }
+
+          return AlertDialog(
+            title: const Text('Share Receipt'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Choose what to send:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Digital Receipt', style: TextStyle(fontSize: 12)),
+                      icon: Icon(Icons.receipt, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
+                      icon: Icon(Icons.image, size: 16),
+                    ),
+                  ],
+                  selected: {shareOriginalImage},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    setState(() {
+                      shareOriginalImage = newSelection.first;
+                    });
+                  },
+                  style: SegmentedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  ),
+                  showSelectedIcon: false,
+                ),
+                const SizedBox(height: 20),
+                const Text('Send to:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Mobile Number',
+                    prefixText: '+91 ',
+                    hintText: 'Enter to send direct',
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              OutlinedButton(
+                onPressed: () => executeShare(''),
+                child: const Text('Skip Number'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final enteredPhone = phoneController.text.trim();
+                  executeShare(enteredPhone);
+                },
+                child: const Text('Share'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return shareResult;
+  }
+
+  /// Builds a short, SMB-friendly WhatsApp reminder message for a party/ledger.
+  ///
+  /// In [useReceiptPhoto] mode the link is the direct image URL of the receipt.
+  /// Otherwise it is the account-statement web link.
+  static String buildPartyReminderMessage({
+    required String customerName,
+    required String shopName,
+    required double totalBilled,
+    required double totalPaid,
+    required double balanceDue,
+    required String statementLink,
+    String? upiId,
+    bool useReceiptPhoto = false,
+    String? receiptPhotoUrl,
+    String? receiptNumber,
+  }) {
+    final firstName = customerName.trim().split(' ').first;
+    final shop = shopName.trim();
+
+    if (useReceiptPhoto &&
+        receiptPhotoUrl != null &&
+        receiptPhotoUrl.isNotEmpty &&
+        receiptPhotoUrl != 'null') {
+      final invoiceRef =
+          receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
+      return 'Hi $firstName,\n\n'
+          '🙏 Friendly reminder from *$shop*\n\n'
+          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*\n\n'
+          'Your receipt$invoiceRef is here 👇\n'
+          '$receiptPhotoUrl\n\n'
+          'Please clear the balance at your earliest convenience.\n\n'
+          'Thank you! 🙏\n'
+          '— *$shop*';
+    }
+
+    // Account Statement mode
+    String msg = 'Hi $firstName,\n\n'
+        '🙏 A friendly reminder from *$shop*\n\n'
+        '📋 Total Bill: ${formatIndianCurrency(totalBilled)}\n'
+        '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n'
+        '⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*\n\n'
+        'View your full account here:\n'
+        '$statementLink\n';
+
+    if (upiId != null && upiId.isNotEmpty) {
+      msg += '\n💳 Pay via UPI: $upiId\n';
+    }
+
+    msg += '\nThank you for your business! 🙏\n— *$shop*';
+    return msg;
+  }
 }

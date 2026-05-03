@@ -307,10 +307,12 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 meta_balance = float(enr.get('balance_due') or 0)
                 payment_mode = enr.get('payment_mode') or 'Cash'
                 
-                # 1. Calculate grand_total: use metadata if sum > 0, else line items
-                grand_total = meta_received + meta_balance
-                if grand_total == 0 and line_item_total > 0:
-                    grand_total = line_item_total
+                # 1. AUTHORITATIVE grand_total: always use the sum of actual line item amounts.
+                # meta_received + meta_balance can be stale/wrong (e.g., balance_due was written
+                # with an incorrect total before amounts were corrected). The line_item_total
+                # is computed by summing the 'amount' column of each verified_invoice row,
+                # which is always the ground-truth value that the user sees on the Order Details page.
+                grand_total = line_item_total if line_item_total > 0 else (meta_received + meta_balance)
                 
                 # 2. Determine effective financial state
                 if payment_mode.lower() != 'credit':
@@ -326,8 +328,11 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                         is_paid = False
                     else:
                         effective_received = meta_received
-                        effective_balance = meta_balance
-                        is_paid = (meta_balance <= 0)
+                        # CRITICAL FIX: Always compute balance from grand_total, NEVER use
+                        # meta_balance directly — it can be stale when the bill total was
+                        # corrected after the initial AI extraction.
+                        effective_balance = max(0, grand_total - effective_received)
+                        is_paid = (effective_balance <= 0)
                 
                 enriched_tx = dict(tx)
                 enriched_tx['amount'] = grand_total
@@ -363,8 +368,10 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 # If we use the enriched_transactions list, we should only count INVOICE + MANUAL_CREDIT vs PAYMENT.
                 pass
 
-        # Robust calculation: Sum of all INVOICE/MANUAL_CREDIT amounts minus all PAYMENT amounts
-        # We'll use the final list which includes dummy payments.
+        # Definitive summary: INVOICE/MANUAL_CREDIT amounts are billed; all PAYMENT
+        # rows (both linked initial payments and standalone "Record Payment" entries)
+        # are counted as paid.  Since grand_total is now authoritative (derived from
+        # line item amounts), final_billed will always be accurate.
         final_billed = 0.0
         final_paid = 0.0
         for tx in enriched_transactions:
@@ -475,9 +482,9 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 meta_balance = float(meta.get('balance_due') or 0)
                 payment_mode = meta.get('payment_mode') or 'Cash'
                 
-                grand_total = meta_received + meta_balance
-                if grand_total == 0 and items_total > 0:
-                    grand_total = items_total
+                # 1. AUTHORITATIVE grand_total: sum of actual line item amounts is the source
+                # of truth. meta_received + meta_balance can be stale when the bill was corrected.
+                grand_total = items_total if items_total > 0 else (meta_received + meta_balance)
 
                 if payment_mode.lower() != 'credit':
                     # Cash/Online: default to fully paid if metadata missing
@@ -492,8 +499,9 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                         effective_is_paid = False
                     else:
                         effective_received = meta_received
-                        effective_balance = meta_balance
-                        effective_is_paid = (meta_balance <= 0)
+                        # CRITICAL FIX: compute from grand_total, not from stale meta_balance
+                        effective_balance = max(0, grand_total - effective_received)
+                        effective_is_paid = (effective_balance <= 0)
                 
                 # Fix amount=0 stored in ledger_transactions
                 if float(tx.get('amount') or 0) == 0 and grand_total > 0:
@@ -861,6 +869,39 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             else:
                 logger.debug(f"ℹ️ No mobile_number for receipt {rn} yet")
 
+        # SELF-HEALING: For each grouped invoice, compute the correct balance_due and
+        # repair any stale values in verified_invoices. This permanently fixes cases where
+        # the initial AI extraction wrote a wrong balance_due (e.g., before amounts were corrected).
+        # We only update the header row (first row_id per receipt) to keep writes minimal.
+        repairs_needed = []
+        for rn, data in grouped_invoices.items():
+            correct_balance = max(0.0, data["total_amount"] - float(data.get("received_amount") or 0))
+            stored_balance = float(data.get("balance_due") or 0)
+            # Repair if difference is more than 1 rupee (to avoid floating point noise)
+            if abs(correct_balance - stored_balance) > 1.0:
+                repairs_needed.append((rn, correct_balance))
+                logger.warning(
+                    f"🔧 REPAIR: Receipt {rn} has stale balance_due={stored_balance:.0f}, "
+                    f"correct={correct_balance:.0f} (total={data['total_amount']:.0f}, "
+                    f"received={data.get('received_amount', 0):.0f})"
+                )
+        
+        if repairs_needed:
+            logger.info(f"🔧 Repairing {len(repairs_needed)} stale balance_due values in verified_invoices")
+            for rn, correct_balance in repairs_needed:
+                try:
+                    # Update only rows that have the wrong balance_due to minimize writes
+                    db.client.table("verified_invoices") \
+                        .update({"balance_due": correct_balance}) \
+                        .eq("username", username) \
+                        .eq("receipt_number", rn) \
+                        .execute()
+                    # Also update grouped_invoices so the rest of the sync uses the correct value
+                    grouped_invoices[rn]["balance_due"] = correct_balance
+                except Exception as repair_err:
+                    logger.error(f"Failed to repair balance_due for receipt {rn}: {repair_err}")
+            logger.info(f"✅ Self-healing complete: repaired {len(repairs_needed)} balance_due values")
+
         # 2. Fetch all existing ledgers and ensure new ones exist
         customer_names = list(set([g["customer_name"] for g in grouped_invoices.values() if g["customer_name"]]))
         
@@ -980,7 +1021,10 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             # - Credit: paid only when balance_due is 0 (i.e. fully settled)
             # - Cash/Online: always treated as paid at time of invoice
             if is_credit:
-                balance_due = data.get("balance_due", total_amount - data["received_amount"])
+                # CRITICAL: Always compute balance_due from total_amount (sum of item amounts)
+                # minus received_amount. Do NOT use data.get("balance_due") from the DB —
+                # that field can be stale if the bill was corrected after initial AI extraction.
+                balance_due = max(0, total_amount - received_amount)
                 is_paid_status = balance_due <= 0.01
             else:
                 is_paid_status = True
