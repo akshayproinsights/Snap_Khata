@@ -328,11 +328,19 @@ class ReviewNotifier extends Notifier<ReviewState> {
 
   /// Background refresh after a successful sync.
   /// Called AFTER navigation so clearing groups never causes a blank screen.
+  ///
+  /// ⚠️  DO NOT use ref.invalidate(udharProvider) or ref.invalidate(vendorLedgerProvider)
+  /// here.  Invalidating destroys provider state (ledgers → [], isLoading → true)
+  /// which makes the home screen flash blank/grey until the network call returns.
+  /// Instead we call the *silent* fetch methods which update data IN-PLACE without
+  /// ever clearing the existing cache — zero blank frames guaranteed.
   Future<void> _refreshAfterSync() async {
     await fetchReviewData();
-    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-    ref.invalidate(udharProvider);
-    ref.invalidate(vendorLedgerProvider);
+    // refreshSilent keeps existing card values visible while fetching — no loading flash
+    unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+    // Silent refresh — keeps existing ledger cache visible while fetching fresh data
+    unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
+    unawaited(ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent());
     ref.invalidate(recentActivitiesProvider);
   }
 

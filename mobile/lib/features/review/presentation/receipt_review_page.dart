@@ -95,24 +95,31 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       });
     }
 
-    // Load received amount (Priority: Saved > Extracted Received > Computed from Balance)
+    // Load received amount (Priority: Saved > Computed from balance_due > Extracted Received)
+    // IMPORTANT: receivedAmount from DB may be 0 when AI didn't extract it correctly.
+    // If balance_due is set (which is more reliable), compute received = total - balance_due.
     final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
+    final header = widget.group.header;
     if (savedReceivedAmount != null && mounted) {
+      // User previously saved a value — trust it completely
       setState(() {
         _receivedAmount = savedReceivedAmount;
       });
-    } else if (widget.group.header?.receivedAmount != null && mounted) {
-      setState(() {
-        _receivedAmount = widget.group.header!.receivedAmount!;
-      });
-    } else if (widget.group.header?.balanceDue != null && mounted) {
-      // If we have balance_due but no received_amount, compute it
+    } else if (header?.balanceDue != null && header!.balanceDue! > 0 && mounted) {
+      // balance_due is more reliably extracted by AI (it's a clear field on the bill)
+      // Compute received = total_bill - balance_due
       final total = _activeTotalAmount(widget.group);
+      final computed = (total - header.balanceDue!).clamp(0.0, total);
       setState(() {
-        _receivedAmount = (total - widget.group.header!.balanceDue!).clamp(0.0, total);
+        _receivedAmount = computed;
+      });
+    } else if (header?.receivedAmount != null && header!.receivedAmount! > 0 && mounted) {
+      // AI explicitly extracted a non-zero received amount
+      setState(() {
+        _receivedAmount = header.receivedAmount!;
       });
     } else if (mounted) {
-      // Default to full payment if no info found
+      // Default: full payment (no credit info found)
       setState(() {
         _receivedAmount = _activeTotalAmount(widget.group);
       });
@@ -470,8 +477,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             if (header != null && header.receiptLink.isNotEmpty)
               GestureDetector(
                 onTap: () => _showFullImage(header.receiptLink),
-                child: Container(
-                  height: MediaQuery.of(context).size.height * 0.25,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  height: MediaQuery.of(context).viewInsets.bottom > 0 
+                      ? 80.0 
+                      : MediaQuery.of(context).size.height * 0.25,
                   width: double.infinity,
                   decoration: BoxDecoration(color: context.surfaceColor),
                   child: Stack(
@@ -860,10 +871,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final key = col['name']?.toString();
       final label = col['label']?.toString();
       if (key == null || key.isEmpty || label == null) continue;
-      if (key == 'customer_name') {
-        // Skipping old customer field rendering inside card
-        continue;
-      }
+      if (key == 'customer_name') continue;
       if (key == 'mobile_number') continue;
       if (key == 'amount' || key == 'total_bill_amount') continue;
       if (key == 'receipt_number' || key == 'date') continue;
@@ -885,27 +893,114 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── DATE + RECEIPT # row — both fully editable ───────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('DATE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
-                    Text(header.date, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('DATE',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: context.textSecondaryColor)),
+                      const SizedBox(height: 4),
+                      DebouncedReviewField(
+                        initialValue: header.date,
+                        keyboardType: TextInputType.datetime,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: header.hasDateDoubt
+                                      ? context.warningColor
+                                      : context.borderColor)),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                          fillColor: header.hasDateDoubt
+                              ? context.warningColor.withValues(alpha: 0.06)
+                              : context.surfaceColor,
+                          filled: true,
+                          hintText: 'DD-MM-YYYY',
+                          suffixIcon: header.hasDateDoubt
+                              ? Tooltip(
+                                  message: 'Low confidence — please verify',
+                                  child: Icon(Icons.warning_amber_rounded,
+                                      size: 16, color: context.warningColor))
+                              : null,
+                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        onSaved: (val) {
+                          if (val.trim().isNotEmpty) {
+                            final notifier = ref.read(reviewProvider.notifier);
+                            notifier.updateDateRecord(header.copyWith(date: val.trim()));
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('RECEIPT #', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
-                    Text(header.receiptNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('RECEIPT #',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: context.textSecondaryColor)),
+                      const SizedBox(height: 4),
+                      DebouncedReviewField(
+                        initialValue: header.receiptNumber,
+                        keyboardType: TextInputType.text,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: header.hasReceiptDoubt
+                                      ? context.warningColor
+                                      : context.borderColor)),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                          fillColor: header.hasReceiptDoubt
+                              ? context.warningColor.withValues(alpha: 0.06)
+                              : context.surfaceColor,
+                          filled: true,
+                          hintText: 'Receipt #',
+                          suffixIcon: header.hasReceiptDoubt
+                              ? Tooltip(
+                                  message: 'Low confidence — please verify',
+                                  child: Icon(Icons.warning_amber_rounded,
+                                      size: 16, color: context.warningColor))
+                              : null,
+                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        onSaved: (val) {
+                          if (val.trim().isNotEmpty) {
+                            final notifier = ref.read(reviewProvider.notifier);
+                            notifier.updateDateRecord(header.copyWith(receiptNumber: val.trim()));
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const Divider(height: 24),
-            ...fields,
+            if (fields.isNotEmpty) ...[
+              const Divider(height: 24),
+              ...fields,
+            ],
           ],
         ),
       ),
