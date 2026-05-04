@@ -93,9 +93,9 @@ class PartyActivityCard extends StatelessWidget {
                               const SizedBox(width: 8),
                             ],
                             _buildTypeBadge(context),
-                            if (party.latestUploadDate != null || party.lastTransactionDate != null) ...[
+                            if (party.updatedAt != null || party.latestUploadDate != null || party.lastTransactionDate != null) ...[
                               const SizedBox(width: 8),
-                              _buildTimestamp(context, party.latestUploadDate ?? party.lastTransactionDate!),
+                              _buildTimestamp(context, party.updatedAt ?? party.latestUploadDate ?? party.lastTransactionDate!),
                             ],
                           ],
                         ),
@@ -245,15 +245,16 @@ class PartyActivityCard extends StatelessWidget {
   }
 
   Widget _buildTimestamp(BuildContext context, DateTime date) {
-    final now = DateTime.now();
-    final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-    final isYesterday = date.year == now.year && date.month == now.month && date.day == now.day - 1;
+    final istDate = date.toUtc().add(const Duration(hours: 5, minutes: 30));
+    final now = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+    final isToday = istDate.year == now.year && istDate.month == now.month && istDate.day == now.day;
+    final isYesterday = istDate.year == now.year && istDate.month == now.month && istDate.day == now.day - 1;
     
-    String dayPart = DateFormat('MMM dd').format(date);
+    String dayPart = DateFormat('MMM dd').format(istDate);
     if (isToday) dayPart = 'Today';
     if (isYesterday) dayPart = 'Yesterday';
     
-    final timePart = DateFormat('h:mm a').format(date);
+    final timePart = DateFormat('h:mm a').format(istDate);
 
     return Text(
       '$dayPart • $timePart',

@@ -7,6 +7,7 @@ class VendorLedger {
   final double? latestBillAmount;
   final DateTime? latestBillDate;
   final DateTime? latestUploadDate;
+  final DateTime? updatedAt;
 
   VendorLedger({
     required this.id,
@@ -17,6 +18,7 @@ class VendorLedger {
     this.latestBillAmount,
     this.latestBillDate,
     this.latestUploadDate,
+    this.updatedAt,
   });
 
   factory VendorLedger.fromJson(Map<String, dynamic> json) {
@@ -36,6 +38,9 @@ class VendorLedger {
           : null,
       latestUploadDate: json['latest_upload_date'] != null 
           ? DateTime.parse(json['latest_upload_date']) 
+          : null,
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at']) 
           : null,
     );
   }

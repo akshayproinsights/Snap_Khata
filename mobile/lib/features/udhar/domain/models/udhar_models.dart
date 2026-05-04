@@ -8,6 +8,7 @@ class CustomerLedger {
   final double? latestBillAmount;
   final DateTime? latestBillDate;
   final DateTime? latestUploadDate;
+  final DateTime? updatedAt;
 
   CustomerLedger({
     required this.id,
@@ -19,6 +20,7 @@ class CustomerLedger {
     this.latestBillAmount,
     this.latestBillDate,
     this.latestUploadDate,
+    this.updatedAt,
   });
 
   CustomerLedger copyWith({
@@ -31,6 +33,7 @@ class CustomerLedger {
     double? latestBillAmount,
     DateTime? latestBillDate,
     DateTime? latestUploadDate,
+    DateTime? updatedAt,
   }) {
     return CustomerLedger(
       id: id ?? this.id,
@@ -42,6 +45,7 @@ class CustomerLedger {
       latestBillAmount: latestBillAmount ?? this.latestBillAmount,
       latestBillDate: latestBillDate ?? this.latestBillDate,
       latestUploadDate: latestUploadDate ?? this.latestUploadDate,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -64,6 +68,9 @@ class CustomerLedger {
           : null,
       latestUploadDate: json['latest_upload_date'] != null
           ? DateTime.parse(json['latest_upload_date'])
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
           : null,
     );
   }

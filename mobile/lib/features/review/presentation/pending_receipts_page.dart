@@ -4,7 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
@@ -43,6 +48,71 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
   }
 
 
+
+  /// Quick-share a reviewed receipt on WhatsApp directly from the list.
+  /// This is a pure side-action — it never syncs or navigates away.
+  Future<void> _quickShareWhatsApp(InvoiceReviewGroup group) async {
+    final header = group.header;
+    if (header == null) return;
+
+    final authState = ref.read(authProvider);
+    final username = authState.user?.username;
+    final shopProfile = ref.read(shopProvider);
+    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+
+    final double totalAmount = header.amount;
+    final double receivedAmount = header.receivedAmount ?? 0.0;
+    final double balanceDue = header.balanceDue ?? (totalAmount - receivedAmount);
+
+    final String? shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+      receiptNumber: group.receiptNumber,
+      username: username,
+    );
+
+    if (!mounted) return;
+    if (shareUrl == null) {
+      AppToast.showError(context, 'Could not generate receipt link. Try again.', title: 'Error');
+      return;
+    }
+
+    OrderPaymentStatus status;
+    if (balanceDue.abs() < 0.01) {
+      status = OrderPaymentStatus.fullyPaid;
+    } else if (receivedAmount > 0) {
+      status = OrderPaymentStatus.partiallyPaid;
+    } else {
+      status = OrderPaymentStatus.unpaid;
+    }
+
+    final caption = WhatsAppUtils.getWhatsAppCaption(
+      status: status,
+      customerName: header.customerName?.isNotEmpty == true ? header.customerName! : 'Customer',
+      businessName: shopName,
+      orderNumber: group.receiptNumber,
+      totalAmount: totalAmount,
+      paidAmount: receivedAmount,
+      pendingAmount: balanceDue,
+    );
+
+    final phoneNumber = header.mobileNumber?.trim() ?? '';
+
+    final shareResult = await WhatsAppUtils.shareReceiptWithOptions(
+      context,
+      phone: phoneNumber,
+      shareUrl: shareUrl,
+      imageUrl: header.receiptLink,
+      caption: caption,
+      shopName: shopName,
+    );
+
+    if (shareResult != null && mounted) {
+      AppToast.showSuccess(
+        context,
+        'Receipt shared on WhatsApp!',
+        title: 'Sent ✓',
+      );
+    }
+  }
 
   Future<void> _syncAndFinish({required bool allDone}) async {
     // If not all receipts are reviewed, show a warning before proceeding
@@ -463,12 +533,11 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                 ],
               ),
             ),
-            // Status Indicator + Sync & Share
+            // Status badge + WhatsApp quick-share (for Done receipts)
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-
-                // Status badge
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -481,6 +550,29 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
                             fontWeight: FontWeight.bold)),
                   ],
                 ),
+                if (status == 'Done') ...
+                  [
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => _quickShareWhatsApp(group),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FaIcon(FontAwesomeIcons.whatsapp, size: 12, color: Color(0xFF25D366)),
+                            SizedBox(width: 4),
+                            Text('Share', style: TextStyle(fontSize: 10, color: Color(0xFF25D366), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
               ],
             ),
             const SizedBox(width: 4),

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -233,97 +235,220 @@ class WhatsAppUtils {
 
     if (!context.mounted) return null;
 
-    final shareResult = await showDialog<String?>(
+    final shareResult = await showModalBottomSheet<String?>(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
           void executeShare(String phoneToUse) async {
-            final message = '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
+            final message =
+                '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
 
-            if (shareOriginalImage && imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
-              // Share the actual image file with caption using share_plus
+            if (shareOriginalImage &&
+                imageUrl != null &&
+                imageUrl.isNotEmpty &&
+                imageUrl != 'null') {
               await shareActualImageOnWhatsApp(
                 context: ctx,
                 imageUrl: imageUrl,
-                phone: phoneToUse, // Note: share_plus doesn't support pre-filling phone numbers, it will open system share sheet
+                phone: phoneToUse,
                 caption: message,
               );
             } else {
-              // Share as link via wa.me API
               await openWhatsAppChat(phone: phoneToUse, message: message);
             }
             if (ctx.mounted) Navigator.pop(ctx, phoneToUse);
           }
 
-          return AlertDialog(
-            title: const Text('Share Receipt'),
-            content: Column(
+          return Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              left: 24,
+              right: 24,
+              top: 12,
+            ),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Choose what to send:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(
-                      value: false,
-                      label: Text('Digital Receipt', style: TextStyle(fontSize: 12)),
-                      icon: Icon(Icons.receipt, size: 16),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
-                      icon: Icon(Icons.image, size: 16),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const FaIcon(FontAwesomeIcons.whatsapp,
+                          size: 20, color: Color(0xFF25D366)),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Share on WhatsApp',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                   ],
-                  selected: {shareOriginalImage},
-                  onSelectionChanged: (Set<bool> newSelection) {
-                    setState(() {
-                      shareOriginalImage = newSelection.first;
-                    });
-                  },
-                  style: SegmentedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  ),
-                  showSelectedIcon: false,
                 ),
-                const SizedBox(height: 20),
-                const Text('Send to:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const SizedBox(height: 24),
+                const Text('Choose Receipt Mode',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildModeButton(
+                          label: 'Digital Receipt',
+                          icon: LucideIcons.receipt,
+                          isSelected: !shareOriginalImage,
+                          onTap: () => setState(() => shareOriginalImage = false),
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildModeButton(
+                          label: 'Receipt Photo',
+                          icon: LucideIcons.image,
+                          isSelected: shareOriginalImage,
+                          onTap: () => setState(() => shareOriginalImage = true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text('Customer Mobile Number',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 12),
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
+                  autofocus: phone.isEmpty,
                   decoration: InputDecoration(
-                    labelText: 'Mobile Number',
                     prefixText: '+91 ',
-                    hintText: 'Enter to send direct',
-                    isDense: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    hintText: 'Enter 10-digit number',
+                    filled: true,
+                    fillColor: Colors.grey.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   ),
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () => executeShare(''),
+                        child: const Text('Skip Number',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () => executeShare(phoneController.text.trim()),
+                        child: const Text('Send on WhatsApp',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 16)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              OutlinedButton(
-                onPressed: () => executeShare(''),
-                child: const Text('Skip Number'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final enteredPhone = phoneController.text.trim();
-                  executeShare(enteredPhone);
-                },
-                child: const Text('Share'),
-              ),
-            ],
           );
         },
       ),
     );
 
     return shareResult;
+  }
+
+  static Widget _buildModeButton({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 20, color: isSelected ? const Color(0xFF25D366) : Colors.grey),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.black : Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Builds a short, SMB-friendly WhatsApp reminder message for a party/ledger.
@@ -437,7 +562,7 @@ class WhatsAppUtils {
       debugPrint('❌ Error sharing image: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share image. Sending link instead.')),
+          SnackBar(content: Text('Error: $e. Sending link instead.')),
         );
         // Graceful fallback: open WhatsApp with text message containing the URL
         if (phone != null && phone.isNotEmpty) {

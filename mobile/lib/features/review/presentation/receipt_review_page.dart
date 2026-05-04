@@ -18,7 +18,7 @@ import 'package:mobile/features/config/presentation/providers/config_provider.da
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
-import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
+
 
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
@@ -814,22 +814,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       await _saveCurrentState(updatePhoneNumber: shareResult);
     }
 
-    Future.microtask(() async {
-      await _saveCurrentState();
-      if (!mounted) return;
-      await ref.read(reviewProvider.notifier).syncAndFinish();
-      if (!mounted) return;
-      final syncState = ref.read(reviewProvider);
-      if (syncState.error != null) return;
-
-      setState(() => _isNavigatingAway = true);
-      if (widget.currentIndex >= 0 && widget.currentIndex < _localAllGroups.length - 1) {
-        _goToNextReceipt();
-      } else {
-        ref.read(uploadProvider.notifier).clearFiles();
-        context.go('/');
-      }
-    });
+    // ✅ WhatsApp is a side-action, not a terminal action.
+    // Stay on this page so the user can continue reviewing the remaining receipts.
+    // They will explicitly tap "Sync & Finish" / "Save & Next" when ready.
+    if (mounted) {
+      AppToast.showSuccess(
+        context,
+        'Receipt shared! Continue reviewing, then tap Sync & Finish when done.',
+        title: 'Sent on WhatsApp ✓',
+      );
+    }
   }
 
   Widget _buildCategoryHeader(String title, IconData icon, Color color) {
@@ -953,40 +947,144 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         child: Column(
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: DebouncedReviewField(
                     initialValue: item.description,
                     decoration: InputDecoration(
-                      hintText: 'Description',
+                      hintText: 'Item Description',
                       isDense: true,
+                      contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
                       hintStyle: TextStyle(color: context.textSecondaryColor.withValues(alpha: 0.5)),
                     ),
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    maxLines: null,
                     onSaved: (val) {
                       ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(description: val));
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 80,
-                  child: DebouncedReviewField(
-                    initialValue: _formatInput(item.amount),
-                    textAlign: TextAlign.right,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.primaryColor),
-                    onSaved: (val) {
-                      final amt = double.tryParse(val) ?? 0.0;
-                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
-                    },
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                // QTY
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: context.backgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('QTY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                        DebouncedReviewField(
+                          initialValue: _formatInput(item.quantity),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            hintText: '-',
+                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          onSaved: (val) {
+                            final qty = double.tryParse(val);
+                            double amt = item.amount;
+                            if (qty != null && item.rate != null && item.rate! > 0) {
+                              amt = qty * item.rate!;
+                            }
+                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(quantity: qty, amount: amt));
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // RATE
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: context.backgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('RATE (₹)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                        DebouncedReviewField(
+                          initialValue: _formatInput(item.rate),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            hintText: '-',
+                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          onSaved: (val) {
+                            final rate = double.tryParse(val);
+                            double amt = item.amount;
+                            if (rate != null && item.quantity != null && item.quantity! > 0) {
+                              amt = item.quantity! * rate;
+                            }
+                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(rate: rate, amount: amt));
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // TOTAL
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: context.primaryColor.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('TOTAL (₹)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.primaryColor)),
+                        DebouncedReviewField(
+                          initialValue: _formatInput(item.amount),
+                          textAlign: TextAlign.right,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            hintText: '0.00',
+                          ),
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: context.primaryColor),
+                          onSaved: (val) {
+                            final amt = double.tryParse(val) ?? 0.0;
+                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-            if (isAutomobile)
+            if (isAutomobile) ...[
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -1003,6 +1101,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ),
                 ],
               ),
+            ]
           ],
         ),
       ),

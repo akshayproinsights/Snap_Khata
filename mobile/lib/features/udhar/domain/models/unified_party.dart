@@ -15,6 +15,7 @@ class UnifiedParty {
   final double? latestBillAmount;
   final DateTime? latestBillDate;
   final DateTime? latestUploadDate;
+  final DateTime? updatedAt;
   final dynamic originalLedger;
 
   UnifiedParty({
@@ -29,6 +30,7 @@ class UnifiedParty {
     this.latestBillAmount,
     this.latestBillDate,
     this.latestUploadDate,
+    this.updatedAt,
     required this.originalLedger,
   });
 
@@ -53,6 +55,9 @@ class UnifiedParty {
       latestUploadDate: json['latest_upload_date'] != null
           ? DateTime.parse(json['latest_upload_date'])
           : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : null,
       originalLedger: null,
     );
   }
@@ -74,6 +79,7 @@ class UnifiedParty {
       latestBillAmount: ledger.latestBillAmount,
       latestBillDate: ledger.latestBillDate,
       latestUploadDate: ledger.latestUploadDate,
+      updatedAt: ledger.updatedAt,
       originalLedger: ledger,
     );
   }
@@ -91,6 +97,7 @@ class UnifiedParty {
       latestBillAmount: ledger.latestBillAmount,
       latestBillDate: ledger.latestBillDate,
       latestUploadDate: ledger.latestUploadDate,
+      updatedAt: ledger.updatedAt,
       originalLedger: ledger,
     );
   }
