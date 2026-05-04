@@ -129,8 +129,8 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (!mounted) return;
     final state = ref.read(reviewProvider);
     if (state.error == null) {
-      AppToast.showSuccess(context, 'Receipts synced successfully!',
-          title: 'Sync Complete');
+      AppToast.showSuccess(context, 'Syncing receipts in background…',
+          title: 'Saved ✔');
       ref.read(uploadProvider.notifier).clearFiles();
       context.go('/');
     } else {
@@ -155,7 +155,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
         if (mounted) {
           context.push('/receipt-review', extra: {
             'group': groups.first,
-            'allGroups': groups,
+            'allGroups': List<InvoiceReviewGroup>.from(groups), // snapshot — immune to provider clears
             'currentIndex': 0,
           });
         }
@@ -392,7 +392,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       onTap: () {
         context.push('/receipt-review', extra: {
           'group': group,
-          'allGroups': allGroups,
+          'allGroups': List<InvoiceReviewGroup>.from(allGroups), // snapshot
           'currentIndex': allGroups.indexOf(group),
         });
       },

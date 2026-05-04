@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/shared/presentation/providers/background_task_provider.dart';
+import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 
 class GlobalTaskBanner extends ConsumerWidget {
   const GlobalTaskBanner({super.key});
@@ -11,9 +12,15 @@ class GlobalTaskBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final taskState = ref.watch(backgroundTaskProvider);
     final uploadState = ref.watch(uploadProvider);
+    final reviewState = ref.watch(reviewProvider);
 
     final isUploading = uploadState.isUploading;
     final isProcessing = uploadState.isProcessing;
+
+    // ── Syncing receipts banner (Option B: navigate-then-sync) ───────────
+    if (reviewState.isSyncing) {
+      return _SyncingReceiptsBanner(progress: reviewState.syncProgress);
+    }
 
     // ── Upload phase: urgent amber banner, not dismissible ──
     if (isUploading) {
@@ -32,6 +39,78 @@ class GlobalTaskBanner extends ConsumerWidget {
     }
 
     return _LegacyTaskBanner(taskState: taskState, ref: ref);
+  }
+}
+
+/// Premium green banner shown while receipts sync in background (Option B UX).
+/// Appears on the home screen immediately after the user navigates back from review.
+class _SyncingReceiptsBanner extends StatelessWidget {
+  final SyncProgress? progress;
+  const _SyncingReceiptsBanner({this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = progress?.percentage ?? 0;
+    final msg = progress?.message;
+    final displayMsg = (msg != null && msg.isNotEmpty)
+        ? msg
+        : (pct > 0 ? 'Saving receipts… $pct%' : 'Saving receipts to database…');
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF00875A), Color(0xFF00AA6E)],
+            ),
+          ),
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 6,
+            bottom: 8,
+            left: 16,
+            right: 16,
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '✅ $displayMsg',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: pct > 0 ? pct / 100.0 : 0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOut,
+          builder: (_, v, __) => LinearProgressIndicator(
+            value: pct > 0 ? v : null, // indeterminate until we have %
+            minHeight: 3,
+            backgroundColor: const Color(0xFF006644),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      ],
+    );
   }
 }
 

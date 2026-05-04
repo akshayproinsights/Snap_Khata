@@ -58,7 +58,9 @@ class ReviewNotifier extends Notifier<ReviewState> {
   @override
   ReviewState build() {
     _repository = ref.watch(reviewRepositoryProvider);
-    Future.microtask(() => fetchReviewData());
+    // NOTE: Do NOT auto-fetch here — PendingReceiptsPage.initState() calls
+    // fetchReviewData() explicitly. Auto-fetching here causes groups to be
+    // cleared while ReceiptReviewPage is still mounted → blank screen.
     return ReviewState();
   }
 
@@ -300,17 +302,29 @@ class ReviewNotifier extends Notifier<ReviewState> {
         return;
       }
 
-      // Remove groups that were processed (refresh)
-      await fetchReviewData();
-      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-      ref.invalidate(udharProvider);
-      ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(recentActivitiesProvider);
+      // ⚡ Option B: Navigate-then-sync pattern.
+      // DO NOT call fetchReviewData() here — the caller (ReceiptReviewPage or
+      // PendingReceiptsPage) navigates to '/' immediately after this returns.
+      // We then refresh data in the background so the home screen is fresh.
+      // This eliminates the blank-screen caused by groups being cleared while
+      // ReceiptReviewPage is still in the widget tree.
+      state = state.copyWith(groups: []);
+      unawaited(_refreshAfterSync());
     } catch (e) {
       state = state.copyWith(error: 'Sync failed. ${_friendlyError(e)}');
     } finally {
       state = state.copyWith(isSyncing: false, syncProgress: null);
     }
+  }
+
+  /// Background refresh after a successful sync.
+  /// Called AFTER navigation so clearing groups never causes a blank screen.
+  Future<void> _refreshAfterSync() async {
+    await fetchReviewData();
+    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
+    ref.invalidate(udharProvider);
+    ref.invalidate(vendorLedgerProvider);
+    ref.invalidate(recentActivitiesProvider);
   }
 
   Future<void> deleteReceipt(String receiptNumber) async {

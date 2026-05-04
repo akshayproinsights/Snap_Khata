@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 
 enum OrderPaymentStatus { fullyPaid, partiallyPaid, unpaid }
 
@@ -42,8 +45,16 @@ class WhatsAppUtils {
     
     String extraTexts = '';
     if (extraFields != null && extraFields.isNotEmpty) {
-      final extraStr = extraFields.entries.map((e) => '🏷️ *${e.key}:* ${e.value}').join('\n');
-      extraTexts = '\n\n$extraStr';
+      final filteredExtraFields = extraFields.entries.where((e) {
+        final key = e.key.toLowerCase();
+        return !key.contains('created at') && 
+               !key.contains('total bill amount') && 
+               !key.contains('mobile number');
+      });
+      if (filteredExtraFields.isNotEmpty) {
+        final extraStr = filteredExtraFields.map((e) => '🏷️ *${e.key}:* ${e.value}').join('\n');
+        extraTexts = '\n\n$extraStr';
+      }
     }
 
     switch (status) {
@@ -227,12 +238,20 @@ class WhatsAppUtils {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
           void executeShare(String phoneToUse) async {
-            final linkToShare = (shareOriginalImage && imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null')
-                ? imageUrl
-                : shareUrl;
+            final message = '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
 
-            final message = '$caption\n\nView details:\n$linkToShare\n\nThank you!\n— *${shopName.trim()}*';
-            await openWhatsAppChat(phone: phoneToUse, message: message);
+            if (shareOriginalImage && imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
+              // Share the actual image file with caption using share_plus
+              await shareActualImageOnWhatsApp(
+                context: ctx,
+                imageUrl: imageUrl,
+                phone: phoneToUse, // Note: share_plus doesn't support pre-filling phone numbers, it will open system share sheet
+                caption: message,
+              );
+            } else {
+              // Share as link via wa.me API
+              await openWhatsAppChat(phone: phoneToUse, message: message);
+            }
             if (ctx.mounted) Navigator.pop(ctx, phoneToUse);
           }
 
@@ -356,5 +375,41 @@ class WhatsAppUtils {
 
     msg += '\nThank you for your business! 🙏\n— *$shop*';
     return msg;
+  }
+
+  /// Downloads an image and shares it natively (which works even if the number is not saved)
+  /// Note: The system share sheet will appear, and the user must manually select WhatsApp and the contact.
+  static Future<void> shareActualImageOnWhatsApp({
+    required BuildContext context,
+    required String imageUrl,
+    required String caption,
+    String? phone, // phone is optional here as it's handled by system share sheet
+  }) async {
+    try {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preparing image for sharing...')),
+        );
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final tempFilePath = '${tempDir.path}/shared_receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      
+      final dio = Dio();
+      await dio.download(imageUrl, tempFilePath);
+
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(tempFilePath)],
+        text: caption,
+      );
+    } catch (e) {
+      debugPrint('Error sharing actual image: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share image: $e')),
+        );
+      }
+    }
   }
 }

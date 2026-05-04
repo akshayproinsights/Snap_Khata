@@ -47,21 +47,23 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   double _receivedAmount = 0.0;
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
-  String? _preFetchedShareUrl;
+
+  /// Snapshot of allGroups taken at initState — immune to provider clears.
+  /// This prevents _goToNextReceipt() from breaking when syncAndFinish()
+  /// clears groups while we are still mounted.
+  late List<InvoiceReviewGroup> _localAllGroups;
+
+  /// True when we have initiated navigation away — suppresses rebuilds
+  /// that happen during the GoRouter transition (blank screen guard).
+  bool _isNavigatingAway = false;
 
   @override
   void initState() {
     super.initState();
+    _localAllGroups = List<InvoiceReviewGroup>.from(widget.allGroups);
     _loadPersistedSettings();
-    _preFetchShareLink();
-  }
-
-  void _preFetchShareLink() async {
-    try {
-      _preFetchedShareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-        receiptNumber: widget.group.receiptNumber,
-      );
-    } catch (_) {}
+    // NOTE: Share link pre-fetch removed from initState().
+    // It is now lazy — fetched only when WhatsApp button is tapped.
   }
 
   @override
@@ -282,19 +284,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await _saveCurrentState();
     if (!mounted) return;
 
-    final isLast = widget.currentIndex == -1 || 
-                   widget.currentIndex == widget.allGroups.length - 1;
+    final isLast = widget.currentIndex == -1 ||
+                   widget.currentIndex == _localAllGroups.length - 1;
 
     if (isLast) {
-      await ref.read(reviewProvider.notifier).syncAndFinish();
-      if (mounted) {
-        final state = ref.read(reviewProvider);
-        if (state.error == null) {
-          AppToast.showSuccess(context, 'Receipts synced successfully!',
-              title: 'Sync Complete');
-          context.go('/');
-        }
-      }
+      // ⚡ Option B: Navigate home FIRST, then sync in background.
+      // This eliminates the blank screen caused by groups being cleared
+      // while this page is still in the widget tree.
+      setState(() => _isNavigatingAway = true);
+      AppToast.showSuccess(context, 'Syncing your receipts in background…',
+          title: 'Saved ✔');
+      context.go('/');
+      // Sync after navigation — the home screen shows a banner if needed
+      ref.read(reviewProvider.notifier).syncAndFinish();
     } else {
       await _goToNextReceipt();
     }
@@ -305,13 +307,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     if (!mounted) return;
     
     final nextIndex = widget.currentIndex + 1;
-    if (nextIndex >= widget.allGroups.length) return;
-    final nextGroup = widget.allGroups[nextIndex];
+    if (nextIndex >= _localAllGroups.length) return;
+    final nextGroup = _localAllGroups[nextIndex];
+    setState(() => _isNavigatingAway = true);
     context.pushReplacement(
       '/receipt-review',
       extra: {
         'group': nextGroup,
-        'allGroups': widget.allGroups,
+        'allGroups': _localAllGroups,
         'currentIndex': nextIndex,
       },
     );
@@ -319,6 +322,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Blank-screen guard: if we have already initiated navigation away
+    // (e.g. after Sync & Finish), return an empty transparent scaffold so
+    // there is zero grey flash during the GoRouter transition.
+    if (_isNavigatingAway) {
+      return Scaffold(backgroundColor: context.backgroundColor);
+    }
+
     final state = ref.watch(reviewProvider);
     final configAsync = ref.watch(configProvider);
     final config = configAsync.value ?? {};
@@ -330,6 +340,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       }
     });
     
+    // Use live group from provider; fall back to widget.group only if still present.
+    // When groups are cleared after sync, _isNavigatingAway is already true so
+    // we never reach here with an empty groups list.
     final group = state.groups.firstWhere(
         (g) => g.receiptNumber == widget.group.receiptNumber,
         orElse: () => widget.group);
@@ -726,8 +739,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final username = authState.user?.username;
     final double balanceDue = totalAmount - _receivedAmount;
 
-    String? shareUrl = _preFetchedShareUrl;
-    shareUrl ??= await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+    // 📲 Lazy share link: fetch only now (not eagerly in initState)
+    final String? shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
       receiptNumber: freshGroup.receiptNumber,
       username: username,
     );
@@ -789,7 +802,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final syncState = ref.read(reviewProvider);
       if (syncState.error != null) return;
 
-      if (widget.currentIndex >= 0 && widget.currentIndex < widget.allGroups.length - 1) {
+      setState(() => _isNavigatingAway = true);
+      if (widget.currentIndex >= 0 && widget.currentIndex < _localAllGroups.length - 1) {
         _goToNextReceipt();
       } else {
         ref.read(uploadProvider.notifier).clearFiles();

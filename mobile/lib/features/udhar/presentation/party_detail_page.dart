@@ -1115,10 +1115,29 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               final phone = phoneController.text.trim().isNotEmpty
                                   ? phoneController.text.trim()
                                   : (ledger.customerPhone ?? '');
-                              await WhatsAppUtils.openWhatsAppChat(
-                                phone: phone,
-                                message: message,
-                              );
+                              
+                              if (useReceiptPhoto && selectedTx?.receiptLink != null && selectedTx!.receiptLink!.isNotEmpty && selectedTx!.receiptLink != 'null') {
+                                await WhatsAppUtils.shareActualImageOnWhatsApp(
+                                  context: context,
+                                  imageUrl: selectedTx!.receiptLink!,
+                                  caption: message,
+                                  phone: phone,
+                                );
+                              } else {
+                                if (phone.isNotEmpty) {
+                                  await WhatsAppUtils.openWhatsAppChat(
+                                    phone: phone,
+                                    message: message,
+                                  );
+                                } else {
+                                  await WhatsAppUtils.shareReceipt(
+                                    context,
+                                    phone: phone,
+                                    message: message,
+                                    dialogTitle: 'Send Reminder',
+                                  );
+                                }
+                              }
                             },
                           ),
                         ),

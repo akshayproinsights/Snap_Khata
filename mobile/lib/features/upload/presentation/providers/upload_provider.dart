@@ -696,11 +696,16 @@ class UploadNotifier extends Notifier<UploadState> {
       lastCompletedStatus: completedStatus,
     );
     unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
-    _backgroundTask.completeTaskWithAction(
-      'Orders ready to review!',
-      'Review',
-      () => AppRouter.router.go('/review'),
-    );
+
+    // ⚡ Auto-launch: navigate directly to the first receipt for review.
+    // We go to '/review' with autoLaunchReview=true so PendingReceiptsPage
+    // fetches groups and immediately pushes the first ReceiptReviewPage.
+    // This eliminates the extra "tap to review" step after processing.
+    _backgroundTask.clearTask(); // clear processing banner
+    AppRouter.router.go('/review', extra: {
+      'skippedCount': 0,
+      'autoLaunchReview': true,
+    });
   }
 
   /// Called by the review page when the user dismisses the summary overlay.
