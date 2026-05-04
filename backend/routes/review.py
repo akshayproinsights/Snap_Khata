@@ -186,7 +186,10 @@ async def update_single_review_date(
         # CRITICAL: Get the OLD record to check if receipt_number changed
         old_record = db.query('verification_dates').eq('username', username).eq('row_id', row_id).execute().data
         if not old_record or len(old_record) == 0:
-            raise HTTPException(status_code=404, detail=f"Record with row_id {row_id} not found")
+            # Record may have already been synced and cleaned up — treat as a soft warning,
+            # NOT a hard error, so the frontend can continue without a toast.
+            logger.warning(f"Record with row_id {row_id} not found in verification_dates — likely already synced. Skipping update.")
+            return {"success": True, "message": f"Record {row_id} not found (already synced). Skipped.", "skipped": True}
         
         old_receipt_number = old_record[0].get('receipt_number')
         new_receipt_number = record.get('receipt_number')
@@ -213,7 +216,7 @@ async def update_single_review_date(
             'customer_name', 'mobile_number', 'payment_mode', 'received_amount', 
             'balance_due', 'customer_details', 'vehicle_number', 'car_number', 'gst_mode',
             'taxable_row_ids', 'fallback_attempted', 'fallback_reason', 
-            'processing_errors'
+            'processing_errors', 'total_bill_amount'
         }
         
         # Handle extra_fields promotion: if any keys in extra_fields are valid top-level columns,
@@ -278,12 +281,18 @@ async def update_single_review_date(
             else:
                 logger.warning(f"Could not find header ID for row_id {row_id}, skipping propagation")
         
+        updated_line_items = 0
+        if new_receipt_number and old_receipt_number != new_receipt_number:
+            updated_line_items = len(line_items) if 'line_items' in dir() and line_items else 0
+
         return {
             "success": True,
             "message": f"Updated record {row_id} successfully",
-            "line_items_updated": len(line_items) if new_receipt_number and old_receipt_number != new_receipt_number and line_items else 0
+            "line_items_updated": updated_line_items
         }
     
+    except HTTPException:
+        raise  # Never swallow FastAPI HTTPExceptions — let them propagate as-is
     except Exception as e:
         logger.error(f"Error updating verification_dates: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update record: {str(e)}")
@@ -502,7 +511,7 @@ async def update_bulk_review_amount(
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'type', 'vehicle_number', 'gst_mode'
+            'type', 'vehicle_number', 'gst_mode', 'total_bill_amount'
         }
         
         success_count = 0
@@ -567,6 +576,12 @@ async def update_single_review_amount(
     
     try:
         db = get_database_client()
+
+        # Graceful check: record may have already been synced and removed.
+        existing = db.query('verification_amounts').eq('username', username).eq('row_id', row_id).execute().data
+        if not existing or len(existing) == 0:
+            logger.warning(f"Amount record with row_id {row_id} not found in verification_amounts — likely already synced. Skipping update.")
+            return {"success": True, "message": f"Amount record {row_id} not found (already synced). Skipped.", "skipped": True}
         
         # Ensure username is set in the record
         record['username'] = username
@@ -595,7 +610,7 @@ async def update_single_review_amount(
             'receipt_number_bbox', 'description_bbox', 'quantity_bbox',
             'rate_bbox', 'amount_bbox', 'customer_name', 'mobile_number',
             'payment_mode', 'received_amount', 'balance_due', 'customer_details',
-            'type', 'vehicle_number', 'car_number', 'gst_mode', 'extra_fields'
+            'type', 'vehicle_number', 'car_number', 'gst_mode', 'extra_fields', 'total_bill_amount'
         }
         update_data = {k: v for k, v in record.items() if k in valid_cols and k not in ['row_id', 'id']}
         
@@ -609,6 +624,8 @@ async def update_single_review_amount(
             "message": f"Updated record {row_id} successfully"
         }
     
+    except HTTPException:
+        raise  # Never swallow FastAPI HTTPExceptions
     except Exception as e:
         logger.error(f"Error updating verification_amounts: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update record: {str(e)}")

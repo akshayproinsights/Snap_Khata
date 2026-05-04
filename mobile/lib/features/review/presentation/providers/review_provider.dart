@@ -158,7 +158,8 @@ class ReviewNotifier extends Notifier<ReviewState> {
     return map.values.toList();
   }
 
-  Future<void> updateDateRecord(ReviewRecord newRecord) async {
+  /// Returns true if the update succeeded (or was gracefully skipped), false on real failure.
+  Future<bool> updateDateRecord(ReviewRecord newRecord) async {
     try {
       await _repository.updateSingleDate(newRecord);
       // Optimistic update locally
@@ -174,13 +175,16 @@ class ReviewNotifier extends Notifier<ReviewState> {
         return group;
       }).toList();
       state = state.copyWith(groups: newGroups);
+      return true;
     } catch (e) {
       state = state.copyWith(
           error: 'Could not update record. ${_friendlyError(e)}');
+      return false;
     }
   }
 
-  Future<void> updateAmountRecord(ReviewRecord newRecord) async {
+  /// Returns true if the update succeeded (or was gracefully skipped), false on real failure.
+  Future<bool> updateAmountRecord(ReviewRecord newRecord) async {
     try {
       await _repository.updateSingleAmount(newRecord);
       // Optimistic update locally
@@ -198,15 +202,18 @@ class ReviewNotifier extends Notifier<ReviewState> {
         return group;
       }).toList();
       state = state.copyWith(groups: newGroups);
+      return true;
     } catch (e) {
       state = state.copyWith(
           error: 'Could not update record. ${_friendlyError(e)}');
+      return false;
     }
   }
 
-  Future<void> updateAmountRecordsBulk(List<ReviewRecord> records) async {
+  /// Returns true if all records saved (or were gracefully skipped), false on real failure.
+  Future<bool> updateAmountRecordsBulk(List<ReviewRecord> records) async {
     try {
-      if (records.isEmpty) return;
+      if (records.isEmpty) return true;
       
       await _repository.updateAmountsBulk(records);
       
@@ -215,7 +222,7 @@ class ReviewNotifier extends Notifier<ReviewState> {
         for (var r in records) r.rowId: r
       };
       
-      final String receiptNumber = records.first.receiptNumber; // Assume all records in bulk belong to same receipt currently
+      final String receiptNumber = records.first.receiptNumber;
       
       final newGroups = state.groups.map((group) {
         if (group.receiptNumber == receiptNumber) {
@@ -231,9 +238,11 @@ class ReviewNotifier extends Notifier<ReviewState> {
         return group;
       }).toList();
       state = state.copyWith(groups: newGroups);
+      return true;
     } catch (e) {
       state = state.copyWith(
           error: 'Could not bulk update records. ${_friendlyError(e)}');
+      return false;
     }
   }
 

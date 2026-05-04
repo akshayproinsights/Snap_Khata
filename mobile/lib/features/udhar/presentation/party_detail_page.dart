@@ -16,7 +16,7 @@ import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-
+import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
 
@@ -827,15 +827,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final usernameParam = authState.user?.username != null
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
-    final statementLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+    final partyStatementLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
 
-    // Collect invoices that have a receipt photo
-    final invoicesWithPhotos = (_transactions ?? [])
+    // Collect invoices that have either a receipt photo or a receipt number
+    final invoicesWithReceipts = (_transactions ?? [])
         .where((tx) =>
             (tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT') &&
-            tx.receiptLink != null &&
-            tx.receiptLink!.isNotEmpty &&
-            tx.receiptLink != 'null')
+            ((tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null') ||
+             (tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty)))
         .toList();
 
     final phoneController = TextEditingController(text: ledger.customerPhone ?? '');
@@ -847,7 +846,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       builder: (ctx) {
         bool useReceiptPhoto = false;
         LedgerTransaction? selectedTx =
-            invoicesWithPhotos.isNotEmpty ? invoicesWithPhotos.first : null;
+            invoicesWithReceipts.isNotEmpty ? invoicesWithReceipts.first : null;
 
         return StatefulBuilder(
           builder: (ctx, setSheet) {
@@ -857,7 +856,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               totalBilled: _totalInvoiced,
               totalPaid: _totalPaid,
               balanceDue: _computedBalance,
-              statementLink: statementLink,
+              statementLink: partyStatementLink,
               upiId: upiId,
               useReceiptPhoto: useReceiptPhoto,
               receiptPhotoUrl: selectedTx?.receiptLink,
@@ -941,8 +940,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Send As toggle (only if receipt photos exist)
-                          if (invoicesWithPhotos.isNotEmpty) ...[
+                          // Send As toggle (only if invoices exist)
+                          if (invoicesWithReceipts.isNotEmpty) ...[
                             Text('SEND AS',
                                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
                                     color: context.textSecondaryColor, letterSpacing: 1.2)),
@@ -967,14 +966,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                               ),
                             ),
-                            // Receipt picker when multiple invoices have photos
-                            if (useReceiptPhoto && invoicesWithPhotos.length > 1) ...[
+                            // Receipt picker when multiple invoices exist
+                            if (invoicesWithReceipts.length > 1) ...[
                               const SizedBox(height: 14),
                               Text('CHOOSE RECEIPT',
                                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
                                       color: context.textSecondaryColor, letterSpacing: 1.2)),
                               const SizedBox(height: 6),
-                              ...invoicesWithPhotos.map((tx) => InkWell(
+                              ...invoicesWithReceipts.map((tx) => InkWell(
                                 onTap: () => setSheet(() => selectedTx = tx),
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
@@ -1116,16 +1115,41 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                   : (ledger.customerPhone ?? '');
 
                               // Capture all values before popping — ctx becomes invalid after Navigator.pop
-                              final capturedMessage = message;
+                              String capturedMessage = message;
                               final capturedReceiptLink = selectedTx?.receiptLink;
+                              final capturedReceiptNumber = selectedTx?.receiptNumber;
                               final capturedUseReceiptPhoto = useReceiptPhoto;
 
                               Navigator.pop(ctx);
+
+                              // Fetch specific receipt statement link if applicable
+                              if (!capturedUseReceiptPhoto && capturedReceiptNumber != null && capturedReceiptNumber.isNotEmpty) {
+                                final shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                                  receiptNumber: capturedReceiptNumber,
+                                  username: authState.user?.username,
+                                );
+
+                                if (shareUrl != null) {
+                                  capturedMessage = WhatsAppUtils.buildPartyReminderMessage(
+                                    customerName: ledger.customerName.isNotEmpty ? ledger.customerName : 'Customer',
+                                    shopName: shopName,
+                                    totalBilled: _totalInvoiced,
+                                    totalPaid: _totalPaid,
+                                    balanceDue: _computedBalance,
+                                    statementLink: shareUrl,
+                                    upiId: upiId,
+                                    useReceiptPhoto: false,
+                                    receiptPhotoUrl: null,
+                                    receiptNumber: capturedReceiptNumber,
+                                  );
+                                }
+                              }
 
                               if (capturedUseReceiptPhoto &&
                                   capturedReceiptLink != null &&
                                   capturedReceiptLink.isNotEmpty &&
                                   capturedReceiptLink != 'null') {
+                                if (!context.mounted) return;
                                 await WhatsAppUtils.shareActualImageOnWhatsApp(
                                   context: context,
                                   imageUrl: capturedReceiptLink,
@@ -1139,6 +1163,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     message: capturedMessage,
                                   );
                                 } else {
+                                  if (!context.mounted) return;
                                   await WhatsAppUtils.shareReceipt(
                                     context,
                                     phone: phone,
@@ -1259,7 +1284,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             Icon(LucideIcons.calendar, size: 12, color: context.textSecondaryColor),
                             const SizedBox(width: 4),
                             Text(
-                              DateFormat('dd MMM yyyy • hh:mm a').format(tx.createdAt.toLocal()),
+                              DateFormat('dd MMM yyyy').format(tx.createdAt.toLocal()),
                               style: TextStyle(
                                 fontSize: 11,
                                 color: context.textSecondaryColor,

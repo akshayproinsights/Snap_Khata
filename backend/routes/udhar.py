@@ -969,10 +969,17 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             # Auto-create ledgers for ALL customers found in invoices (Cash or Credit).
             # This ensures that even fully settled parties appear in the "PARTIES" list.
             if key not in ledger_map:
+                # Find a mobile_number for this customer from their invoices
+                customer_phone = None
+                for inv_data in grouped_invoices.values():
+                    if str(inv_data.get("customer_name") or "").strip().lower() == key and inv_data.get("mobile_number"):
+                        customer_phone = str(inv_data["mobile_number"])
+                        break
                 new_ledger_resp = db.client.table("customer_ledgers").insert({
                     "username": username,
                     "customer_name": name,
                     "balance_due": 0.0,
+                    "customer_phone": customer_phone,
                 }).execute()
                 if new_ledger_resp.data:
                     ledger_map[key] = new_ledger_resp.data[0]["id"]
@@ -1089,6 +1096,24 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 }).execute()
                 if ins_resp.data:
                     invoice_id = ins_resp.data[0]["id"]
+
+            # Sync mobile_number → customer_ledgers.customer_phone
+            # Do this for both new and existing invoices so existing ledgers get backfilled.
+            if data.get("mobile_number") and ledger_id:
+                try:
+                    # Only update if the ledger doesn't already have a phone stored
+                    ledger_phone_resp = db.client.table("customer_ledgers") \
+                        .select("customer_phone") \
+                        .eq("id", ledger_id) \
+                        .execute()
+                    current_phone = (ledger_phone_resp.data or [{}])[0].get("customer_phone")
+                    if not current_phone:
+                        db.client.table("customer_ledgers").update({
+                            "customer_phone": str(data["mobile_number"])
+                        }).eq("id", ledger_id).execute()
+                        logger.info(f"📞 Backfilled customer_phone for ledger {ledger_id}: {data['mobile_number']}")
+                except Exception as phone_err:
+                    logger.warning(f"Could not sync customer_phone for ledger {ledger_id}: {phone_err}")
 
             # 2. Handle the PAYMENT transaction (Received amount)
             # received_amount was calculated above to handle defensive Cash/Online settling

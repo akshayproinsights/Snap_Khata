@@ -17,6 +17,7 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
+import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 
 
@@ -57,6 +58,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   /// that happen during the GoRouter transition (blank screen guard).
   bool _isNavigatingAway = false;
 
+  /// Currently selected party from the top customer banner.
+  /// Null means name is typed but not matched to an existing party.
+  CustomerLedger? _selectedParty;
+
   @override
   void initState() {
     super.initState();
@@ -76,19 +81,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final prefs = await SharedPreferences.getInstance();
     final receipt = widget.group.receiptNumber;
 
-    // Load received amount
-    final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
-    if (savedReceivedAmount != null && mounted) {
-      setState(() {
-        _receivedAmount = savedReceivedAmount;
-      });
-    } else if (widget.group.header?.receivedAmount != null && mounted) {
-      setState(() {
-        _receivedAmount = widget.group.header!.receivedAmount!;
-      });
-    }
-
-    // Load manual total amount
+    // Load manual total amount (AIGemini extracted Total Bill)
     final savedTotalAmount = prefs.getDouble('total_amount_$receipt');
     if (savedTotalAmount != null && mounted) {
       setState(() {
@@ -102,6 +95,28 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       });
     }
 
+    // Load received amount (Priority: Saved > Extracted Received > Computed from Balance)
+    final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
+    if (savedReceivedAmount != null && mounted) {
+      setState(() {
+        _receivedAmount = savedReceivedAmount;
+      });
+    } else if (widget.group.header?.receivedAmount != null && mounted) {
+      setState(() {
+        _receivedAmount = widget.group.header!.receivedAmount!;
+      });
+    } else if (widget.group.header?.balanceDue != null && mounted) {
+      // If we have balance_due but no received_amount, compute it
+      final total = _activeTotalAmount(widget.group);
+      setState(() {
+        _receivedAmount = (total - widget.group.header!.balanceDue!).clamp(0.0, total);
+      });
+    } else if (mounted) {
+      // Default to full payment if no info found
+      setState(() {
+        _receivedAmount = _activeTotalAmount(widget.group);
+      });
+    }
     // Load credit details
     final savedCreditDetails = prefs.getString('credit_details_$receipt');
     if (savedCreditDetails != null && mounted) {
@@ -118,13 +133,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           (e) => e.name == savedMode,
           orElse: () => GstMode.none,
         );
-      });
-    }
-
-    // Set default received amount if still zero (fallback for new receipts)
-    if (_receivedAmount == 0 && mounted) {
-      setState(() {
-        _receivedAmount = _activeTotalAmount(widget.group);
       });
     }
   }
@@ -252,6 +260,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           amount: grandTotal,
           receivedAmount: _receivedAmount,
           balanceDue: balanceDue,
+          totalBillAmount: grandTotal,
           customerDetails: balanceDue > 0 ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
       );
@@ -455,6 +464,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         ),
         body: Column(
           children: [
+            // ── Customer Name banner — always at the very top ──────────────
+            if (header != null)
+              _buildTopCustomerBanner(header),
             if (header != null && header.receiptLink.isNotEmpty)
               GestureDetector(
                 onTap: () => _showFullImage(header.receiptLink),
@@ -849,7 +861,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final label = col['label']?.toString();
       if (key == null || key.isEmpty || label == null) continue;
       if (key == 'customer_name') {
-        fields.add(_buildCustomerField(header));
+        // Skipping old customer field rendering inside card
         continue;
       }
       if (key == 'mobile_number') continue;
@@ -900,23 +912,63 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildCustomerField(ReviewRecord header) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: CustomerAutocompleteField(
-        initialValue: header.customerName ?? '',
-        label: 'Customer Name',
-        onSaved: (val) {
-          final notifier = ref.read(reviewProvider.notifier);
-          notifier.updateDateRecord(header.copyWith(customerName: val));
-        },
-        onCustomerSelected: (party) {
-          final notifier = ref.read(reviewProvider.notifier);
-          notifier.updateDateRecord(header.copyWith(
-            customerName: party.customerName,
-            mobileNumber: party.customerPhone,
-          ));
-        },
+  /// Top-of-page customer banner — the most prominent element after the AppBar.
+  /// Encourages owners to tag the customer before anything else.
+  Widget _buildTopCustomerBanner(ReviewRecord header) {
+    return Container(
+      width: double.infinity,
+      color: context.primaryColor.withValues(alpha: 0.05),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.userPlus, size: 16, color: context.primaryColor),
+              const SizedBox(width: 8),
+              Text(
+                'CUSTOMER DETAILS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: context.primaryColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          CustomerAutocompleteField(
+            initialValue: header.customerName ?? '',
+            label: 'Search or enter customer name...',
+            onSaved: (val) {
+              final notifier = ref.read(reviewProvider.notifier);
+              notifier.updateDateRecord(header.copyWith(customerName: val));
+            },
+            onCustomerSelected: (party) {
+              setState(() => _selectedParty = party);
+              final notifier = ref.read(reviewProvider.notifier);
+              notifier.updateDateRecord(header.copyWith(
+                customerName: party.customerName,
+                mobileNumber: party.customerPhone,
+              ));
+            },
+          ),
+          if (_selectedParty != null && _selectedParty!.customerPhone != null && _selectedParty!.customerPhone!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.phone, size: 12, color: context.textSecondaryColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    _selectedParty!.customerPhone!,
+                    style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

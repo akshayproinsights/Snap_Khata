@@ -550,6 +550,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             'payment_mode': 'Payment Mode',
             'received_amount': 'Received Amount',
             'balance_due': 'Balance Due',
+            'total_bill_amount': 'Total Bill Amount',
             'customer_details': 'Customer Details',
             'gst_mode': 'GST Mode',
             'taxable_row_ids': 'Taxable Row Ids',
@@ -711,6 +712,10 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                             bd = row['Balance Due']
                             if not (isinstance(bd, (list, dict)) and len(bd) == 0):
                                 df_raw.loc[mask, 'Balance Due'] = bd
+                        if 'Total Bill Amount' in row and _is_valid_scalar(row['Total Bill Amount']):
+                            tba = row['Total Bill Amount']
+                            if not (isinstance(tba, (list, dict)) and len(tba) == 0):
+                                df_raw.loc[mask, 'Total Bill Amount'] = tba
                         if 'Customer Details' in row and _is_valid_scalar(row['Customer Details']):
                             cd = row['Customer Details']
                             if not (isinstance(cd, (list, dict)) and len(cd) == 0):

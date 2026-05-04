@@ -356,7 +356,7 @@ def update_verified_invoices(username: str, data: List[Dict[str, Any]]) -> bool:
             'output_tokens', 'total_tokens', 'cost_inr', 'extra_fields', 'receipt_link', 
             'quantity', 'rate', 'upload_date', 'fallback_attempted', 'fallback_reason', 
             'processing_errors', 'gst_mode', 'payment_mode', 'received_amount', 
-            'balance_due', 'customer_details', 'taxable_row_ids'
+            'balance_due', 'customer_details', 'taxable_row_ids', 'total_bill_amount'
         }
         
         verified_records = []

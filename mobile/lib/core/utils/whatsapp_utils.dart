@@ -479,8 +479,7 @@ class WhatsAppUtils {
       return 'Hi $firstName,\n\n'
           '🙏 Friendly reminder from *$shop*\n\n'
           '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*\n\n'
-          'Your receipt$invoiceRef is here 👇\n'
-          '$receiptPhotoUrl\n\n'
+          'Your receipt$invoiceRef is attached 👇\n\n'
           'Please clear the balance at your earliest convenience.\n\n'
           'Thank you! 🙏\n'
           '— *$shop*';
@@ -565,9 +564,7 @@ class WhatsAppUtils {
           SnackBar(content: Text('Error: $e. Sending link instead.')),
         );
         // Graceful fallback: open WhatsApp with text message containing the URL
-        if (phone != null && phone.isNotEmpty) {
-          await openWhatsAppChat(phone: phone, message: '$caption\n\n$imageUrl');
-        }
+        await openWhatsAppChat(phone: phone, message: '$caption\n\nReceipt Link: $imageUrl');
       }
     }
   }
