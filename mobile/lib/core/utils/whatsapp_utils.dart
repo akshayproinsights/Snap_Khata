@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -377,38 +378,71 @@ class WhatsAppUtils {
     return msg;
   }
 
-  /// Downloads an image and shares it natively (which works even if the number is not saved)
-  /// Note: The system share sheet will appear, and the user must manually select WhatsApp and the contact.
+  /// Downloads an image and shares it natively via the system share sheet.
+  ///
+  /// On Flutter Web/PWA: fetches image as raw bytes and uses [XFile.fromData]
+  /// which triggers the Web Share API with files — the ONLY approach that works
+  /// on a mobile browser/PWA (file paths & getTemporaryDirectory don't exist on web).
+  ///
+  /// On native (Android/iOS): falls back to downloading to a temp file path.
   static Future<void> shareActualImageOnWhatsApp({
     required BuildContext context,
     required String imageUrl,
     required String caption,
-    String? phone, // phone is optional here as it's handled by system share sheet
+    String? phone,
   }) async {
     try {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Preparing image for sharing...')),
+          const SnackBar(content: Text('⏳ Preparing image for sharing...')),
         );
       }
 
-      final tempDir = await getTemporaryDirectory();
-      final tempFilePath = '${tempDir.path}/shared_receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
       final dio = Dio();
-      await dio.download(imageUrl, tempFilePath);
 
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [XFile(tempFilePath)],
-        text: caption,
-      );
+      if (kIsWeb) {
+        // ── WEB / PWA PATH ─────────────────────────────────────────────────
+        // Must use in-memory bytes + XFile.fromData to trigger the
+        // Web Share API with a real file. Using a file path on web
+        // silently fails — this was the production bug.
+        final response = await dio.get<List<int>>(
+          imageUrl,
+          options: Options(responseType: ResponseType.bytes),
+        );
+
+        final bytes = Uint8List.fromList(response.data!);
+        final fileName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile.fromData(bytes, mimeType: 'image/jpeg', name: fileName)],
+            text: caption,
+          ),
+        );
+      } else {
+        // ── NATIVE (Android / iOS) PATH ────────────────────────────────────
+        final tempDir = await getTemporaryDirectory();
+        final tempFilePath = '${tempDir.path}/receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+        await dio.download(imageUrl, tempFilePath);
+
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(tempFilePath, mimeType: 'image/jpeg')],
+            text: caption,
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error sharing actual image: $e');
+      debugPrint('❌ Error sharing image: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share image: $e')),
+          SnackBar(content: Text('Could not share image. Sending link instead.')),
         );
+        // Graceful fallback: open WhatsApp with text message containing the URL
+        if (phone != null && phone.isNotEmpty) {
+          await openWhatsAppChat(phone: phone, message: '$caption\n\n$imageUrl');
+        }
       }
     }
   }

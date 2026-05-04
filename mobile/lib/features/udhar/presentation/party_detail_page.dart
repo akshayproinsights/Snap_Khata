@@ -1111,29 +1111,38 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
                             onPressed: () async {
-                              Navigator.pop(ctx);
                               final phone = phoneController.text.trim().isNotEmpty
                                   ? phoneController.text.trim()
                                   : (ledger.customerPhone ?? '');
-                              
-                              if (useReceiptPhoto && selectedTx?.receiptLink != null && selectedTx!.receiptLink!.isNotEmpty && selectedTx!.receiptLink != 'null') {
+
+                              // Capture all values before popping — ctx becomes invalid after Navigator.pop
+                              final capturedMessage = message;
+                              final capturedReceiptLink = selectedTx?.receiptLink;
+                              final capturedUseReceiptPhoto = useReceiptPhoto;
+
+                              Navigator.pop(ctx);
+
+                              if (capturedUseReceiptPhoto &&
+                                  capturedReceiptLink != null &&
+                                  capturedReceiptLink.isNotEmpty &&
+                                  capturedReceiptLink != 'null') {
                                 await WhatsAppUtils.shareActualImageOnWhatsApp(
                                   context: context,
-                                  imageUrl: selectedTx!.receiptLink!,
-                                  caption: message,
+                                  imageUrl: capturedReceiptLink,
+                                  caption: capturedMessage,
                                   phone: phone,
                                 );
                               } else {
                                 if (phone.isNotEmpty) {
                                   await WhatsAppUtils.openWhatsAppChat(
                                     phone: phone,
-                                    message: message,
+                                    message: capturedMessage,
                                   );
                                 } else {
                                   await WhatsAppUtils.shareReceipt(
                                     context,
                                     phone: phone,
-                                    message: message,
+                                    message: capturedMessage,
                                     dialogTitle: 'Send Reminder',
                                   );
                                 }

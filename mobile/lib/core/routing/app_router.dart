@@ -151,16 +151,24 @@ class AppRouter {
           final extra = state.extra;
           // New format: Map with group, allGroups, currentIndex
           if (extra is Map<String, dynamic>) {
-            return ReceiptReviewPage(
-              group: extra['group'] as InvoiceReviewGroup,
-              allGroups:
-                  (extra['allGroups'] as List?)?.cast<InvoiceReviewGroup>() ??
-                  const [],
-              currentIndex: extra['currentIndex'] as int? ?? -1,
-            );
+            final group = extra['group'];
+            if (group is InvoiceReviewGroup) {
+              return ReceiptReviewPage(
+                group: group,
+                allGroups:
+                    (extra['allGroups'] as List?)?.cast<InvoiceReviewGroup>() ??
+                    const [],
+                currentIndex: extra['currentIndex'] as int? ?? -1,
+              );
+            }
           }
-          // Legacy format: bare InvoiceReviewGroup (fallback)
-          return ReceiptReviewPage(group: extra as InvoiceReviewGroup);
+          // Legacy format: bare InvoiceReviewGroup
+          if (extra is InvoiceReviewGroup) {
+            return ReceiptReviewPage(group: extra);
+          }
+          // Safe fallback: extra is null or invalid (PWA reload / browser nav).
+          // Navigate back to the pending review list instead of crashing.
+          return const PendingReceiptsPage();
         },
       ),
       GoRoute(

@@ -331,6 +331,26 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final state = ref.watch(reviewProvider);
     final configAsync = ref.watch(configProvider);
+
+    // ✅ Config loading guard: configProvider re-fetches every time authProvider
+    // changes (e.g. _checkInitialAuth() completing). While it's loading, show a
+    // skeleton screen rather than building with incomplete data — this prevents
+    // the "visible for < 1 second then blank" race condition caused by column
+    // config resolving AFTER first render and triggering a crash in _buildHeaderCard.
+    if (configAsync.isLoading) {
+      return Scaffold(
+        backgroundColor: context.backgroundColor,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: _handleBack,
+          ),
+          title: Text('Receipt #${widget.group.receiptNumber}'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final config = configAsync.value ?? {};
     final isAutomobile = config['industry'] == 'automobile';
 
@@ -830,8 +850,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
     final fields = <Widget>[];
     for (var col in columns) {
-      final key = col['name'] as String;
-      final label = col['label'] as String;
+      // Safe-cast: skip malformed column entries to prevent TypeError → blank screen
+      final key = col['name']?.toString();
+      final label = col['label']?.toString();
+      if (key == null || key.isEmpty || label == null) continue;
       if (key == 'customer_name') {
         fields.add(_buildCustomerField(header));
         continue;
