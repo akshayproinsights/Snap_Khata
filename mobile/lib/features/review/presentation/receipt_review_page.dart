@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -17,7 +18,6 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/config/presentation/providers/config_provider.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
-import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 
 
@@ -45,6 +45,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   GstMode _gstMode = GstMode.none;
 
   final TextEditingController _creditDetailsController = TextEditingController();
+
+  // ── Mobile Number ──────────────────────────────────────────────────
+  final TextEditingController _mobileController = TextEditingController();
+  final FocusNode _mobileFocusNode = FocusNode();
+
   double _receivedAmount = 0.0;
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
@@ -60,20 +65,38 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   /// Currently selected party from the top customer banner.
   /// Null means name is typed but not matched to an existing party.
-  CustomerLedger? _selectedParty;
 
   @override
   void initState() {
     super.initState();
     _localAllGroups = List<InvoiceReviewGroup>.from(widget.allGroups);
     _loadPersistedSettings();
+    _initMobileNumber();
     // NOTE: Share link pre-fetch removed from initState().
     // It is now lazy — fetched only when WhatsApp button is tapped.
+  }
+
+  void _initMobileNumber() {
+    final header = widget.group.header;
+    if (header == null) return;
+    // Priority: direct column > extraFields > empty
+    final mobile = header.mobileNumber?.trim().isNotEmpty == true
+        ? header.mobileNumber!
+        : (header.extraFields['mobile_number']?.toString().trim() ?? '');
+    _mobileController.text = mobile;
+    // Auto-save when user leaves the field
+    _mobileFocusNode.addListener(() {
+      if (!_mobileFocusNode.hasFocus) {
+        _saveMobileNumberFromController();
+      }
+    });
   }
 
   @override
   void dispose() {
     _creditDetailsController.dispose();
+    _mobileController.dispose();
+    _mobileFocusNode.dispose();
     super.dispose();
   }
 
@@ -236,11 +259,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         ),
       ),
     );
-  }
-
-  String _formatAmount(double? amount) {
-    if (amount == null) return '';
-    return CurrencyFormatter.formatPlain(amount);
   }
 
   String _formatInput(double? amount) {
@@ -582,7 +600,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final state = ref.watch(reviewProvider);
     final total = _activeTotalAmount(group);
     final balance = total - _receivedAmount;
-    final isFullPaid = balance.abs() < 0.01;
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 12),
@@ -609,7 +626,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text('Total Bill (₹)',
+                      child: Text('Total (₹)',
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
                     ),
                     DebouncedReviewField(
@@ -617,14 +634,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
                         fillColor: context.surfaceColor,
                         filled: true,
                       ),
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                       onSaved: (val) {
                         final nt = double.tryParse(val);
                         if (nt != null) {
@@ -642,43 +659,64 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 4),
-                          child: Text('Received (₹)',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.primaryColor)),
-                        ),
-                        if (!isFullPaid)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text('₹${_formatAmount(balance)} Due',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: context.errorColor)),
-                          ),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text('Received (₹)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.primaryColor)),
                     ),
                     DebouncedReviewField(
                       initialValue: _formatInput(_receivedAmount),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.5))),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
                         fillColor: context.primaryColor.withValues(alpha: 0.05),
                         filled: true,
-                        prefixIcon: isFullPaid ? Icon(LucideIcons.checkCircle2, size: 16, color: context.successColor) : null,
                       ),
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: context.primaryColor),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.primaryColor),
                       onSaved: (val) {
                         final nr = double.tryParse(val) ?? 0.0;
+                        setState(() => _receivedAmount = nr);
+                        _saveReceivedAmount(nr);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text('Balance (₹)',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.errorColor)),
+                    ),
+                    DebouncedReviewField(
+                      initialValue: _formatInput(balance),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.errorColor.withValues(alpha: 0.5))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.errorColor, width: 2)),
+                        fillColor: context.errorColor.withValues(alpha: 0.05),
+                        filled: true,
+                      ),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.errorColor),
+                      onSaved: (val) {
+                        final nb = double.tryParse(val) ?? 0.0;
+                        final nr = (total - nb).clamp(0.0, total);
                         setState(() => _receivedAmount = nr);
                         _saveReceivedAmount(nr);
                       },
@@ -1041,7 +1079,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               notifier.updateDateRecord(header.copyWith(customerName: val));
             },
             onCustomerSelected: (party) {
-              setState(() => _selectedParty = party);
+              // Sync mobile field when a party with a phone is selected
+              if (party.customerPhone != null && party.customerPhone!.isNotEmpty) {
+                _mobileController.text = party.customerPhone!.replaceAll('+91', '').trim();
+              }
               final notifier = ref.read(reviewProvider.notifier);
               notifier.updateDateRecord(header.copyWith(
                 customerName: party.customerName,
@@ -1049,22 +1090,157 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               ));
             },
           ),
-          if (_selectedParty != null && _selectedParty!.customerPhone != null && _selectedParty!.customerPhone!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.phone, size: 12, color: context.textSecondaryColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    _selectedParty!.customerPhone!,
-                    style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 12),
+          _buildMobileNumberField(header),
         ],
       ),
+    );
+  }
+
+  void _saveMobileNumberFromController() {
+    final val = _mobileController.text.trim();
+    final liveState = ref.read(reviewProvider);
+    final group = liveState.groups.firstWhere(
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => widget.group,
+    );
+    final header = group.header;
+    if (header == null) return;
+    // Save to provider (which calls the backend PUT /review/dates/update)
+    final notifier = ref.read(reviewProvider.notifier);
+    final newExtra = Map<String, dynamic>.from(header.extraFields)
+      ..['mobile_number'] = val;
+    notifier.updateDateRecord(header.copyWith(
+      mobileNumber: val,
+      extraFields: newExtra,
+    ));
+  }
+
+  Widget _buildMobileNumberField(ReviewRecord header) {
+    final phoneVal = _mobileController.text;
+    final isValid = phoneVal.length == 10;
+    final isEmpty = phoneVal.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(LucideIcons.smartphone, size: 14, color: context.primaryColor),
+            const SizedBox(width: 6),
+            Text(
+              'MOBILE NUMBER',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: context.primaryColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // +91 prefix chip
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+              decoration: BoxDecoration(
+                color: context.primaryColor.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+                border: Border(
+                  top: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  left: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  bottom: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                ),
+              ),
+              child: Text(
+                '+91',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: context.primaryColor,
+                ),
+              ),
+            ),
+            // Number input
+            Expanded(
+              child: TextField(
+                controller: _mobileController,
+                focusNode: _mobileFocusNode,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 1.2),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  hintText: '98765 43210',
+                  hintStyle: TextStyle(
+                    color: context.textSecondaryColor.withValues(alpha: 0.4),
+                    fontWeight: FontWeight.normal,
+                    letterSpacing: 0,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    borderSide: BorderSide(
+                      color: context.primaryColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    borderSide: BorderSide(color: context.primaryColor, width: 2),
+                  ),
+                  fillColor: context.primaryColor.withValues(alpha: 0.03),
+                  filled: true,
+                  suffixIcon: isEmpty
+                      ? null
+                      : Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+                            size: 18,
+                            color: isValid ? context.successColor : context.warningColor,
+                          ),
+                        ),
+                ),
+                onChanged: (_) => setState(() {}), // Refresh validation icon
+                onSubmitted: (_) => _saveMobileNumberFromController(),
+                onTapOutside: (_) {
+                  _mobileFocusNode.unfocus();
+                },
+                textInputAction: TextInputAction.done,
+              ),
+            ),
+          ],
+        ),
+        if (!isEmpty && !isValid)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'Enter 10-digit mobile number',
+              style: TextStyle(fontSize: 11, color: context.warningColor),
+            ),
+          ),
+      ],
     );
   }
 

@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/settings/domain/models/shop_profile.dart';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
+import 'package:mobile/core/localization/locale_provider.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   final bool openShopDetails;
@@ -172,6 +174,55 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  void _showLanguageSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: context.backgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              AppLocalizations.of(context)?.selectLanguage ?? 'Select Language / भाषा निवडा',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Text('🇺🇸', style: TextStyle(fontSize: 24)),
+              title: const Text('English'),
+              trailing: ref.watch(localeProvider).languageCode == 'en'
+                  ? Icon(LucideIcons.checkCircle2, color: context.primaryColor)
+                  : null,
+              onTap: () {
+                ref.read(localeProvider.notifier).setLocale(const Locale('en'));
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Text('🇮🇳', style: TextStyle(fontSize: 24)),
+              title: const Text('मराठी (Marathi)'),
+              trailing: ref.watch(localeProvider).languageCode == 'mr'
+                  ? Icon(LucideIcons.checkCircle2, color: context.primaryColor)
+                  : null,
+              onTap: () {
+                ref.read(localeProvider.notifier).setLocale(const Locale('mr'));
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userState = ref.watch(authProvider);
@@ -183,7 +234,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       backgroundColor: context.backgroundColor,
       appBar: AppBar(
         title: Text(
-          'SETTINGS',
+          AppLocalizations.of(context)?.settings ?? 'SETTINGS',
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
@@ -264,19 +315,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           // Settings Options
           Text(
-            'Preferences',
+            AppLocalizations.of(context)?.preferences ?? 'Preferences',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),
           _buildSettingsTile(
+            icon: LucideIcons.languages,
+            title: AppLocalizations.of(context)?.language ?? 'Language / भाषा',
+            subtitle: ref.watch(localeProvider).languageCode == 'mr'
+                ? 'मराठी (Marathi)'
+                : 'English',
+            onTap: _showLanguageSelector,
+          ),
+          _buildSettingsTile(
             icon: LucideIcons.store,
-            title: 'Shop Details',
+            title: AppLocalizations.of(context)?.shopDetails ?? 'Shop Details',
             subtitle: _shopName.isNotEmpty ? _shopName : 'Tap to set up',
             onTap: _showShopDetailsSheet,
           ),
           _buildSettingsTile(
             icon: LucideIcons.moon,
-            title: 'Dark Mode',
+            title: AppLocalizations.of(context)?.darkMode ?? 'Dark Mode',
             trailing: Switch(
               value: ref.watch(themeProvider) == ThemeMode.dark,
               onChanged: (val) {
@@ -287,7 +346,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           _buildSettingsTile(
             icon: LucideIcons.barChart2,
-            title: 'Orders Processed',
+            title: AppLocalizations.of(context)?.ordersProcessed ?? 'Orders Processed',
             subtitle: 'View real usage metrics',
             onTap: () {
               context.push('/usage-stats');
@@ -298,13 +357,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           // Account Actions
           Text(
-            'Account',
+            AppLocalizations.of(context)?.account ?? 'Account',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),
           _buildSettingsTile(
             icon: LucideIcons.logOut,
-            title: 'Log Out',
+            title: AppLocalizations.of(context)?.logOut ?? 'Log Out',
             iconColor: context.errorColor,
             textColor: context.errorColor,
             onTap: () async {
@@ -318,7 +377,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           // About
           Text(
-            'About',
+            AppLocalizations.of(context)?.about ?? 'About',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
           ),
           const SizedBox(height: 12),

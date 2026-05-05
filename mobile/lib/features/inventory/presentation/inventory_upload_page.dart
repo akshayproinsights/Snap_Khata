@@ -34,6 +34,11 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   bool _isCheckingBackend = true;
   bool _isCapturing = false;
 
+  /// Prevents didChangeDependencies from firing resumeIfActive on the very first
+  /// mount (initState already handles it). Only subsequent tab-switch returns
+  /// should trigger a re-check.
+  bool _hasInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,14 +52,11 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Resume state on first build and every time the route becomes active again
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(inventoryUploadProvider.notifier).resumeIfActive();
-    });
-
     // APPROACH 2 (Direct): ask the backend directly — bulletproof
-    _checkBackendForActiveTask();
+    // This also implicitly handles resumeIfActive (state is set in provider).
+    _checkBackendForActiveTask().then((_) {
+      if (mounted) setState(() => _hasInitialized = true);
+    });
   }
 
   /// Called when dependencies change — this fires when the user navigates
@@ -63,11 +65,13 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Re-check active state so tab-switch always shows processing overlay
-    // instead of the camera page.
+    // Skip the initial call — initState already queued _checkBackendForActiveTask.
+    // Only re-check on subsequent tab-switch returns.
+    if (!_hasInitialized) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(inventoryUploadProvider.notifier).resumeIfActive();
+      setState(() => _isCheckingBackend = true);
+      _checkBackendForActiveTask();
     });
   }
 
@@ -82,9 +86,10 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         ref.read(inventoryUploadProvider.notifier).pausePolling();
         break;
       case AppLifecycleState.resumed:
-        // App returned to foreground — immediate sync then resume backoff.
+        // App returned to foreground — resume polling first (instant, in-memory),
+        // then do one backend check. resumeIfActive is NOT called here to avoid
+        // duplicate getRecentTask calls — _checkBackendForActiveTask covers it.
         ref.read(inventoryUploadProvider.notifier).resumePolling();
-        ref.read(inventoryUploadProvider.notifier).resumeIfActive();
         if (mounted) setState(() => _isCheckingBackend = true);
         _checkBackendForActiveTask();
         break;

@@ -42,4 +42,46 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get restockList => 'रेस्टॉक सूची';
+
+  @override
+  String get language => 'Language';
+
+  @override
+  String get selectLanguage => 'Select Language';
+
+  @override
+  String get settings => 'SETTINGS';
+
+  @override
+  String get preferences => 'Preferences';
+
+  @override
+  String get shopDetails => 'Shop Details';
+
+  @override
+  String get darkMode => 'Dark Mode';
+
+  @override
+  String get ordersProcessed => 'Orders Processed';
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get logOut => 'Log Out';
+
+  @override
+  String get about => 'About';
+
+  @override
+  String get partiesKhata => 'PARTIES';
+
+  @override
+  String get toCollect => 'TO COLLECT';
+
+  @override
+  String get toGive => 'TO GIVE';
+
+  @override
+  String get scanBill => 'SCAN BILL';
 }

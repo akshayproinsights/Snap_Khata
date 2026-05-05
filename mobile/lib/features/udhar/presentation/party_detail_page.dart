@@ -1186,6 +1186,54 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       },
     );
   }
+  Future<void> _confirmDeleteTransaction(LedgerTransaction tx) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Transaction', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete this ${tx.transactionType == 'PAYMENT' ? 'payment' : 'entry'}? This action cannot be undone and balances will be recalculated.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.errorColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('DELETE', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await ref.read(udharProvider.notifier).deleteTransaction(tx.id);
+      if (success && mounted) {
+        // Show success snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Transaction deleted successfully'),
+            backgroundColor: context.successColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // Refresh local view
+        _loadTransactions();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to delete transaction'),
+            backgroundColor: context.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
 
 
   Widget _summaryChip(BuildContext context, String label, String value, Color valueColor) {
@@ -1363,71 +1411,78 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ),
 
           // Actions Row
-          if (isInvoice || canTap)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
-              ),
-              child: Row(
-                children: [
-                  if (tx.receiptNumber != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Text(
-                        '#${tx.receiptNumber}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: context.textSecondaryColor.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                  const Spacer(),
-                  if (canTap)
-                    TextButton.icon(
-                      onPressed: () => _showReceiptPhotoDialog(tx),
-                      icon: const Icon(LucideIcons.eye, size: 14),
-                      label: const Text('VIEW BILL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: context.primaryColor,
-                      ),
-                    ),
-                  if (isInvoice) ...[
-                    // SETTLED badge for paid invoices
-                    if (tx.isPaid)
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: context.successColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: context.successColor.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.checkCircle2, size: 10, color: context.successColor),
-                            const SizedBox(width: 4),
-                            Text(
-                              'SETTLED',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                color: context.successColor,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    // COLLECT button removed — use RECORD PAYMENT button at bottom instead
-                  ],
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: context.surfaceColor,
+              border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
             ),
+            child: Row(
+              children: [
+                if (tx.receiptNumber != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      '#${tx.receiptNumber}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: context.textSecondaryColor.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                const Spacer(),
+                if (canTap)
+                  TextButton.icon(
+                    onPressed: () => _showReceiptPhotoDialog(tx),
+                    icon: const Icon(LucideIcons.eye, size: 14),
+                    label: const Text('VIEW BILL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: context.primaryColor,
+                    ),
+                  ),
+                if (isInvoice) ...[
+                  // SETTLED badge for paid invoices
+                  if (tx.isPaid)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: context.successColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: context.successColor.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.checkCircle2, size: 10, color: context.successColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            'SETTLED',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: context.successColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // COLLECT button removed — use RECORD PAYMENT button at bottom instead
+                ],
+                IconButton(
+                  icon: Icon(LucideIcons.trash2, size: 16, color: context.errorColor),
+                  onPressed: () => _confirmDeleteTransaction(tx),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -126,6 +126,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   bool _isPaused = false;   // true while app is in background
   String? _pausedTaskId;    // task to resume when foregrounded
   DateTime? _pollingStartTime; // ALWAYS set from persisted start time, never reset on resume
+  bool _isUploadInProgress = false; // synchronous mutex — prevents double-upload race
 
   @override
   InventoryUploadState build() {
@@ -414,35 +415,40 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   }
 
   Future<void> uploadAndProcess({bool force = false}) async {
+    // Synchronous mutex: prevents double-upload when two async callers both
+    // read state.isActive before either one sets isUploading = true.
+    if (_isUploadInProgress) return;
     if (state.isActive) return;
-
+    _isUploadInProgress = true;
+    
     final toUpload = state.fileItems
         .where((f) => f.status == UploadFileStatus.idle)
         .toList();
-    if (toUpload.isEmpty) return;
-
-    // Mark all pending as uploading
-    final uploading = state.fileItems.map((item) {
-      if (item.status == UploadFileStatus.idle) {
-        return item.copyWith(status: UploadFileStatus.uploading);
-      }
-      return item;
-    }).toList();
-
-    state = state.copyWith(
-      fileItems: uploading,
-      isUploading: true,
-      error: null,
-      uploadProgress: 0.0,
-      processingStatus: null,
-    );
-
-    // ✅ Persist upload-phase BEFORE starting the R2 upload
-    await InventoryPersistenceService.saveUploadPhase(
-      toUpload.map((f) => f.path).toList(),
-    );
 
     try {
+      if (toUpload.isEmpty) return;
+
+      // Mark all pending as uploading
+      final uploading = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.idle) {
+          return item.copyWith(status: UploadFileStatus.uploading);
+        }
+        return item;
+      }).toList();
+
+      state = state.copyWith(
+        fileItems: uploading,
+        isUploading: true,
+        error: null,
+        uploadProgress: 0.0,
+        processingStatus: null,
+      );
+
+      // ✅ Persist upload-phase BEFORE starting the R2 upload
+      await InventoryPersistenceService.saveUploadPhase(
+        toUpload.map((f) => f.path).toList(),
+      );
+
       final xFiles = toUpload.map((f) => XFile(f.path, name: f.name)).toList();
 
       // 1. Upload files to R2
@@ -488,6 +494,8 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
       _startPolling(initialStatus.taskId, taskStartTime: taskStartTime);
     } catch (e) {
       await _handleUploadError(e.toString(), toUpload);
+    } finally {
+      _isUploadInProgress = false;
     }
   }
 

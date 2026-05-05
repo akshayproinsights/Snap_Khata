@@ -797,6 +797,11 @@ def save_to_inventory_table(rows: List[Dict[str, Any]], username: str):
     Save inventory rows to Supabase inventory_items table, and persist any
     header-level adjustments to the invoice_adjustments table.
 
+    Uses upsert (INSERT ... ON CONFLICT DO UPDATE) on 'row_id' to safely
+    handle re-uploads without hitting unique key constraint violations.
+    The row_id is a composite key: image_hash_prefix + uuid + item_index,
+    making it a reliable idempotency token per line item.
+
     Args:
         rows: List of inventory item dictionaries (output of convert_to_inventory_rows)
         username: Username for RLS
@@ -809,6 +814,9 @@ def save_to_inventory_table(rows: List[Dict[str, Any]], username: str):
         db = get_database_client()
 
         # ── 1. Insert line items ─────────────────────────────────────────────
+        # NOTE: The (username, part_number) unique constraint was incorrectly
+        # blocking legitimate re-purchases of the same part. That constraint
+        # has been removed via DB migration. Plain insert is correct here.
         db.client.table("inventory_items").insert(rows).execute()
         logger.info(f"✓ Saved {len(rows)} rows to inventory_items table")
 

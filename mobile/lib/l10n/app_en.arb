@@ -17,5 +17,19 @@
   "totalSales": "TOTAL SALES",
   "processNow": "Process Now",
   "mapItems": "Link Items",
-  "restockList": "Restock List"
+  "restockList": "Restock List",
+  "language": "Language",
+  "selectLanguage": "Select Language",
+  "settings": "SETTINGS",
+  "preferences": "Preferences",
+  "shopDetails": "Shop Details",
+  "darkMode": "Dark Mode",
+  "ordersProcessed": "Orders Processed",
+  "account": "Account",
+  "logOut": "Log Out",
+  "about": "About",
+  "partiesKhata": "PARTIES",
+  "toCollect": "TO COLLECT",
+  "toGive": "TO GIVE",
+  "scanBill": "SCAN BILL"
 }

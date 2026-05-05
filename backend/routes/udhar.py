@@ -784,6 +784,107 @@ async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: D
         logger.error(f"Error recording payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.delete("/transactions/{transaction_id}")
+async def delete_transaction(transaction_id: int, current_user: Dict = Depends(get_current_user)):
+    """Delete a specific transaction and cascade if it's an INVOICE."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Fetch the transaction
+        tx_resp = db.client.table('ledger_transactions') \
+            .select('*') \
+            .eq('id', transaction_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not tx_resp.data:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+            
+        tx = tx_resp.data[0]
+        ledger_id = tx['ledger_id']
+        receipt_number = tx.get('receipt_number')
+        tx_type = tx.get('transaction_type')
+        
+        if tx_type in ('INVOICE', 'MANUAL_CREDIT') and receipt_number:
+            # Delete from source tables
+            db.client.table('invoices').delete().eq('username', username).eq('receipt_number', receipt_number).execute()
+            db.client.table('verification_dates').delete().eq('username', username).eq('receipt_number', receipt_number).execute()
+            db.client.table('verification_amounts').delete().eq('username', username).eq('receipt_number', receipt_number).execute()
+            db.client.table('verified_invoices').delete().eq('username', username).eq('receipt_number', receipt_number).execute()
+            
+        # Delete from ledger_transactions
+        db.client.table('ledger_transactions').delete().eq('id', transaction_id).execute()
+        
+        # Recalculate ledger balance
+        now = datetime.utcnow().isoformat()
+        
+        remaining_tx_resp = db.client.table('ledger_transactions') \
+            .select('amount, transaction_type, receipt_number') \
+            .eq('ledger_id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        computed_balance = 0.0
+        invoice_rns = []
+        receipts_with_payment: set = set()
+        for rtx in (remaining_tx_resp.data or []):
+            amt = float(rtx.get('amount') or 0)
+            ttype = rtx.get('transaction_type')
+            rn = rtx.get('receipt_number')
+            if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                computed_balance += amt
+                if rn:
+                    invoice_rns.append(rn)
+            elif ttype == 'PAYMENT':
+                computed_balance -= amt
+                if rn:
+                    receipts_with_payment.add(rn)
+
+        if invoice_rns:
+            try:
+                vi_resp = db.client.table('verified_invoices') \
+                    .select('receipt_number, received_amount') \
+                    .eq('username', username) \
+                    .in_('receipt_number', invoice_rns) \
+                    .execute()
+                vi_received_map: Dict[str, float] = {}
+                for vi in (vi_resp.data or []):
+                    rn = vi.get('receipt_number')
+                    if rn:
+                        vi_received_map[rn] = max(
+                            vi_received_map.get(rn, 0.0),
+                            float(vi.get('received_amount') or 0)
+                        )
+                for rn, received in vi_received_map.items():
+                    if rn not in receipts_with_payment and received > 0:
+                        computed_balance -= received
+            except Exception:
+                pass
+
+        new_balance = max(0.0, computed_balance)
+        
+        db.client.table('customer_ledgers').update({
+            'balance_due': new_balance,
+            'updated_at': now
+        }).eq('id', ledger_id).execute()
+        
+        return {
+            "status": "success",
+            "message": "Transaction deleted successfully",
+            "new_balance": new_balance
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting transaction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ManualUdharEntry(BaseModel):
     party_type: str # 'customer' or 'vendor'
     party_name: str # Name of the customer or vendor

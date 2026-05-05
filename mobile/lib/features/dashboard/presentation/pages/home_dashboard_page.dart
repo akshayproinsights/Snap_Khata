@@ -11,6 +11,7 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_search_provid
 import 'package:mobile/features/udhar/presentation/widgets/swipeable_party_card.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/bill_type_selection_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/review_center_sheet.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
@@ -162,7 +163,7 @@ class HomeDashboardPage extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'PARTIES (KHATA)',
+                              AppLocalizations.of(context)?.partiesKhata ?? 'PARTIES',
                               style: TextStyle(
                                 color: context.textColor,
                                 fontSize: 12,
@@ -417,7 +418,7 @@ class HomeDashboardPage extends ConsumerWidget {
         children: [
           Expanded(
             child: _SummaryCard(
-              label: 'TO COLLECT',
+              label: AppLocalizations.of(context)?.toCollect ?? 'TO COLLECT',
               amount: CurrencyFormatter.format(totals.totalReceivable),
               color: context.successColor,
               isDark: isDark,
@@ -426,7 +427,7 @@ class HomeDashboardPage extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             child: _SummaryCard(
-              label: 'TO GIVE',
+              label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
               amount: CurrencyFormatter.format(totals.totalPayable),
               color: context.errorColor,
               isDark: isDark,
@@ -438,7 +439,7 @@ class HomeDashboardPage extends ConsumerWidget {
         children: [
           Expanded(
             child: _SummaryCard(
-              label: 'TO COLLECT',
+              label: AppLocalizations.of(context)?.toCollect ?? 'TO COLLECT',
               amount: '...',
               isLoading: true,
               color: context.successColor,
@@ -448,7 +449,7 @@ class HomeDashboardPage extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             child: _SummaryCard(
-              label: 'TO GIVE',
+              label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
               amount: '...',
               isLoading: true,
               color: context.errorColor,
@@ -463,7 +464,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
               child: _SummaryCard(
-                label: 'TO COLLECT',
+                label: AppLocalizations.of(context)?.toCollect ?? 'TO COLLECT',
                 amount: 'Retry',
                 color: context.errorColor,
                 isDark: isDark,
@@ -475,7 +476,7 @@ class HomeDashboardPage extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
               child: _SummaryCard(
-                label: 'TO GIVE',
+                label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
                 amount: 'Retry',
                 color: context.errorColor,
                 isDark: isDark,
@@ -637,7 +638,7 @@ class HomeDashboardPage extends ConsumerWidget {
                 const Icon(LucideIcons.camera, color: Colors.white, size: 22),
                 const SizedBox(width: 10),
                 Text(
-                  'Scan Bill'.toUpperCase(),
+                  (AppLocalizations.of(context)?.scanBill ?? 'Scan Bill').toUpperCase(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -725,7 +726,7 @@ class _SummaryCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      label.contains('COLLECT') ? LucideIcons.trendingDown : LucideIcons.trendingUp,
+                      label.contains(AppLocalizations.of(context)?.toCollect ?? 'COLLECT') ? LucideIcons.trendingDown : LucideIcons.trendingUp,
                       size: 12,
                       color: color,
                     ),

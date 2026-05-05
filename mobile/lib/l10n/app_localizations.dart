@@ -169,6 +169,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restock List'**
   String get restockList;
+
+  /// No description provided for @language.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get language;
+
+  /// No description provided for @selectLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Language'**
+  String get selectLanguage;
+
+  /// No description provided for @settings.
+  ///
+  /// In en, this message translates to:
+  /// **'SETTINGS'**
+  String get settings;
+
+  /// No description provided for @preferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences'**
+  String get preferences;
+
+  /// No description provided for @shopDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop Details'**
+  String get shopDetails;
+
+  /// No description provided for @darkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark Mode'**
+  String get darkMode;
+
+  /// No description provided for @ordersProcessed.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders Processed'**
+  String get ordersProcessed;
+
+  /// No description provided for @account.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get account;
+
+  /// No description provided for @logOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Log Out'**
+  String get logOut;
+
+  /// No description provided for @about.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get about;
+
+  /// No description provided for @partiesKhata.
+  ///
+  /// In en, this message translates to:
+  /// **'PARTIES'**
+  String get partiesKhata;
+
+  /// No description provided for @toCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'TO COLLECT'**
+  String get toCollect;
+
+  /// No description provided for @toGive.
+  ///
+  /// In en, this message translates to:
+  /// **'TO GIVE'**
+  String get toGive;
+
+  /// No description provided for @scanBill.
+  ///
+  /// In en, this message translates to:
+  /// **'SCAN BILL'**
+  String get scanBill;
 }
 
 class _AppLocalizationsDelegate

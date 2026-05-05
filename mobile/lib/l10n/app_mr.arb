@@ -1,8 +1,8 @@
 {
   "@@locale": "mr",
-  "appTitle": "डिजीएंट्री",
-  "dashboardTitle": "डॅशबोर्ड",
-  "welcomeBack": "परत आल्याबद्दल स्वागत आहे, {userName}",
+  "appTitle": "SnapKhata",
+  "dashboardTitle": "होम",
+  "welcomeBack": "नमस्कार, {userName}",
   "@welcomeBack": {
     "placeholders": {
       "userName": {
@@ -10,12 +10,26 @@
       }
     }
   },
-  "quickActions": "त्वरित क्रिया",
-  "reviewSync": "पुनरावलोकन आणि सिंक",
-  "unmappedItems": "मॅप न केलेले आयटम",
-  "outOfStock": "स्टॉकमध्ये नाही",
+  "quickActions": "जलद क्रिया",
+  "reviewSync": "बिल चेक करा",
+  "unmappedItems": "नवीन माल",
+  "outOfStock": "स्टॉक संपला",
   "totalSales": "एकूण विक्री",
-  "processNow": "आता प्रक्रिया करा",
-  "mapItems": "लिंक आयटम",
-  "restockList": "रेस्टॉक सूची"
+  "processNow": "आता तपासा",
+  "mapItems": "आयटम जोडा",
+  "restockList": "माल भरा",
+  "language": "भाषा",
+  "selectLanguage": "भाषा निवडा",
+  "settings": "सेटिंग्ज",
+  "preferences": "प्राधान्ये",
+  "shopDetails": "दुकान माहिती",
+  "darkMode": "डार्क मोड",
+  "ordersProcessed": "ऑर्डर्स",
+  "account": "खाते",
+  "logOut": "लॉग आउट",
+  "about": "आमच्याबद्दल",
+  "partiesKhata": "खाते",
+  "toCollect": "येणे बाकी",
+  "toGive": "देणे बाकी",
+  "scanBill": "बिल स्कॅन करा"
 }

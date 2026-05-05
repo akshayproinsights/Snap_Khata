@@ -210,6 +210,18 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  Future<bool> deleteTransaction(int transactionId) async {
+    try {
+      await _dio.delete('/api/udhar/transactions/$transactionId');
+      ref.invalidate(verifiedProvider);
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
+      unawaited(fetchLedgersSilent());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<OrderLineItem>> fetchOrderItems(String receiptNumber) async {
     try {
       final response = await _dio.get(
