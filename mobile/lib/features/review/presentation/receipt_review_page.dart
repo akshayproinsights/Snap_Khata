@@ -54,6 +54,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
 
+  /// True when the user tried to save without a customer name.
+  /// Turns the customer banner field red until user fills it in.
+  bool _customerNameMissing = false;
+
   /// Snapshot of allGroups taken at initState — immune to provider clears.
   /// This prevents _goToNextReceipt() from breaking when syncAndFinish()
   /// clears groups while we are still mounted.
@@ -62,6 +66,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   /// True when we have initiated navigation away — suppresses rebuilds
   /// that happen during the GoRouter transition (blank screen guard).
   bool _isNavigatingAway = false;
+
+  bool _isPartyFocused = false;
 
   /// Currently selected party from the top customer banner.
   /// Null means name is typed but not matched to an existing party.
@@ -315,6 +321,24 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   void _markAllDone() async {
+    // ── Validation: customer name is required ─────────────────────────
+    final liveState = ref.read(reviewProvider);
+    final liveGroup = liveState.groups.firstWhere(
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => widget.group,
+    );
+    final customerName = liveGroup.header?.customerName?.trim() ?? '';
+    if (customerName.isEmpty) {
+      setState(() => _customerNameMissing = true);
+      AppToast.showError(
+        context,
+        'Please enter the customer name before saving.',
+        title: 'Customer Required',
+      );
+      // Scroll to the top so the red field is visible
+      return;
+    }
+
     await _saveCurrentState();
     if (!mounted) return;
 
@@ -433,6 +457,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final hasAnyError = group.hasError;
 
+    final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final bool hidePartyBanner = keyboardOpen && !_isPartyFocused;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -491,7 +518,26 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           children: [
             // ── Customer Name banner — always at the very top ──────────────
             if (header != null)
-              _buildTopCustomerBanner(header),
+              Focus(
+                onFocusChange: (hasFocus) {
+                  if (mounted) setState(() => _isPartyFocused = hasFocus);
+                },
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  tween: Tween<double>(begin: 1.0, end: hidePartyBanner ? 0.0 : 1.0),
+                  builder: (context, factor, child) {
+                    return ClipRect(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: factor,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _buildTopCustomerBanner(header),
+                ),
+              ),
             if (header != null && header.receiptLink.isNotEmpty)
               GestureDetector(
                 onTap: () => _showFullImage(header.receiptLink),
@@ -1091,14 +1137,27 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Widget _buildTopCustomerBanner(ReviewRecord header) {
     return Container(
       width: double.infinity,
-      color: context.primaryColor.withValues(alpha: 0.05),
+      decoration: BoxDecoration(
+        color: _customerNameMissing
+            ? context.errorColor.withValues(alpha: 0.05)
+            : context.primaryColor.withValues(alpha: 0.05),
+        border: _customerNameMissing
+            ? Border(
+                left: BorderSide(color: context.errorColor, width: 3),
+              )
+            : null,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(LucideIcons.userPlus, size: 16, color: context.primaryColor),
+              Icon(LucideIcons.userPlus,
+                  size: 16,
+                  color: _customerNameMissing
+                      ? context.errorColor
+                      : context.primaryColor),
               const SizedBox(width: 8),
               Text(
                 'CUSTOMER DETAILS',
@@ -1106,20 +1165,55 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.5,
-                  color: context.primaryColor,
+                  color: _customerNameMissing
+                      ? context.errorColor
+                      : context.primaryColor,
                 ),
               ),
+              if (_customerNameMissing) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: context.errorColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'REQUIRED',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
+          if (_customerNameMissing)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: Text(
+                'Customer name is required before saving.',
+                style: TextStyle(fontSize: 11, color: context.errorColor, fontWeight: FontWeight.w600),
+              ),
+            ),
           const SizedBox(height: 12),
           CustomerAutocompleteField(
             initialValue: header.customerName ?? '',
             label: 'Search or enter customer name...',
+            hasError: _customerNameMissing,
             onSaved: (val) {
+              if (val.isNotEmpty && _customerNameMissing) {
+                setState(() => _customerNameMissing = false);
+              }
               final notifier = ref.read(reviewProvider.notifier);
               notifier.updateDateRecord(header.copyWith(customerName: val));
             },
             onCustomerSelected: (party) {
+              // Clear the error as soon as a customer is selected
+              if (_customerNameMissing) setState(() => _customerNameMissing = false);
               // Sync mobile field when a party with a phone is selected
               if (party.customerPhone != null && party.customerPhone!.isNotEmpty) {
                 _mobileController.text = party.customerPhone!.replaceAll('+91', '').trim();

@@ -704,6 +704,13 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   Future<void> _handleUploadError(
       String errorString, List<UploadFileItem> toUpload) async {
     await InventoryPersistenceService.clearTask();
+
+    // Build a clean, user-readable error message (strip Dart exception prefixes)
+    final cleanError = errorString
+        .replaceAll('Exception: ', '')
+        .replaceAll('DioException: ', '')
+        .trim();
+
     if (errorString.contains('DioException') ||
         errorString.contains('SocketException')) {
       await SyncQueueService()
@@ -723,6 +730,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
         isUploading: false,
         isProcessing: false,
         clearActiveTaskId: true,
+        error: 'No internet connection. Files queued for upload when back online.',
       );
       _backgroundTask.completeTask('Offline: Queued for sync');
     } else {
@@ -731,16 +739,20 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
             item.status == UploadFileStatus.processing) {
           return item.copyWith(
             status: UploadFileStatus.failed,
-            errorMessage: errorString.replaceAll('Exception: ', ''),
+            errorMessage: cleanError,
           );
         }
         return item;
       }).toList();
+      // ── FIX: propagate real error to state.error so the UI shows it ──
+      // Previously error was null here, causing the UI to always fall back
+      // to the generic "There was an issue processing your vendor invoices." text.
       state = state.copyWith(
         fileItems: failed,
         isUploading: false,
         isProcessing: false,
         clearActiveTaskId: true,
+        error: cleanError,
       );
       _backgroundTask.completeTask('Inventory upload error');
     }

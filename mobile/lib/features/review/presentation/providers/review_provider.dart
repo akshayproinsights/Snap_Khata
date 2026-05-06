@@ -106,18 +106,32 @@ class ReviewNotifier extends Notifier<ReviewState> {
       List<ReviewRecord> dates, List<ReviewRecord> amounts) {
     final Map<String, InvoiceReviewGroup> map = {};
 
-    int missingCounter = 1;
+    // Compute today's date in dd-MM-yyyy format once (reused for empty dates)
+    final now = DateTime.now();
+    final todayFormatted =
+        '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
+
+    int missingReceiptCounter = 1;
     for (var date in dates) {
       String receiptNo = date.receiptNumber;
+
+      // ── Auto-fill missing receipt number (clean "NEW-N" format) ──────────
       if (receiptNo.trim().isEmpty) {
-        // Auto-generate receipt number so it's not a duplicate
-        receiptNo = 'AUTO-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}-$missingCounter';
-        missingCounter++;
+        receiptNo = 'NEW-$missingReceiptCounter';
+        missingReceiptCounter++;
         date = date.copyWith(receiptNumber: receiptNo);
-        // Fire and forget update to save it to DB immediately so it persists
+        // Persist immediately so it survives a reload
         _repository.updateSingleDate(date).catchError((_) {});
       }
-      // Group by receiptLink (the image file) because receiptNumber might have been empty and changed
+
+      // ── Auto-fill missing date with today ──────────────────────────
+      if (date.date.trim().isEmpty) {
+        date = date.copyWith(date: todayFormatted);
+        // Persist immediately so it shows correctly on next load
+        _repository.updateSingleDate(date).catchError((_) {});
+      }
+
+      // Group by receiptLink (the image file) so same image isn’t duplicated
       final groupKey = date.receiptLink.isNotEmpty ? date.receiptLink : receiptNo;
       
       map[groupKey] = InvoiceReviewGroup(

@@ -61,22 +61,38 @@ class InventoryUploadRepository {
       final compressed = await ImageCompressService.compressFile(file);
       final bytes = await compressed.readAsBytes();
 
-      // Direct PUT to R2 — bypasses Python server entirely
+      // Direct PUT to R2 — bypasses Python server entirely.
+      //
+      // CRITICAL: Pass `bytes` (Uint8List) directly — NOT Stream.fromIterable.
+      // Cloudflare R2 presigned PUT URLs do NOT support chunked transfer
+      // encoding (which Dio uses automatically for Stream data). Passing raw
+      // bytes makes Dio send a standard Content-Length upload that R2 accepts.
+      // Also: Content-Length must be a String, not an int.
       final uploadUrl = slot['upload_url'] as String;
       final fileKey = slot['file_key'] as String;
 
-      await Dio().put(
+      final r2Response = await Dio().put(
         uploadUrl,
-        data: Stream.fromIterable([bytes]),
+        data: bytes, // Uint8List — Dio sets Content-Length as String automatically
         options: Options(
+          contentType: 'image/jpeg',
           headers: {
             'Content-Type': 'image/jpeg',
-            'Content-Length': bytes.length,
           },
           sendTimeout: const Duration(seconds: 120),
-          receiveTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 60),
+          // Accept any 2xx status; R2 returns 200 on success
+          validateStatus: (status) => status != null && status < 400,
         ),
       );
+
+      // Explicitly validate — R2 occasionally returns non-200 2xx
+      final statusCode = r2Response.statusCode ?? 0;
+      if (statusCode < 200 || statusCode >= 400) {
+        throw Exception(
+          'R2 upload rejected: HTTP $statusCode for $fileKey',
+        );
+      }
 
       completedFiles++;
       if (onProgress != null) {

@@ -33,6 +33,7 @@ class PendingReceiptsPage extends ConsumerStatefulWidget {
 }
 
 class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
+  /// Becomes true the moment we fire the push — prevents double-navigation.
   bool _autoLaunched = false;
 
   @override
@@ -211,26 +212,37 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
   @override
   Widget build(BuildContext context) {
     ref.listen<ReviewState>(reviewProvider, (previous, next) {
+      // ── Show errors ──────────────────────────────────────────────────────
       if (next.error != null && next.error != previous?.error) {
         AppToast.showError(context, next.error!, title: 'Update Failed');
       }
+
+      // ── Auto-launch fix: watch for isLoading transitioning FALSE → groups ready
+      // The old build-time guard fired BEFORE fetchReviewData() set isLoading=true,
+      // so isLoading=false AND groups=[] simultaneously → blank "All caught up!".
+      // Now we catch the exact transition: was loading, now done, has groups.
+      if (widget.autoLaunchReview &&
+          !_autoLaunched &&
+          previous?.isLoading == true &&
+          !next.isLoading &&
+          next.groups.isNotEmpty) {
+        _autoLaunched = true;
+        final groups = next.groups;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            context.push('/receipt-review', extra: {
+              'group': groups.first,
+              'allGroups': List<InvoiceReviewGroup>.from(groups),
+              'currentIndex': 0,
+            });
+          }
+        });
+      }
     });
+
     final state = ref.watch(reviewProvider);
     final uploadState = ref.watch(uploadProvider);
     final groups = state.groups;
-
-    if (widget.autoLaunchReview && !_autoLaunched && !state.isLoading && groups.isNotEmpty) {
-      _autoLaunched = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.push('/receipt-review', extra: {
-            'group': groups.first,
-            'allGroups': List<InvoiceReviewGroup>.from(groups), // snapshot — immune to provider clears
-            'currentIndex': 0,
-          });
-        }
-      });
-    }
 
     final allDone = groups.isNotEmpty && groups.every((g) => g.isComplete);
     final pendingCount = groups.where((g) => g.status == 'Pending').length;
