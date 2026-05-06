@@ -100,6 +100,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
 
   /// APPROACH 2: Direct backend API call
   Future<void> _checkBackendForActiveTask() async {
+    bool foundActiveTask = false;
     try {
       final repo = ref.read(inventoryUploadRepositoryProvider);
       final recentTask = await repo.getRecentTask();
@@ -121,13 +122,25 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
         if (!currentState.isProcessing && !currentState.isUploading) {
           notifier.forceIntoProcessingState(taskId, total);
         }
+        foundActiveTask = true;
       }
     } catch (_) {
       // Network error — provider's disk check is the fallback
     }
 
     if (mounted) {
+      // Clear the local guard
       setState(() => _isCheckingBackend = false);
+
+      // CRITICAL: If no active task was found, also clear the provider's
+      // isRestoringState (which defaults to true). Without this, the camera
+      // screen is blocked forever by the "Checking for active uploads…" guard.
+      if (!foundActiveTask) {
+        final currentState = ref.read(inventoryUploadProvider);
+        if (currentState.isRestoringState) {
+          ref.read(inventoryUploadProvider.notifier).clearRestoringState();
+        }
+      }
     }
   }
 

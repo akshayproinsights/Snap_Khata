@@ -168,6 +168,28 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  Future<bool> updateCustomerPhone(int ledgerId, String phone) async {
+    // Optimistic update
+    final prevLedgers = state.ledgers;
+    state = state.copyWith(
+      ledgers: state.ledgers.map((l) {
+        if (l.id != ledgerId) return l;
+        return l.copyWith(customerPhone: phone);
+      }).toList(),
+    );
+    try {
+      await _dio.put(
+        '/api/udhar/ledgers/$ledgerId/phone',
+        data: {'phone': phone},
+      );
+      return true;
+    } catch (e) {
+      // Roll back on failure
+      state = state.copyWith(ledgers: prevLedgers);
+      return false;
+    }
+  }
+
   Future<bool> deleteLedger(int ledgerId) async {
     // Optimistic removal — remove from UI immediately so the party
     // disappears the instant the user confirms, without waiting for re-fetch.

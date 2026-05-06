@@ -178,6 +178,14 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
     state = InventoryUploadState(isRestoringState: false);
   }
 
+  /// Called by the page after _checkBackendForActiveTask() confirms no active
+  /// task — clears the isRestoringState=true default so the camera can render.
+  void clearRestoringState() {
+    if (state.isRestoringState) {
+      state = state.copyWith(isRestoringState: false);
+    }
+  }
+
   /// Called when the page confirms an active backend task but the provider
   /// doesn't know about it (state was lost on navigation/kill).
   void forceIntoProcessingState(String taskId, int fileCount) {

@@ -75,7 +75,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           
           // Body Section
           const Text(
@@ -94,7 +94,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               fontSize: 15,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
           // Selectable Cards
           Flexible(
@@ -124,60 +124,42 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     selectedColor: context.errorColor,
                     isDark: isDark,
                   ),
-                  const SizedBox(height: 24),
-                  // Manual Entry Divider
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: context.borderColor.withValues(alpha: 0.5))),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'OR',
+                  const SizedBox(height: 16),
+                  // Compact Manual Entry
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => const AddPartyEntrySheet(),
+                          );
+                        },
+                        icon: Icon(
+                          LucideIcons.edit3,
+                          size: 16,
+                          color: context.textSecondaryColor,
+                        ),
+                        label: Text(
+                          'Record manual entry',
                           style: TextStyle(
                             color: context.textSecondaryColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
                           ),
                         ),
-                      ),
-                      Expanded(child: Divider(color: context.borderColor.withValues(alpha: 0.5))),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  // Manual Entry Button
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: InkWell(
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => const AddPartyEntrySheet(),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: context.borderColor),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(LucideIcons.edit3, size: 18, color: context.primaryColor),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Record Manual Entry',
-                              style: TextStyle(
-                                color: context.textColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),

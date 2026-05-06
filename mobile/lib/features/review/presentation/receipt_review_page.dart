@@ -499,7 +499,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeInOut,
                   height: MediaQuery.of(context).viewInsets.bottom > 0 
-                      ? 80.0 
+                      ? 0.0 
                       : MediaQuery.of(context).size.height * 0.25,
                   width: double.infinity,
                   decoration: BoxDecoration(color: context.surfaceColor),
@@ -944,9 +944,56 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                               fontWeight: FontWeight.bold,
                               color: context.textSecondaryColor)),
                       const SizedBox(height: 4),
-                      DebouncedReviewField(
+                      TextFormField(
+                        key: ValueKey('date_${header.date}'),
                         initialValue: header.date,
-                        keyboardType: TextInputType.datetime,
+                        readOnly: true,
+                        onTap: () async {
+                          DateTime initialDate = DateTime.now();
+                          try {
+                            final parts = header.date.split('-');
+                            if (parts.length == 3) {
+                              if (parts[0].length == 4) {
+                                initialDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+                              } else {
+                                initialDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+                              }
+                            } else if (header.date.contains('/')) {
+                               final parts2 = header.date.split('/');
+                               if (parts2.length == 3) {
+                                 if (parts2[0].length == 4) {
+                                   initialDate = DateTime(int.parse(parts2[0]), int.parse(parts2[1]), int.parse(parts2[2]));
+                                 } else {
+                                   initialDate = DateTime(int.parse(parts2[2]), int.parse(parts2[1]), int.parse(parts2[0]));
+                                 }
+                               }
+                            }
+                          } catch (_) {}
+                          
+                          final DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: initialDate,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2101),
+                            builder: (context, child) {
+                              return Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: context.isDark ? ColorScheme.dark(
+                                    primary: context.primaryColor,
+                                  ) : ColorScheme.light(
+                                    primary: context.primaryColor,
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+                          if (picked != null) {
+                            final formattedDate = "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
+                            final notifier = ref.read(reviewProvider.notifier);
+                            notifier.updateDateRecord(header.copyWith(date: formattedDate));
+                          }
+                        },
                         decoration: InputDecoration(
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -970,15 +1017,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                                   message: 'Low confidence — please verify',
                                   child: Icon(Icons.warning_amber_rounded,
                                       size: 16, color: context.warningColor))
-                              : null,
+                              : Icon(LucideIcons.calendarDays, size: 16, color: context.textSecondaryColor),
                         ),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        onSaved: (val) {
-                          if (val.trim().isNotEmpty) {
-                            final notifier = ref.read(reviewProvider.notifier);
-                            notifier.updateDateRecord(header.copyWith(date: val.trim()));
-                          }
-                        },
                       ),
                     ],
                   ),
@@ -1258,25 +1299,27 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   Widget _buildLineItemCard(ReviewRecord item, bool isAutomobile) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 6),
       elevation: 0,
       color: item.hasError ? context.errorColor.withValues(alpha: 0.05) : context.surfaceColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: item.hasError ? context.errorColor.withValues(alpha: 0.3) : context.borderColor),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Row 1: Description (left) + Amount (right) ──────────────
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: DebouncedReviewField(
                     initialValue: item.description,
                     decoration: InputDecoration(
-                      hintText: 'Item Description',
+                      hintText: 'Item description',
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
@@ -1289,35 +1332,70 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     },
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Amount — right-aligned, primary color, editable
+                SizedBox(
+                  width: 80,
+                  child: DebouncedReviewField(
+                    initialValue: _formatInput(item.amount),
+                    textAlign: TextAlign.right,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: context.primaryColor, width: 2),
+                      ),
+                      fillColor: context.primaryColor.withValues(alpha: 0.05),
+                      filled: true,
+                      hintText: '0',
+                      prefixText: '₹',
+                      prefixStyle: TextStyle(fontWeight: FontWeight.w700, color: context.primaryColor, fontSize: 13),
+                    ),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: context.primaryColor),
+                    onSaved: (val) {
+                      final amt = double.tryParse(val) ?? 0.0;
+                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
+                    },
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
+            // ── Row 2: QTY chip + RATE chip + (Part/Labor toggle if automobile) ──
             Row(
               children: [
-                // QTY
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: context.backgroundColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('QTY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
-                        DebouncedReviewField(
+                // QTY — always visible
+                Container(
+                  padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
+                  decoration: BoxDecoration(
+                    color: context.backgroundColor,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Q:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                      const SizedBox(width: 2),
+                      SizedBox(
+                        width: 38,
+                        child: DebouncedReviewField(
                           initialValue: _formatInput(item.quantity),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
                             border: InputBorder.none,
-                            hintText: '-',
+                            hintText: '1',
                           ),
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                           onSaved: (val) {
                             final qty = double.tryParse(val);
                             double amt = item.amount;
@@ -1327,26 +1405,27 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(quantity: qty, amount: amt));
                           },
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 // RATE
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: context.backgroundColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('RATE (₹)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
-                        DebouncedReviewField(
+                Container(
+                  padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
+                  decoration: BoxDecoration(
+                    color: context.backgroundColor,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('₹:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                      const SizedBox(width: 2),
+                      SizedBox(
+                        width: 62,
+                        child: DebouncedReviewField(
                           initialValue: _formatInput(item.rate),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: const InputDecoration(
@@ -1355,7 +1434,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             border: InputBorder.none,
                             hintText: '-',
                           ),
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                           onSaved: (val) {
                             final rate = double.tryParse(val);
                             double amt = item.amount;
@@ -1365,66 +1444,34 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(rate: rate, amount: amt));
                           },
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                // TOTAL
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: context.primaryColor.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('TOTAL (₹)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.primaryColor)),
-                        DebouncedReviewField(
-                          initialValue: _formatInput(item.amount),
-                          textAlign: TextAlign.right,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                            border: InputBorder.none,
-                            hintText: '0.00',
-                          ),
-                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: context.primaryColor),
-                          onSaved: (val) {
-                            final amt = double.tryParse(val) ?? 0.0;
-                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (isAutomobile) ...[
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+                // Error badge
+                if (item.hasError) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.warning_amber_rounded, size: 14, color: context.errorColor),
+                ],
+                const Spacer(),
+                // Part/Labor toggle — only for automobile, moved to same row
+                if (isAutomobile) ...[
                   _PartLaborToggle(
                     isPart: true,
                     selected: item.type?.toUpperCase().contains('PART') ?? false,
                     onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'PART')),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   _PartLaborToggle(
                     isPart: false,
-                    selected: (item.type?.toUpperCase().contains('LABOR') ?? false) || (item.type?.toUpperCase().contains('LABOUR') ?? false) || (item.type?.toUpperCase().contains('SERVICE') ?? false),
+                    selected: (item.type?.toUpperCase().contains('LABOR') ?? false) ||
+                        (item.type?.toUpperCase().contains('LABOUR') ?? false) ||
+                        (item.type?.toUpperCase().contains('SERVICE') ?? false),
                     onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'LABOR')),
                   ),
                 ],
-              ),
-            ]
+              ],
+            ),
           ],
         ),
       ),
@@ -1521,6 +1568,7 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
       textAlign: widget.textAlign,
       style: widget.style,
       maxLines: widget.maxLines,
+      scrollPadding: const EdgeInsets.only(bottom: 220),
       onChanged: _onChanged,
       onFieldSubmitted: (_) {
         _saveCurrentValue();
@@ -1546,7 +1594,7 @@ class _PartLaborToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = isPart ? '\u2699\uFE0F Part' : '\uD83D\uDD27 Labor';
+    final label = isPart ? '⚙ Part' : '🔧 Labor';
     final selectedColor = isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
 
     return GestureDetector(

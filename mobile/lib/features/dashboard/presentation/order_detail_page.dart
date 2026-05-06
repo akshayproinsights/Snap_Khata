@@ -79,6 +79,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   double _receivedAmount = 0.0;
   bool _isReceivedChecked = false;
   late TextEditingController _receivedAmountController;
+  late TextEditingController _totalAmountController;
+  late TextEditingController _balanceDueController;
   late TextEditingController _creditDetailsController;
 
   @override
@@ -131,6 +133,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   double _totalAfterGst(InvoiceGroup group) {
+    // If we have a manually entered total from the backend/previous edit, prioritize it
+    final manualTotal = group.extraFields['total_bill_amount'] ?? group.extraFields['total_amount'];
+    if (manualTotal != null) {
+      final parsed = double.tryParse(manualTotal.toString());
+      if (parsed != null) return parsed;
+    }
+
     final parts = _partsSubtotal(group);
     final labor = _laborSubtotal(group);
     final combined = parts + labor;
@@ -163,11 +172,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     // If paymentMode is null but balanceDue > 0, the order was created as credit
     // (e.g., via the ledger flow). Infer 'Credit' so UI reflects the actual state.
     final hasDue = (widget.group.balanceDue ?? 0) > 0;
+    final baseTotal = _totalAfterGst(widget.group);
     _paymentMode = widget.group.paymentMode ?? (hasDue ? 'Credit' : 'Cash');
     _receivedAmount = widget.group.receivedAmount ?? (hasDue ? (widget.group.totalAmount - (widget.group.balanceDue ?? 0)) : widget.group.totalAmount);
     _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
+    
     _receivedAmountController = TextEditingController(
         text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _formatInput(_receivedAmount) : '') : '');
+    
+    _totalAmountController = TextEditingController(text: _formatInput(baseTotal));
+    _balanceDueController = TextEditingController(text: _formatInput(baseTotal - _receivedAmount));
+    
     _creditDetailsController = TextEditingController(text: widget.group.customerDetails ?? '');
 
     itemCtrls = widget.group.items.map((item) {
@@ -195,6 +210,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       ctrl.dispose();
     }
     _receivedAmountController.dispose();
+    _totalAmountController.dispose();
+    _balanceDueController.dispose();
     _creditDetailsController.dispose();
     super.dispose();
   }
@@ -206,7 +223,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     double newParts = 0;
     double newLabor = 0;
     
-    // First pass: calculate totals
+    // First pass: calculate totals from line items
     for (int i = 0; i < widget.group.items.length; i++) {
         final ctrl = itemCtrls[i];
         final double amt = double.tryParse(ctrl.amtCtrl.text) ?? widget.group.items[i].amount;
@@ -218,15 +235,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         }
     }
     
-    double newGst = 0;
-    if (_gstMode == GstMode.excluded) {
-      newGst = (newParts + newLabor) * 0.18;
-    } else if (_gstMode == GstMode.included) {
-      newGst = (newParts + newLabor) * 18 / 118;
-    }
-    
-    double grandTotal = newParts + newLabor + newGst;
-    double calculatedBalanceDue = _paymentMode == 'Credit' ? (grandTotal - _receivedAmount) : 0.0;
+    // Use the manual total if edited, otherwise fallback to item sum
+    final double manualGrandTotal = double.tryParse(_totalAmountController.text) ?? (newParts + newLabor);
+    final double manualReceived = double.tryParse(_receivedAmountController.text) ?? 0.0;
+    final double manualDue = double.tryParse(_balanceDueController.text) ?? (manualGrandTotal - manualReceived);
 
     double newTotal = 0;
 
@@ -234,6 +246,9 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     final newGroupExtraFields = {
       for (final e in _extraFieldCtrls.entries) e.key: e.value.text,
     };
+    
+    // Persist the manual total into extra fields
+    newGroupExtraFields['total_bill_amount'] = _totalAmountController.text;
 
     final List<VerifiedInvoice> updatedItems = [];
 
@@ -260,8 +275,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         rate: rate,
         amount: amt,
         paymentMode: _paymentMode,
-        receivedAmount: _paymentMode == 'Credit' ? _receivedAmount : grandTotal,
-        balanceDue: calculatedBalanceDue,
+        receivedAmount: _paymentMode == 'Cash' ? manualGrandTotal : manualReceived,
+        balanceDue: _paymentMode == 'Cash' ? 0.0 : manualDue,
         customerDetails: _creditDetailsController.text,
         extraFields: newExtraFields,
       );
@@ -287,10 +302,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     widget.group.extraFields
       ..clear()
       ..addAll(newGroupExtraFields);
-    widget.group.totalAmount = newTotal;
+    widget.group.totalAmount = double.tryParse(_totalAmountController.text) ?? newTotal;
     widget.group.paymentMode = _paymentMode;
-    widget.group.receivedAmount = _paymentMode == 'Credit' ? _receivedAmount : grandTotal;
-    widget.group.balanceDue = calculatedBalanceDue;
+    widget.group.receivedAmount = _paymentMode == 'Cash' ? widget.group.totalAmount : manualReceived;
+    widget.group.balanceDue = _paymentMode == 'Cash' ? 0.0 : manualDue;
     widget.group.customerDetails = _creditDetailsController.text;
 
     setState(() {
@@ -574,8 +589,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     onTap: () {
                       setState(() {
                         _paymentMode = 'Cash';
-                        _receivedAmount = grandTotal;
-                        _receivedAmountController.text = _formatAmount(grandTotal);
+                        final total = double.tryParse(_totalAmountController.text) ?? grandTotal;
+                        _receivedAmount = total;
+                        _receivedAmountController.text = _formatInput(total);
+                        _balanceDueController.text = '0';
                       });
                     },
                   ),
@@ -593,12 +610,25 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             const Text('₹ ',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             SizedBox(
-              width: 100,
-              child: Text(
-                _formatAmount(grandTotal),
+              width: 120,
+              child: TextField(
+                controller: _totalAmountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold, color: context.textColor),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: context.textColor),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                  border: UnderlineInputBorder(borderSide: BorderSide(color: context.borderColor)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                ),
+                onChanged: (val) {
+                  final total = double.tryParse(val) ?? 0.0;
+                  final received = double.tryParse(_receivedAmountController.text) ?? 0.0;
+                  final due = total - received;
+                  _balanceDueController.text = _formatInput(due);
+                  setState(() {});
+                },
               ),
             ),
           ],
@@ -661,8 +691,12 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     fillColor: Colors.transparent,
                   ),
                   onChanged: (val) {
+                    final received = double.tryParse(val) ?? 0.0;
+                    final total = double.tryParse(_totalAmountController.text) ?? 0.0;
+                    final due = total - received;
+                    _balanceDueController.text = _formatInput(due);
                     setState(() {
-                      _receivedAmount = double.tryParse(val) ?? 0.0;
+                      _receivedAmount = received;
                       _isReceivedChecked = val.isNotEmpty && _receivedAmount > 0;
                     });
                   },
@@ -685,14 +719,28 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       fontSize: 16,
                       fontWeight: FontWeight.w500)),
               SizedBox(
-                width: 100,
-                child: Text(
-                  _formatAmount(grandTotal - _receivedAmount),
+                width: 120,
+                child: TextField(
+                  controller: _balanceDueController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.right,
-                  style: TextStyle(
-                      color: context.errorColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: context.errorColor),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                    border: UnderlineInputBorder(borderSide: BorderSide(color: context.borderColor)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: context.errorColor, width: 2)),
+                  ),
+                  onChanged: (val) {
+                    final due = double.tryParse(val) ?? 0.0;
+                    final total = double.tryParse(_totalAmountController.text) ?? 0.0;
+                    final received = total - due;
+                    _receivedAmountController.text = _formatInput(received);
+                    setState(() {
+                      _receivedAmount = received;
+                      _isReceivedChecked = received > 0;
+                    });
+                  },
                 ),
               ),
             ],
@@ -949,7 +997,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                               'upload_date', 'balance_due', 'payment_mode',
                               'received_amount', 'id', 'customer_name',
                               'mobile_number', 'description', 'type', 'date',
-                              'customer_details', 'is_paid'
+                              'customer_details', 'is_paid', 'total_bill_amount',
+                              'total_amount'
                             ];
                             return !ignored.contains(key);
                           }).map((entry) {

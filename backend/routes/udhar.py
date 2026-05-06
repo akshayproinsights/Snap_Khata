@@ -20,10 +20,67 @@ SYNC_DEBOUNCE_SECONDS = 30 # Only auto-sync every 30 seconds per user
 
 router = APIRouter()
 
+def parse_date_to_iso(date_str: Any) -> str:
+    """Helper to convert various date formats to a sortable ISO string."""
+    if not date_str:
+        return "0000-00-00T00:00:00"
+    if isinstance(date_str, datetime):
+        return date_str.isoformat()
+    
+    date_str = str(date_str).strip()
+    if not date_str:
+        return "0000-00-00T00:00:00"
+
+    # Try standard ISO first
+    try:
+        # Handles 2026-05-06, 2026-05-06T10:00:00 etc
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00')).isoformat()
+    except:
+        pass
+
+    # Try DD-MMM-YYYY (e.g. 04-Nov-2025)
+    try:
+        return datetime.strptime(date_str, "%d-%b-%Y").isoformat()
+    except:
+        pass
+
+    # Try DD/MM/YYYY
+    try:
+        return datetime.strptime(date_str, "%d/%m/%Y").isoformat()
+    except:
+        pass
+
+    return date_str # Fallback
+
+def get_transaction_sort_key(tx: Dict):
+    """
+    Returns a sortable key for transactions.
+    Primary key: Transaction date (invoice_date or date)
+    Secondary key: System date (upload_date or created_at)
+    
+    Returns a tuple for descending sort (latest first).
+    """
+    # 1. Primary Date (Event Date)
+    primary_raw = tx.get('invoice_date') or tx.get('date')
+    if not primary_raw:
+        primary_raw = tx.get('created_at') or ''
+    
+    primary_iso = parse_date_to_iso(primary_raw)
+    
+    # 2. Secondary Date (System Arrival Date)
+    secondary_raw = tx.get('upload_date') or tx.get('created_at') or ''
+    secondary_iso = parse_date_to_iso(secondary_raw)
+    
+    return (primary_iso, secondary_iso)
+
 # Schema for Payment
 class PaymentCreate(BaseModel):
     amount: float
     notes: Optional[str] = None
+
+class LedgerPhoneUpdate(BaseModel):
+    phone: str
+
 
 async def process_ledgers_for_verified_invoices(username: str, final_records: List[Dict[str, Any]]):
     """
@@ -276,14 +333,14 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         enrichment = {}
         if receipt_numbers:
             # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
-            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, payment_mode, receipt_link').in_('receipt_number', receipt_numbers).eq('username', username).execute()
+            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, payment_mode, receipt_link, date, upload_date').in_('receipt_number', receipt_numbers).eq('username', username).execute()
             
             for vi in vi_resp.data:
                 rn = vi.get('receipt_number')
                 if not rn:
                     continue
                 if rn not in enrichment:
-                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'payment_mode': 'Cash', 'receipt_link': ''}
+                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'payment_mode': 'Cash', 'receipt_link': '', 'date': '', 'upload_date': ''}
                 enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
                 # Take the max non-zero value across rows (balance_due/received_amount may only be on one row)
                 row_received = float(vi.get('received_amount', 0) or 0)
@@ -296,6 +353,10 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                     enrichment[rn]['payment_mode'] = vi['payment_mode']
                 if vi.get('receipt_link'):
                     enrichment[rn]['receipt_link'] = vi['receipt_link']
+                if vi.get('date'):
+                    enrichment[rn]['date'] = vi['date']
+                if vi.get('upload_date'):
+                    enrichment[rn]['upload_date'] = vi['upload_date']
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
@@ -341,12 +402,15 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 enriched_tx['balance_due'] = effective_balance
                 enriched_tx['received_amount'] = effective_received
                 enriched_tx['payment_mode'] = payment_mode
+                enriched_tx['invoice_date'] = enr.get('date') or ''
+                enriched_tx['upload_date'] = enr.get('upload_date') or ''
                 enriched_transactions.append(enriched_tx)
             else:
                 enriched_transactions.append(tx)
                 
         # Re-sort because injected dummy payments will be out of order
-        enriched_transactions.sort(key=lambda x: x['created_at'], reverse=True)
+        # Now uses a unified sort key (Transaction Date > System Date)
+        enriched_transactions.sort(key=get_transaction_sort_key, reverse=True)
         
         # Recompute ledger summary from enriched transactions to ensure consistency
         computed_total_billed = 0.0
@@ -594,11 +658,10 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
 
         unified_txs.extend(grouped_cash_invoices.values())
 
-        # Sort combined list by activity_ts descending.
-        # activity_ts = upload_date for INVOICE records (when it was processed),
-        # and created_at for PAYMENT records (when payment was actually made).
-        # This ensures: recent uploads > recent payments > old invoices.
-        unified_txs.sort(key=lambda x: x.get('activity_ts') or x.get('created_at') or '', reverse=True)
+        # Sort combined list by Transaction Date > System Date descending.
+        # This ensures: newest actual transactions (by bill date) appear first,
+        # with system creation/upload time as a tie-breaker for same-day entries.
+        unified_txs.sort(key=get_transaction_sort_key, reverse=True)
 
         return {
             "status": "success",
@@ -688,6 +751,47 @@ async def delete_customer_ledger(ledger_id: int, current_user: Dict = Depends(ge
     except Exception as e:
         logger.error(f"Error deleting ledger: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/ledgers/{ledger_id}/phone")
+async def update_ledger_phone(ledger_id: int, payload: LedgerPhoneUpdate, current_user: Dict = Depends(get_current_user)):
+    """Update a customer ledger's mobile number."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # Verify ledger belongs to user
+        ledger_resp = db.client.table('customer_ledgers') \
+            .select('id') \
+            .eq('id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not ledger_resp.data:
+            raise HTTPException(status_code=404, detail="Ledger not found")
+            
+        now = datetime.utcnow().isoformat()
+        
+        # Update the customer_phone
+        db.client.table('customer_ledgers').update({
+            'customer_phone': payload.phone,
+            'updated_at': now
+        }).eq('id', ledger_id).execute()
+        
+        return {
+            "status": "success",
+            "message": "Mobile number updated successfully",
+            "customer_phone": payload.phone
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating ledger phone: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/ledgers/{ledger_id}/pay")
 async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: Dict = Depends(get_current_user)):

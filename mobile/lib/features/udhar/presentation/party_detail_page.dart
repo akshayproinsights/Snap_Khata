@@ -17,6 +17,7 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
 
@@ -31,7 +32,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
   List<LedgerTransaction>? _transactions;
   bool _isLoading = true;
-  Map<String, double> _backendSummary = {'total_billed': 0, 'total_paid': 0, 'balance_due': 0};
+  Map<String, double> _backendSummary = {
+    'total_billed': 0,
+    'total_paid': 0,
+    'balance_due': 0,
+  };
 
   @override
   void initState() {
@@ -83,9 +88,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     if (backendVal > 0) return backendVal;
     if (_transactions == null) return 0;
     return _transactions!
-        .where((tx) =>
-            tx.transactionType == 'INVOICE' ||
-            tx.transactionType == 'MANUAL_CREDIT')
+        .where(
+          (tx) =>
+              tx.transactionType == 'INVOICE' ||
+              tx.transactionType == 'MANUAL_CREDIT',
+        )
         .fold(0.0, (sum, tx) => sum + tx.amount);
   }
 
@@ -123,7 +130,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
               decoration: BoxDecoration(
                 color: context.surfaceColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -146,7 +155,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       const Text(
                         'Record Payment',
                         style: TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(LucideIcons.x),
@@ -160,7 +172,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     decoration: BoxDecoration(
                       color: context.primaryColor.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.primaryColor.withValues(alpha: 0.2), width: 1),
+                      border: Border.all(
+                        color: context.primaryColor.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -168,8 +183,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         Text(
                           'Balance Due:',
                           style: TextStyle(
-                              color: context.textSecondaryColor,
-                              fontWeight: FontWeight.w600),
+                            color: context.textSecondaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         Text(
                           CurrencyFormatter.format(_computedBalance),
@@ -185,15 +201,24 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   const SizedBox(height: 24),
                   TextField(
                     controller: amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Amount Received',
                       labelStyle: TextStyle(color: context.textSecondaryColor),
-                      prefixIcon: Icon(LucideIcons.indianRupee, color: context.primaryColor),
+                      prefixIcon: Icon(
+                        LucideIcons.indianRupee,
+                        color: context.primaryColor,
+                      ),
                       filled: true,
-                      fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
+                      fillColor: context.textSecondaryColor.withValues(
+                        alpha: 0.03,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide(color: context.borderColor),
@@ -211,9 +236,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     decoration: InputDecoration(
                       labelText: 'Notes (Optional)',
                       labelStyle: TextStyle(color: context.textSecondaryColor),
-                      prefixIcon: Icon(LucideIcons.edit3, color: context.textSecondaryColor),
+                      prefixIcon: Icon(
+                        LucideIcons.edit3,
+                        color: context.textSecondaryColor,
+                      ),
                       filled: true,
-                      fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
+                      fillColor: context.textSecondaryColor.withValues(
+                        alpha: 0.03,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide(color: context.borderColor),
@@ -237,8 +267,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               if (amount <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content:
-                                          Text('Please enter a valid amount')),
+                                    content: Text(
+                                      'Please enter a valid amount',
+                                    ),
+                                  ),
                                 );
                                 return;
                               }
@@ -246,8 +278,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               setModalState(() => isSubmitting = true);
                               final success = await ref
                                   .read(udharProvider.notifier)
-                                  .recordPayment(widget.ledger.id, amount,
-                                      notesController.text);
+                                  .recordPayment(
+                                    widget.ledger.id,
+                                    amount,
+                                    notesController.text,
+                                  );
 
                               if (success && context.mounted) {
                                 ref.invalidate(verifiedProvider);
@@ -255,15 +290,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content: Text('Payment recorded! 🎉')),
+                                    content: Text('Payment recorded! 🎉'),
+                                  ),
                                 );
                               } else {
                                 setModalState(() => isSubmitting = false);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                        content:
-                                            Text('Failed to save payment.')),
+                                      content: Text('Failed to save payment.'),
+                                    ),
                                   );
                                 }
                               }
@@ -281,11 +317,181 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               width: 24,
                               height: 24,
                               child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
                           : const Text(
                               'Save Payment',
                               style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w800),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditPhoneDialog(
+    BuildContext context,
+    CustomerLedger currentLedger,
+  ) {
+    final phoneController = TextEditingController(
+      text: currentLedger.customerPhone ?? '',
+    );
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: context.borderColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Mobile Number',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                    ),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    maxLength: 10,
+                    decoration: InputDecoration(
+                      labelText: 'Customer Mobile Number',
+                      labelStyle: TextStyle(color: context.textSecondaryColor),
+                      prefixIcon: Icon(
+                        LucideIcons.phone,
+                        color: context.primaryColor,
+                      ),
+                      filled: true,
+                      fillColor: context.textSecondaryColor.withValues(
+                        alpha: 0.03,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: context.borderColor),
+                      ),
+                      counterText: '',
+                    ),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: isSubmitting
+                          ? null
+                          : () async {
+                              final phone = phoneController.text.trim();
+
+                              setModalState(() => isSubmitting = true);
+                              final success = await ref
+                                  .read(udharProvider.notifier)
+                                  .updateCustomerPhone(currentLedger.id, phone);
+
+                              if (success && context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Mobile number saved! 🎉'),
+                                  ),
+                                );
+                              } else {
+                                setModalState(() => isSubmitting = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Failed to save mobile number.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.primaryColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: isSubmitting
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Save',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                     ),
                   ),
@@ -310,8 +516,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
     try {
       final repo = ref.read(verifiedRepositoryProvider);
-      final records =
-          await repo.getVerifiedInvoices(receiptNumber: tx.receiptNumber);
+      final records = await repo.getVerifiedInvoices(
+        receiptNumber: tx.receiptNumber,
+      );
 
       if (!mounted) return;
       Navigator.pop(context);
@@ -346,9 +553,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
@@ -381,10 +588,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.receipt, color: Colors.white, size: 20),
+                    const Icon(
+                      LucideIcons.receipt,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -405,21 +619,31 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
               const Divider(color: Colors.white12),
               Expanded(
-                child: tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null'
-                  ? _buildImageWidget(tx.receiptLink!, scrollController)
-                  : Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.imageOff, color: Colors.white.withValues(alpha: 0.2), size: 64),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'No receipt photo available',
-                            style: TextStyle(color: Colors.white54, fontSize: 16),
-                          ),
-                        ],
+                child:
+                    tx.receiptLink != null &&
+                        tx.receiptLink!.isNotEmpty &&
+                        tx.receiptLink != 'null'
+                    ? _buildImageWidget(tx.receiptLink!, scrollController)
+                    : Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.imageOff,
+                              color: Colors.white.withValues(alpha: 0.2),
+                              size: 64,
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No receipt photo available',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
               ),
             ],
           ),
@@ -453,9 +677,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 48),
+                  Icon(
+                    LucideIcons.alertTriangle,
+                    color: Colors.orange,
+                    size: 48,
+                  ),
                   SizedBox(height: 12),
-                  Text('Could not load image', style: TextStyle(color: Colors.white54)),
+                  Text(
+                    'Could not load image',
+                    style: TextStyle(color: Colors.white54),
+                  ),
                 ],
               ),
             ),
@@ -469,16 +700,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(udharProvider);
     final currentLedger = state.ledgers.firstWhere(
-        (l) => l.id == widget.ledger.id,
-        orElse: () => widget.ledger);
+      (l) => l.id == widget.ledger.id,
+      orElse: () => widget.ledger,
+    );
 
     final initials = currentLedger.customerName.isNotEmpty
         ? currentLedger.customerName
-            .trim()
-            .split(' ')
-            .take(2)
-            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-            .join()
+              .trim()
+              .split(' ')
+              .take(2)
+              .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+              .join()
         : 'C';
 
     return Scaffold(
@@ -525,22 +757,49 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (currentLedger.customerPhone != null &&
-                      currentLedger.customerPhone!.isNotEmpty)
-                    Text(
-                      currentLedger.customerPhone!,
-                      style: TextStyle(
-                        fontSize: 12, 
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w500,
+                  Row(
+                    children: [
+                      if (currentLedger.customerPhone != null &&
+                          currentLedger.customerPhone!.isNotEmpty)
+                        Text(
+                          currentLedger.customerPhone!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      else
+                        Text(
+                          'Add Mobile Number',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () =>
+                            _showEditPhoneDialog(context, currentLedger),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(
+                            LucideIcons.edit2,
+                            size: 12,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ],
         ),
-
       ),
       body: Column(
         children: [
@@ -590,32 +849,47 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _transactions == null || _transactions!.isEmpty
-                    ? _buildEmptyState()
-                    : Builder(builder: (context) {
-                        final visibleTxs = _transactions!
-                            .where((tx) => !(tx.transactionType == 'PAYMENT' &&
-                                tx.linkedTransactionId != null))
-                            .toList();
-                        if (visibleTxs.isEmpty) return _buildEmptyState();
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                          itemCount: visibleTxs.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final tx = visibleTxs[index];
-                            return _buildTransactionCard(tx);
-                          },
-                        );
-                      }),
+                ? _buildEmptyState()
+                : Builder(
+                    builder: (context) {
+                      final visibleTxs = _transactions!
+                          .where(
+                            (tx) =>
+                                !(tx.transactionType == 'PAYMENT' &&
+                                    tx.linkedTransactionId != null),
+                          )
+                          .toList();
+                      if (visibleTxs.isEmpty) return _buildEmptyState();
+                      return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                        itemCount: visibleTxs.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final tx = visibleTxs[index];
+                          return _buildTransactionCard(tx);
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         decoration: BoxDecoration(
           color: context.surfaceColor,
-          border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 0.5)),
+          border: Border(
+            top: BorderSide(
+              color: context.borderColor.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
@@ -630,27 +904,51 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               flex: 2,
               child: OutlinedButton.icon(
                 icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 16),
-                label: const Text('REMIND', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                label: const Text(
+                  'REMIND',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 52),
                   side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
                   foregroundColor: const Color(0xFF25D366),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-                onPressed: () => _showWhatsAppReminderSheet(context, ref, currentLedger),
+                onPressed: () =>
+                    _showWhatsAppReminderSheet(context, ref, currentLedger),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
               child: ElevatedButton.icon(
-                icon: const Icon(LucideIcons.indianRupee, size: 18, color: Colors.white),
-                label: const Text('RECORD PAYMENT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                icon: const Icon(
+                  LucideIcons.indianRupee,
+                  size: 18,
+                  color: Colors.white,
+                ),
+                label: const Text(
+                  'RECORD PAYMENT',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.primaryColor,
                   minimumSize: const Size(0, 52),
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: () => _showAddPaymentDialog(context),
               ),
@@ -683,7 +981,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             color: context.primaryColor.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, 10),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -731,7 +1029,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
-                            color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                            color: isPositive
+                                ? Colors.white
+                                : Colors.greenAccent.shade200,
                           ),
                         ),
                       ),
@@ -741,7 +1041,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         style: TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.w900,
-                          color: isPositive ? Colors.white : Colors.greenAccent.shade200,
+                          color: isPositive
+                              ? Colors.white
+                              : Colors.greenAccent.shade200,
                           letterSpacing: -2,
                         ),
                       ),
@@ -817,27 +1119,41 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  void _showWhatsAppReminderSheet(BuildContext context, WidgetRef ref, CustomerLedger ledger) {
+  void _showWhatsAppReminderSheet(
+    BuildContext context,
+    WidgetRef ref,
+    CustomerLedger ledger,
+  ) {
     HapticFeedback.lightImpact();
 
     final shopProfile = ref.read(shopProvider);
     final authState = ref.read(authProvider);
-    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+    final shopName = shopProfile.name.isNotEmpty
+        ? shopProfile.name
+        : 'Our Shop';
     final upiId = shopProfile.upiId.isNotEmpty ? shopProfile.upiId : null;
     final usernameParam = authState.user?.username != null
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
-    final partyStatementLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+    final partyStatementLink =
+        'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
 
     // Collect invoices that have either a receipt photo or a receipt number
     final invoicesWithReceipts = (_transactions ?? [])
-        .where((tx) =>
-            (tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT') &&
-            ((tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null') ||
-             (tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty)))
+        .where(
+          (tx) =>
+              (tx.transactionType == 'INVOICE' ||
+                  tx.transactionType == 'MANUAL_CREDIT') &&
+              ((tx.receiptLink != null &&
+                      tx.receiptLink!.isNotEmpty &&
+                      tx.receiptLink != 'null') ||
+                  (tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty)),
+        )
         .toList();
 
-    final phoneController = TextEditingController(text: ledger.customerPhone ?? '');
+    final phoneController = TextEditingController(
+      text: ledger.customerPhone ?? '',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -845,13 +1161,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         bool useReceiptPhoto = false;
-        LedgerTransaction? selectedTx =
-            invoicesWithReceipts.isNotEmpty ? invoicesWithReceipts.first : null;
+        LedgerTransaction? selectedTx = invoicesWithReceipts.isNotEmpty
+            ? invoicesWithReceipts.first
+            : null;
 
         return StatefulBuilder(
           builder: (ctx, setSheet) {
             final message = WhatsAppUtils.buildPartyReminderMessage(
-              customerName: ledger.customerName.isNotEmpty ? ledger.customerName : 'Customer',
+              customerName: ledger.customerName.isNotEmpty
+                  ? ledger.customerName
+                  : 'Customer',
               shopName: shopName,
               totalBilled: _totalInvoiced,
               totalPaid: _totalPaid,
@@ -867,7 +1186,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               height: MediaQuery.of(ctx).size.height * 0.85,
               decoration: BoxDecoration(
                 color: context.surfaceColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
               ),
               child: Column(
                 children: [
@@ -894,25 +1215,46 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                                  color: const Color(
+                                    0xFF25D366,
+                                  ).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: const FaIcon(FontAwesomeIcons.whatsapp, color: Color(0xFF25D366), size: 22),
+                                child: const FaIcon(
+                                  FontAwesomeIcons.whatsapp,
+                                  color: Color(0xFF25D366),
+                                  size: 22,
+                                ),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Send Payment Reminder',
-                                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                                    Text(ledger.customerName,
-                                        style: TextStyle(fontSize: 13, color: context.textSecondaryColor, fontWeight: FontWeight.w600)),
+                                    const Text(
+                                      'Send Payment Reminder',
+                                      style: TextStyle(
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      ledger.customerName,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: context.textSecondaryColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                               IconButton(
-                                icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
+                                icon: Icon(
+                                  LucideIcons.x,
+                                  color: context.textSecondaryColor,
+                                ),
                                 onPressed: () => Navigator.pop(ctx),
                               ),
                             ],
@@ -921,7 +1263,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                           // Summary strip
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
                             decoration: BoxDecoration(
                               color: context.backgroundColor,
                               borderRadius: BorderRadius.circular(16),
@@ -930,11 +1275,34 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _summaryChip(context, 'Billed', CurrencyFormatter.format(_totalInvoiced), context.textColor),
-                                Container(width: 1, height: 32, color: context.borderColor),
-                                _summaryChip(context, 'Paid', CurrencyFormatter.format(_totalPaid), context.successColor),
-                                Container(width: 1, height: 32, color: context.borderColor),
-                                _summaryChip(context, 'Due', CurrencyFormatter.format(_computedBalance), context.errorColor),
+                                _summaryChip(
+                                  context,
+                                  'Billed',
+                                  CurrencyFormatter.format(_totalInvoiced),
+                                  context.textColor,
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 32,
+                                  color: context.borderColor,
+                                ),
+                                _summaryChip(
+                                  context,
+                                  'Paid',
+                                  CurrencyFormatter.format(_totalPaid),
+                                  context.successColor,
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 32,
+                                  color: context.borderColor,
+                                ),
+                                _summaryChip(
+                                  context,
+                                  'Due',
+                                  CurrencyFormatter.format(_computedBalance),
+                                  context.errorColor,
+                                ),
                               ],
                             ),
                           ),
@@ -942,82 +1310,130 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                           // Send As toggle (only if invoices exist)
                           if (invoicesWithReceipts.isNotEmpty) ...[
-                            Text('SEND AS',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
-                                    color: context.textSecondaryColor, letterSpacing: 1.2)),
+                            Text(
+                              'SEND AS',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: context.textSecondaryColor,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             SegmentedButton<bool>(
                               segments: const [
                                 ButtonSegment(
                                   value: false,
-                                  label: Text('Account Statement', style: TextStyle(fontSize: 12)),
+                                  label: Text(
+                                    'Account Statement',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                                   icon: Icon(LucideIcons.fileText, size: 15),
                                 ),
                                 ButtonSegment(
                                   value: true,
-                                  label: Text('Receipt Photo', style: TextStyle(fontSize: 12)),
+                                  label: Text(
+                                    'Receipt Photo',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                                   icon: Icon(LucideIcons.image, size: 15),
                                 ),
                               ],
                               selected: {useReceiptPhoto},
-                              onSelectionChanged: (s) => setSheet(() => useReceiptPhoto = s.first),
+                              onSelectionChanged: (s) =>
+                                  setSheet(() => useReceiptPhoto = s.first),
                               showSelectedIcon: false,
                               style: SegmentedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 10,
+                                ),
                               ),
                             ),
                             // Receipt picker when multiple invoices exist
                             if (invoicesWithReceipts.length > 1) ...[
                               const SizedBox(height: 14),
-                              Text('CHOOSE RECEIPT',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
-                                      color: context.textSecondaryColor, letterSpacing: 1.2)),
+                              Text(
+                                'CHOOSE RECEIPT',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: context.textSecondaryColor,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
                               const SizedBox(height: 6),
-                              ...invoicesWithReceipts.map((tx) => InkWell(
-                                onTap: () => setSheet(() => selectedTx = tx),
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: selectedTx == tx
-                                        ? context.primaryColor.withValues(alpha: 0.08)
-                                        : context.backgroundColor,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: selectedTx == tx ? context.primaryColor : context.borderColor,
-                                      width: selectedTx == tx ? 1.5 : 1,
+                              ...invoicesWithReceipts.map(
+                                (tx) => InkWell(
+                                  onTap: () => setSheet(() => selectedTx = tx),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
                                     ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(LucideIcons.receipt, size: 16,
-                                          color: selectedTx == tx ? context.primaryColor : context.textSecondaryColor),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          'Bill #${tx.receiptNumber ?? "N/A"} · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
-                                            color: selectedTx == tx ? context.primaryColor : context.textColor,
+                                    decoration: BoxDecoration(
+                                      color: selectedTx == tx
+                                          ? context.primaryColor.withValues(
+                                              alpha: 0.08,
+                                            )
+                                          : context.backgroundColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: selectedTx == tx
+                                            ? context.primaryColor
+                                            : context.borderColor,
+                                        width: selectedTx == tx ? 1.5 : 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          LucideIcons.receipt,
+                                          size: 16,
+                                          color: selectedTx == tx
+                                              ? context.primaryColor
+                                              : context.textSecondaryColor,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Bill #${tx.receiptNumber ?? "N/A"} · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                              color: selectedTx == tx
+                                                  ? context.primaryColor
+                                                  : context.textColor,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      if (selectedTx == tx)
-                                        Icon(LucideIcons.checkCircle2, size: 16, color: context.primaryColor),
-                                    ],
+                                        if (selectedTx == tx)
+                                          Icon(
+                                            LucideIcons.checkCircle2,
+                                            size: 16,
+                                            color: context.primaryColor,
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              )),
+                              ),
                             ],
                             const SizedBox(height: 20),
                           ],
 
                           // Message preview (WhatsApp bubble style)
-                          Text('PREVIEW',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900,
-                                  color: context.textSecondaryColor, letterSpacing: 1.2)),
+                          Text(
+                            'PREVIEW',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
@@ -1049,7 +1465,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ),
 
                           // Phone field if missing
-                          if (ledger.customerPhone == null || ledger.customerPhone!.trim().isEmpty) ...[
+                          if (ledger.customerPhone == null ||
+                              ledger.customerPhone!.trim().isEmpty) ...[
                             const SizedBox(height: 20),
                             TextField(
                               controller: phoneController,
@@ -1058,13 +1475,21 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 labelText: 'Customer Mobile Number',
                                 prefixText: '+91 ',
                                 hintText: '9876543210',
-                                prefixIcon: Icon(LucideIcons.phone, color: context.primaryColor),
+                                prefixIcon: Icon(
+                                  LucideIcons.phone,
+                                  color: context.primaryColor,
+                                ),
                                 filled: true,
-                                fillColor: context.textSecondaryColor.withValues(alpha: 0.03),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                fillColor: context.textSecondaryColor
+                                    .withValues(alpha: 0.03),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(color: context.borderColor),
+                                  borderSide: BorderSide(
+                                    color: context.borderColor,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1077,10 +1502,19 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                   // Action buttons
                   Container(
-                    padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(ctx).padding.bottom),
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      12,
+                      24,
+                      24 + MediaQuery.of(ctx).padding.bottom,
+                    ),
                     decoration: BoxDecoration(
                       color: context.surfaceColor,
-                      border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.5))),
+                      border: Border(
+                        top: BorderSide(
+                          color: context.borderColor.withValues(alpha: 0.5),
+                        ),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -1090,58 +1524,85 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             onPressed: () => Navigator.pop(ctx),
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size(0, 52),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                               side: BorderSide(color: context.borderColor),
                             ),
-                            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w700)),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           flex: 2,
                           child: ElevatedButton.icon(
-                            icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
-                            label: const Text('SEND ON WHATSAPP',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                            icon: const FaIcon(
+                              FontAwesomeIcons.whatsapp,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'SEND ON WHATSAPP',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF25D366),
                               minimumSize: const Size(0, 52),
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             onPressed: () async {
-                              final phone = phoneController.text.trim().isNotEmpty
+                              final phone =
+                                  phoneController.text.trim().isNotEmpty
                                   ? phoneController.text.trim()
                                   : (ledger.customerPhone ?? '');
 
                               // Capture all values before popping — ctx becomes invalid after Navigator.pop
                               String capturedMessage = message;
-                              final capturedReceiptLink = selectedTx?.receiptLink;
-                              final capturedReceiptNumber = selectedTx?.receiptNumber;
+                              final capturedReceiptLink =
+                                  selectedTx?.receiptLink;
+                              final capturedReceiptNumber =
+                                  selectedTx?.receiptNumber;
                               final capturedUseReceiptPhoto = useReceiptPhoto;
 
                               Navigator.pop(ctx);
 
                               // Fetch specific receipt statement link if applicable
-                              if (!capturedUseReceiptPhoto && capturedReceiptNumber != null && capturedReceiptNumber.isNotEmpty) {
-                                final shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-                                  receiptNumber: capturedReceiptNumber,
-                                  username: authState.user?.username,
-                                );
+                              if (!capturedUseReceiptPhoto &&
+                                  capturedReceiptNumber != null &&
+                                  capturedReceiptNumber.isNotEmpty) {
+                                final shareUrl =
+                                    await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                                      receiptNumber: capturedReceiptNumber,
+                                      username: authState.user?.username,
+                                    );
 
                                 if (shareUrl != null) {
-                                  capturedMessage = WhatsAppUtils.buildPartyReminderMessage(
-                                    customerName: ledger.customerName.isNotEmpty ? ledger.customerName : 'Customer',
-                                    shopName: shopName,
-                                    totalBilled: _totalInvoiced,
-                                    totalPaid: _totalPaid,
-                                    balanceDue: _computedBalance,
-                                    statementLink: shareUrl,
-                                    upiId: upiId,
-                                    useReceiptPhoto: false,
-                                    receiptPhotoUrl: null,
-                                    receiptNumber: capturedReceiptNumber,
-                                  );
+                                  capturedMessage =
+                                      WhatsAppUtils.buildPartyReminderMessage(
+                                        customerName:
+                                            ledger.customerName.isNotEmpty
+                                            ? ledger.customerName
+                                            : 'Customer',
+                                        shopName: shopName,
+                                        totalBilled: _totalInvoiced,
+                                        totalPaid: _totalPaid,
+                                        balanceDue: _computedBalance,
+                                        statementLink: shareUrl,
+                                        upiId: upiId,
+                                        useReceiptPhoto: false,
+                                        receiptPhotoUrl: null,
+                                        receiptNumber: capturedReceiptNumber,
+                                      );
                                 }
                               }
 
@@ -1186,16 +1647,25 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       },
     );
   }
+
   Future<void> _confirmDeleteTransaction(LedgerTransaction tx) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Transaction', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete this ${tx.transactionType == 'PAYMENT' ? 'payment' : 'entry'}? This action cannot be undone and balances will be recalculated.'),
+        title: const Text(
+          'Delete Transaction',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete this ${tx.transactionType == 'PAYMENT' ? 'payment' : 'entry'}? This action cannot be undone and balances will be recalculated.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -1203,14 +1673,19 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               backgroundColor: context.errorColor,
               foregroundColor: Colors.white,
             ),
-            child: const Text('DELETE', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'DELETE',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmed == true && mounted) {
-      final success = await ref.read(udharProvider.notifier).deleteTransaction(tx.id);
+      final success = await ref
+          .read(udharProvider.notifier)
+          .deleteTransaction(tx.id);
       if (success && mounted) {
         // Show success snackbar
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1234,52 +1709,68 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     }
   }
 
-
-
-  Widget _summaryChip(BuildContext context, String label, String value, Color valueColor) {
+  Widget _summaryChip(
+    BuildContext context,
+    String label,
+    String value,
+    Color valueColor,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: context.textSecondaryColor,
-              letterSpacing: 0.5,
-            )),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            color: context.textSecondaryColor,
+            letterSpacing: 0.5,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: valueColor,
-            )),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: valueColor,
+          ),
+        ),
       ],
     );
   }
 
-
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';
-    final isInvoice = tx.transactionType == 'INVOICE' || tx.transactionType == 'MANUAL_CREDIT';
-    final canTap = isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
+    final isInvoice =
+        tx.transactionType == 'INVOICE' ||
+        tx.transactionType == 'MANUAL_CREDIT';
+    final canTap =
+        isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
 
-    final Color accentColor = isPayment ? context.successColor : context.errorColor;
+    final Color accentColor = isPayment
+        ? context.successColor
+        : context.errorColor;
     final Color bgColor = accentColor.withValues(alpha: 0.08);
-    
-    final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
-    final String txTitle = isPayment 
-        ? 'Payment Received' 
-        : (tx.paymentMode != null && tx.paymentMode!.toLowerCase() != 'credit' 
-            ? '${tx.paymentMode} Sale' 
-            : 'Credit Sale');
+
+    final IconData txIcon = isPayment
+        ? LucideIcons.arrowDownLeft
+        : LucideIcons.arrowUpRight;
+    final String txTitle = isPayment
+        ? 'Payment Received'
+        : (tx.paymentMode != null && tx.paymentMode!.toLowerCase() != 'credit'
+              ? '${tx.paymentMode} Sale'
+              : 'Credit Sale');
 
     return Container(
       decoration: BoxDecoration(
         color: context.surfaceColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: context.premiumShadow,
-        border: Border.all(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+        border: Border.all(
+          color: context.borderColor.withValues(alpha: 0.5),
+          width: 1,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -1329,10 +1820,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Icon(LucideIcons.calendar, size: 12, color: context.textSecondaryColor),
+                            Icon(
+                              LucideIcons.calendar,
+                              size: 12,
+                              color: context.textSecondaryColor,
+                            ),
                             const SizedBox(width: 4),
                             Text(
-                              DateFormat('dd MMM yyyy').format(tx.createdAt.toLocal()),
+                              DateFormat(
+                                'dd MMM yyyy',
+                              ).format(tx.createdAt.toLocal()),
                               style: TextStyle(
                                 fontSize: 11,
                                 color: context.textSecondaryColor,
@@ -1344,24 +1841,37 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         if (tx.notes != null && tx.notes!.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: context.textSecondaryColor.withValues(alpha: 0.05),
+                              color: context.textSecondaryColor.withValues(
+                                alpha: 0.05,
+                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(LucideIcons.messageSquare, size: 10, color: context.textSecondaryColor),
+                                Icon(
+                                  LucideIcons.messageSquare,
+                                  size: 10,
+                                  color: context.textSecondaryColor,
+                                ),
                                 const SizedBox(width: 6),
                                 Flexible(
                                   child: Text(
                                     // Clean up auto-generated notes for SMB readability
-                                    tx.notes!.startsWith('Payment collected for Invoice')
+                                    tx.notes!.startsWith(
+                                          'Payment collected for Invoice',
+                                        )
                                         ? 'Full balance collected'
-                                        : tx.notes!.startsWith('Auto-generated payment')
-                                            ? 'Payment for Invoice #${tx.receiptNumber ?? ""}'
-                                            : tx.notes!,
+                                        : tx.notes!.startsWith(
+                                            'Auto-generated payment',
+                                          )
+                                        ? 'Payment for Invoice #${tx.receiptNumber ?? ""}'
+                                        : tx.notes!,
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.textSecondaryColor,
@@ -1382,28 +1892,40 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
             ),
           ),
-          
+
           // User Clarity Row: Bill, Paid, Balance
           if (isInvoice)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: context.textSecondaryColor.withValues(alpha: 0.03),
-                border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+                border: Border(
+                  top: BorderSide(color: context.borderColor, width: 0.5),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildClarityItem('Bill Amount', CurrencyFormatter.format(tx.amount)),
                   _buildClarityItem(
-                    'Paid', 
-                    CurrencyFormatter.format(tx.receivedAmount ?? (tx.amount - (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))))
+                    'Bill Amount',
+                    CurrencyFormatter.format(tx.amount),
                   ),
                   _buildClarityItem(
-                    'Balance', 
-                    CurrencyFormatter.format(tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)),
-                    valueColor: (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)) <= 0 
-                        ? context.successColor 
+                    'Paid',
+                    CurrencyFormatter.format(
+                      tx.receivedAmount ??
+                          (tx.amount -
+                              (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))),
+                    ),
+                  ),
+                  _buildClarityItem(
+                    'Balance',
+                    CurrencyFormatter.format(
+                      tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount),
+                    ),
+                    valueColor:
+                        (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)) <= 0
+                        ? context.successColor
                         : context.errorColor,
                   ),
                 ],
@@ -1415,7 +1937,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: context.surfaceColor,
-              border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+              border: Border(
+                top: BorderSide(color: context.borderColor, width: 0.5),
+              ),
             ),
             child: Row(
               children: [
@@ -1427,7 +1951,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        color: context.textSecondaryColor.withValues(alpha: 0.5),
+                        color: context.textSecondaryColor.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -1436,7 +1962,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   TextButton.icon(
                     onPressed: () => _showReceiptPhotoDialog(tx),
                     icon: const Icon(LucideIcons.eye, size: 14),
-                    label: const Text('VIEW BILL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                    label: const Text(
+                      'VIEW BILL',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       foregroundColor: context.primaryColor,
@@ -1446,17 +1978,29 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   // SETTLED badge for paid invoices
                   if (tx.isPaid)
                     Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 6,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: context.successColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: context.successColor.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: context.successColor.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.checkCircle2, size: 10, color: context.successColor),
+                          Icon(
+                            LucideIcons.checkCircle2,
+                            size: 10,
+                            color: context.successColor,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'SETTLED',
@@ -1473,7 +2017,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   // COLLECT button removed — use RECORD PAYMENT button at bottom instead
                 ],
                 IconButton(
-                  icon: Icon(LucideIcons.trash2, size: 16, color: context.errorColor),
+                  icon: Icon(
+                    LucideIcons.trash2,
+                    size: 16,
+                    color: context.errorColor,
+                  ),
                   onPressed: () => _confirmDeleteTransaction(tx),
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -1526,7 +2074,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               shape: BoxShape.circle,
               boxShadow: context.premiumShadow,
             ),
-            child: Icon(LucideIcons.fileText, size: 48, color: context.borderColor),
+            child: Icon(
+              LucideIcons.fileText,
+              size: 48,
+              color: context.borderColor,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
@@ -1541,7 +2093,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           Text(
             'Transactions will appear here once\nan invoice or payment is recorded.',
             style: TextStyle(
-              fontSize: 14, 
+              fontSize: 14,
               color: context.textSecondaryColor,
               fontWeight: FontWeight.w500,
             ),
