@@ -67,8 +67,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   /// that happen during the GoRouter transition (blank screen guard).
   bool _isNavigatingAway = false;
 
-  bool _isPartyFocused = false;
-
   /// Currently selected party from the top customer banner.
   /// Null means name is typed but not matched to an existing party.
 
@@ -339,6 +337,83 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       return;
     }
 
+    if (liveGroup.hasError) {
+      // Gather specific error messages
+      final List<String> errorMessages = [];
+      if (liveGroup.header?.verificationStatus.toLowerCase() == 'duplicate receipt number') {
+        errorMessages.add('• Duplicate receipt number');
+      }
+      if (liveGroup.header?.date.trim().isEmpty == true) {
+        errorMessages.add('• Receipt date is missing');
+      }
+      
+      int mismatchCount = 0;
+      for (var item in liveGroup.lineItems) {
+        if (item.amountMismatch != null && item.amountMismatch!.abs() >= 1.0) {
+          mismatchCount++;
+        }
+      }
+      if (mismatchCount > 0) {
+        errorMessages.add('• $mismatchCount line item(s) have amount mismatches');
+      }
+
+      if (errorMessages.isEmpty) {
+        errorMessages.add('• Some fields have errors');
+      }
+
+      // Show dialog
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(LucideIcons.alertTriangle, color: context.errorColor),
+              const SizedBox(width: 8),
+              const Text('Errors Found', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Please review the following errors before saving:'),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.errorColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: context.errorColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  errorMessages.join('\n'),
+                  style: TextStyle(color: context.errorColor, fontWeight: FontWeight.w600, height: 1.5, fontSize: 13),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Are you sure you want to save with these errors?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => context.pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: context.errorColor),
+              onPressed: () => context.pop(true),
+              child: const Text('Save Anyway'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) {
+        return; // User cancelled
+      }
+    }
+
     await _saveCurrentState();
     if (!mounted) return;
 
@@ -457,9 +532,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final hasAnyError = group.hasError;
 
-    final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-    final bool hidePartyBanner = keyboardOpen && !_isPartyFocused;
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -516,122 +588,106 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         ),
         body: Column(
           children: [
-            // ── Customer Name banner — always at the very top ──────────────
-            if (header != null)
-              Focus(
-                onFocusChange: (hasFocus) {
-                  if (mounted) setState(() => _isPartyFocused = hasFocus);
-                },
-                child: TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  tween: Tween<double>(begin: 1.0, end: hidePartyBanner ? 0.0 : 1.0),
-                  builder: (context, factor, child) {
-                    return ClipRect(
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        heightFactor: factor,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: _buildTopCustomerBanner(header),
-                ),
-              ),
-            if (header != null && header.receiptLink.isNotEmpty)
-              GestureDetector(
-                onTap: () => _showFullImage(header.receiptLink),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  height: MediaQuery.of(context).viewInsets.bottom > 0 
-                      ? 0.0 
-                      : MediaQuery.of(context).size.height * 0.25,
-                  width: double.infinity,
-                  decoration: BoxDecoration(color: context.surfaceColor),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      RobustReceiptImage(
-                        imageUrl: header.receiptLink,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        heroTag: 'receipt_image_${group.receiptNumber}',
-                        maxRetries: 3,
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(LucideIcons.maximize, color: Colors.white, size: 14),
-                              SizedBox(width: 6),
-                              Text('Tap to expand', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.zero,
                 children: [
+                  // ── Customer Name banner — always at the very top ──────────────
                   if (header != null)
-                    _buildHeaderCard(header, invoiceColumns, isAutomobile),
-                  const SizedBox(height: 16),
-                  Text('Line Items',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: context.textSecondaryColor)),
-                  const SizedBox(height: 8),
-                  if (sortedLineItems.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Center(child: Text('No line items found.')),
+                    _buildTopCustomerBanner(header),
+                  if (header != null && header.receiptLink.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => _showFullImage(header.receiptLink),
+                      child: Container(
+                        height: MediaQuery.of(context).size.height * 0.25,
+                        width: double.infinity,
+                        decoration: BoxDecoration(color: context.surfaceColor),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            RobustReceiptImage(
+                              imageUrl: header.receiptLink,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                              heroTag: 'receipt_image_${group.receiptNumber}',
+                              maxRetries: 3,
+                            ),
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(LucideIcons.maximize, color: Colors.white, size: 14),
+                                    SizedBox(width: 6),
+                                    Text('Tap to expand', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  if (isAutomobile) ...[
-                    if (partsItems.isNotEmpty) ...[
-                      _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
-                      ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                      const SizedBox(height: 12),
-                    ],
-                    if (laborItems.isNotEmpty) ...[
-                      _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
-                      ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                      const SizedBox(height: 12),
-                    ],
-                    if (otherItems.isNotEmpty) ...[
-                      _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
-                      ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                      const SizedBox(height: 12),
-                    ],
-                  ] else ...[
-                    ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
-                    const SizedBox(height: 12),
-                  ],
-                  PaymentSummaryCard(
-                    isAutomobile: isAutomobile,
-                    gstMode: _gstMode,
-                    partsSubtotal: _partsSubtotal(group),
-                    laborSubtotal: _laborSubtotal(group),
-                    gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
-                    grandTotal: _activeTotalAmount(group),
-                    originalTotal: group.header?.amount ?? (_partsSubtotal(group) + _laborSubtotal(group)),
-                    onGstModeChanged: _saveGstMode,
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (header != null)
+                          _buildHeaderCard(header, invoiceColumns, isAutomobile),
+                        const SizedBox(height: 16),
+                        Text('Line Items',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: context.textSecondaryColor)),
+                        const SizedBox(height: 8),
+                        if (sortedLineItems.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Center(child: Text('No line items found.')),
+                          ),
+                        if (isAutomobile) ...[
+                          if (partsItems.isNotEmpty) ...[
+                            _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
+                            ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            const SizedBox(height: 12),
+                          ],
+                          if (laborItems.isNotEmpty) ...[
+                            _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
+                            ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            const SizedBox(height: 12),
+                          ],
+                          if (otherItems.isNotEmpty) ...[
+                            _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
+                            ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            const SizedBox(height: 12),
+                          ],
+                        ] else ...[
+                          ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                          const SizedBox(height: 12),
+                        ],
+                        PaymentSummaryCard(
+                          isAutomobile: isAutomobile,
+                          gstMode: _gstMode,
+                          partsSubtotal: _partsSubtotal(group),
+                          laborSubtotal: _laborSubtotal(group),
+                          gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
+                          grandTotal: _activeTotalAmount(group),
+                          originalTotal: group.header?.amount ?? (_partsSubtotal(group) + _laborSubtotal(group)),
+                          onGstModeChanged: _saveGstMode,
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -781,13 +837,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     gradient: LinearGradient(
-                      colors: hasAnyError
-                          ? [context.warningColor, context.warningColor.withValues(alpha: 0.8)]
-                          : [context.primaryColor, context.primaryColor.withValues(alpha: 0.8)],
+                      colors: [context.primaryColor, context.primaryColor.withValues(alpha: 0.8)],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (hasAnyError ? context.warningColor : context.primaryColor).withValues(alpha: 0.3),
+                        color: context.primaryColor.withValues(alpha: 0.3),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -803,15 +857,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     ),
                     icon: state.isSyncing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : Icon(hasAnyError ? LucideIcons.alertTriangle : LucideIcons.checkCircle, size: 20),
+                        : const Icon(LucideIcons.checkCircle, size: 20),
                     label: Text(
                       state.isSyncing
                           ? 'Saving...'
-                          : (hasAnyError
-                              ? 'Save with Errors'
-                              : (widget.currentIndex == -1 || widget.currentIndex == widget.allGroups.length - 1
-                                  ? 'Sync & Finish'
-                                  : 'Save & Next')),
+                          : (widget.currentIndex == -1 || widget.currentIndex == widget.allGroups.length - 1
+                              ? 'Sync & Finish'
+                              : 'Save & Next'),
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
                     ),
                   ),
