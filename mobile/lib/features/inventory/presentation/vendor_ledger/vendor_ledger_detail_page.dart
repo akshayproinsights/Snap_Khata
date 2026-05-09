@@ -296,7 +296,7 @@ class _VendorLedgerDetailPageState
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : (_activityItems == null || _activityItems!.isEmpty)
-                    ? _buildEmptyState()
+                    ? _buildEmptyState(currentLedger)
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                         itemCount: _activityItems!.length,
@@ -572,7 +572,7 @@ class _VendorLedgerDetailPageState
     final Color bgColor = accentColor.withValues(alpha: 0.08);
 
     final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
-    final String txTitle = isPayment ? 'Payment Sent' : 'Purchase Invoice';
+    final String txTitle = isPayment ? 'Payment Sent' : 'Purchase Bill';
     
     final amount = isPayment ? (tx?.amount ?? 0) : (inv?['total_amount']?.toDouble() ?? tx?.amount ?? 0);
     final date = item.date;
@@ -685,8 +685,6 @@ class _VendorLedgerDetailPageState
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildClarityItem('Bill Amount', CurrencyFormatter.format(amount)),
-                    _buildClarityItem('Status', isPaid ? 'PAID' : 'PENDING', 
-                      valueColor: isPaid ? context.successColor : context.errorColor),
                     _buildClarityItem('Bill #', inv?['invoice_number']?.toString() ?? tx?.invoiceNumber ?? 'N/A'),
                   ],
                 ),
@@ -740,7 +738,7 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(VendorLedger ledger) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -754,6 +752,21 @@ class _VendorLedgerDetailPageState
           const Text('No activity yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text('Activity will appear here once\na purchase or payment is recorded.', style: TextStyle(fontSize: 14, color: context.textSecondaryColor), textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            icon: const Icon(LucideIcons.camera, size: 18),
+            label: const Text('Scan Purchase Bill', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: () {
+              context.push('/upload', extra: {'vendorName': ledger.vendorName});
+            },
+          ),
         ],
       ),
     );

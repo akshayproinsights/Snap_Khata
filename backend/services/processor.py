@@ -371,7 +371,8 @@ def process_single_invoice(
                     config = types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         response_mime_type="application/json",
-                        temperature=0.1
+                        temperature=0.1,
+                        max_output_tokens=8192
                     )
                     
                     # Call API

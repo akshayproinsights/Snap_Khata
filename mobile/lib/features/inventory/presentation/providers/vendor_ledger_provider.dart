@@ -136,8 +136,8 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      // Silent re-fetch so the list stays visible while updating.
-      unawaited(fetchLedgersSilent());
+      // Wait for ledger update before returning so the UI sees the new balance
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;
@@ -155,7 +155,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      unawaited(fetchLedgersSilent());
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;
@@ -169,7 +169,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      unawaited(fetchLedgersSilent());
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;
@@ -187,7 +187,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      unawaited(fetchLedgersSilent());
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;
@@ -202,7 +202,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      unawaited(fetchLedgersSilent());
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;
@@ -227,7 +227,7 @@ class VendorLedgerNotifier extends Notifier<VendorLedgerState> {
       );
       ref.invalidate(inventoryItemsProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-      unawaited(fetchLedgersSilent());
+      await fetchLedgersSilent();
       return true;
     } catch (e) {
       return false;

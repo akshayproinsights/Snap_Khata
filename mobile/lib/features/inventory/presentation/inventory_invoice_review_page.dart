@@ -422,7 +422,12 @@ class _InventoryInvoiceReviewPageState
           'currentIndex': nextIdx,
         });
       } else {
-        context.go('/inventory-review');
+        // Auto-sync and navigate to dashboard when no more pending bills
+        ref.read(inventoryProvider.notifier).syncAndFinish().then((_) {
+          if (mounted) {
+            context.go('/');
+          }
+        });
       }
     });
   }
@@ -524,7 +529,14 @@ class _InventoryInvoiceReviewPageState
                   ],
                   selected: {_paymentMode},
                   onSelectionChanged: (newSelection) {
-                    setState(() => _paymentMode = newSelection.first);
+                    setState(() {
+                      _paymentMode = newSelection.first;
+                      if (_paymentMode == 'Cash') {
+                        _paidAmountController.text = totalAmount.round().toString();
+                      } else {
+                        _paidAmountController.text = '0';
+                      }
+                    });
                   },
                 ),
               ),
