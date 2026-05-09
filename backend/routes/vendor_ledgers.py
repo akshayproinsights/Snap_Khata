@@ -1201,7 +1201,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
 
         # 3. Fetch existing transactions for these invoice numbers (both INVOICE and PAYMENT)
         existing_tx_resp = db.client.table("vendor_ledger_transactions") \
-            .select("id, invoice_number, vendor_ledger_id, amount, is_paid, transaction_type") \
+            .select("id, invoice_number, ledger_id, amount, is_paid, transaction_type") \
             .eq("username", username) \
             .in_("invoice_number", invoice_numbers) \
             .execute()
@@ -1269,7 +1269,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
             if inv_num in existing_invoices:
                 tx = existing_invoices[inv_num]
                 update_data = {}
-                if tx["vendor_ledger_id"] != ledger_id: update_data["vendor_ledger_id"] = ledger_id
+                if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
                 if abs(float(tx.get("amount") or 0) - full_amount) > 0.01:
                     update_data["amount"] = full_amount
                 if bool(tx.get("is_paid")) != is_paid_status:
@@ -1285,7 +1285,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
             else:
                 db.client.table("vendor_ledger_transactions").insert({
                     "username": username,
-                    "vendor_ledger_id": ledger_id,
+                    "ledger_id": ledger_id,
                     "transaction_type": "INVOICE",
                     "amount": full_amount,
                     "invoice_number": inv_num,
@@ -1302,7 +1302,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                 if inv_num in existing_payments:
                     tx = existing_payments[inv_num]
                     update_data = {}
-                    if tx["vendor_ledger_id"] != ledger_id: update_data["vendor_ledger_id"] = ledger_id
+                    if tx["ledger_id"] != ledger_id: update_data["ledger_id"] = ledger_id
                     if abs(float(tx.get("amount") or 0) - amount_paid) > 0.01:
                         update_data["amount"] = amount_paid
                     if update_data:
@@ -1310,7 +1310,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                 else:
                     db.client.table("vendor_ledger_transactions").insert({
                         "username": username,
-                        "vendor_ledger_id": ledger_id,
+                        "ledger_id": ledger_id,
                         "transaction_type": "PAYMENT",
                         "amount": amount_paid,
                         "invoice_number": inv_num,
@@ -1371,7 +1371,7 @@ async def reconcile_all_ledger_balances(current_user: Dict = Depends(get_current
 
         # 2. Fetch all transactions
         tx_resp = db.client.table("vendor_ledger_transactions") \
-            .select("vendor_ledger_id, amount, transaction_type, is_paid") \
+            .select("ledger_id, amount, transaction_type, is_paid") \
             .eq("username", username) \
             .execute()
 
@@ -1379,7 +1379,7 @@ async def reconcile_all_ledger_balances(current_user: Dict = Depends(get_current
         expected_balances = {ld["id"]: 0.0 for ld in ledgers_resp.data}
         
         for tx in (tx_resp.data or []):
-            lid = tx["vendor_ledger_id"] # Note: in vendor_ledger_transactions it's vendor_ledger_id
+            lid = tx["ledger_id"] # Note: in vendor_ledger_transactions it's ledger_id
             if lid in expected_balances:
                 amt = float(tx.get("amount", 0))
                 ttype = tx.get("transaction_type")

@@ -36,7 +36,7 @@ class KhataSortBy(str, Enum):
 # INVENTORY ENDPOINTS - PAGINATED
 # ════════════════════════════════════════════════════════════════════════════════
 
-@router.get("/inventory/items")
+@router.get("/inventory/items/paginated")
 async def get_inventory_items_paginated(
     limit: int = Query(20, ge=10, le=100, description="Items per page"),
     cursor: Optional[str] = Query(None, description="Pagination cursor"),

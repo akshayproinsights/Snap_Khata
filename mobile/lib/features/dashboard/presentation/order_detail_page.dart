@@ -133,13 +133,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   double _totalAfterGst(InvoiceGroup group) {
-    // If we have a manually entered total from the backend/previous edit, prioritize it
-    final manualTotal = group.extraFields['total_bill_amount'] ?? group.extraFields['total_amount'];
-    if (manualTotal != null) {
-      final parsed = double.tryParse(manualTotal.toString());
-      if (parsed != null) return parsed;
-    }
-
+    // ALWAYS compute from actual line items — they are the authoritative source of truth.
+    // DO NOT read extra_fields['total_bill_amount'] here: the AI sometimes extracts a
+    // stale/wrong total_bill_amount into extra_fields which causes the Credit Book (₹34,320)
+    // vs Order Details (₹21,310) mismatch.
     final parts = _partsSubtotal(group);
     final labor = _laborSubtotal(group);
     final combined = parts + labor;
@@ -242,13 +239,14 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     double newTotal = 0;
 
-    // Build updated extra_fields from dynamic controllers
+    // Build updated extra_fields from dynamic controllers.
+    // IMPORTANT: Do NOT persist 'total_bill_amount' into extra_fields — the AI sometimes
+    // writes a wrong value there that would then override the correct line-item sum.
+    // The source of truth for the total is always the sum of actual line items.
     final newGroupExtraFields = {
-      for (final e in _extraFieldCtrls.entries) e.key: e.value.text,
+      for (final e in _extraFieldCtrls.entries)
+        if (e.key != 'total_bill_amount' && e.key != 'total_amount') e.key: e.value.text,
     };
-    
-    // Persist the manual total into extra fields
-    newGroupExtraFields['total_bill_amount'] = _totalAmountController.text;
 
     final List<VerifiedInvoice> updatedItems = [];
 

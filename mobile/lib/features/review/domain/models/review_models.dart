@@ -53,9 +53,6 @@ class ReviewRecord {
     if (isHeader && date.trim().isEmpty) {
       return true;
     }
-    if (isHeader && (customerName == null || customerName!.trim().isEmpty)) {
-      return true;
-    }
     return false;
   }
 

@@ -1,17 +1,15 @@
 import asyncio
 from backend.database import get_database_client
 
-async def test():
+def main():
     db = get_database_client()
-    # Let's get the raw data without username filter so we can see all of it
-    resp = db.client.table('vendor_ledgers').select('*').limit(5).execute()
-    print("Vendor ledgers:")
-    for row in resp.data:
-        print(f"Vendor: {row.get('vendor_name')}, Balance Due: {row.get('balance_due')} (Type: {type(row.get('balance_due'))})")
+    resp = db.client.table("inventory_items").select("id, verification_status").execute()
+    print("Total items:", len(resp.data))
+    for row in resp.data[:5]:
+        print(row)
     
-    resp2 = db.client.table('vendor_ledgers').select('*').gt('balance_due', 0).limit(5).execute()
-    print("Vendor ledgers with balance > 0:")
-    for row in resp2.data:
-        print(f"Vendor: {row.get('vendor_name')}, Balance Due: {row.get('balance_due')}")
+    # Query with neq Done
+    resp2 = db.client.table("inventory_items").select("id, verification_status").neq("verification_status", "Done").execute()
+    print("Total with neq Done:", len(resp2.data))
 
-asyncio.run(test())
+main()

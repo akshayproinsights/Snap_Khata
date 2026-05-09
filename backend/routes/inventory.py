@@ -1041,6 +1041,9 @@ async def get_inventory_items(
     db = get_database_client()
     
     try:
+        with open("/root/Snap_Khata/logs/debug_inventory.log", "a") as f:
+            f.write(f"get_inventory_items: username={username}, show_all={show_all}\n")
+        
         # Base query
         query = db.client.table("inventory_items").select("*").eq("username", username)
         
@@ -1057,6 +1060,8 @@ async def get_inventory_items(
         query = query.order("created_at", desc=True)
         
         response = query.execute()
+        with open("/root/Snap_Khata/logs/debug_inventory.log", "a") as f:
+            f.write(f"get_inventory_items: found {len(response.data or [])} items\n")
         
         # Resolve r2:// URLs in response
         items = response.data or []

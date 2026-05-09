@@ -283,6 +283,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       final balanceDue = grandTotal - _receivedAmount;
       final paymentMode = balanceDue > 0 ? 'Credit' : 'Cash';
       
+      var customerName = header.customerName?.trim() ?? '';
+      if (customerName.isEmpty) {
+        customerName = 'Counter';
+      }
+
       var newRecord = header.copyWith(
           verificationStatus: 'Done',
           paymentMode: paymentMode,
@@ -292,6 +297,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           totalBillAmount: grandTotal,
           customerDetails: balanceDue > 0 ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
+          customerName: customerName,
       );
 
       if (updatePhoneNumber != null && updatePhoneNumber.isNotEmpty) {
@@ -325,18 +331,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       (g) => g.receiptNumber == widget.group.receiptNumber,
       orElse: () => widget.group,
     );
-    final customerName = liveGroup.header?.customerName?.trim() ?? '';
-    if (customerName.isEmpty) {
-      setState(() => _customerNameMissing = true);
-      AppToast.showError(
-        context,
-        'Please enter the customer name before saving.',
-        title: 'Customer Required',
-      );
-      // Scroll to the top so the red field is visible
-      return;
-    }
-
     if (liveGroup.hasError) {
       // Gather specific error messages
       final List<String> errorMessages = [];

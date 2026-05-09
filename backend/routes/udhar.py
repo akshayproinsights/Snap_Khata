@@ -1458,13 +1458,13 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
         if v_ledgers:
             v_ledger_ids = [ld['id'] for ld in v_ledgers]
             vend_tx_resp = db.client.table('vendor_ledger_transactions') \
-                .select('vendor_ledger_id, amount, transaction_type, is_paid') \
+                .select('ledger_id, amount, transaction_type, is_paid') \
                 .eq('username', username) \
-                .in_('vendor_ledger_id', v_ledger_ids) \
+                .in_('ledger_id', v_ledger_ids) \
                 .execute()
             v_expected: Dict[int, float] = {ld['id']: 0.0 for ld in v_ledgers}
             for tx in (vend_tx_resp.data or []):
-                lid = tx.get('vendor_ledger_id')
+                lid = tx.get('ledger_id')
                 if lid not in v_expected:
                     continue
                 amt = float(tx.get('amount') or 0)

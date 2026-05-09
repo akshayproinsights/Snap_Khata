@@ -248,6 +248,10 @@ class AppRouter {
         path: '/inventory-invoice-review',
         name: 'inventory-invoice-review',
         parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          if (state.extra == null) return '/inventory-review';
+          return null;
+        },
         builder: (context, state) {
           final bundle = state.extra as InventoryInvoiceBundle;
           return InventoryInvoiceReviewPage(bundle: bundle);
@@ -288,8 +292,17 @@ class AppRouter {
         name: 'party-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final ledger = state.extra as CustomerLedger;
-          return PartyDetailPage(ledger: ledger);
+          if (state.extra is CustomerLedger) {
+            return PartyDetailPage(ledger: state.extra as CustomerLedger);
+          }
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          return PartyDetailPage(
+            ledger: CustomerLedger(
+              id: id,
+              customerName: 'Loading...',
+              balanceDue: 0.0,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -303,14 +316,27 @@ class AppRouter {
         name: 'vendor-ledger-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final ledger = state.extra as VendorLedger;
-          return VendorLedgerDetailPage(ledger: ledger);
+          if (state.extra is VendorLedger) {
+            return VendorLedgerDetailPage(ledger: state.extra as VendorLedger);
+          }
+          final id = int.tryParse(state.pathParameters['id'] ?? '0') ?? 0;
+          return VendorLedgerDetailPage(
+            ledger: VendorLedger(
+              id: id,
+              vendorName: 'Loading...',
+              balanceDue: 0.0,
+            ),
+          );
         },
       ),
       GoRoute(
         path: '/order-detail',
         name: 'order-detail',
         parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          if (state.extra == null) return '/';
+          return null;
+        },
         builder: (context, state) {
           final group = state.extra as InvoiceGroup;
           return OrderDetailPage(group: group);
@@ -320,6 +346,10 @@ class AppRouter {
         path: '/vendor-delivery-detail',
         name: 'vendor-delivery-detail',
         parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          if (state.extra == null) return '/inventory/vendor-ledger';
+          return null;
+        },
         builder: (context, state) {
           final bundle = state.extra as InventoryInvoiceBundle;
           return VendorDeliveryDetailPage(bundle: bundle);

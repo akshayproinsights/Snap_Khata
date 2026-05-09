@@ -69,7 +69,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     // state without this explicit refresh.
     Future.microtask(() {
       if (mounted) {
-        ref.read(inventoryProvider.notifier).fetchItems();
+        ref.read(inventoryProvider.notifier).fetchItems(showAll: true);
       }
     });
   }
@@ -250,7 +250,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     final error = allBundles.where((b) => b.hasMismatch).length;
     final allDone = total > 0 && done == total;
 
-    final bundles = allBundles.where((b) => !b.isVerified).toList();
+    final bundles = allBundles; // Show ALL bundles (Pending + Done)
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
@@ -281,7 +281,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
             tooltip: 'Refresh',
             onPressed: () {
               HapticFeedback.lightImpact();
-              ref.read(inventoryProvider.notifier).refresh();
+              ref.read(inventoryProvider.notifier).fetchItems(showAll: true);
             },
           ),
         ],

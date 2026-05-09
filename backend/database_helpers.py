@@ -32,7 +32,7 @@ def convert_numeric_types(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     - Floats with decimals: convert to float
     - Remove .0 suffix from string representations
     """
-    integer_fields = ['input_tokens', 'output_tokens', 'total_tokens']  # Industry-specific numeric fields are now in extra_fields
+    integer_fields = ['input_tokens', 'output_tokens', 'total_tokens', 'mobile_number']  # mobile_number is bigint in verified_invoices
     float_fields = ['quantity', 'rate', 'amount', 'total_bill_amount', 'calculated_amount', 'amount_mismatch', 'received_amount', 'balance_due', 'model_accuracy', 'cost_inr']
     
     for key, value in row_dict.items():

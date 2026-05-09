@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/core/utils/image_compress_service.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
@@ -36,88 +38,50 @@ class InventoryUploadRepository {
   }) async {
     if (files.isEmpty) return [];
 
-    // Step 1 ─ Get pre-signed PUT URLs from backend (lightweight, no payload)
-    final slotsResponse = await _dio.get(
-      '/api/inventory/upload-urls',
-      queryParameters: {'count': files.length},
-    );
-    final slots = List<Map<String, dynamic>>.from(
-      slotsResponse.data['upload_slots'] ?? [],
-    );
-    if (slots.length != files.length) {
-      throw Exception('Server returned incorrect number of upload slots');
-    }
+    try {
+      debugPrint('🚀 [InventoryUpload] Compressing ${files.length} files...');
+      final compressedFiles = await ImageCompressService.compressFiles(files);
 
-    // Step 2 ─ Streaming compress + upload pipeline
-    //   For each (file, slot) pair, compress then immediately PUT to R2.
-    //   All pairs run concurrently — Dart's async scheduler interleaves
-    //   the CPU-bound compression with the IO-bound uploads transparently.
-    int totalFiles = files.length;
-    int completedFiles = 0;
+      final formData = FormData();
+      
+      for (var file in compressedFiles) {
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          formData.files.add(MapEntry(
+            'files',
+            MultipartFile.fromBytes(bytes, filename: file.name),
+          ));
+        } else {
+          final filename = file.name.isNotEmpty ? file.name : p.basename(file.path);
+          formData.files.add(MapEntry(
+            'files',
+            await MultipartFile.fromFile(file.path, filename: filename),
+          ));
+        }
+      }
 
-    Future<String> compressAndUpload(
-        XFile file, Map<String, dynamic> slot) async {
-      // Compress on-device (reduces size 5–10×)
-      final compressed = await ImageCompressService.compressFile(file);
-      final bytes = await compressed.readAsBytes();
-
-      // Direct PUT to R2 — bypasses Python server entirely.
-      //
-      // CRITICAL: Pass `bytes` (Uint8List) directly — NOT Stream.fromIterable.
-      // Cloudflare R2 presigned PUT URLs do NOT support chunked transfer
-      // encoding (which Dio uses automatically for Stream data). Passing raw
-      // bytes makes Dio send a standard Content-Length upload that R2 accepts.
-      // Also: Content-Length must be a String, not an int.
-      final uploadUrl = slot['upload_url'] as String;
-      final fileKey = slot['file_key'] as String;
-
-      final r2Response = await Dio().put(
-        uploadUrl,
-        data: bytes, // Uint8List — Dio sets Content-Length as String automatically
-        options: Options(
-          contentType: 'image/jpeg',
-          headers: {
-            'Content-Type': 'image/jpeg',
-          },
-          sendTimeout: const Duration(seconds: 120),
-          receiveTimeout: const Duration(seconds: 60),
-          // Accept any 2xx status; R2 returns 200 on success
-          validateStatus: (status) => status != null && status < 400,
-        ),
+      debugPrint('🚀 [InventoryUpload] Sending POST to /api/inventory/upload');
+      final response = await _dio.post(
+        '/api/inventory/upload',
+        data: formData,
+        onSendProgress: onProgress,
       );
 
-      // Explicitly validate — R2 occasionally returns non-200 2xx
-      final statusCode = r2Response.statusCode ?? 0;
-      if (statusCode < 200 || statusCode >= 400) {
-        throw Exception(
-          'R2 upload rejected: HTTP $statusCode for $fileKey',
-        );
-      }
-
-      completedFiles++;
-      if (onProgress != null) {
-        // Signal as (filesUploaded, totalFiles) — provider reads sent/total = 0.0–1.0
-        onProgress(completedFiles, totalFiles);
-      }
-
-      return fileKey;
+      final uploadedFiles = List<String>.from(response.data['uploaded_files'] ?? []);
+      debugPrint('✅ [InventoryUpload] Successfully uploaded keys: $uploadedFiles');
+      
+      return uploadedFiles;
+    } catch (e) {
+      debugPrint('❌ [InventoryUpload] Error in uploadFiles: $e');
+      throw Exception('Failed to upload files: $e');
     }
-
-    // Launch all compress+upload tasks concurrently
-    final results = await Future.wait(
-      List.generate(
-        files.length,
-        (i) => compressAndUpload(files[i], slots[i]),
-      ),
-    );
-
-    return results;
   }
 
   // 2. Start asynchronous processing for uploaded keys
   Future<UploadTaskStatus> processInvoices(List<String> fileKeys,
       {bool forceUpload = false}) async {
     try {
+      debugPrint('🚀 [InventoryUpload] Calling /api/inventory/process with keys: $fileKeys');
       final response = await _dio.post(
         '/api/inventory/process',
         data: {
@@ -125,8 +89,13 @@ class InventoryUploadRepository {
           'force_upload': forceUpload,
         },
       );
+      debugPrint('✅ [InventoryUpload] Process response: ${response.data}');
       return UploadTaskStatus.fromJson(response.data);
+    } on DioException catch (e) {
+      debugPrint('❌ [InventoryUpload] DioError in processInvoices: ${e.response?.data ?? e.message}');
+      throw Exception('Failed to start inventory processing: ${e.response?.data ?? e.message}');
     } catch (e) {
+      debugPrint('❌ [InventoryUpload] Error in processInvoices: $e');
       throw Exception('Failed to start inventory processing: $e');
     }
   }

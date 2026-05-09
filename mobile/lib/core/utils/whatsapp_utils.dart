@@ -242,16 +242,19 @@ class WhatsAppUtils {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) {
           void executeShare(String phoneToUse) async {
-            final message =
-                '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
-
-            if (shareOriginalImage &&
+            final isSharingPhoto = shareOriginalImage &&
                 imageUrl != null &&
                 imageUrl.isNotEmpty &&
-                imageUrl != 'null') {
+                imageUrl != 'null';
+
+            final message = isSharingPhoto
+                ? '$caption\n\nThank you!\n— *${shopName.trim()}*'
+                : '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
+
+            if (isSharingPhoto) {
               await shareActualImageOnWhatsApp(
                 context: ctx,
-                imageUrl: imageUrl,
+                imageUrl: imageUrl!,
                 phone: phoneToUse,
                 caption: message,
               );
