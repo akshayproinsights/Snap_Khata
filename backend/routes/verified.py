@@ -118,9 +118,10 @@ async def get_verified_invoices_route(
             mask = df.apply(lambda row: row.astype(str).str.contains(search, case=False, na=False).any(), axis=1)
             df = df[mask]
         
-        # Apply receipt number filter (snake_case for Supabase)
+        # Apply receipt number filter — use EXACT match to avoid substring collisions
+        # e.g. searching for "5" must NOT return receipts "15", "25", "50", etc.
         if receipt_number and 'receipt_number' in df.columns:
-            df = df[df['receipt_number'].astype(str).str.contains(receipt_number, case=False, na=False)]
+            df = df[df['receipt_number'].astype(str) == str(receipt_number)]
         
         
         # Apply customer name filter
@@ -427,9 +428,9 @@ async def export_verified_invoices(
                 mask = df.apply(lambda row: row.astype(str).str.contains(search, case=False, na=False).any(), axis=1)
                 df = df[mask]
             
-            # Apply receipt number filter
+            # Apply receipt number filter — exact match only
             if receipt_number and 'receipt_number' in df.columns:
-                df = df[df['receipt_number'].astype(str).str.contains(receipt_number, case=False, na=False)]
+                df = df[df['receipt_number'].astype(str) == str(receipt_number)]
             
             # Apply vehicle number filter
             if vehicle_number:

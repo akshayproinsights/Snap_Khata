@@ -16,8 +16,8 @@ class AppShell extends ConsumerWidget {
 
   void _onTap(BuildContext context, WidgetRef ref, int index) {
     final uploadState = ref.read(uploadProvider);
-    // Block navigation while file upload is in-flight
-    if (uploadState.isUploading) return;
+    // Block navigation only if task is uploading AND blocking
+    if (uploadState.isUploading && uploadState.isBlocking) return;
 
     // Background refresh totals when switching to main data tab (Home)
     if (index == 0) {
@@ -59,12 +59,12 @@ class AppShell extends ConsumerWidget {
                   children: [
                     // ── Main navigation content ──
                     AbsorbPointer(
-                      absorbing: isUploading,
+                      absorbing: isUploading && uploadState.isBlocking,
                       child: navigationShell,
                     ),
 
                     // ── Upload lockout overlay (non-upload tabs only) ──
-                    if (isUploading) _UploadLockOverlay(),
+                    if (isUploading && uploadState.isBlocking) const _UploadLockOverlay(),
                   ],
                 ),
               ),
@@ -119,6 +119,8 @@ class AppShell extends ConsumerWidget {
 /// Full-screen blurred lockout overlay when upload is active and
 /// the user is NOT on the Upload tab.
 class _UploadLockOverlay extends ConsumerWidget {
+  const _UploadLockOverlay();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Stack(

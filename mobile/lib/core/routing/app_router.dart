@@ -127,7 +127,12 @@ class AppRouter {
         path: '/upload',
         name: 'upload',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const UploadPage(),
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>?;
+          return UploadPage(
+            customerName: extras?['customerName'] as String?,
+          );
+        },
       ),
       GoRoute(
         path: '/review',

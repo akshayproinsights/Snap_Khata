@@ -37,6 +37,7 @@ class ProcessRequest(BaseModel):
     """Process invoices request model"""
     file_keys: List[str]
     force_upload: bool = True  # If True, bypass duplicate checking and delete old duplicates
+    customer_name: Optional[str] = None
 
 
 class ProcessResponse(BaseModel):
@@ -843,7 +844,8 @@ def process_invoices_sync(
             r2_bucket=r2_bucket,
             username=username,
             progress_callback=update_progress,
-            force_upload=force_upload
+            force_upload=force_upload,
+            customer_name=request.customer_name
         )
         
         logger.info(f"Processing completed. Results: {results}")

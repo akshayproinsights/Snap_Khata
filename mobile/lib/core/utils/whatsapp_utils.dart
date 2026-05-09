@@ -254,7 +254,7 @@ class WhatsAppUtils {
             if (isSharingPhoto) {
               await shareActualImageOnWhatsApp(
                 context: ctx,
-                imageUrl: imageUrl!,
+                imageUrl: imageUrl,
                 phone: phoneToUse,
                 caption: message,
               );

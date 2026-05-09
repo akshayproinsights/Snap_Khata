@@ -15,7 +15,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:mobile/shared/widgets/universal_image.dart';
 
 class UploadPage extends ConsumerStatefulWidget {
-  const UploadPage({super.key});
+  final String? customerName;
+  const UploadPage({super.key, this.customerName});
 
   @override
   ConsumerState<UploadPage> createState() => _UploadPageState();
@@ -50,6 +51,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(uploadProvider.notifier).resumeIfActive();
+      ref.read(uploadProvider.notifier).setCustomerContext(widget.customerName);
     });
 
     // ── APPROACH 2 (Direct): ask the backend directly — bulletproof
@@ -429,6 +431,58 @@ class _UploadPageState extends ConsumerState<UploadPage>
         children: [
           CameraPreview(controller),
           _ScanOverlay(pulseAnimation: _pulseAnimation),
+          if (widget.customerName != null && widget.customerName!.isNotEmpty)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: context.primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.userCheck, color: Colors.white, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Contextual Scan Active',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            widget.customerName!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.5, end: 0, curve: Curves.easeOutBack),
+            ),
           Align(
             alignment: Alignment.bottomCenter,
             child: Column(

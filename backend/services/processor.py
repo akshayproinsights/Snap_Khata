@@ -911,7 +911,8 @@ def process_invoices_batch(
     r2_bucket: str,
     username: str,
     progress_callback: Optional[Callable[[int, int, int, str], None]] = None,
-    force_upload: bool = False
+    force_upload: bool = False,
+    customer_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Process a batch of invoices from R2 storage with parallel processing
@@ -1004,6 +1005,12 @@ def process_invoices_batch(
             if invoice_data:
                 # Add image hash to invoice data
                 invoice_data["image_hash"] = image_hash
+                
+                # Contextual upload: override customer name if provided
+                if customer_name:
+                    if "header" not in invoice_data:
+                        invoice_data["header"] = {}
+                    invoice_data["header"]["customer_name"] = customer_name
                 
                 # Convert to rows (with user-specific column mapping)
                 rows = convert_to_dataframe_rows(invoice_data, username)

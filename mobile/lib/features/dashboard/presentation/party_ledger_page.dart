@@ -14,6 +14,7 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+import 'package:go_router/go_router.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
   final String customerName;
@@ -117,6 +118,18 @@ class _PartyLedgerPageState extends ConsumerState<PartyLedgerPage> {
             elevation: 0,
             backgroundColor: context.primaryColor,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              IconButton(
+                onPressed: () {
+                  context.push('/upload', extra: {
+                    'customerName': widget.customerName,
+                  });
+                },
+                icon: const Icon(LucideIcons.scanLine),
+                tooltip: 'Scan New Bill',
+              ),
+              const SizedBox(width: 8),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: SafeArea(
                 child: Padding(

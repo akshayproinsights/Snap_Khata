@@ -14,7 +14,7 @@ final unifiedPartiesLoadingProvider = Provider<bool>((ref) {
 });
 
 // Enum for filtering on Home page
-enum HomePartyFilter { all, pending, customers, suppliers }
+enum HomePartyFilter { all, pending, customers, suppliers, counter }
 
 class HomePartyFilterNotifier extends Notifier<HomePartyFilter> {
   @override
@@ -56,6 +56,15 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
       if (filter == HomePartyFilter.pending && ledger.balanceDue.abs() < 0.01) continue;
 
       unifiedList.add(UnifiedParty.fromVendor(ledger));
+    }
+  }
+
+  // Add Counter
+  if (filter == HomePartyFilter.counter) {
+    for (var ledger in udharState.ledgers) {
+      if (ledger.customerName == 'Counter') {
+        unifiedList.add(UnifiedParty.fromCustomer(ledger));
+      }
     }
   }
 

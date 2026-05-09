@@ -81,6 +81,9 @@ class PaymentCreate(BaseModel):
 class LedgerPhoneUpdate(BaseModel):
     phone: str
 
+class LedgerNameUpdate(BaseModel):
+    name: str
+
 
 async def process_ledgers_for_verified_invoices(username: str, final_records: List[Dict[str, Any]]):
     """
@@ -790,6 +793,72 @@ async def update_ledger_phone(ledger_id: int, payload: LedgerPhoneUpdate, curren
         raise
     except Exception as e:
         logger.error(f"Error updating ledger phone: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/ledgers/{ledger_id}/name")
+async def update_ledger_name(ledger_id: int, payload: LedgerNameUpdate, current_user: Dict = Depends(get_current_user)):
+    """Update a customer ledger's name across all relevant tables."""
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        
+    db = get_database_client()
+    db.set_user_context(username)
+    
+    try:
+        # 1. Fetch old name
+        ledger_resp = db.client.table('customer_ledgers') \
+            .select('customer_name') \
+            .eq('id', ledger_id) \
+            .eq('username', username) \
+            .execute()
+            
+        if not ledger_resp.data:
+            raise HTTPException(status_code=404, detail="Ledger not found")
+            
+        old_name = ledger_resp.data[0].get('customer_name')
+        new_name = payload.name.strip()
+        
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+
+        now = datetime.utcnow().isoformat()
+        
+        # 2. Update customer_ledgers
+        db.client.table('customer_ledgers').update({
+            'customer_name': new_name,
+            'updated_at': now
+        }).eq('id', ledger_id).execute()
+        
+        # 3. Update verified_invoices
+        if old_name:
+            db.client.table('verified_invoices').update({
+                'customer_name': new_name
+            }).eq('username', username).eq('customer_name', old_name).execute()
+            
+            # 4. Update invoices (source table)
+            db.client.table('invoices').update({
+                'customer': new_name
+            }).eq('username', username).eq('customer', old_name).execute()
+            
+            # 5. Update review tables
+            db.client.table('verification_dates').update({
+                'customer_name': new_name
+            }).eq('username', username).eq('customer_name', old_name).execute()
+            
+            db.client.table('verification_amounts').update({
+                'customer_name': new_name
+            }).eq('username', username).eq('customer_name', old_name).execute()
+
+        return {
+            "status": "success",
+            "message": "Customer name updated successfully",
+            "customer_name": new_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating ledger name: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

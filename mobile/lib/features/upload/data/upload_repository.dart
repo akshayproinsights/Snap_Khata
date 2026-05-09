@@ -53,14 +53,20 @@ class UploadRepository {
 
   // 2. Start asynchronous processing for uploaded keys
   Future<UploadTaskStatus> processInvoices(List<String> fileKeys,
-      {bool forceUpload = false}) async {
+      {bool forceUpload = false, String? customerName}) async {
     try {
+      final body = <String, dynamic>{
+        'file_keys': fileKeys,
+        'force_upload': forceUpload,
+      };
+      
+      if (customerName != null && customerName.isNotEmpty) {
+        body['customer_name'] = customerName;
+      }
+      
       final response = await _dio.post(
         '/api/upload/process-files',
-        data: {
-          'file_keys': fileKeys,
-          'force_upload': forceUpload,
-        },
+        data: body,
       );
       return UploadTaskStatus.fromJson(response.data);
     } catch (e) {

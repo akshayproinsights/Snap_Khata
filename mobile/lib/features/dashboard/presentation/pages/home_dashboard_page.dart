@@ -591,6 +591,32 @@ class HomeDashboardPage extends ConsumerWidget {
                 .setFilter(HomePartyFilter.suppliers),
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _FilterChip(
+            label: 'Counter',
+            isSelected: currentFilter == HomePartyFilter.counter,
+            onTap: () {
+              // Direct Navigation to Counter Ledger
+              final ledgers = ref.read(udharProvider).ledgers;
+              try {
+                final counterLedger = ledgers.firstWhere(
+                  (l) => l.customerName == 'Counter',
+                );
+                context.pushNamed(
+                  'party-detail',
+                  pathParameters: {'id': counterLedger.id.toString()},
+                  extra: counterLedger,
+                );
+              } catch (_) {
+                // Fallback: just set the filter if ledger not found yet
+                ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.counter);
+              }
+            },
+            highlightColor: context.primaryColor,
+          ),
+        ),
       ],
     );
   }

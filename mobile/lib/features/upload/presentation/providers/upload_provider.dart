@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+
 import 'package:camera/camera.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +25,7 @@ class UploadState {
       fileItems.map((i) => XFile(i.path, name: i.name)).toList();
 
   final bool isUploading;
+  final bool isBlocking; // NEW: controls if AppShell should blur the screen
   final bool isProcessing;
   final double uploadProgress;
   final UploadTaskStatus? processingStatus;
@@ -42,6 +45,10 @@ class UploadState {
   /// Snapshot of the completed task status, used to display the results summary
   /// overlay. Cleared when the user dismisses the summary.
   final UploadTaskStatus? lastCompletedStatus;
+
+  /// Target customer context for contextual scanning. Ensures all invoices
+  /// scanned during this session are automatically assigned to this customer.
+  final String? customerContext;
 
   // ── Sequential duplicate review queue (mirrors web app logic) ────────────
   /// Full list of duplicate objects returned by backend.
@@ -65,6 +72,7 @@ class UploadState {
   UploadState({
     this.fileItems = const [],
     this.isUploading = false,
+    this.isBlocking = true,
     this.isProcessing = false,
     this.uploadProgress = 0.0,
     this.processingStatus,
@@ -82,6 +90,7 @@ class UploadState {
     this.allR2Keys = const [],
     this.skippedDuplicatesCount = 0,
     this.lastCompletedStatus,
+    this.customerContext,
   });
 
   int get pendingCount =>
@@ -105,6 +114,7 @@ class UploadState {
   UploadState copyWith({
     List<UploadFileItem>? fileItems,
     bool? isUploading,
+    bool? isBlocking,
     bool? isProcessing,
     double? uploadProgress,
     UploadTaskStatus? processingStatus,
@@ -124,10 +134,12 @@ class UploadState {
     int? skippedDuplicatesCount,
     UploadTaskStatus? lastCompletedStatus,
     bool clearLastCompletedStatus = false,
+    String? customerContext,
   }) {
     return UploadState(
       fileItems: fileItems ?? this.fileItems,
       isUploading: isUploading ?? this.isUploading,
+      isBlocking: isBlocking ?? this.isBlocking,
       isProcessing: isProcessing ?? this.isProcessing,
       uploadProgress: uploadProgress ?? this.uploadProgress,
       processingStatus: processingStatus ?? this.processingStatus,
@@ -150,6 +162,7 @@ class UploadState {
       lastCompletedStatus: clearLastCompletedStatus
           ? null
           : (lastCompletedStatus ?? this.lastCompletedStatus),
+      customerContext: customerContext ?? this.customerContext,
     );
   }
 }
@@ -242,10 +255,16 @@ class UploadNotifier extends Notifier<UploadState> {
       isLoadingHistory: state.isLoadingHistory,
       historyError: state.historyError,
       isRestoringState: false,
+      customerContext: null, // Clear context on explicit clear
     );
     // Belt-and-suspenders disk cleanup
     UploadPersistenceService.clearTask();
     UploadPersistenceService.clearUploadPhase();
+  }
+
+  void setCustomerContext(String? customerContext) {
+    if (state.customerContext == customerContext) return;
+    state = state.copyWith(customerContext: customerContext);
   }
 
   /// Force-clear regardless of active state (used in error/duplicate/cancel flows).
@@ -268,10 +287,12 @@ class UploadNotifier extends Notifier<UploadState> {
   /// but the provider doesn't know about it (state was lost).
   /// This directly forces the provider into processing mode and starts polling.
   void forceIntoProcessingState(String taskId, int fileCount) {
-    if (state.isProcessing && state.activeTaskId == taskId) {
-      return; // already tracking
-    }
-
+    state = state.copyWith(
+      isUploading: true, // it is effectively uploading/locking
+      activeTaskId: taskId,
+      isRestoringState: false,
+      isBlocking: true, // Legacy uploads are always blocking
+    );
     final placeholders = List.generate(
       fileCount,
       (i) => UploadFileItem(
@@ -516,6 +537,7 @@ class UploadNotifier extends Notifier<UploadState> {
       processingStatus: null,
       hasDuplicate: false,
     );
+    debugPrint('UploadNotifier: uploadAndProcess() set isUploading: true');
 
     // ✅ Persist upload-phase BEFORE starting the R2 upload
     await UploadPersistenceService.saveUploadPhase(
@@ -547,8 +569,11 @@ class UploadNotifier extends Notifier<UploadState> {
       );
 
       // 2. Start AI processing
-      final initialStatus =
-          await _repository.processInvoices(fileKeys, forceUpload: true);
+      final initialStatus = await _repository.processInvoices(
+        fileKeys,
+        forceUpload: true,
+        customerName: state.customerContext,
+      );
 
       // ✅ Persist task to disk (also clears upload-phase)
       await UploadPersistenceService.saveTask(
