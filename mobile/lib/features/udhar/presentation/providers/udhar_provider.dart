@@ -139,7 +139,7 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
-  Future<bool> recordPayment(int ledgerId, double amount, String notes) async {
+  Future<bool> recordPayment(int ledgerId, double amount, String notes, {String? receiptNumber}) async {
     // Optimistic update — immediately reduce the displayed balance so the
     // user sees the change before the network round-trip completes.
     final prevLedgers = state.ledgers;
@@ -154,7 +154,11 @@ class UdharNotifier extends Notifier<UdharState> {
     try {
       await _dio.post(
         '/api/udhar/ledgers/$ledgerId/pay',
-        data: {'amount': amount, 'notes': notes},
+        data: {
+          'amount': amount,
+          'notes': notes,
+          if (receiptNumber != null) 'receipt_number': receiptNumber,
+        },
       );
       ref.invalidate(verifiedProvider);
       unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());

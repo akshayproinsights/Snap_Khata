@@ -701,6 +701,28 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       }
 
       final first = records.first;
+
+      // ─── Fix #1: Derive authoritative payment amounts from ledger_transactions ───
+      // verified_invoices.received_amount is NEVER updated when a payment is recorded
+      // via the Khata page — payments only live in ledger_transactions.
+      // So we compute the true paid/due amounts from the already-loaded _transactions.
+      //
+      //   1. tx is the INVOICE ledger transaction → tx.amount = bill total per ledger.
+      //   2. Find all PAYMENT txs for the same receipt number in _transactions.
+      //   3. Sum them → authoritative totalPaid.
+      //   4. invoiceAmount − totalPaid → authoritative balanceDue.
+      final double ledgerInvoiceAmount = tx.amount;
+      final double ledgerTotalPaid = (_transactions ?? [])
+          .where((t) =>
+              t.transactionType == 'PAYMENT' &&
+              t.receiptNumber == tx.receiptNumber)
+          .fold(0.0, (sum, t) => sum + t.amount);
+      final double ledgerBalanceDue =
+          (ledgerInvoiceAmount - ledgerTotalPaid).clamp(0.0, double.infinity);
+      final String ledgerPaymentMode =
+          ledgerBalanceDue <= 0 ? 'Cash' : (tx.paymentMode ?? 'Credit');
+      // ─────────────────────────────────────────────────────────────────────────
+
       final group = InvoiceGroup(
         receiptNumber: first.receiptNumber,
         date: first.date.isNotEmpty ? first.date : first.uploadDate,
@@ -709,9 +731,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         mobileNumber: first.mobileNumber,
         extraFields: first.extraFields,
         uploadDate: first.uploadDate,
-        paymentMode: first.paymentMode,
-        receivedAmount: first.receivedAmount,
-        balanceDue: first.balanceDue,
+        paymentMode: ledgerPaymentMode,
+        receivedAmount: ledgerTotalPaid,
+        balanceDue: ledgerBalanceDue,
         customerDetails: first.customerDetails,
       );
       group.items = records;

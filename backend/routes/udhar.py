@@ -77,6 +77,7 @@ def get_transaction_sort_key(tx: Dict):
 class PaymentCreate(BaseModel):
     amount: float
     notes: Optional[str] = None
+    receipt_number: Optional[str] = None  # which bill this payment clears (for verified_invoices sync)
 
 class LedgerPhoneUpdate(BaseModel):
     phone: str
@@ -892,8 +893,56 @@ async def record_payment(ledger_id: int, payment: PaymentCreate, current_user: D
             'ledger_id': ledger_id,
             'transaction_type': 'PAYMENT',
             'amount': payment.amount,
-            'notes': payment.notes
+            'notes': payment.notes,
+            'receipt_number': payment.receipt_number  # link payment to the specific bill
         }).execute()
+
+        # ─── Fix #2: Sync verified_invoices so Order Detail page shows correct balance ───
+        # Payments recorded via Khata page ONLY update ledger_transactions, leaving
+        # verified_invoices.received_amount stale. This causes Order Detail to show
+        # Balance Due = full bill amount even after a payment was recorded.
+        # Fix: recompute the total paid for this receipt across ALL ledger PAYMENT txs
+        # and write it back to every verified_invoices row for that receipt number.
+        if payment.receipt_number:
+            try:
+                # Sum ALL payment txs for this receipt (current + previous)
+                all_pay_resp = db.client.table('ledger_transactions') \
+                    .select('amount') \
+                    .eq('username', username) \
+                    .eq('ledger_id', ledger_id) \
+                    .eq('transaction_type', 'PAYMENT') \
+                    .eq('receipt_number', payment.receipt_number) \
+                    .execute()
+                total_paid_for_receipt = sum(
+                    float(r.get('amount') or 0) for r in (all_pay_resp.data or [])
+                ) + payment.amount  # include the one we just inserted
+
+                # Get the bill total from verified_invoices (first row's total_bill_amount)
+                vi_bill_resp = db.client.table('verified_invoices') \
+                    .select('total_bill_amount') \
+                    .eq('username', username) \
+                    .eq('receipt_number', payment.receipt_number) \
+                    .limit(1) \
+                    .execute()
+                bill_total = 0.0
+                if vi_bill_resp.data:
+                    bill_total = float(vi_bill_resp.data[0].get('total_bill_amount') or 0)
+
+                new_vi_received = min(total_paid_for_receipt, bill_total) if bill_total > 0 else total_paid_for_receipt
+                new_vi_balance = max(0.0, bill_total - new_vi_received) if bill_total > 0 else 0.0
+
+                db.client.table('verified_invoices').update({
+                    'received_amount': new_vi_received,
+                    'balance_due': new_vi_balance,
+                    'payment_mode': 'Cash' if new_vi_balance <= 0 else 'Credit',
+                }).eq('username', username).eq('receipt_number', payment.receipt_number).execute()
+
+                logger.info(f"Synced verified_invoices for receipt {payment.receipt_number}: "
+                            f"received={new_vi_received}, balance={new_vi_balance}")
+            except Exception as vi_err:
+                # Non-fatal — ledger is already updated; log and continue
+                logger.warning(f"Could not sync verified_invoices for receipt {payment.receipt_number}: {vi_err}")
+        # ─────────────────────────────────────────────────────────────────────────────
 
         tx_resp = db.client.table('ledger_transactions') \
             .select('amount, transaction_type, receipt_number') \
