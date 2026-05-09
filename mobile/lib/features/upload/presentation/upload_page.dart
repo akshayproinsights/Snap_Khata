@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
+import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 import 'package:mobile/features/upload/presentation/providers/camera_provider.dart';
@@ -52,6 +53,8 @@ class _UploadPageState extends ConsumerState<UploadPage>
       if (!mounted) return;
       ref.read(uploadProvider.notifier).resumeIfActive();
       ref.read(uploadProvider.notifier).setCustomerContext(widget.customerName);
+      // Fresh review data to show "Already in review" badge correctly
+      ref.read(reviewProvider.notifier).fetchReviewData();
     });
 
     // ── APPROACH 2 (Direct): ask the backend directly — bulletproof
@@ -111,6 +114,14 @@ class _UploadPageState extends ConsumerState<UploadPage>
         final currentState = ref.read(uploadProvider);
         if (!currentState.isProcessing && !currentState.isUploading) {
           notifier.forceIntoProcessingState(taskId, total);
+        }
+      } else {
+        // Backend says NO active task.
+        // If the provider still thinks it's "done" from a previous session,
+        // clear it now so the camera shows up.
+        final currentState = ref.read(uploadProvider);
+        if (currentState.allDone) {
+          ref.read(uploadProvider.notifier).clearFiles();
         }
       }
     } catch (_) {
@@ -290,7 +301,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          _buildCameraBody(),
+          _buildCameraBody(state),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -358,9 +369,10 @@ class _UploadPageState extends ConsumerState<UploadPage>
     );
   }
 
-  Widget _buildCameraBody() {
+  Widget _buildCameraBody(UploadState state) {
     final camAsync = ref.watch(cameraControllerProvider);
-    final state = ref.watch(uploadProvider);
+    final reviewState = ref.watch(reviewProvider);
+    final pendingReviewCount = reviewState.groups.where((g) => g.status == 'Pending').length;
 
     return camAsync.when(
       loading: () => const Center(
@@ -479,6 +491,37 @@ class _UploadPageState extends ConsumerState<UploadPage>
                         ],
                       ),
                     ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.5, end: 0, curve: Curves.easeOutBack),
+            ),
+          if (pendingReviewCount > 0 && (widget.customerName == null || widget.customerName!.isEmpty))
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.listTodo, color: Color(0xFF94A3B8), size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '$pendingReviewCount item${pendingReviewCount > 1 ? 's' : ''} already in review',
+                        style: const TextStyle(
+                          color: Color(0xFFF1F5F9),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Icon(LucideIcons.chevronRight, color: Colors.white24, size: 16),
                   ],
                 ),
               ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.5, end: 0, curve: Curves.easeOutBack),

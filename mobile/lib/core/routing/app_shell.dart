@@ -39,7 +39,13 @@ class AppShell extends ConsumerWidget {
     // If isUploading is true but no files are present and we aren't restoring state,
     // it's a "ghost" state. Auto-clear it to prevent user lockout.
     if (isUploading && !uploadState.hasFiles && !uploadState.isRestoringState) {
+      debugPrint('AppShell: GHOST STATE DETECTED! isUploading=true but fileItems is empty. Force resetting...');
       Future.microtask(() => ref.read(uploadProvider.notifier).forceReset());
+    }
+
+    // Diagnostic logging for the navigation glitch
+    if (isUploading && uploadState.isBlocking) {
+      debugPrint('AppShell: UI LOCK ACTIVE. isUploading=$isUploading, isBlocking=${uploadState.isBlocking}, isRestoring=${uploadState.isRestoringState}');
     }
 
     return Scaffold(

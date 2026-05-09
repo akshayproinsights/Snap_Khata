@@ -10,7 +10,8 @@ def enqueue_process_invoices_task(
     file_keys: List[str],
     r2_bucket: str,
     username: str,
-    force_upload: bool = False
+    force_upload: bool = False,
+    customer_name: Optional[str] = None
 ) -> bool:
     """
     Enqueues a task to process invoices in the background via Google Cloud Tasks.
@@ -42,7 +43,8 @@ def enqueue_process_invoices_task(
         "file_keys": file_keys,
         "r2_bucket": r2_bucket,
         "username": username,
-        "force_upload": force_upload
+        "force_upload": force_upload,
+        "customer_name": customer_name
     }
 
     task = {

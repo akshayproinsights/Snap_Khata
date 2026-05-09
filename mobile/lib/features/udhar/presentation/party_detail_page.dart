@@ -987,6 +987,18 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              context.push('/upload', extra: {
+                'customerName': currentLedger.customerName,
+              });
+            },
+            icon: const Icon(LucideIcons.scanLine, color: Colors.white),
+            tooltip: 'Scan New Bill',
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
@@ -1088,17 +1100,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         child: Row(
           children: [
             Expanded(
-              flex: 2,
-              child: OutlinedButton.icon(
-                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 16),
-                label: const Text(
-                  'REMIND',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+              flex: 1,
+              child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 52),
                   side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
@@ -1106,14 +1109,45 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
+                  padding: EdgeInsets.zero,
                 ),
                 onPressed: () =>
                     _showWhatsAppReminderSheet(context, ref, currentLedger),
+                child: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
-              flex: 3,
+              flex: 2,
+              child: ElevatedButton.icon(
+                icon: const Icon(LucideIcons.scanLine, size: 18, color: Colors.white),
+                label: const Text(
+                  'SCAN BILL',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1), // Indigo color for scanning
+                  minimumSize: const Size(0, 52),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () {
+                  context.push('/upload', extra: {
+                    'customerName': currentLedger.customerName,
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
               child: ElevatedButton.icon(
                 icon: const Icon(
                   LucideIcons.indianRupee,
@@ -1121,11 +1155,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   color: Colors.white,
                 ),
                 label: const Text(
-                  'RECORD PAYMENT',
+                  'PAYMENT',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
-                    fontSize: 13,
+                    fontSize: 12,
                     letterSpacing: 0.5,
                   ),
                 ),

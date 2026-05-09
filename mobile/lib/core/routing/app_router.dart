@@ -258,8 +258,16 @@ class AppRouter {
           return null;
         },
         builder: (context, state) {
-          final bundle = state.extra as InventoryInvoiceBundle;
-          return InventoryInvoiceReviewPage(bundle: bundle);
+          final extra = state.extra as Map<String, dynamic>;
+          final bundle = extra['bundle'] as InventoryInvoiceBundle;
+          final allBundles = extra['allBundles'] as List<InventoryInvoiceBundle>? ?? [];
+          final currentIndex = extra['currentIndex'] as int? ?? -1;
+
+          return InventoryInvoiceReviewPage(
+            bundle: bundle,
+            allBundles: allBundles,
+            currentIndex: currentIndex,
+          );
         },
       ),
       GoRoute(

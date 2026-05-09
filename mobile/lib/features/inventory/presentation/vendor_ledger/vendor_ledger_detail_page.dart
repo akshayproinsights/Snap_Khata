@@ -1,17 +1,23 @@
+import 'package:mobile/core/theme/context_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../domain/models/vendor_ledger_models.dart';
 import '../providers/vendor_ledger_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/models/inventory_models.dart';
-import '../inventory_review_page.dart';
 import '../providers/inventory_items_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
+import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
+import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class VendorLedgerDetailPage extends ConsumerStatefulWidget {
   final VendorLedger ledger;
@@ -40,6 +46,7 @@ class VendorActivityItem {
 class _VendorLedgerDetailPageState
     extends ConsumerState<VendorLedgerDetailPage> {
   final dateFormatter = DateFormat('dd MMM yyyy');
+  final detailDateFormatter = DateFormat('dd MMM yyyy, hh:mm a');
 
   List<VendorLedgerTransaction>? _transactions;
   List<Map<String, dynamic>>? _purchaseInvoices;
@@ -136,15 +143,17 @@ class _VendorLedgerDetailPageState
     // 3. Sort chronologically
     activityItems.sort((a, b) => b.date.compareTo(a.date));
 
-    // Ensure descending date order for transactions (just in case they are used elsewhere)
+    // Ensure descending date order for transactions
     transactions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    setState(() {
-      _transactions = transactions;
-      _purchaseInvoices = purchaseInvoices;
-      _activityItems = activityItems;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _transactions = transactions;
+        _purchaseInvoices = purchaseInvoices;
+        _activityItems = activityItems;
+        _isLoading = false;
+      });
+    }
   }
 
   void _toggleSelection(int id) {
@@ -167,11 +176,14 @@ class _VendorLedgerDetailPageState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(paid ? 'Mark as Paid' : 'Mark as Unpaid'),
+        title: Text(paid ? 'Mark as Paid' : 'Mark as Unpaid', style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Are you sure you want to mark ${_selectedIds.length} transactions as ${paid ? 'paid' : 'unpaid'}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Confirm', style: TextStyle(color: paid ? Colors.green : Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: Text('CONFIRM', style: TextStyle(color: paid ? Colors.green : Colors.orange, fontWeight: FontWeight.bold))
+          ),
         ],
       ),
     );
@@ -191,11 +203,14 @@ class _VendorLedgerDetailPageState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Transactions'),
+        title: const Text('Delete Transactions', style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text('Are you sure you want to delete ${_selectedIds.length} transactions? This action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text('DELETE', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+          ),
         ],
       ),
     );
@@ -210,960 +225,6 @@ class _VendorLedgerDetailPageState
       }
     }
   }
-
-
-  /// Opens a dialog showing the original receipt photo for the given transaction.
-  void _showReceiptPhotoDialog(VendorLedgerTransaction tx) async {
-    if (tx.invoiceNumber == null && tx.receiptLink == null) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white38,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Invoice #${tx.invoiceNumber}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.x, color: Colors.white70),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: Colors.white12),
-              // Receipt photo area
-              Expanded(
-                child: tx.receiptLink != null && tx.receiptLink!.isNotEmpty && tx.receiptLink != 'null'
-                  ? _buildImageWidget(tx.receiptLink!, scrollController)
-                  : FutureBuilder<String?>(
-                      future: ref.read(vendorLedgerProvider.notifier).fetchReceiptLink(tx.invoiceNumber!),
-                      builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(color: Colors.white),
-                            SizedBox(height: 12),
-                            Text('Loading receipt...', style: TextStyle(color: Colors.white54)),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final receiptLink = snapshot.data;
-
-                    if (receiptLink == null || receiptLink.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(LucideIcons.imageOff, color: Colors.white38, size: 48),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'No receipt photo available',
-                              style: TextStyle(color: Colors.white54, fontSize: 15),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Invoice #${tx.invoiceNumber}',
-                              style: const TextStyle(color: Colors.white30, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return _buildImageWidget(receiptLink, scrollController);
-                  },
-                ),
-              ),
-              // Action buttons
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _togglePaidStatus(tx, !tx.isPaid);
-                        },
-                        icon: Icon(
-                          tx.isPaid ? LucideIcons.xCircle : LucideIcons.checkCircle,
-                          size: 16,
-                          color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
-                        ),
-                        label: Text(
-                          tx.isPaid ? 'Mark as Unpaid' : 'Mark as Paid',
-                          style: TextStyle(
-                            color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: tx.isPaid ? Colors.orange.shade300 : Colors.green.shade300,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageWidget(String url, ScrollController scrollController) {
-    return SingleChildScrollView(
-      controller: scrollController,
-      padding: const EdgeInsets.all(16),
-      child: InteractiveViewer(
-        maxScale: 5.0,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: CachedNetworkImage(
-            imageUrl: url,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            placeholder: (context, url) => Container(
-              height: 300,
-              color: Colors.white10,
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              height: 200,
-              color: Colors.white10,
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
-                  SizedBox(height: 8),
-                  Text('Could not load receipt image',
-                    style: TextStyle(color: Colors.white54)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAddPaymentDialog(BuildContext context) {
-    final amountController = TextEditingController();
-    final notesController = TextEditingController();
-    bool isSubmitting = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 20,
-                right: 20,
-                top: 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Record Payment',
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface),
-                      ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Current Balance:',
-                          style: TextStyle(
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.format(widget.ledger.balanceDue),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Amount Paid (₹)',
-                      prefixIcon: Icon(LucideIcons.indianRupee, size: 18),
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: notesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes / Reference',
-                      prefixIcon: Icon(LucideIcons.edit2, size: 18),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: isSubmitting
-                        ? null
-                        : () async {
-                            final amount =
-                                double.tryParse(amountController.text) ?? 0;
-                            if (amount <= 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('Please enter a valid amount')),
-                              );
-                              return;
-                            }
-
-                            setModalState(() => isSubmitting = true);
-                            final success = await ref
-                                .read(vendorLedgerProvider.notifier)
-                                .recordPayment(widget.ledger.id, amount,
-                                    notesController.text, vendorName: widget.ledger.vendorName);
-
-                            if (success && context.mounted) {
-                              ref.invalidate(inventoryItemsProvider);
-                              ref.invalidate(dashboardTotalsProvider);
-                              Navigator.pop(context);
-                              _loadData();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Payment recorded! 🎉')),
-                              );
-                            } else {
-                              setModalState(() => isSubmitting = false);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('Failed to save payment.')),
-                                );
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                        : const Text(
-                            'Save Payment',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(vendorLedgerProvider);
-    final currentLedger = state.ledgers.firstWhere(
-        (l) => l.id == widget.ledger.id,
-        orElse: () => widget.ledger);
-
-    // Calculate aggregated stats from available transactions AND purchase invoices
-    // Hide auto-generated payments by filtering out those with a linkedTransactionId
-    final txList = _transactions?.where((tx) => tx.linkedTransactionId == null).toList() ?? [];
-
-    // Calculate totals from ledger transactions (credit invoices)
-    double ledgerTotalSpend = 0;
-    int ledgerOrdersCount = 0;
-    DateTime? ledgerLastOrderDate;
-
-    for (var tx in txList) {
-      if (tx.transactionType != 'PAYMENT') {
-        ledgerTotalSpend += tx.amount;
-        ledgerOrdersCount++;
-        if (ledgerLastOrderDate == null || tx.createdAt.isAfter(ledgerLastOrderDate)) {
-          ledgerLastOrderDate = tx.createdAt;
-        }
-      }
-    }
-
-    // Calculate totals from purchase invoices (inventory items)
-    double purchaseTotalSpend = 0;
-    int purchaseOrdersCount = _purchaseInvoices?.length ?? 0;
-    DateTime? purchaseLastOrderDate;
-
-    if (_purchaseInvoices != null) {
-      for (var invoice in _purchaseInvoices!) {
-        final amount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
-        purchaseTotalSpend += amount;
-
-        final dateStr = invoice['invoice_date']?.toString();
-        if (dateStr != null && dateStr.isNotEmpty) {
-          final date = DateTime.tryParse(dateStr);
-          if (date != null && (purchaseLastOrderDate == null || date.isAfter(purchaseLastOrderDate))) {
-            purchaseLastOrderDate = date;
-          }
-        }
-      }
-    }
-
-    // Combine totals - use purchase invoices as primary source for spend/orders if available
-    // since they represent actual purchase history
-    final totalSpend = purchaseTotalSpend > 0 ? purchaseTotalSpend : ledgerTotalSpend;
-    final ordersCount = purchaseOrdersCount > 0 ? purchaseOrdersCount : ledgerOrdersCount;
-    final lastOrderDate = purchaseLastOrderDate ?? ledgerLastOrderDate;
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        leading: _isSelectionMode 
-          ? IconButton(icon: const Icon(LucideIcons.x), onPressed: _clearSelection)
-          : IconButton(
-              icon: const Icon(LucideIcons.arrowLeft),
-              onPressed: () => Navigator.pop(context),
-            ),
-        title: _isSelectionMode ? Text('${_selectedIds.length} Selected') : null,
-        actions: [
-          if (!_isSelectionMode)
-            IconButton(
-              icon: const Icon(LucideIcons.moreVertical),
-              onPressed: () {},
-            )
-        ],
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Profile
-                Text(
-                  currentLedger.vendorName.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Builder(
-                  builder: (context) {
-                    final isPending = currentLedger.balanceDue > 0.01;
-                    final isAdvance = currentLedger.balanceDue < -0.01;
-                    
-                    final statusColor = isPending 
-                        ? Theme.of(context).colorScheme.error 
-                        : (isAdvance ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant);
-                    
-                    final statusText = isPending ? 'YOU GIVE' : (isAdvance ? 'ADVANCE' : 'SETTLED');
-                    final statusIcon = isPending ? LucideIcons.clock : (isAdvance ? LucideIcons.arrowDownLeft : LucideIcons.checkCircle2);
-
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            statusIcon,
-                            size: 14,
-                            color: statusColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            statusText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: statusColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                
-                const SizedBox(height: 24),
-
-                // Metrics Grid (Stitch AI Layout)
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: 1.8,
-                  children: [
-                    _buildMetricCard(
-                      'Total Spend',
-                      CurrencyFormatter.format(totalSpend > 0 ? totalSpend : currentLedger.balanceDue)
-                    ),
-                    _buildMetricCard('Orders', '$ordersCount'),
-                    _buildMetricCard('Pending Due', CurrencyFormatter.format(currentLedger.balanceDue)),
-                    _buildMetricCard(
-                      'Last Order',
-                      lastOrderDate != null ? dateFormatter.format(lastOrderDate) : 'N/A'
-                    ),
-                  ],
-                ),
-
-
-                // Account Activity Section
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Account Activity',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    if (_isSelectionMode)
-                      // In selection mode: show Select All / Deselect All
-                      TextButton(
-                        onPressed: () {
-                          final activityTxIds = (_activityItems ?? [])
-                              .where((a) => !a.isPayment && a.transaction != null)
-                              .map((a) => a.transaction!.id)
-                              .toSet();
-                          setState(() {
-                            if (_selectedIds.containsAll(activityTxIds) && activityTxIds.isNotEmpty) {
-                              _selectedIds.clear();
-                            } else {
-                              _selectedIds.addAll(activityTxIds);
-                            }
-                          });
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: Theme.of(context).colorScheme.primary,
-                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        child: Builder(builder: (context) {
-                          final activityTxIds = (_activityItems ?? [])
-                              .where((a) => !a.isPayment && a.transaction != null)
-                              .map((a) => a.transaction!.id)
-                              .toSet();
-                          final allSelected = _selectedIds.containsAll(activityTxIds) && activityTxIds.isNotEmpty;
-                          return Text(
-                            allSelected ? 'Deselect All' : 'Select All',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          );
-                        }),
-                      )
-                    else
-                      Row(
-                        children: [
-                          // Select button
-                          TextButton(
-                            onPressed: () {
-                              final firstInvoiceTx = (_activityItems ?? []).firstWhere(
-                                (a) => !a.isPayment && a.transaction != null,
-                                orElse: () => VendorActivityItem(date: DateTime.now(), isPayment: false),
-                              );
-                              if (firstInvoiceTx.transaction != null) {
-                                _toggleSelection(firstInvoiceTx.transaction!.id);
-                              }
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(context).colorScheme.primary,
-                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(LucideIcons.checkSquare, size: 14),
-                                SizedBox(width: 6),
-                                Text('Select', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Pay button
-                          TextButton(
-                            onPressed: () => _showAddPaymentDialog(context),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(context).colorScheme.primary,
-                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(LucideIcons.indianRupee, size: 14),
-                                SizedBox(width: 6),
-                                Text('Pay', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Unified Activity List
-                _isLoading
-                    ? const Center(child: Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(),
-                      ))
-                    : (_activityItems == null || _activityItems!.isEmpty)
-                        ? Center(
-                            child: Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Text('No account activity found',
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                          ))
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _activityItems!.length,
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final item = _activityItems![index];
-                              return _buildActivityCard(item);
-                            },
-                          ),
-
-                const SizedBox(height: 100), // More padding for batch bar
-              ],
-            ),
-          ),
-          // Only show batch action bar if in selection mode AND ledger exists
-          if (_isSelectionMode && widget.ledger.id >= 0)
-            Positioned(
-              bottom: 24,
-              left: 16,
-              right: 16,
-              child: _buildBatchActionBar(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBatchActionBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.onSurface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildBatchActionButton(
-            LucideIcons.checkCircle, 
-            'Mark Paid', 
-            Colors.green.shade400, 
-            () => _handleBatchMarkAsPaid(true)
-          ),
-          Container(height: 24, width: 1, color: Colors.white24),
-          _buildBatchActionButton(
-            LucideIcons.xCircle, 
-            'Mark Unpaid', 
-            Colors.orange.shade400, 
-            () => _handleBatchMarkAsPaid(false)
-          ),
-          Container(height: 24, width: 1, color: Colors.white24),
-          _buildBatchActionButton(
-            LucideIcons.trash2, 
-            'Delete', 
-            Colors.red.shade400, 
-            _handleBatchDelete
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBatchActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: Theme.of(context).colorScheme.surface, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricCard(String title, String value) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 0.5,
-        ),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActivityCard(VendorActivityItem item) {
-    if (item.isPayment && item.transaction != null) {
-      return _buildTransactionCard(item.transaction!, true);
-    } else if (item.transaction != null) {
-      return _buildTransactionCard(item.transaction!, false);
-    } else if (item.purchaseInvoice != null) {
-      return _buildPurchaseInvoiceCard(item.purchaseInvoice!);
-    }
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildTransactionCard(VendorLedgerTransaction tx, bool isPayment) {
-    final isSelected = _selectedIds.contains(tx.id);
-    
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05)
-            : Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: isSelected ? 1.5 : 0.5,
-        ),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
-      ),
-      child: InkWell(
-        onLongPress: () {
-          // HapticFeedback.heavyImpact();
-          _toggleSelection(tx.id);
-        },
-        onTap: () {
-          if (_isSelectionMode) {
-            _toggleSelection(tx.id);
-          } else if (!isPayment && tx.invoiceNumber?.isNotEmpty == true) {
-            _navigateToBillDetails(tx.invoiceNumber!);
-          }
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_isSelectionMode) ...[
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 10, top: 4),
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
-                          border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant, width: 2),
-                        ),
-                        child: Icon(LucideIcons.check, size: 12, color: isSelected ? Theme.of(context).colorScheme.onPrimary : Colors.transparent),
-                      ),
-                    ],
-                    Container(
-                      margin: const EdgeInsets.only(top: 2),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isPayment ? Colors.green.withValues(alpha: 0.1) : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isPayment ? LucideIcons.arrowUpRight : LucideIcons.receipt,
-                        color: isPayment ? Colors.green : Theme.of(context).colorScheme.primary,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  dateFormatter.format(tx.createdAt.toLocal()),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (!isPayment && tx.isPaid) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'PAID',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isPayment
-                                ? 'Payment Sent'
-                                : (tx.invoiceNumber?.isNotEmpty == true ? 'Credit Invoice ${tx.invoiceNumber}' : 'Purchase Order'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!isPayment && !_isSelectionMode)
-                               IconButton(
-                                  icon: Icon(LucideIcons.eye, color: context.textSecondaryColor, size: 24),
-                                  onPressed: () => _showReceiptPhotoDialog(tx),
-                                  tooltip: 'View Receipt Photo',
-                               ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${isPayment ? '-' : ''}${CurrencyFormatter.format(tx.amount)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: isPayment ? Colors.green : (!tx.isPaid ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.onSurface),
-                              ),
-                            ),
-                            if (!isPayment && !_isSelectionMode && tx.isPaid) ...[
-                               const SizedBox(width: 4),
-                               PopupMenuButton<String>(
-                                 icon: Icon(LucideIcons.moreVertical, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                 padding: EdgeInsets.zero,
-                                 constraints: const BoxConstraints(),
-                                 itemBuilder: (context) => [
-                                   const PopupMenuItem(
-                                     value: 'unpaid',
-                                     child: Text('Mark as Unpaid'),
-                                   ),
-                                 ],
-                                 onSelected: (value) {
-                                   if (value == 'unpaid') _togglePaidStatus(tx, false);
-                                 },
-                               ),
-                            ],
-                          ],
-                        ),
-                        if (tx.notes?.isNotEmpty == true)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              tx.notes!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontStyle: FontStyle.italic,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ),
-                        if (!isPayment && !_isSelectionMode && !tx.isPaid)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: SizedBox(
-                              height: 28,
-                              child: ElevatedButton(
-                                onPressed: () => _togglePaidStatus(tx, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green.shade600,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                ),
-                                child: const Text('Mark Paid', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
 
   void _navigateToBillDetails(String invoiceNumber) {
     if (invoiceNumber.isEmpty) return;
@@ -1182,7 +243,6 @@ class _VendorLedgerDetailPageState
       return;
     }
     
-    // Create a bundle for navigation
     final bundle = InventoryInvoiceBundle(
       invoiceNumber: invoiceNumber,
       date: invoice['invoice_date']?.toString() ?? '',
@@ -1190,8 +250,7 @@ class _VendorLedgerDetailPageState
       receiptLink: invoice['receipt_link']?.toString() ?? '',
       items: (invoice['items'] as List<dynamic>?)
               ?.map((item) => InventoryItem.fromJson(item as Map<String, dynamic>))
-              .toList() ??
-          [],
+              .toList() ?? [],
       totalAmount: (invoice['total_amount'] as num?)?.toDouble() ?? 0.0,
       hasMismatch: false,
       isVerified: true,
@@ -1203,195 +262,224 @@ class _VendorLedgerDetailPageState
     }
   }
 
-  Future<void> _togglePaidStatus(VendorLedgerTransaction tx, bool paid) async {
-    final success = await ref
-        .read(vendorLedgerProvider.notifier)
-        .toggleTransactionPaidStatus(tx.id, paid);
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(vendorLedgerProvider);
+    final currentLedger = state.ledgers.firstWhere(
+        (l) => l.id == widget.ledger.id,
+        orElse: () => widget.ledger);
+
+    // Calculate aggregated stats
+    final txList = _transactions?.where((tx) => tx.linkedTransactionId == null).toList() ?? [];
     
-    if (success && mounted) {
-      ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(dashboardTotalsProvider);
-      _loadData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Transaction marked as ${paid ? 'paid' : 'unpaid'}')),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update transaction status')),
-      );
+    double totalSpent = 0;
+    if (_purchaseInvoices != null && _purchaseInvoices!.isNotEmpty) {
+      for (var inv in _purchaseInvoices!) {
+        totalSpent += (inv['total_amount'] as num?)?.toDouble() ?? 0.0;
+      }
+    } else {
+      for (var tx in txList) {
+        if (tx.transactionType != 'PAYMENT') totalSpent += tx.amount;
+      }
     }
-  }
 
-  Future<void> _markPurchaseAsPaid(Map<String, dynamic> invoice) async {
-    final invoiceNumber = invoice['invoice_number']?.toString() ?? '';
-    final totalAmount = (invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final vendorName = invoice['vendor_name']?.toString() ?? widget.ledger.vendorName;
-    final date = invoice['invoice_date']?.toString();
+    final totalPaid = totalSpent - currentLedger.balanceDue;
 
-    final success = await ref.read(vendorLedgerProvider.notifier).markInvoiceAsPaid(
-      vendorName: vendorName,
-      invoiceNumber: invoiceNumber,
-      amount: totalAmount,
-      date: date,
+    return Scaffold(
+      backgroundColor: context.backgroundColor,
+      appBar: _buildAppBar(currentLedger),
+      body: Column(
+        children: [
+          _buildHeaderCard(currentLedger, totalSpent, totalPaid),
+          _buildSectionHeader(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : (_activityItems == null || _activityItems!.isEmpty)
+                    ? _buildEmptyState()
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                        itemCount: _activityItems!.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = _activityItems![index];
+                          return _buildActivityCard(item);
+                        },
+                      ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _isSelectionMode ? null : _buildBottomNavBar(currentLedger, totalSpent, totalPaid),
     );
-
-    if (success && mounted) {
-      ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(dashboardTotalsProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invoice marked as paid! 🎉')),
-      );
-      _loadData();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to mark invoice as paid.')),
-      );
-    }
   }
 
-  /// Builds a card for displaying a purchase invoice from inventory_items
-  Widget _buildPurchaseInvoiceCard(Map<String, dynamic> invoice) {
-    final invoiceNumber = invoice['invoice_number']?.toString() ?? '';
-    final invoiceDate = invoice['invoice_date']?.toString() ?? '';
+  PreferredSizeWidget _buildAppBar(VendorLedger ledger) {
+    return AppBar(
+      backgroundColor: context.primaryColor,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      leading: _isSelectionMode 
+        ? IconButton(icon: const Icon(LucideIcons.x, color: Colors.white), onPressed: _clearSelection)
+        : IconButton(
+            icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+      title: _isSelectionMode 
+        ? Text('${_selectedIds.length} Selected', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)) 
+        : Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  ledger.vendorName.isNotEmpty ? ledger.vendorName[0].toUpperCase() : 'V',
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  ledger.vendorName,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+      actions: [
+        if (!_isSelectionMode)
+          IconButton(
+            icon: const Icon(LucideIcons.moreVertical, color: Colors.white),
+            onPressed: () {},
+          )
+        else ...[
+          IconButton(
+            icon: const Icon(LucideIcons.checkCircle, color: Colors.white),
+            onPressed: () => _handleBatchMarkAsPaid(true),
+            tooltip: 'Mark Paid',
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.trash2, color: Colors.white),
+            onPressed: _handleBatchDelete,
+            tooltip: 'Delete',
+          ),
+        ]
+      ],
+    );
+  }
 
-    final itemCount = (invoice['item_count'] as num?)?.toInt() ?? 0;
-    final receiptLink = invoice['receipt_link']?.toString();
+  Widget _buildHeaderCard(VendorLedger ledger, double totalSpent, double totalPaid) {
+    final balance = ledger.balanceDue;
+    final isPending = balance > 0.01;
+    final isAdvance = balance < -0.01;
 
-    DateTime? parsedDate;
-    if (invoiceDate.isNotEmpty) {
-      parsedDate = DateTime.tryParse(invoiceDate);
-    }
+    String headerLabel = 'TOTAL BALANCE DUE';
+    if (isAdvance) headerLabel = 'ADVANCE';
+    if (!isPending && !isAdvance) headerLabel = 'SETTLED';
 
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
-          width: 0.5,
+        color: context.primaryColor,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
         ),
-        boxShadow: Theme.of(context).brightness == Brightness.light
-            ? AppTheme.premiumShadow
-            : AppTheme.darkPremiumShadow,
+        boxShadow: [
+          BoxShadow(
+            color: context.primaryColor.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () {
-          if (invoiceNumber.isNotEmpty) {
-            _navigateToBillDetails(invoiceNumber);
-          } else if (receiptLink != null && receiptLink.isNotEmpty) {
-            _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber);
-          }
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.18),
+                Colors.white.withValues(alpha: 0.08),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      LucideIcons.package,
-                      color: Color(0xFFF59E0B),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Invoice',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          parsedDate != null
-                              ? dateFormatter.format(parsedDate)
-                              : invoiceDate,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (receiptLink != null && receiptLink.isNotEmpty)
-                    IconButton(
-                       icon: Icon(LucideIcons.eye, size: 18, color: Theme.of(context).colorScheme.primary),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () => _showPurchaseInvoiceReceipt(receiptLink, invoiceNumber),
-                      tooltip: 'View Receipt',
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                       Icon(LucideIcons.box, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$itemCount item${itemCount == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontSize: 13,
-                           color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (!_isSelectionMode)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      SizedBox(
-                        height: 32,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _markPurchaseAsPaid(invoice),
-                          icon: const Icon(LucideIcons.checkCircle, size: 14),
-                          label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              Text(
+                headerLabel,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
                 ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '₹',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: isPending ? Colors.white : Colors.greenAccent.shade200,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    NumberFormat('#,##,###.##').format(balance.abs()),
+                    style: TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.w900,
+                      color: isPending ? Colors.white : Colors.greenAccent.shade200,
+                      letterSpacing: -2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildHeaderStat(
+                      label: 'TOTAL SPENT',
+                      value: CurrencyFormatter.format(totalSpent),
+                      icon: LucideIcons.shoppingCart,
+                    ),
+                  ),
+                  Container(
+                    width: 1.5,
+                    height: 36,
+                    color: Colors.white.withValues(alpha: 0.15),
+                  ),
+                  Expanded(
+                    child: _buildHeaderStat(
+                      label: 'TOTAL PAID',
+                      value: CurrencyFormatter.format(totalPaid),
+                      icon: LucideIcons.checkCircle2,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -1399,8 +487,434 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  /// Shows a modal with the purchase invoice receipt photo
-  void _showPurchaseInvoiceReceipt(String receiptLink, String invoiceNumber) {
+  Widget _buildHeaderStat({required String label, required String value, required IconData icon}) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 14),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: context.primaryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'TRANSACTION HISTORY',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: context.textSecondaryColor,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          if (_activityItems != null && _activityItems!.isNotEmpty)
+            Text(
+              '${_activityItems!.length} Entries',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.textSecondaryColor.withValues(alpha: 0.6),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityCard(VendorActivityItem item) {
+    final tx = item.transaction;
+    final inv = item.purchaseInvoice;
+    final isPayment = item.isPayment;
+    final isSelected = tx != null && _selectedIds.contains(tx.id);
+    
+    final Color accentColor = isPayment ? context.successColor : context.errorColor;
+    final Color bgColor = accentColor.withValues(alpha: 0.08);
+
+    final IconData txIcon = isPayment ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight;
+    final String txTitle = isPayment ? 'Payment Sent' : 'Purchase Invoice';
+    
+    final amount = isPayment ? (tx?.amount ?? 0) : (inv?['total_amount']?.toDouble() ?? tx?.amount ?? 0);
+    final date = item.date;
+    final isPaid = tx?.isPaid ?? (inv?['payment_status'] == 'paid');
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isSelected ? context.primaryColor.withValues(alpha: 0.05) : context.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: context.premiumShadow,
+        border: Border.all(
+          color: isSelected ? context.primaryColor : context.borderColor.withValues(alpha: 0.5),
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onLongPress: tx != null ? () => _toggleSelection(tx.id) : null,
+        onTap: () {
+          if (_isSelectionMode && tx != null) {
+            _toggleSelection(tx.id);
+          } else if (!isPayment) {
+            final invNum = inv?['invoice_number']?.toString() ?? tx?.invoiceNumber ?? '';
+            if (invNum.isNotEmpty) _navigateToBillDetails(invNum);
+          }
+        },
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isSelectionMode) ...[
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 12, top: 4),
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSelected ? context.primaryColor : Colors.transparent,
+                        border: Border.all(color: isSelected ? context.primaryColor : context.textSecondaryColor, width: 2),
+                      ),
+                      child: Icon(LucideIcons.check, size: 12, color: isSelected ? Colors.white : Colors.transparent),
+                    ),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(txIcon, color: accentColor, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              txTitle,
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: -0.5),
+                            ),
+                            Text(
+                              '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(amount)}',
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: accentColor, letterSpacing: -0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(LucideIcons.calendar, size: 12, color: context.textSecondaryColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              dateFormatter.format(date),
+                              style: TextStyle(fontSize: 11, color: context.textSecondaryColor, fontWeight: FontWeight.w600),
+                            ),
+                            if (!isPayment && isPaid) ...[
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.successColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text('PAID', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: context.successColor)),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isPayment)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: context.textSecondaryColor.withValues(alpha: 0.03),
+                  border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildClarityItem('Bill Amount', CurrencyFormatter.format(amount)),
+                    _buildClarityItem('Status', isPaid ? 'PAID' : 'PENDING', 
+                      valueColor: isPaid ? context.successColor : context.errorColor),
+                    _buildClarityItem('Bill #', inv?['invoice_number']?.toString() ?? tx?.invoiceNumber ?? 'N/A'),
+                  ],
+                ),
+              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Spacer(),
+                  if (tx != null || (inv?['receipt_link'] != null))
+                    TextButton.icon(
+                      onPressed: () {
+                        if (tx != null) {
+                          _showReceiptPhotoDialog(tx);
+                        } else if (inv?['receipt_link'] != null) {
+                          _showInvoicePhotoDialog(inv!['receipt_link'], inv['invoice_number']?.toString() ?? 'N/A');
+                        }
+                      },
+                      icon: const Icon(LucideIcons.eye, size: 14),
+                      label: const Text('VIEW BILL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: context.primaryColor),
+                    ),
+                  if (tx != null)
+                    IconButton(
+                      icon: Icon(LucideIcons.trash2, size: 16, color: context.errorColor),
+                      onPressed: () => _confirmDeleteTransaction(tx.id),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClarityItem(String label, String value, {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: context.textSecondaryColor.withValues(alpha: 0.6), letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: valueColor ?? context.textColor)),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: context.surfaceColor, shape: BoxShape.circle, boxShadow: context.premiumShadow),
+            child: Icon(LucideIcons.fileText, size: 48, color: context.borderColor),
+          ),
+          const SizedBox(height: 24),
+          const Text('No activity yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text('Activity will appear here once\na purchase or payment is recorded.', style: TextStyle(fontSize: 14, color: context.textSecondaryColor), textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavBar(VendorLedger ledger, double spent, double paid) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border(top: BorderSide(color: context.borderColor.withValues(alpha: 0.5), width: 0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 1,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 52),
+                side: const BorderSide(color: Color(0xFF25D366), width: 1.5),
+                foregroundColor: const Color(0xFF25D366),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => _showWhatsAppReminderSheet(context, ref, ledger, spent, paid),
+              child: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 4,
+            child: ElevatedButton.icon(
+              icon: const Icon(LucideIcons.indianRupee, size: 18, color: Colors.white),
+              label: const Text('RECORD PAYMENT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryColor,
+                minimumSize: const Size(0, 52),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () => _showAddPaymentDialog(context, ledger),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Dialogs & Sheets
+
+  void _showAddPaymentDialog(BuildContext context, VendorLedger ledger) {
+    final amountController = TextEditingController();
+    final notesController = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Record Payment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: context.primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Current Balance:', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(CurrencyFormatter.format(ledger.balanceDue), style: TextStyle(color: context.primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Amount Paid (₹)', prefixIcon: Icon(LucideIcons.indianRupee, size: 18)),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(labelText: 'Notes / Reference', prefixIcon: Icon(LucideIcons.edit2, size: 18)),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: isSubmitting ? null : () async {
+                  final amount = double.tryParse(amountController.text) ?? 0;
+                  if (amount <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid amount')));
+                    return;
+                  }
+                  setModalState(() => isSubmitting = true);
+                  final success = await ref.read(vendorLedgerProvider.notifier).recordPayment(ledger.id, amount, notesController.text, vendorName: ledger.vendorName);
+                  if (success && context.mounted) {
+                    ref.invalidate(inventoryItemsProvider);
+                    ref.invalidate(dashboardTotalsProvider);
+                    Navigator.pop(context);
+                    _loadData();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment recorded! 🎉')));
+                  } else if (context.mounted) {
+                    setModalState(() => isSubmitting = false);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save payment.')));
+                  }
+                },
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), backgroundColor: context.primaryColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: isSubmitting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Save Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showReceiptPhotoDialog(VendorLedgerTransaction tx) {
+    if (tx.receiptLink != null && tx.receiptLink != 'null') {
+      _showInvoicePhotoDialog(tx.receiptLink!, tx.invoiceNumber ?? 'N/A');
+    } else if (tx.invoiceNumber != null) {
+      // Try to fetch it
+      showDialog(
+        context: context,
+        builder: (context) => FutureBuilder<String?>(
+          future: ref.read(vendorLedgerProvider.notifier).fetchReceiptLink(tx.invoiceNumber!),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Colors.white));
+            }
+            final link = snapshot.data;
+            if (link == null || link.isEmpty) {
+              return AlertDialog(
+                title: const Text('No Photo'),
+                content: const Text('No receipt photo available for this invoice.'),
+                actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+              );
+            }
+            Navigator.pop(context); // Close wait dialog
+            WidgetsBinding.instance.addPostFrameCallback((_) => _showInvoicePhotoDialog(link, tx.invoiceNumber!));
+            return const SizedBox.shrink();
+          },
+        ),
+      );
+    }
+  }
+
+  void _showInvoicePhotoDialog(String url, String invoiceNumber) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1410,86 +924,101 @@ class _VendorLedgerDetailPageState
         minChildSize: 0.5,
         maxChildSize: 0.95,
         builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+          decoration: const BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           child: Column(
             children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white38,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Header
+              Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4, decoration: BoxDecoration(color: Colors.white38, borderRadius: BorderRadius.circular(2))),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                 child: Row(
                   children: [
                     const Icon(LucideIcons.receipt, color: Colors.white70, size: 18),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        invoiceNumber.isNotEmpty ? 'Invoice #$invoiceNumber' : 'Purchase Receipt',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.x, color: Colors.white70),
-                      onPressed: () => Navigator.pop(context),
-                    ),
+                    Expanded(child: Text('Invoice #$invoiceNumber', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+                    IconButton(icon: const Icon(LucideIcons.x, color: Colors.white70), onPressed: () => Navigator.pop(context)),
                   ],
                 ),
               ),
               const Divider(color: Colors.white12),
-              // Receipt photo area
               Expanded(
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: receiptLink,
-                      fit: BoxFit.contain,
-                      width: double.infinity,
-                      placeholder: (context, url) => Container(
-                        height: 300,
-                        color: Colors.white10,
-                        child: const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        height: 200,
-                        color: Colors.white10,
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 36),
-                            SizedBox(height: 8),
-                            Text('Could not load receipt image',
-                              style: TextStyle(color: Colors.white54)),
-                          ],
-                        ),
-                      ),
-                    ),
+                child: InteractiveViewer(
+                  maxScale: 5.0,
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                    errorWidget: (context, url, error) => const Center(child: Icon(LucideIcons.alertTriangle, color: Colors.orange, size: 48)),
                   ),
                 ),
               ),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _showWhatsAppReminderSheet(BuildContext context, WidgetRef ref, VendorLedger ledger, double spent, double paid) {
+    final shop = ref.read(shopProvider);
+    final user = ref.read(authProvider).user;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Share Reminder', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFF25D366), child: FaIcon(FontAwesomeIcons.whatsapp, color: Colors.white, size: 18)),
+              title: const Text('Send Payment Update', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Share current balance and payment status'),
+              onTap: () {
+                Navigator.pop(context);
+                final message = 'Payment Update for ${ledger.vendorName}\n'
+                    'Current Balance: ${CurrencyFormatter.format(ledger.balanceDue)}\n'
+                    'Thank you!\n— *${shop.name.isNotEmpty ? shop.name : user?.name ?? 'Our Shop'}*';
+                WhatsAppUtils.openWhatsAppChat(phone: '', message: message);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: CircleAvatar(backgroundColor: context.primaryColor.withValues(alpha: 0.1), child: Icon(LucideIcons.share2, color: context.primaryColor, size: 18)),
+              title: const Text('Share Ledger Summary', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Share spend and payment stats'),
+              onTap: () {
+                Navigator.pop(context);
+                final summary = 'Ledger Summary for ${ledger.vendorName}\nTotal Spent: ${CurrencyFormatter.format(spent)}\nTotal Paid: ${CurrencyFormatter.format(paid)}\nBalance Due: ${CurrencyFormatter.format(ledger.balanceDue)}';
+                SharePlus.instance.share(ShareParams(text: summary));
+              },
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteTransaction(int txId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Transaction', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to delete this transaction?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('DELETE', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final success = await ref.read(vendorLedgerProvider.notifier).batchDeleteTransactions([txId]);
+      if (success) _loadData();
+    }
   }
 }

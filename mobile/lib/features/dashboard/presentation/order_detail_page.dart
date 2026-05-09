@@ -20,6 +20,7 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -214,6 +215,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   Future<void> _saveChanges() async {
+    FocusScope.of(context).unfocus();
     setState(() => isSaving = true);
     final notifier = ref.read(verifiedProvider.notifier);
 
@@ -874,7 +876,23 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       if (isEditing)
-                        _buildTextField(context, customerCtrl, 'Name')
+                        CustomerAutocompleteField(
+                          initialValue: customerCtrl.text,
+                          label: 'Name',
+                          compact: true,
+                          onSaved: (val) => customerCtrl.text = val,
+                          onCustomerSelected: (party) {
+                            setState(() {
+                              customerCtrl.text = party.customerName;
+                              if (party.customerPhone != null &&
+                                  party.customerPhone!.isNotEmpty) {
+                                mobileCtrl.text = party.customerPhone!
+                                    .replaceAll('+91', '')
+                                    .trim();
+                              }
+                            });
+                          },
+                        )
                       else
                         Text(
                             widget.group.customerName.isNotEmpty

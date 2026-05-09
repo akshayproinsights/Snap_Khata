@@ -350,6 +350,7 @@ class InternalProcessRequest(BaseModel):
     r2_bucket: str
     username: str
     force_upload: bool = False
+    customer_name: Optional[str] = None
 
     class Config:
         # Accept and ignore extra fields (e.g. old payloads with sheet_id)
@@ -374,7 +375,8 @@ async def internal_process_task(request: InternalProcessRequest):
             file_keys=request.file_keys,
             r2_bucket=request.r2_bucket,
             username=request.username,
-            force_upload=request.force_upload
+            force_upload=request.force_upload,
+            customer_name=request.customer_name
         )
         logger.info(f"[CLOUD-TASK-WEBHOOK] Task {request.task_id} processed successfully")
         return {"status": "success", "message": f"Task {request.task_id} processed"}
@@ -531,7 +533,8 @@ async def process_invoices_endpoint(
                     file_keys=request.file_keys,
                     r2_bucket=r2_bucket,
                     username=username,
-                    force_upload=request.force_upload
+                    force_upload=request.force_upload,
+                    customer_name=request.customer_name
                 )
                 if success:
                     logger.info(f"Task {task_id} submitted to Cloud Tasks successfully")
@@ -554,7 +557,8 @@ async def process_invoices_endpoint(
                 request.file_keys,
                 r2_bucket,
                 username,
-                request.force_upload
+                request.force_upload,
+                request.customer_name
             )
             logger.info(f"Task {task_id} submitted locally successfully")
     except Exception as e:
@@ -730,7 +734,8 @@ def process_invoices_sync(
     file_keys: List[str],
     r2_bucket: str,
     username: str,
-    force_upload: bool = False
+    force_upload: bool = False,
+    customer_name: Optional[str] = None
 ):
     """
     Synchronous background task to process invoices
@@ -845,7 +850,7 @@ def process_invoices_sync(
             username=username,
             progress_callback=update_progress,
             force_upload=force_upload,
-            customer_name=request.customer_name
+            customer_name=customer_name
         )
         
         logger.info(f"Processing completed. Results: {results}")

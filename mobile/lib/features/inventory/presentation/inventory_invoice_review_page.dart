@@ -12,17 +12,25 @@ import 'package:mobile/features/inventory/presentation/providers/inventory_provi
 import 'package:mobile/features/inventory/presentation/widgets/edit_item_modal.dart';
 import 'package:mobile/features/inventory/presentation/widgets/header_adjustments_section.dart';
 import 'package:mobile/features/inventory/presentation/widgets/invoice_item_card.dart';
-import 'package:mobile/features/inventory/presentation/widgets/validation_save_button.dart';
+import 'package:mobile/features/inventory/presentation/widgets/supplier_autocomplete_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:intl/intl.dart';
 import 'providers/vendor_ledger_provider.dart';
 import 'providers/inventory_items_provider.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 
 class InventoryInvoiceReviewPage extends ConsumerStatefulWidget {
   final InventoryInvoiceBundle bundle;
+  final List<InventoryInvoiceBundle> allBundles;
+  final int currentIndex;
 
-  const InventoryInvoiceReviewPage({super.key, required this.bundle});
+  const InventoryInvoiceReviewPage({
+    super.key,
+    required this.bundle,
+    this.allBundles = const [],
+    this.currentIndex = -1,
+  });
 
   @override
   ConsumerState<InventoryInvoiceReviewPage> createState() =>
@@ -35,9 +43,11 @@ class _InventoryInvoiceReviewPageState
   late final TextEditingController _vendorNameController;
   late final TextEditingController _invoiceNumberController;
   late final TextEditingController _dateController;
+  late final TextEditingController _paidAmountController;
 
   String _paymentMode = 'Credit';
   bool _isLoading = false;
+  bool _isNavigatingAway = false;
 
   late List<HeaderAdjustment> _adjustments;
   double? _targetTotal;
@@ -58,7 +68,17 @@ class _InventoryInvoiceReviewPageState
         }
     } catch (_) {}
     _dateController = TextEditingController(text: initialDate);
-    _adjustments = List.from(widget.bundle.headerAdjustments);
+    _paidAmountController = TextEditingController(text: '0');
+    _adjustments = List<HeaderAdjustment>.from(widget.bundle.headerAdjustments);
+  }
+
+  @override
+  void dispose() {
+    _vendorNameController.dispose();
+    _invoiceNumberController.dispose();
+    _dateController.dispose();
+    _paidAmountController.dispose();
+    super.dispose();
   }
 
   Future<void> _deleteItem(InventoryItem item) async {
@@ -94,13 +114,6 @@ class _InventoryInvoiceReviewPageState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('"${item.description}" deleted'),
-            action: SnackBarAction(
-              label: 'UNDO',
-              onPressed: () {
-                // Note: Undo would require recreating the item
-                // For now just show a message
-              },
-            ),
           ),
         );
       }
@@ -161,14 +174,6 @@ class _InventoryInvoiceReviewPageState
     }
   }
 
-  @override
-  void dispose() {
-    _vendorNameController.dispose();
-    _invoiceNumberController.dispose();
-    _dateController.dispose();
-    super.dispose();
-  }
-
   void _showEditAdjustmentDialog(int index, HeaderAdjustment adj) {
     final controller = TextEditingController(text: adj.amount.abs().round().toString());
     final type = adj.adjustmentType;
@@ -203,7 +208,6 @@ class _InventoryInvoiceReviewPageState
               final val = double.tryParse(controller.text) ?? 0.0;
               setState(() {
                 _adjustments[index] = adj.copyWith(amount: isDeduction ? -val.abs() : val.abs());
-                // Reset target total if we manually edit adjustments to avoid dual-conflicts
                 _targetTotal = null;
               });
               Navigator.pop(context);
@@ -249,7 +253,6 @@ class _InventoryInvoiceReviewPageState
             onPressed: () {
               setState(() {
                 _targetTotal = null;
-                // Remove any manual correction adjustments if they exist
                 _adjustments.removeWhere((a) => a.description == 'Manual Correction');
               });
               Navigator.pop(context);
@@ -300,25 +303,6 @@ class _InventoryInvoiceReviewPageState
     );
   }
 
-  InputDecoration _inputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontSize: 12),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-  }
-
   Future<void> _selectDate() async {
     DateTime? initialDate;
     try {
@@ -362,156 +346,208 @@ class _InventoryInvoiceReviewPageState
     setState(() => _isLoading = true);
 
     try {
-      String backendDate = _dateController.text.trim();
-      try {
-        final parsed = DateFormat('dd/MM/yyyy').parse(backendDate);
-        backendDate = DateFormat('yyyy-MM-dd').format(parsed);
-      } catch (_) {}
-
+      final paidAmount = double.tryParse(_paidAmountController.text) ?? 0.0;
       final data = {
         'invoice_number': _invoiceNumberController.text.trim(),
         'vendor_name': _vendorNameController.text.trim(),
-        'invoice_date': backendDate,
-        'item_ids': items.map((i) => i.id).toList(),
+        'invoice_date': _dateController.text.trim(),
         'payment_mode': _paymentMode,
-        'payment_date': backendDate,
-        'balance_owed': _paymentMode == 'Credit' ? totalAmount : 0.0,
-        'amount_paid': _paymentMode == 'Cash' ? totalAmount : 0.0,
+        'balance_owed': (totalAmount - paidAmount).clamp(0.0, double.infinity),
+        'amount_paid': paidAmount,
+        'item_ids': items.map((i) => i.id).toList(),
         'final_total': totalAmount,
         'adjustments': _adjustments.map((a) => a.toJson()).toList(),
       };
 
       await ref.read(inventoryProvider.notifier).verifyInvoice(data);
-      
-      ref.invalidate(inventoryItemsProvider);
-      ref.invalidate(vendorLedgerProvider);
-      ref.invalidate(dashboardTotalsProvider);
+      ref.read(uploadProvider.notifier).unlockBlocking();
 
-      // Persist payment mode on the bundle so downstream pages reflect it
-      widget.bundle.paymentMode = _paymentMode;
+      if (!mounted) return;
 
-      if (mounted) {
-        AppToast.showSuccess(
-          context,
-          'Inventory updated successfully. You can continue with your next bill.',
-          title: 'Saved',
-        );
-        context.go('/');
-      }
+      AppToast.showSuccess(
+        context,
+        'Invoice saved successfully.',
+        title: 'Saved',
+      );
+
+      _goToNextInvoice();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
         setState(() => _isLoading = false);
+        AppToast.showError(context, e.toString(), title: 'Save Failed');
       }
     }
   }
 
+  void _goToNextInvoice() {
+    if (_isNavigatingAway) return;
+    
+    final pendingBundles = widget.allBundles
+        .where((b) => !b.isVerified)
+        .toList();
+    
+    // Find next bundle after the current index
+    InventoryInvoiceBundle? nextBundle;
+    int nextIdx = -1;
+    
+    if (widget.currentIndex != -1 && widget.currentIndex < widget.allBundles.length - 1) {
+        for (int i = widget.currentIndex + 1; i < widget.allBundles.length; i++) {
+            if (!widget.allBundles[i].isVerified) {
+                nextBundle = widget.allBundles[i];
+                nextIdx = i;
+                break;
+            }
+        }
+    }
+    
+    // If no next found, pick the first pending one that isn't the current one
+    if (nextBundle == null && pendingBundles.isNotEmpty) {
+        for (final b in pendingBundles) {
+            if (b.invoiceNumber != widget.bundle.invoiceNumber) {
+                nextBundle = b;
+                nextIdx = widget.allBundles.indexOf(b);
+                break;
+            }
+        }
+    }
 
+    setState(() => _isNavigatingAway = true);
 
-  Widget _buildToggleBtn(String mode, bool isSelected) {
-    return GestureDetector(
-      onTap: () => setState(() => _paymentMode = mode),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          mode,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textSecondary,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (nextBundle != null) {
+        context.pushReplacement('/inventory-invoice-review', extra: {
+          'bundle': nextBundle,
+          'allBundles': widget.allBundles,
+          'currentIndex': nextIdx,
+        });
+      } else {
+        context.go('/inventory-review');
+      }
+    });
   }
 
-  Widget _buildHeaderCard() {
+
+
+  Widget _buildActionPanel(double totalAmount) {
+    final paidAmount = double.tryParse(_paidAmountController.text) ?? 0.0;
+    final balance = (totalAmount - paidAmount).clamp(0.0, double.infinity);
+    final hasNext = widget.allBundles.any((b) => !b.isVerified && b.invoiceNumber != widget.bundle.invoiceNumber);
+
     return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        color: context.surfaceColor,
+        border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, -4),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+              // Total (Tap to Edit)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showEditTotalDialog(totalAmount),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total Bill', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text('₹${totalAmount.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                          const SizedBox(width: 4),
+                          Icon(LucideIcons.pencil, size: 12, color: context.primaryColor.withValues(alpha: 0.6)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Icon(LucideIcons.fileText,
-                    size: 18, color: AppTheme.primary),
+              ),
+              // Paid Input
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _paidAmountController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  onChanged: (val) {
+                    final paid = double.tryParse(val) ?? 0.0;
+                    setState(() {
+                      _paymentMode = paid >= totalAmount ? 'Cash' : 'Credit';
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Amount Paid',
+                    labelStyle: TextStyle(fontSize: 10, color: context.textSecondaryColor),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'Header Details',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary),
+              // Balance
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Balance Due', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                  const SizedBox(height: 2),
+                  Text('₹${balance.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: balance > 0 ? context.errorColor : context.successColor,
+                      )),
+                ],
               ),
-              const Spacer(),
-              Container(
-                 decoration: BoxDecoration(
-                   color: Colors.grey.shade100,
-                   borderRadius: BorderRadius.circular(20),
-                 ),
-                 child: Row(
-                   mainAxisSize: MainAxisSize.min,
-                   children: [
-                     _buildToggleBtn('Credit', _paymentMode == 'Credit'),
-                     _buildToggleBtn('Cash', _paymentMode == 'Cash'),
-                   ],
-                 ),
-               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _vendorNameController,
-            decoration: _inputDecoration('Vendor Name'),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: TextFormField(
-                  controller: _invoiceNumberController,
-                  decoration: _inputDecoration('Invoice Number'),
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'Cash', label: Text('Cash')),
+                    ButtonSegment(value: 'Credit', label: Text('Credit')),
+                  ],
+                  selected: {_paymentMode},
+                  onSelectionChanged: (newSelection) {
+                    setState(() => _paymentMode = newSelection.first);
+                  },
                 ),
               ),
-              const SizedBox(width: 12),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
               Expanded(
-                child: GestureDetector(
-                  onTap: _selectDate,
-                  child: AbsorbPointer(
-                    child: TextFormField(
-                      controller: _dateController,
-                      decoration: _inputDecoration('Date').copyWith(
-                        suffixIcon: const Icon(LucideIcons.calendar, size: 16),
-                      ),
+                child: SizedBox(
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _isLoading ? null : () => _saveInvoice(widget.bundle.items, totalAmount),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.primaryColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text(
+                            hasNext ? 'Save & Next Bill' : 'Save & Finish',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                          ),
                   ),
                 ),
               ),
@@ -522,21 +558,85 @@ class _InventoryInvoiceReviewPageState
     );
   }
 
+  Widget _buildCompactMetadata() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // Invoice Date
+          Expanded(
+            child: GestureDetector(
+              onTap: _selectDate,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.borderColor),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.calendar, size: 16, color: context.textSecondaryColor),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bill Date', style: TextStyle(fontSize: 10, color: context.textSecondaryColor)),
+                        Text(_dateController.text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Invoice Number
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.hash, size: 16, color: context.textSecondaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bill No.', style: TextStyle(fontSize: 10, color: context.textSecondaryColor)),
+                        TextField(
+                          controller: _invoiceNumberController,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Watch provider so optimistic updates reflect immediately
+    if (_isNavigatingAway) return const Scaffold();
+
     final state = ref.watch(inventoryProvider);
-
-    // Build a lookup of optimistically-updated / deleted items from the provider.
-    // The provider only loads *pending* items by default, so we must NOT replace
-    // the full item list with provider items (verified items won't appear there).
-    // Instead, we always start from widget.bundle.items (loaded via inventoryItemsProvider
-    // with show_all=true) and only apply per-item overrides from the provider by ID.
     final providerItemById = { for (final i in state.items) i.id: i };
-
-    // Apply optimistic updates: use provider version of each item if present,
-    // skip items that were deleted (absent from provider only if provider has
-    // loaded items for this invoice at all).
+    
     final providerHasThisInvoice = state.items.any((i) {
       final key = i.invoiceNumber.isNotEmpty
           ? i.invoiceNumber
@@ -548,17 +648,14 @@ class _InventoryInvoiceReviewPageState
     });
 
     final currentItems = widget.bundle.items.where((bundleItem) {
-      // If the provider has loaded items for this specific invoice, respect deletions
       if (providerHasThisInvoice && !providerItemById.containsKey(bundleItem.id)) {
-        return false; // Item was deleted (optimistic)
+        return false;
       }
       return true;
     }).map((bundleItem) {
-      // Apply any optimistic edits from provider
       return providerItemById[bundleItem.id] ?? bundleItem;
     }).toList();
 
-    // Mismatch items first
     final sortedItems = List<InventoryItem>.from(currentItems);
     sortedItems.sort((a, b) {
       final aMis = a.amountMismatch.abs() > 1.0;
@@ -568,154 +665,87 @@ class _InventoryInvoiceReviewPageState
       return a.id.compareTo(b.id);
     });
 
-    final hasAnyMismatch = sortedItems.any((i) => i.amountMismatch.abs() > 1.0 || (i.needsReview ?? false));
-
-    // ── Two-Scenario Grand Total Logic ────────────────────────────────────────
-    //
-    // SCENARIO A — Per-item discount (discAmount > 0 OR discPercent > 0 on any item):
-    //   Each item's netAmount already has: gross → (gross − discAmt) → +GST.
-    //   HEADER_DISCOUNT/SCHEME are just a summary of what's already in items.
-    //   → Sum item netAmounts; skip HEADER_DISCOUNT from adjustments (avoid double-count).
-    //
-    // SCENARIO B — Header-only discount (all items have discAmount=0, discPercent=0):
-    //   Items have no per-item discount; discount appears only as a footer line.
-    //   Correct bill math: totalGross − headerDiscount = totalTaxable → GST on taxable.
-    //   Items' netAmounts currently include GST on FULL gross (no discount applied).
-    //   → Recalculate: totalTaxable = totalGross − headerDiscount;
-    //     scale GST proportionally from items' original GST amounts.
-    //   → HEADER_DISCOUNT is consumed here and NOT added to adjustmentTotal.
-
     final hasPerItemDiscount = sortedItems.any(
       (i) => (i.discAmount ?? 0.0) > 0.01 || (i.discPercent ?? 0.0) > 0.01,
     );
 
-
-
-    // ROUND_OFF / OTHER always added on top in both scenarios.
     final nonDiscountAdjTotal = _adjustments.fold<double>(
       0.0,
-      (sum, adj) {
+      (double sum, HeaderAdjustment adj) {
         final type = adj.adjustmentType.toUpperCase();
         if (type == 'ROUND_OFF' || type == 'OTHER') {
-          return sum + (adj.amount); // use signed amount
+          return sum + (adj.amount);
         }
         return sum;
       },
     );
 
     double baseItemsTotal;
-
     if (hasPerItemDiscount) {
-      // ── Scenario A ──────────────────────────────────────────────────────────
-      // Discounts are already inside each item's netAmount. Just sum them up.
-      baseItemsTotal = sortedItems.fold(
-        0.0,
-        (sum, item) => sum + (item.netAmount ?? item.netBill),
-      );
+      baseItemsTotal = sortedItems.fold(0.0, (sum, item) => sum + (item.netAmount ?? item.netBill));
     } else {
-      // ── Scenario B ──────────────────────────────────────────────────────────
-      // No per-item discount. Apply HEADER_DISCOUNT/SCHEME to total gross,
-      // THEN scale GST proportionally (discount before tax, not after).
-
-      final totalGross = sortedItems.fold(
-        0.0,
-        (sum, item) => sum + (item.grossAmount ?? (item.quantity * item.rate)),
-      );
-
-      final headerDiscountAmt = _adjustments.fold<double>(
-        0.0,
-        (sum, adj) {
-          final type = adj.adjustmentType.toUpperCase();
-          if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') {
-            return sum + adj.amount.abs();
-          }
-          return sum;
-        },
-      );
-
+      final totalGross = sortedItems.fold(0.0, (sum, item) => sum + (item.grossAmount ?? (item.quantity * item.rate)));
+      final headerDiscountAmt = _adjustments.fold<double>(0.0, (double sum, HeaderAdjustment adj) {
+        final type = adj.adjustmentType.toUpperCase();
+        if (type == 'HEADER_DISCOUNT' || type == 'SCHEME') return sum + adj.amount.abs();
+        return sum;
+      });
       final totalTaxable = (totalGross - headerDiscountAmt).clamp(0.0, double.infinity);
-
-      // Scale existing GST amounts proportionally to the discounted taxable base.
-      // (Items' GST was computed on grossAmount since discPct=0 at item level)
-      final originalTaxableBase = sortedItems.fold<double>(
-        0.0,
-        (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.quantity * item.rate)),
-      );
-      final totalGst = sortedItems.fold<double>(
-        0.0,
-        (sum, item) =>
-            sum + (item.cgstAmount ?? 0.0) + (item.sgstAmount ?? 0.0) + (item.igstAmount ?? 0.0),
-      );
-      final scaledGst = originalTaxableBase > 0
-          ? totalGst * (totalTaxable / originalTaxableBase)
-          : totalGst;
-
+      final originalTaxableBase = sortedItems.fold<double>(0.0, (sum, item) => sum + (item.taxableAmount ?? item.grossAmount ?? (item.quantity * item.rate)));
+      final totalGst = sortedItems.fold<double>(0.0, (sum, item) => sum + (item.cgstAmount ?? 0.0) + (item.sgstAmount ?? 0.0) + (item.igstAmount ?? 0.0));
+      final scaledGst = originalTaxableBase > 0 ? totalGst * (totalTaxable / originalTaxableBase) : totalGst;
       baseItemsTotal = totalTaxable + scaledGst;
     }
 
     double totalAmount = baseItemsTotal + nonDiscountAdjTotal;
-
-    // ── Apply Manual Correction if Target Total is set ────────────────────────
     if (_targetTotal != null) {
         final diff = _targetTotal! - totalAmount;
         if (diff.abs() > 0.001) {
-            // Find existing manual correction or create new
-            final idx = _adjustments.indexWhere((a) => a.description == 'Manual Correction');
+            final idx = _adjustments.indexWhere((HeaderAdjustment a) => a.description == 'Manual Correction');
             if (idx != -1) {
                 _adjustments[idx] = _adjustments[idx].copyWith(amount: _adjustments[idx].amount + diff);
             } else {
-                _adjustments.add(HeaderAdjustment(
-                    adjustmentType: 'OTHER',
-                    amount: diff,
-                    description: 'Manual Correction',
-                ));
+                _adjustments.add(HeaderAdjustment(adjustmentType: 'OTHER', amount: diff, description: 'Manual Correction'));
             }
-            // Re-calculate to reflect the correction
             totalAmount = _targetTotal!;
         }
     }
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
-        surfaceTintColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.bundle.vendorName,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              'Review Inventory',
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
+        backgroundColor: context.surfaceColor,
+        elevation: 0,
+        leadingWidth: 40,
+        titleSpacing: 0,
+        title: SupplierAutocompleteField(
+          initialValue: _vendorNameController.text,
+          label: 'Supplier Name',
+          compact: true,
+          showOnFocus: true,
+          onSaved: (val) => _vendorNameController.text = val,
+          onSupplierSelected: (s) {
+            setState(() => _vendorNameController.text = s.vendorName);
+            HapticFeedback.mediumImpact();
+          },
         ),
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.trash2, color: Colors.red),
-            tooltip: 'Delete Invoice',
+            icon: const Icon(LucideIcons.trash2, color: Colors.red, size: 20),
             onPressed: _isLoading ? null : () => _deleteInvoice(sortedItems),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
-          // Receipt image
+          // Image Section
           if (widget.bundle.receiptLink.isNotEmpty)
             GestureDetector(
               onTap: () => _showFullImage(widget.bundle.receiptLink),
-              child: Container(
-                height: MediaQuery.of(context).size.height * 0.25,
+              child: SizedBox(
+                height: 180,
                 width: double.infinity,
-                color: Colors.black,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -727,29 +757,14 @@ class _InventoryInvoiceReviewPageState
                         alignment: Alignment.topCenter,
                       ),
                     ),
+                    Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.1))),
                     Positioned(
-                      bottom: 8,
-                      right: 8,
+                      bottom: 12,
+                      right: 12,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.maximize,
-                                color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text('Tap to expand',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
+                        child: const Icon(LucideIcons.maximize, color: Colors.white, size: 14),
                       ),
                     ),
                   ],
@@ -757,74 +772,26 @@ class _InventoryInvoiceReviewPageState
               ),
             ),
 
-          // Main list
+          _buildCompactMetadata(),
+
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                _buildHeaderCard(),
-                const SizedBox(height: 24),
-
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Text(
-                      'Line Items',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary),
-                    ),
+                    Text('Line Items', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: context.textColor)),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${sortedItems.length} item${sortedItems.length == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary),
-                      ),
-                    ),
+                    Text('${sortedItems.length} items', style: TextStyle(fontSize: 12, color: context.textSecondaryColor, fontWeight: FontWeight.w600)),
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (sortedItems.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(
-                        child: Text('No items found.',
-                            style: TextStyle(color: AppTheme.textSecondary))),
-                  ),
                 ...sortedItems.map((item) => InvoiceItemCard(
                   item: item,
                   onEdit: () {
                     EditItemModal.show(context, item, (updatedItem) {
-                      ref.read(inventoryProvider.notifier).updateItem(updatedItem.id, {
-                        'description': updatedItem.description,
-                        'part_number': updatedItem.partNumber,
-                        'hsn_code': updatedItem.hsnCode,
-                        'quantity': updatedItem.quantity,
-                        'rate': updatedItem.rate,
-                        'gross_amount': updatedItem.grossAmount,
-                        'disc_type': updatedItem.discType,
-                        'disc_amount': updatedItem.discAmount,
-                        'taxable_amount': updatedItem.taxableAmount,
-                        'tax_type': updatedItem.taxType,
-                        'cgst_amount': updatedItem.cgstAmount,
-                        'sgst_amount': updatedItem.sgstAmount,
-                        'igst_percent': updatedItem.igstPercent,
-                        'igst_amount': updatedItem.igstAmount,
-                        'net_amount': updatedItem.netAmount,
-                        'net_bill': updatedItem.netBill,
-                        'printed_total': updatedItem.printedTotal,
-                        'amount_mismatch': updatedItem.amountMismatch,
-                        'needs_review': updatedItem.needsReview,
-                      });
+                      ref.read(inventoryProvider.notifier).updateItem(updatedItem.id, updatedItem.toJson());
                     });
                   },
                   onDelete: () => _deleteItem(item),
@@ -834,25 +801,13 @@ class _InventoryInvoiceReviewPageState
                   hasPerItemDiscount: hasPerItemDiscount,
                   onEdit: _showEditAdjustmentDialog,
                 ),
-                const SizedBox(height: 16),
-                
-                // Add lots of padding at the bottom so we can easily scroll past the FAB area
-                const SizedBox(height: 120),
+                const SizedBox(height: 32),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: ValidationSaveButton(
-        totalAmount: totalAmount,
-        hasMismatch: hasAnyMismatch,
-        isLoading: _isLoading,
-        onSave: () => _saveInvoice(sortedItems, totalAmount),
-        onTotalTap: () => _showEditTotalDialog(totalAmount),
-        isUpdate: widget.bundle.isVerified,
-      ),
+      bottomNavigationBar: _buildActionPanel(totalAmount),
     );
   }
 }
-
-

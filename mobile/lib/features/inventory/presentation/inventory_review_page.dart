@@ -383,7 +383,11 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
                     dateLabel: _dateLabel(bundle.date),
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      context.push('/inventory-invoice-review', extra: bundle);
+                      context.push('/inventory-invoice-review', extra: {
+                        'bundle': bundle,
+                        'allBundles': bundles,
+                        'currentIndex': index,
+                      });
                     },
                   );
                 },

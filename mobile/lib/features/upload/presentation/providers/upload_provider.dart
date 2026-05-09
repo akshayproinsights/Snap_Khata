@@ -283,6 +283,11 @@ class UploadNotifier extends Notifier<UploadState> {
     );
   }
 
+  /// Manually unlock the UI if it's stuck in a blocking state.
+  void unlockBlocking() {
+    state = state.copyWith(isBlocking: false);
+  }
+
   /// Called by the upload page when the BACKEND confirms an active task
   /// but the provider doesn't know about it (state was lost).
   /// This directly forces the provider into processing mode and starts polling.
@@ -346,11 +351,10 @@ class UploadNotifier extends Notifier<UploadState> {
       return;
     }
 
-    // 1c. Already done in memory → navigate to review
+    // 1c. Already done in memory -> prepare for next scan
     if (state.allDone) {
       state = state.copyWith(isRestoringState: false);
       await forceReset();
-      AppRouter.router.go('/review');
       return;
     }
 
