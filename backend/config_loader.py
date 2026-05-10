@@ -20,6 +20,9 @@ TEMPLATES_DIR = USER_CONFIGS_DIR / "templates"
 _config_cache: Dict[str, Dict[str, Any]] = {}
 _template_cache: Dict[str, Dict[str, Any]] = {}
 
+# Default industry when all else fails
+_DEFAULT_INDUSTRY = "general"
+
 
 def load_template(industry: str) -> Optional[Dict[str, Any]]:
     """
@@ -56,63 +59,157 @@ def load_template(industry: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _get_user_industry_from_db(username: str) -> Optional[Dict[str, str]]:
+    """
+    Query the database for a user's industry and r2_bucket.
+    Returns dict with 'industry', 'r2_bucket', 'display_name' or None on failure.
+    This is only called when the per-user config file does not exist.
+    """
+    try:
+        from database import get_database_client
+        db = get_database_client()
+        resp = (
+            db.client.table("users")
+            .select("username,industry,r2_bucket")
+            .eq("username", username)
+            .limit(1)
+            .execute()
+        )
+        if resp.data:
+            row = resp.data[0]
+            return {
+                "industry":    row.get("industry") or _DEFAULT_INDUSTRY,
+                "r2_bucket":   row.get("r2_bucket") or "snapkhata-prod",
+                "display_name": row.get("display_name") or "",
+            }
+        # Try case-insensitive (some old usernames may differ)
+        resp2 = (
+            db.client.table("users")
+            .select("username,industry,r2_bucket")
+            .ilike("username", username)
+            .limit(1)
+            .execute()
+        )
+        if resp2.data:
+            row = resp2.data[0]
+            return {
+                "industry":    row.get("industry") or _DEFAULT_INDUSTRY,
+                "r2_bucket":   row.get("r2_bucket") or "snapkhata-prod",
+                "display_name": row.get("display_name") or "",
+            }
+        logger.warning(f"User '{username}' not found in DB — will use general template")
+        return None
+    except Exception as e:
+        logger.error(f"DB lookup failed for user '{username}': {e} — falling back to general template")
+        return None
+
+
 def load_user_config(username: str, bypass_cache: bool = False) -> Optional[Dict[str, Any]]:
     """
-    Load user-specific configuration and merge with industry template.
-    
+    Load user configuration using a 3-tier fallback strategy:
+
+      Tier 1 — Per-user JSON file (user_configs/{username}.json)
+               For power users / existing users with custom prompts.
+               Merged with their template if 'extends_template' is set.
+
+      Tier 2 — DB-backed template lookup
+               Query the `users` table for their registered `industry`,
+               load the matching template, stamp username/r2_bucket.
+               Works for ALL self-registered users with no per-user file.
+
+      Tier 3 — General template hardcoded fallback
+               Used if the DB is unreachable. Ensures the system never
+               returns None for a valid username.
+
     Args:
-        username: Username (e.g., 'adnak')
-        bypass_cache: If True, force reload from disk
-    
+        username:     Username (e.g., 'adnak', 'yogeshwari')
+        bypass_cache: If True, force reload from disk / DB
+
     Returns:
-        Merged config dict or None if not found
+        Merged config dict (never None for a real user).
+        Returns None only if even the 'general' template is broken.
     """
     global _config_cache
-    
-    # Check cache first
+
+    # ── Cache check ──────────────────────────────────────────────────────────
     if not bypass_cache and username in _config_cache:
         return deepcopy(_config_cache[username])
-    
+
+    # ── Tier 1: Per-user JSON file ────────────────────────────────────────────
     user_config_path = USER_CONFIGS_DIR / f"{username}.json"
-    
-    # CASE SENSITIVITY FIX: Fallback to lowercase if exact match not found
+
+    # CASE SENSITIVITY FIX: try lowercase filename if exact match not found
     if not user_config_path.exists():
         lowercase_path = USER_CONFIGS_DIR / f"{username.lower()}.json"
         if lowercase_path.exists():
             logger.info(f"User config found with lowercase name: {username.lower()}")
             user_config_path = lowercase_path
-        else:
-            logger.warning(f"User config not found: {username} (checked {user_config_path} and {lowercase_path})")
-            return None
-    
-    try:
-        # Load user config
-        with open(user_config_path, 'r', encoding='utf-8') as f:
-            user_config = json.load(f)
-        
-        logger.info(f"Loaded user config: {username}")
-        
-        # If user extends a template, merge them
-        if "extends_template" in user_config:
-            industry = user_config["extends_template"]
-            template = load_template(industry)
-            
-            if template:
-                merged_config = merge_configs(template, user_config)
+
+    if user_config_path.exists():
+        try:
+            with open(user_config_path, 'r', encoding='utf-8') as f:
+                user_config = json.load(f)
+
+            logger.info(f"[Tier 1] Loaded per-user config: {username}")
+
+            # Merge with industry template if requested
+            if "extends_template" in user_config:
+                industry = user_config["extends_template"]
+                template = load_template(industry)
+                if template:
+                    merged_config = merge_configs(template, user_config)
+                else:
+                    logger.warning(f"Template '{industry}' not found for {username}, using user config only")
+                    merged_config = user_config
             else:
-                logger.warning(f"Template {industry} not found for user {username}, using user config only")
                 merged_config = user_config
-        else:
-            # No template, use user config as-is
-            merged_config = user_config
-        
-        # Cache the merged config
-        _config_cache[username] = merged_config
-        return deepcopy(merged_config)
-    
-    except Exception as e:
-        logger.error(f"Error loading user config {username}: {e}")
+
+            _config_cache[username] = merged_config
+            return deepcopy(merged_config)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"[Tier 1] Per-user config for '{username}' has invalid JSON: {e} — falling to Tier 2")
+        except Exception as e:
+            logger.error(f"[Tier 1] Failed to load config for '{username}': {e} — falling to Tier 2")
+
+    else:
+        logger.info(f"[Tier 2] No per-user config file for '{username}' — looking up industry from DB")
+
+    # ── Tier 2: DB-backed industry template ───────────────────────────────────
+    db_info = _get_user_industry_from_db(username)
+    if db_info:
+        industry  = db_info["industry"]
+        r2_bucket = db_info["r2_bucket"]
+        display   = db_info["display_name"]
+    else:
+        logger.warning(f"[Tier 3] DB lookup failed for '{username}' — using general template as last resort")
+        industry  = _DEFAULT_INDUSTRY
+        r2_bucket = "snapkhata-prod"
+        display   = ""
+
+    template = load_template(industry)
+    if template is None and industry != _DEFAULT_INDUSTRY:
+        logger.warning(f"Template '{industry}' not found — falling back to '{_DEFAULT_INDUSTRY}'")
+        template = load_template(_DEFAULT_INDUSTRY)
+
+    if template is None:
+        logger.error(f"CRITICAL: Even the '{_DEFAULT_INDUSTRY}' template could not be loaded for '{username}'")
         return None
+
+    # Stamp identity fields so the rest of the system works correctly
+    import copy
+    config = copy.deepcopy(template)
+    config["username"]  = username
+    config["industry"]  = industry
+    config["r2_bucket"] = r2_bucket
+    if display:
+        config["display_name"] = display
+
+    tier = "2" if db_info else "3"
+    logger.info(f"[Tier {tier}] Loaded '{industry}' template config for '{username}' (r2={r2_bucket})")
+
+    _config_cache[username] = config
+    return deepcopy(config)
 
 
 def merge_configs(template: Dict[str, Any], user_overrides: Dict[str, Any]) -> Dict[str, Any]:

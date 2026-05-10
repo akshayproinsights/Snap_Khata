@@ -202,7 +202,10 @@ async def register(data: RegisterRequest):
             detail="Failed to create account. Please try again.",
         )
 
-    # ── 5. Generate user config from template ────────────────────────────
+    # ── 5. Generate user config from template (cache warm-up) ───────────────
+    # This is best-effort: if it fails, the user still works via the DB-backed
+    # template fallback in config_loader.load_user_config() Tier 2.
+    # A failure here is NOT fatal — but we log it loudly so it's visible.
     try:
         create_user_config_from_template(
             username=username,
@@ -210,10 +213,15 @@ async def register(data: RegisterRequest):
             r2_bucket=r2_bucket,
             display_name=data.shop_name,
         )
+        logger.info(f"✓ Config file created for '{username}' (industry={data.industry})")
     except Exception as e:
-        # Non-fatal: log the error but don't roll back the DB row.
-        # The user can still log in; config will be generated on next load.
-        logger.error(f"Config generation failed for '{username}': {e}")
+        # Non-fatal: DB fallback will handle this user at processing time.
+        # Fix the root cause (broken template JSON, missing template) before
+        # relying on this path for production users.
+        logger.warning(
+            f"⚠️ Config file generation FAILED for '{username}' (industry={data.industry}): {e}. "
+            f"User will still work via DB template fallback — but fix the template!"
+        )
 
     # ── 6. Also upsert into user_profiles (shop_name) ───────────────────
     try:

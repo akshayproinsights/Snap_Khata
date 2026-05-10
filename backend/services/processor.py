@@ -306,11 +306,26 @@ def process_single_invoice(
         logger.error(str(e))
         return None
     
-    # Load user-specific Gemini prompt
+    # Load user-specific Gemini prompt (3-tier fallback happens inside config_loader)
     system_instruction = get_gemini_prompt(username)
     if not system_instruction:
-        logger.error(f"No Gemini prompt found for user: {username}")
-        return None
+        # Emergency last-resort: load general template prompt directly from disk.
+        # This fires only if config_loader Tier 1/2/3 ALL failed (e.g. DB down + no file).
+        logger.critical(
+            f"get_gemini_prompt returned None for '{username}' — all config tiers failed. "
+            f"Attempting emergency fallback to 'general' template."
+        )
+        try:
+            from config_loader import load_template
+            fallback_tpl = load_template("general")
+            if fallback_tpl:
+                system_instruction = fallback_tpl.get("gemini", {}).get("system_instruction")
+        except Exception as fb_err:
+            logger.error(f"Emergency fallback load failed: {fb_err}")
+
+        if not system_instruction:
+            logger.error(f"No Gemini prompt found for user: {username} — giving up.")
+            return None
     
     logger.debug(f"Loaded prompt for user {username}, length: {len(system_instruction)}")
     
