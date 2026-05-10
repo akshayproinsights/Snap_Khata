@@ -388,43 +388,18 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
   Widget _buildProgressHeader(int total, int done, int pending, int error) {
     if (total == 0) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       color: context.surfaceColor,
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Review Progress',
-                  style:
-                      TextStyle(color: context.textSecondaryColor, fontSize: 13)),
-              Text('$done of $total Done',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: total > 0 ? done / total : 0,
-              backgroundColor: context.borderColor.withValues(alpha: 0.2),
-              color: context.successColor,
-              minHeight: 8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              if (pending > 0)
-                _buildBadge(
-                    LucideIcons.clock, '$pending Pending', context.warningColor),
-              if (error > 0)
-                _buildBadge(
-                    LucideIcons.alertCircle, '$error Errors', context.errorColor),
-            ],
-          )
+          if (pending > 0)
+            _buildBadge(LucideIcons.clock, '$pending Pending', context.warningColor),
+          if (pending > 0 && error > 0) const SizedBox(width: 12),
+          if (error > 0)
+            _buildBadge(LucideIcons.alertCircle, '$error Errors', context.errorColor),
+          if (pending == 0 && error == 0 && done > 0)
+            _buildBadge(LucideIcons.checkCircle2, 'All Verified', context.successColor),
         ],
       ),
     );

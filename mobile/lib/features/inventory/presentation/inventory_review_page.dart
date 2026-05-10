@@ -61,7 +61,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     super.initState();
     Future.microtask(() {
       if (mounted) {
-        ref.read(inventoryProvider.notifier).fetchItems(showAll: true);
+        ref.read(inventoryProvider.notifier).fetchItems();
       }
     });
   }
@@ -166,7 +166,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
       'currentIndex': index,
     });
     if (mounted) {
-      ref.read(inventoryProvider.notifier).fetchItems(showAll: true);
+      ref.read(inventoryProvider.notifier).fetchItems();
     }
   }
 
@@ -199,41 +199,18 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
     if (total == 0) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       color: context.surfaceColor,
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Review Progress',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-              Text('$done of $total Done',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: context.textColor)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: total > 0 ? done / total : 0,
-              backgroundColor: context.borderColor.withValues(alpha: 0.3),
-              color: context.successColor,
-              minHeight: 8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              if (pending > 0)
-                _buildBadge(LucideIcons.clock, '$pending Pending', context.warningColor),
-              if (error > 0)
-                _buildBadge(LucideIcons.alertCircle, '$error Errors', context.errorColor),
-              if (pending == 0 && error == 0 && done > 0)
-                _buildBadge(LucideIcons.checkCircle2, 'All Verified', context.successColor),
-            ],
-          )
+          if (pending > 0)
+            _buildBadge(LucideIcons.clock, '$pending Pending', context.warningColor),
+          if (pending > 0 && error > 0) const SizedBox(width: 12),
+          if (error > 0)
+            _buildBadge(LucideIcons.alertCircle, '$error Errors', context.errorColor),
+          if (pending == 0 && error == 0 && done > 0)
+            _buildBadge(LucideIcons.checkCircle2, 'All Verified', context.successColor),
         ],
       ),
     );
@@ -286,7 +263,7 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         actions: [
           IconButton(
             icon: state.isLoading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(LucideIcons.refreshCw),
-            onPressed: () => ref.read(inventoryProvider.notifier).fetchItems(showAll: true),
+            onPressed: () => ref.read(inventoryProvider.notifier).fetchItems(),
           ),
         ],
       ),

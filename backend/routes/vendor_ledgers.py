@@ -7,6 +7,7 @@ from datetime import datetime
 from auth import get_current_user
 from database import get_database_client
 from services.storage import get_storage_client
+from utils.date_helpers import format_to_db
 
 logger = logging.getLogger(__name__)
 
@@ -580,7 +581,7 @@ async def onboard_invoice_paid(request: OnboardInvoicePaidRequest, current_user:
                 'amount': request.amount,
                 'invoice_number': request.invoice_number,
                 'is_paid': False,
-                'created_at': request.date or datetime.utcnow().isoformat()
+                'created_at': format_to_db(request.date) if request.date else datetime.utcnow().isoformat()
             }).execute()
             
             if not insert_tx_resp.data:
@@ -1290,7 +1291,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                     "amount": full_amount,
                     "invoice_number": inv_num,
                     "is_paid": is_paid_status,
-                    "created_at": data.get("invoice_date") or now,
+                    "created_at": format_to_db(data.get("invoice_date")) if data.get("invoice_date") else now,
                     "car_number": data.get("car_number"),
                     "vehicle_number": data.get("vehicle_number"),
                     "extra_fields": data.get("extra_fields") or {}
@@ -1315,7 +1316,7 @@ async def sync_vendor_ledgers_from_invoices(current_user: Dict = Depends(get_cur
                         "amount": amount_paid,
                         "invoice_number": inv_num,
                         "is_paid": True,
-                        "created_at": data.get("invoice_date") or now,
+                        "created_at": format_to_db(data.get("invoice_date")) if data.get("invoice_date") else now,
                         "notes": f"Auto-sync payment from invoice {inv_num}",
                         "car_number": data.get("car_number"),
                         "vehicle_number": data.get("vehicle_number"),

@@ -51,7 +51,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   final FocusNode _mobileFocusNode = FocusNode();
   late final TextEditingController _paidAmountController;
 
-  String _paymentMode = 'Cash';
+  String _paymentMode = 'Credit';
   double _receivedAmount = 0.0; // Still kept for internal logic
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
@@ -138,7 +138,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     } else if (header?.receivedAmount != null && header!.receivedAmount! > 0) {
       initialReceived = header.receivedAmount!;
     } else {
-      initialReceived = _activeTotalAmount(widget.group);
+      initialReceived = 0.0;
     }
 
     if (mounted) {
