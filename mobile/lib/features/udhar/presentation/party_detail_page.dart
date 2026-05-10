@@ -737,7 +737,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         customerDetails: first.customerDetails,
       );
       group.items = records;
-      group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
+      group.totalAmount = ledgerInvoiceAmount;
 
       if (mounted) {
         // Use await to refresh data when returning from details

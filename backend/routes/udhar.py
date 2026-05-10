@@ -337,30 +337,42 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         enrichment = {}
         if receipt_numbers:
             # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
-            vi_resp = db.client.table('verified_invoices').select('receipt_number, amount, received_amount, balance_due, payment_mode, receipt_link, date, upload_date').in_('receipt_number', receipt_numbers).eq('username', username).execute()
+            vi_resp = db.client.table('verified_invoices').select('id, receipt_number, amount, total_bill_amount, received_amount, balance_due, payment_mode, receipt_link, date, upload_date').in_('receipt_number', receipt_numbers).eq('username', username).execute()
             
             for vi in vi_resp.data:
                 rn = vi.get('receipt_number')
                 if not rn:
                     continue
                 if rn not in enrichment:
-                    enrichment[rn] = {'amount_sum': 0.0, 'received_amount': 0.0, 'balance_due': 0.0, 'payment_mode': 'Cash', 'receipt_link': '', 'date': '', 'upload_date': ''}
+                    enrichment[rn] = {
+                        'amount_sum': 0.0, 
+                        'total_bill_amount': float(vi.get('total_bill_amount') or 0), 
+                        'received_amount': float(vi.get('received_amount') or 0), 
+                        'balance_due': float(vi.get('balance_due') or 0), 
+                        'payment_mode': vi.get('payment_mode') or 'Cash', 
+                        'receipt_link': vi.get('receipt_link') or '', 
+                        'date': vi.get('date') or '', 
+                        'upload_date': vi.get('upload_date') or '',
+                        'max_id': vi.get('id', 0)
+                    }
                 enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
-                # Take the max non-zero value across rows (balance_due/received_amount may only be on one row)
-                row_received = float(vi.get('received_amount', 0) or 0)
-                row_balance = float(vi.get('balance_due', 0) or 0)
-                if row_received > enrichment[rn]['received_amount']:
-                    enrichment[rn]['received_amount'] = row_received
-                if row_balance > enrichment[rn]['balance_due']:
-                    enrichment[rn]['balance_due'] = row_balance
-                if vi.get('payment_mode'):
-                    enrichment[rn]['payment_mode'] = vi['payment_mode']
-                if vi.get('receipt_link'):
-                    enrichment[rn]['receipt_link'] = vi['receipt_link']
-                if vi.get('date'):
-                    enrichment[rn]['date'] = vi['date']
-                if vi.get('upload_date'):
-                    enrichment[rn]['upload_date'] = vi['upload_date']
+                
+                # CRITICAL FIX: To prevent mixing metadata from old scans and new edits of 
+                # the same receipt, always take all authoritative metadata from the NEWEST row (highest ID).
+                current_id = vi.get('id', 0)
+                if current_id > enrichment[rn]['max_id']:
+                    enrichment[rn]['max_id'] = current_id
+                    enrichment[rn]['total_bill_amount'] = float(vi.get('total_bill_amount') or 0)
+                    enrichment[rn]['received_amount'] = float(vi.get('received_amount') or 0)
+                    enrichment[rn]['balance_due'] = float(vi.get('balance_due') or 0)
+                    if vi.get('payment_mode'):
+                        enrichment[rn]['payment_mode'] = vi['payment_mode']
+                    if vi.get('receipt_link'):
+                        enrichment[rn]['receipt_link'] = vi['receipt_link']
+                    if vi.get('date'):
+                        enrichment[rn]['date'] = vi['date']
+                    if vi.get('upload_date'):
+                        enrichment[rn]['upload_date'] = vi['upload_date']
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
@@ -372,12 +384,13 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 meta_balance = float(enr.get('balance_due') or 0)
                 payment_mode = enr.get('payment_mode') or 'Cash'
                 
-                # 1. AUTHORITATIVE grand_total: always use the sum of actual line item amounts.
-                # meta_received + meta_balance can be stale/wrong (e.g., balance_due was written
-                # with an incorrect total before amounts were corrected). The line_item_total
-                # is computed by summing the 'amount' column of each verified_invoice row,
-                # which is always the ground-truth value that the user sees on the Order Details page.
-                grand_total = line_item_total if line_item_total > 0 else (meta_received + meta_balance)
+                # 1. AUTHORITATIVE grand_total: use user-edited total_bill_amount if present.
+                # Otherwise, fallback to the sum of actual line item amounts.
+                tba = float(enr.get('total_bill_amount') or 0)
+                if tba > 0:
+                    grand_total = tba
+                else:
+                    grand_total = line_item_total if line_item_total > 0 else (meta_received + meta_balance)
                 
                 # 2. Determine effective financial state
                 if payment_mode.lower() != 'credit':
@@ -528,9 +541,16 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                         if rn not in invoice_items_map:
                             invoice_items_map[rn] = []
                         invoice_items_map[rn].append(vi)
-                        # Keep the latest or first as meta
+                        
+                        # CRITICAL FIX: To prevent mixing metadata from old scans and new edits of 
+                        # the same receipt, always take all authoritative metadata from the NEWEST row (highest ID).
                         if rn not in invoice_meta:
                             invoice_meta[rn] = vi
+                        else:
+                            current_id = vi.get('id', 0)
+                            max_id = invoice_meta[rn].get('id', 0)
+                            if current_id > max_id:
+                                invoice_meta[rn] = vi
             except Exception as e:
                 logger.warning(f"Error fetching full items for verified_invoices: {e}")
 
@@ -550,9 +570,13 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 meta_balance = float(meta.get('balance_due') or 0)
                 payment_mode = meta.get('payment_mode') or 'Cash'
                 
-                # 1. AUTHORITATIVE grand_total: sum of actual line item amounts is the source
-                # of truth. meta_received + meta_balance can be stale when the bill was corrected.
-                grand_total = items_total if items_total > 0 else (meta_received + meta_balance)
+                # 1. AUTHORITATIVE grand_total: use user-edited total_bill_amount if present.
+                # Otherwise, fallback to the sum of actual line item amounts.
+                tba = float(meta.get('total_bill_amount') or 0)
+                if tba > 0:
+                    grand_total = tba
+                else:
+                    grand_total = items_total if items_total > 0 else (meta_received + meta_balance)
 
                 if payment_mode.lower() != 'credit':
                     # Cash/Online: default to fully paid if metadata missing
@@ -571,8 +595,8 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                         effective_balance = max(0, grand_total - effective_received)
                         effective_is_paid = (effective_balance <= 0)
                 
-                # Fix amount=0 stored in ledger_transactions
-                if float(tx.get('amount') or 0) == 0 and grand_total > 0:
+                # Always use authoritative grand_total, overriding any stale value in ledger_transactions
+                if grand_total > 0:
                     tx['amount'] = grand_total
                 
                 tx['receipt_link'] = meta.get('receipt_link') or ''
@@ -613,7 +637,9 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
                 continue  # Skip credit invoices (already handled above via ledger_txs)
 
             first_item = items[0]
-            total_amount = sum(float(i.get('amount') or 0.0) for i in items)
+            items_total = sum(float(i.get('amount') or 0.0) for i in items)
+            tba_max = max((float(i.get('total_bill_amount') or 0.0) for i in items), default=0.0)
+            total_amount = tba_max if tba_max > 0 else items_total
             
             # Use LATEST upload_date as the activity timestamp for cash invoices.
             # This ensures newly processed cash invoices appear at the top.
@@ -1130,7 +1156,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
     try:
         # 1. Fetch all verified invoices
         invoices_resp = db.client.table("verified_invoices") \
-            .select("id, receipt_number, date, customer_name, customer_details, amount, received_amount, balance_due, payment_mode, created_at, car_number, vehicle_number, extra_fields, mobile_number") \
+            .select("id, receipt_number, date, customer_name, customer_details, amount, total_bill_amount, received_amount, balance_due, payment_mode, created_at, car_number, vehicle_number, extra_fields, mobile_number") \
             .eq("username", username) \
             .execute()
 
@@ -1155,8 +1181,12 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 if not raw_name or raw_name.lower() in ['unknown', 'unknown customer', 'cash customer', '—', '-', 'null']:
                     final_name = raw_details if raw_details else raw_name
 
+                # SINGLE SOURCE OF TRUTH: total_bill_amount is the user-verified grand total
+                # set from the review page. It must override the sum of line item amounts.
+                tba = float(inv.get("total_bill_amount") or 0)
                 grouped_invoices[rn] = {
                     "total_amount": 0.0,
+                    "total_bill_amount": tba,  # Authoritative grand total (user-edited)
                     "received_amount": float(inv.get("received_amount") or 0),
                     "balance_due": float(inv.get("balance_due") or 0),
                     # payment_mode is a header-level field — take from first line item
@@ -1166,10 +1196,21 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     "notes": inv.get("customer_details"),
                     "car_number": inv.get("car_number") or inv.get("vehicle_number"),
                     "extra_fields": inv.get("extra_fields") or {},
-                    "mobile_number": inv.get("mobile_number")
+                    "mobile_number": inv.get("mobile_number"),
+                    "max_id": inv.get("id", 0)  # Keep track of the newest row
                 }
             
             grouped_invoices[rn]["total_amount"] += float(inv.get("amount") or 0)
+            
+            # CRITICAL FIX: To prevent mixing metadata from old scans and new edits of 
+            # the same receipt, always take all authoritative metadata from the NEWEST row (highest ID).
+            current_id = inv.get("id", 0)
+            if current_id > grouped_invoices[rn]["max_id"]:
+                grouped_invoices[rn]["max_id"] = current_id
+                grouped_invoices[rn]["total_bill_amount"] = float(inv.get("total_bill_amount") or 0)
+                grouped_invoices[rn]["received_amount"] = float(inv.get("received_amount") or 0)
+                grouped_invoices[rn]["balance_due"] = float(inv.get("balance_due") or 0)
+                grouped_invoices[rn]["payment_mode"] = inv.get("payment_mode") or "Cash"
             
             # Ensure we keep the latest metadata if multiple lines have different metadata
             if inv.get("car_number") or inv.get("vehicle_number"):
@@ -1178,13 +1219,6 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                 grouped_invoices[rn]["extra_fields"].update(inv.get("extra_fields"))
             if inv.get("mobile_number"):
                 grouped_invoices[rn]["mobile_number"] = inv.get("mobile_number")
-            # payment_mode: if any line on the invoice is Credit, treat whole invoice as Credit
-            existing_pm = grouped_invoices[rn].get("payment_mode", "Cash")
-            incoming_pm = inv.get("payment_mode") or "Cash"
-            if incoming_pm.strip().lower() == "credit":
-                grouped_invoices[rn]["payment_mode"] = incoming_pm
-            elif existing_pm.strip().lower() == "cash" and incoming_pm:
-                grouped_invoices[rn]["payment_mode"] = incoming_pm
             
             # DEBUG: Log if we have mobile number
             if grouped_invoices[rn].get("mobile_number"):
@@ -1198,14 +1232,18 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
         # We only update the header row (first row_id per receipt) to keep writes minimal.
         repairs_needed = []
         for rn, data in grouped_invoices.items():
-            correct_balance = max(0.0, data["total_amount"] - float(data.get("received_amount") or 0))
+            # Use total_bill_amount (user-edited grand total) as the authoritative total
+            tba = data.get("total_bill_amount", 0.0)
+            authoritative_total = tba if tba and tba > 0 else data["total_amount"]
+            correct_balance = max(0.0, authoritative_total - float(data.get("received_amount") or 0))
             stored_balance = float(data.get("balance_due") or 0)
             # Repair if difference is more than 1 rupee (to avoid floating point noise)
             if abs(correct_balance - stored_balance) > 1.0:
                 repairs_needed.append((rn, correct_balance))
                 logger.warning(
                     f"🔧 REPAIR: Receipt {rn} has stale balance_due={stored_balance:.0f}, "
-                    f"correct={correct_balance:.0f} (total={data['total_amount']:.0f}, "
+                    f"correct={correct_balance:.0f} (authoritative_total={authoritative_total:.0f}, "
+                    f"line_item_sum={data['total_amount']:.0f}, "
                     f"received={data.get('received_amount', 0):.0f})"
                 )
         
@@ -1334,7 +1372,17 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             if not ledger_id: continue
 
             # 1. Handle the INVOICE transaction (Full billing amount)
-            total_amount = data["total_amount"]
+            # ── SINGLE SOURCE OF TRUTH ──────────────────────────────────────────────
+            # total_bill_amount is explicitly set by the user on the Review page.
+            # It is the authoritative grand total and MUST be used when available.
+            # Falling back to sum-of-line-items only when the user never edited the total.
+            tba = data.get("total_bill_amount", 0.0)
+            total_amount = tba if tba and tba > 0 else data["total_amount"]
+            if tba and tba > 0 and abs(tba - data["total_amount"]) > 0.01:
+                logger.info(
+                    f"✅ Receipt {rn}: using user-edited total_bill_amount={tba:.0f} "
+                    f"instead of line-item sum={data['total_amount']:.0f}"
+                )
             payment_mode = data.get("payment_mode") or "Cash"
             is_credit = payment_mode.strip().lower() == "credit"
             
@@ -1351,9 +1399,8 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             # - Credit: paid only when balance_due is 0 (i.e. fully settled)
             # - Cash/Online: always treated as paid at time of invoice
             if is_credit:
-                # CRITICAL: Always compute balance_due from total_amount (sum of item amounts)
-                # minus received_amount. Do NOT use data.get("balance_due") from the DB —
-                # that field can be stale if the bill was corrected after initial AI extraction.
+                # CRITICAL: Always compute balance_due from total_amount (the authoritative
+                # grand total, now preferring total_bill_amount over the line-item sum).
                 balance_due = max(0, total_amount - received_amount)
                 is_paid_status = balance_due <= 0.01
             else:

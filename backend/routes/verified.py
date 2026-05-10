@@ -165,12 +165,40 @@ async def get_verified_invoices_route(
             
             df = df.drop(columns=['_parsed_date'], errors='ignore')
         
+        # ─── CORE FIX: Deduplicate by receipt_number ───
+        # If multiple scans exist for the same receipt_number (e.g. a user re-scanned or edited),
+        # we MUST only show the items from the LATEST scan session. Otherwise, the frontend
+        # groups them and sums up totals, leading to double-counted bills (e.g. ₹3,370 instead of ₹1,685).
+        
+        if not df.empty and 'receipt_number' in df.columns and 'upload_date' in df.columns:
+            # 1. Identify the latest upload_date for each receipt_number
+            # We use strings for receipt_number to ensure consistency
+            df['receipt_number_str'] = df['receipt_number'].astype(str)
+            
+            # Find the max upload_date per receipt
+            latest_uploads = df.groupby('receipt_number_str')['upload_date'].max().reset_index()
+            latest_uploads.columns = ['receipt_number_str', 'latest_upload_date']
+            
+            # Merge back to filter the original dataframe
+            df = df.merge(latest_uploads, on='receipt_number_str')
+            
+            # Keep only rows where upload_date matches the latest_upload_date for that receipt
+            # For records without a receipt_number (empty string), we keep all of them (they are individual items)
+            df = df[
+                (df['receipt_number_str'] == '') | 
+                (df['receipt_number_str'] == 'nan') |
+                (df['upload_date'] == df['latest_upload_date'])
+            ]
+            
+            # Cleanup temporary columns
+            df = df.drop(columns=['receipt_number_str', 'latest_upload_date'], errors='ignore')
+
         total = len(df)
         
         # Apply pagination
         if limit:
             df = df.iloc[offset:offset+limit]
-        
+
         filtered_records = df.to_dict('records')
         sanitized = sanitize_records(filtered_records)
         

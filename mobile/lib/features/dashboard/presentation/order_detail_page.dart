@@ -134,10 +134,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   }
 
   double _totalAfterGst(InvoiceGroup group) {
-    // ALWAYS compute from actual line items — they are the authoritative source of truth.
-    // DO NOT read extra_fields['total_bill_amount'] here: the AI sometimes extracts a
-    // stale/wrong total_bill_amount into extra_fields which causes the Credit Book (₹34,320)
-    // vs Order Details (₹21,310) mismatch.
+    // If we have an explicitly provided total (from review or ledger), prioritize it
+    // when in view mode. This ensures ₹600 from review shows as ₹600 in details.
+    if (!isEditing) {
+      if (group.totalAmount > 0) return group.totalAmount;
+      
+      // Fallback: sum of payment fields (authoritative in database)
+      final paymentTotal = group.receivedAmount + group.balanceDue;
+      if (paymentTotal > 0) return paymentTotal;
+    }
+
+    // Fallback/Editing mode: compute from actual line items
     final parts = _partsSubtotal(group);
     final labor = _laborSubtotal(group);
     final combined = parts + labor;
@@ -170,7 +177,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     // If paymentMode is null but balanceDue > 0, the order was created as credit
     // (e.g., via the ledger flow). Infer 'Credit' so UI reflects the actual state.
     final hasDue = (widget.group.balanceDue ?? 0) > 0;
-    final baseTotal = _totalAfterGst(widget.group);
+    
     _paymentMode = widget.group.paymentMode ?? (hasDue ? 'Credit' : 'Cash');
     _receivedAmount = widget.group.receivedAmount ?? (hasDue ? (widget.group.totalAmount - (widget.group.balanceDue ?? 0)) : widget.group.totalAmount);
     _isReceivedChecked = _paymentMode == 'Credit' && _receivedAmount > 0;
@@ -178,6 +185,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _receivedAmountController = TextEditingController(
         text: _paymentMode == 'Credit' ? (_receivedAmount > 0 ? _formatInput(_receivedAmount) : '') : '');
     
+    final baseTotal = _totalAfterGst(widget.group);
     _totalAmountController = TextEditingController(text: _formatInput(baseTotal));
     _balanceDueController = TextEditingController(text: _formatInput(baseTotal - _receivedAmount));
     

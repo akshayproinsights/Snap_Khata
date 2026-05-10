@@ -769,8 +769,9 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       gstAmount = combinedSubtotal * 18 / 118;
     }
 
-    double grandTotal = combinedSubtotal;
-    if (gstModeStr == 'excluded') {
+    final double recordTotal = (firstItem.receivedAmount ?? 0) + (firstItem.balanceDue ?? 0);
+    double grandTotal = (recordTotal > 0) ? recordTotal : combinedSubtotal;
+    if (gstModeStr == 'excluded' && recordTotal <= 0) {
       grandTotal += gstAmount;
     }
 

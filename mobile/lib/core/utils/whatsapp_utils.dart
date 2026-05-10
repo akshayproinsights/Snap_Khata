@@ -470,7 +470,7 @@ class WhatsAppUtils {
     String? receiptPhotoUrl,
     String? receiptNumber,
   }) {
-    final firstName = customerName.trim().split(' ').first;
+    final name = customerName.trim();
     final shop = shopName.trim();
 
     if (useReceiptPhoto &&
@@ -479,7 +479,7 @@ class WhatsAppUtils {
         receiptPhotoUrl != 'null') {
       final invoiceRef =
           receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
-      return 'Hi $firstName,\n\n'
+      return 'Hi $name,\n\n'
           '🙏 Friendly reminder from *$shop*\n\n'
           '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*\n\n'
           'Your receipt$invoiceRef is attached 👇\n\n'
@@ -489,7 +489,7 @@ class WhatsAppUtils {
     }
 
     // Account Statement mode
-    String msg = 'Hi $firstName,\n\n'
+    String msg = 'Hi $name,\n\n'
         '🙏 A friendly reminder from *$shop*\n\n'
         '📋 Total Bill: ${formatIndianCurrency(totalBilled)}\n'
         '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n'
