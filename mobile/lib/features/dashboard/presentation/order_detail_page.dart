@@ -140,7 +140,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       if (group.totalAmount > 0) return group.totalAmount;
       
       // Fallback: sum of payment fields (authoritative in database)
-      final paymentTotal = group.receivedAmount + group.balanceDue;
+      final paymentTotal = (group.receivedAmount ?? 0) + (group.balanceDue ?? 0);
       if (paymentTotal > 0) return paymentTotal;
     }
 
