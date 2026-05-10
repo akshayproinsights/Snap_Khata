@@ -487,13 +487,27 @@ async def delete_vendor_ledger(ledger_id: int, current_user: Dict = Depends(get_
     try:
         # Verify ledger belongs to user
         ledger_resp = db.client.table('vendor_ledgers') \
-            .select('id') \
+            .select('id, vendor_name') \
             .eq('id', ledger_id) \
             .eq('username', username) \
             .execute()
             
         if not ledger_resp.data:
             raise HTTPException(status_code=404, detail="Vendor Ledger not found")
+            
+        ledger = ledger_resp.data[0]
+        vendor_name = ledger.get('vendor_name')
+        
+        # Delete related inventory_invoices to prevent them from re-syncing
+        if vendor_name:
+            try:
+                db.client.table('inventory_invoices') \
+                    .delete() \
+                    .eq('username', username) \
+                    .eq('vendor_name', vendor_name) \
+                    .execute()
+            except Exception as e:
+                logger.warning(f"Failed to cascade delete inventory_invoices for {vendor_name}: {e}")
             
         # Delete the ledger (transactions will be deleted by CASCADE)
         db.client.table('vendor_ledgers').delete().eq('id', ledger_id).execute()
@@ -995,13 +1009,13 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
                     .eq('username', username) \
                     .execute()
 
-        # 4. Prevent "resurrection" by updating the source inventory_invoices
+        # 4. Prevent "resurrection" by deleting the source inventory_invoices
         if tx_type == 'INVOICE':
             invoice_num = transaction.get('invoice_number')
             vendor_name = ledger.get('vendor_name')
             if invoice_num and vendor_name:
                 db.client.table('inventory_invoices') \
-                    .update({'payment_mode': 'Cash', 'balance_owed': 0}) \
+                    .delete() \
                     .eq('username', username) \
                     .eq('vendor_name', vendor_name) \
                     .eq('invoice_number', invoice_num) \
@@ -1110,7 +1124,7 @@ async def batch_delete_transactions(request: BatchActionRequest, current_user: D
             .eq('username', username) \
             .execute()
 
-        # Prevent "resurrection" by updating the source inventory_invoices for all deleted INVOICE transactions
+        # Prevent "resurrection" by deleting the source inventory_invoices for all deleted INVOICE transactions
         for tx_id, tx in tx_map.items():
             if tx.get('transaction_type') == 'INVOICE':
                 invoice_num = tx.get('invoice_number')
@@ -1119,7 +1133,7 @@ async def batch_delete_transactions(request: BatchActionRequest, current_user: D
                 if invoice_num and vendor_name:
                     try:
                         db.client.table('inventory_invoices') \
-                            .update({'payment_mode': 'Cash', 'balance_owed': 0}) \
+                            .delete() \
                             .eq('username', username) \
                             .eq('vendor_name', vendor_name) \
                             .eq('invoice_number', invoice_num) \

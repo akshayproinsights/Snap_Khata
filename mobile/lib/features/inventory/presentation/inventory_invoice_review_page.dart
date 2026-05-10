@@ -557,7 +557,7 @@ class _InventoryInvoiceReviewPageState
                     child: _isLoading
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : Text(
-                            hasNext ? 'Save & Next Bill' : 'Save & Finish',
+                            hasNext ? 'Save & Next' : 'Save & Finish',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                           ),
                   ),
@@ -644,7 +644,20 @@ class _InventoryInvoiceReviewPageState
 
   @override
   Widget build(BuildContext context) {
-    if (_isNavigatingAway) return const Scaffold();
+    if (_isNavigatingAway) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Saving...', style: TextStyle(color: AppTheme.textSecondary)),
+            ],
+          ),
+        ),
+      );
+    }
 
     final state = ref.watch(inventoryProvider);
     final providerItemById = { for (final i in state.items) i.id: i };
@@ -755,31 +768,35 @@ class _InventoryInvoiceReviewPageState
           if (widget.bundle.receiptLink.isNotEmpty)
             GestureDetector(
               onTap: () => _showFullImage(widget.bundle.receiptLink),
-              child: SizedBox(
-                height: 180,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                height: 150,
                 width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Hero(
-                      tag: 'inv_img_${widget.bundle.invoiceNumber}',
-                      child: UniversalImage(
-                        path: widget.bundle.receiptLink,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Hero(
+                        tag: 'inv_img_${widget.bundle.invoiceNumber}',
+                        child: UniversalImage(
+                          path: widget.bundle.receiptLink,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                        ),
                       ),
-                    ),
-                    Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.1))),
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
-                        child: const Icon(LucideIcons.maximize, color: Colors.white, size: 14),
+                      Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.1))),
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
+                          child: const Icon(LucideIcons.maximize, color: Colors.white, size: 14),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -817,9 +834,9 @@ class _InventoryInvoiceReviewPageState
               ],
             ),
           ),
+          _buildActionPanel(totalAmount),
         ],
       ),
-      bottomNavigationBar: _buildActionPanel(totalAmount),
     );
   }
 }

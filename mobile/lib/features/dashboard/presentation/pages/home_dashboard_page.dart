@@ -363,7 +363,9 @@ class HomeDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  username,
+                  username.isNotEmpty
+                      ? '${username[0].toUpperCase()}${username.substring(1)}'
+                      : username,
                   style: TextStyle(
                     color: context.textColor,
                     fontSize: 26,

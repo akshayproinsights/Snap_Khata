@@ -179,4 +179,30 @@ class DashboardRepository {
       return [];
     }
   }
+
+  Future<DashboardAnalytics> getDashboardAnalytics({
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final Map<String, dynamic> queryParams = {};
+    if (dateFrom != null) queryParams['date_from'] = dateFrom;
+    if (dateTo != null) queryParams['date_to'] = dateTo;
+
+    try {
+      final response = await _dio.get(
+        '/api/dashboard/analytics',
+        queryParameters: queryParams,
+      );
+      final cacheBox = Hive.box('dashboard_cache');
+      cacheBox.put('dashboard_analytics', response.data);
+      return DashboardAnalytics.fromJson(Map<String, dynamic>.from(response.data as Map));
+    } catch (e) {
+      final cacheBox = Hive.box('dashboard_cache');
+      final cached = cacheBox.get('dashboard_analytics');
+      if (cached != null) {
+        return DashboardAnalytics.fromJson(Map<String, dynamic>.from(cached as Map));
+      }
+      throw Exception('Failed to fetch dashboard analytics: $e');
+    }
+  }
 }

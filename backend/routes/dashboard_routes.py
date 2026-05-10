@@ -73,6 +73,23 @@ class DailySalesVolume(BaseModel):
     volume: int  # count of receipts
 
 
+class AnalyticsDataPoint(BaseModel):
+    """Analytics data point for a specific date"""
+    date: str
+    amount: int
+    count: int
+
+
+class DashboardAnalytics(BaseModel):
+    """Dashboard analytics response with sales and purchases"""
+    sales: List[AnalyticsDataPoint]
+    purchases: List[AnalyticsDataPoint]
+    total_sales_amount: int
+    total_sales_count: int
+    total_purchase_amount: int
+    total_purchase_count: int
+
+
 class InventoryByPriority(BaseModel):
     """Inventory stats by priority"""
     priority: str
@@ -710,6 +727,106 @@ async def get_daily_sales_volume(
         raise
     except Exception as e:
         logger.error(f"Error getting daily sales volume: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics", response_model=DashboardAnalytics)
+async def get_dashboard_analytics(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get daily sales and purchase analytics.
+    """
+    username = current_user.get("username")
+    db = get_database_client()
+    
+    try:
+        date_from_str, date_to_str = get_date_range(date_from, date_to, 30)
+        
+        # 1. Query Sales (verified_invoices)
+        sales_query = db.client.table("verified_invoices").select("date, amount")
+        sales_query = sales_query.eq("username", username)
+        sales_query = sales_query.gte("date", date_from_str)
+        sales_query = sales_query.lte("date", date_to_str)
+        
+        sales_resp = sales_query.execute()
+        sales_items = sales_resp.data or []
+        
+        # 2. Query Purchases (inventory_invoices)
+        purchase_query = db.client.table("inventory_invoices").select("invoice_date, total_amount")
+        purchase_query = purchase_query.eq("username", username)
+        purchase_query = purchase_query.gte("invoice_date", date_from_str)
+        purchase_query = purchase_query.lte("invoice_date", date_to_str)
+        
+        purchase_resp = purchase_query.execute()
+        purchase_items = purchase_resp.data or []
+        
+        # Aggregate Sales by date
+        sales_by_date = {}
+        total_sales_amount = 0
+        for item in sales_items:
+            date_str = item.get("date")
+            if not date_str:
+                continue
+            date_key = date_str[:10]  # Normalize to YYYY-MM-DD
+            amount = float(item.get("amount") or 0)
+            
+            if date_key not in sales_by_date:
+                sales_by_date[date_key] = {"amount": 0, "count": 0}
+            
+            sales_by_date[date_key]["amount"] += amount
+            sales_by_date[date_key]["count"] += 1
+            total_sales_amount += amount
+            
+        # Aggregate Purchases by date
+        purchase_by_date = {}
+        total_purchase_amount = 0
+        for item in purchase_items:
+            date_str = item.get("invoice_date")
+            if not date_str:
+                continue
+            date_key = date_str[:10]  # Normalize to YYYY-MM-DD
+            amount = float(item.get("total_amount") or 0)
+            
+            if date_key not in purchase_by_date:
+                purchase_by_date[date_key] = {"amount": 0, "count": 0}
+            
+            purchase_by_date[date_key]["amount"] += amount
+            purchase_by_date[date_key]["count"] += 1
+            total_purchase_amount += amount
+            
+        # Convert to response model lists
+        sales_list = [
+            AnalyticsDataPoint(
+                date=k,
+                amount=int(round(v["amount"])),
+                count=v["count"]
+            )
+            for k, v in sorted(sales_by_date.items())
+        ]
+        
+        purchase_list = [
+            AnalyticsDataPoint(
+                date=k,
+                amount=int(round(v["amount"])),
+                count=v["count"]
+            )
+            for k, v in sorted(purchase_by_date.items())
+        ]
+        
+        return DashboardAnalytics(
+            sales=sales_list,
+            purchases=purchase_list,
+            total_sales_amount=int(round(total_sales_amount)),
+            total_sales_count=len(sales_items),
+            total_purchase_amount=int(round(total_purchase_amount)),
+            total_purchase_count=len(purchase_items)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting dashboard analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

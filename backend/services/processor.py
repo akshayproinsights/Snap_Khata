@@ -731,7 +731,8 @@ def delete_invoice_by_hash(image_hash: str, username: str):
 
 def convert_to_dataframe_rows(
     invoice_data: Dict[str, Any],
-    username: str  # NEW: Required for loading column config
+    username: str,  # NEW: Required for loading column config
+    fallback_receipt_number: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Convert invoice JSON to list of DataFrame rows
@@ -818,7 +819,10 @@ def convert_to_dataframe_rows(
         # System columns (always present)
         receipt_num_val = header.get('receipt_number', '')
         if not receipt_num_val or str(receipt_num_val).lower() == 'none':
-            receipt_num_val = f"UNKNOWN-{image_hash[:8]}"
+            if fallback_receipt_number:
+                receipt_num_val = fallback_receipt_number
+            else:
+                receipt_num_val = f"UNKNOWN-{image_hash[:8]}"
         row["row_id"] = f"{receipt_num_val}_{idx}"
         row["image_hash"] = image_hash  # CRITICAL
         row["receipt_link"] = receipt_link
@@ -964,6 +968,25 @@ def process_invoices_batch(
     all_rows = []
     results_lock = threading.Lock()
     
+    # Find max REC- number for this user to continue the sequence
+    base_num = 0
+    try:
+        db = get_database_client()
+        # Query for the highest REC- receipt number
+        result = db.client.table('invoices').select('receipt_number').eq('username', username).like('receipt_number', 'REC-%').order('receipt_number', desc=True).limit(1).execute()
+        
+        if result.data:
+            last_receipt = result.data[0]['receipt_number']
+            try:
+                base_num = int(last_receipt.replace('REC-', ''))
+                logger.info(f"Found existing max fallback receipt number: {last_receipt} (base: {base_num})")
+            except ValueError:
+                logger.warning(f"Failed to parse receipt number: {last_receipt}")
+                base_num = 0
+    except Exception as e:
+        logger.error(f"Error querying max receipt number: {e}")
+        base_num = 0
+    
     def process_single_file(file_key: str, file_index: int) -> Optional[List[Dict[str, Any]]]:
         """Process a single file and return its rows"""
         try:
@@ -1029,7 +1052,8 @@ def process_invoices_batch(
                     invoice_data["header"]["customer_name"] = customer_name
                 
                 # Convert to rows (with user-specific column mapping)
-                rows = convert_to_dataframe_rows(invoice_data, username)
+                fallback_receipt_number = f"REC-{base_num + file_index + 1:05d}"
+                rows = convert_to_dataframe_rows(invoice_data, username, fallback_receipt_number=fallback_receipt_number)
                 with results_lock:
                     results["processed"] += 1
                 

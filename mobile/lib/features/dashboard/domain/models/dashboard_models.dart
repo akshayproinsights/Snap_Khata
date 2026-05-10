@@ -207,3 +207,52 @@ class StockAlert {
     );
   }
 }
+
+class AnalyticsDataPoint {
+  final String date;
+  final int amount;
+  final int count;
+
+  AnalyticsDataPoint({
+    required this.date,
+    required this.amount,
+    required this.count,
+  });
+
+  factory AnalyticsDataPoint.fromJson(Map<String, dynamic> json) {
+    return AnalyticsDataPoint(
+      date: json['date']?.toString() ?? '',
+      amount: _parseInt(json['amount']),
+      count: _parseInt(json['count']),
+    );
+  }
+}
+
+class DashboardAnalytics {
+  final List<AnalyticsDataPoint> sales;
+  final List<AnalyticsDataPoint> purchases;
+  final int totalSalesAmount;
+  final int totalSalesCount;
+  final int totalPurchaseAmount;
+  final int totalPurchaseCount;
+
+  DashboardAnalytics({
+    required this.sales,
+    required this.purchases,
+    required this.totalSalesAmount,
+    required this.totalSalesCount,
+    required this.totalPurchaseAmount,
+    required this.totalPurchaseCount,
+  });
+
+  factory DashboardAnalytics.fromJson(Map<String, dynamic> json) {
+    return DashboardAnalytics(
+      sales: (json['sales'] as List?)?.map((e) => AnalyticsDataPoint.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? [],
+      purchases: (json['purchases'] as List?)?.map((e) => AnalyticsDataPoint.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? [],
+      totalSalesAmount: _parseInt(json['total_sales_amount']),
+      totalSalesCount: _parseInt(json['total_sales_count']),
+      totalPurchaseAmount: _parseInt(json['total_purchase_amount']),
+      totalPurchaseCount: _parseInt(json['total_purchase_count']),
+    );
+  }
+}

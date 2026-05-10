@@ -352,6 +352,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               context.push('/usage-stats');
             },
           ),
+          _buildSettingsTile(
+            icon: LucideIcons.lineChart,
+            title: 'Dashboard Analytics',
+            subtitle: 'View sales and purchases',
+            onTap: () {
+              context.push('/analytics');
+            },
+          ),
 
           const SizedBox(height: 24),
 

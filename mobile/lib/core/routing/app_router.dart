@@ -26,6 +26,7 @@ import 'package:mobile/features/notifications/presentation/notifications_page.da
 import 'package:mobile/core/routing/app_shell.dart';
 import 'package:mobile/features/settings/presentation/settings_page.dart';
 import 'package:mobile/features/settings/presentation/usage_stats_page.dart';
+import 'package:mobile/features/dashboard/presentation/pages/analytics_dashboard_page.dart';
 import 'package:mobile/features/dashboard/presentation/party_ledger_page.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
@@ -431,6 +432,12 @@ class AppRouter {
         name: 'usage-stats',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const UsageStatsPage(),
+      ),
+      GoRoute(
+        path: '/analytics',
+        name: 'analytics',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AnalyticsDashboardPage(),
       ),
     ],
   );
