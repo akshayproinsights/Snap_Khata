@@ -49,8 +49,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   // ── Mobile Number ──────────────────────────────────────────────────
   final TextEditingController _mobileController = TextEditingController();
   final FocusNode _mobileFocusNode = FocusNode();
+  late final TextEditingController _paidAmountController;
 
-  double _receivedAmount = 0.0;
+  String _paymentMode = 'Cash';
+  double _receivedAmount = 0.0; // Still kept for internal logic
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
 
@@ -73,6 +75,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   void initState() {
     super.initState();
     _localAllGroups = List<InvoiceReviewGroup>.from(widget.allGroups);
+    _paidAmountController = TextEditingController(text: '0');
     _loadPersistedSettings();
     _initMobileNumber();
     // NOTE: Share link pre-fetch removed from initState().
@@ -100,6 +103,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     _creditDetailsController.dispose();
     _mobileController.dispose();
     _mobileFocusNode.dispose();
+    _paidAmountController.dispose();
     super.dispose();
   }
 
@@ -121,35 +125,31 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       });
     }
 
-    // Load received amount (Priority: Saved > Computed from balance_due > Extracted Received)
-    // IMPORTANT: receivedAmount from DB may be 0 when AI didn't extract it correctly.
-    // If balance_due is set (which is more reliable), compute received = total - balance_due.
+    // Load received amount
     final savedReceivedAmount = prefs.getDouble('received_amount_$receipt');
     final header = widget.group.header;
-    if (savedReceivedAmount != null && mounted) {
-      // User previously saved a value — trust it completely
-      setState(() {
-        _receivedAmount = savedReceivedAmount;
-      });
-    } else if (header?.balanceDue != null && header!.balanceDue! > 0 && mounted) {
-      // balance_due is more reliably extracted by AI (it's a clear field on the bill)
-      // Compute received = total_bill - balance_due
+    double initialReceived = 0.0;
+
+    if (savedReceivedAmount != null) {
+      initialReceived = savedReceivedAmount;
+    } else if (header?.balanceDue != null && header!.balanceDue! > 0) {
       final total = _activeTotalAmount(widget.group);
-      final computed = (total - header.balanceDue!).clamp(0.0, total);
+      initialReceived = (total - header.balanceDue!).clamp(0.0, total);
+    } else if (header?.receivedAmount != null && header!.receivedAmount! > 0) {
+      initialReceived = header.receivedAmount!;
+    } else {
+      initialReceived = _activeTotalAmount(widget.group);
+    }
+
+    if (mounted) {
       setState(() {
-        _receivedAmount = computed;
-      });
-    } else if (header?.receivedAmount != null && header!.receivedAmount! > 0 && mounted) {
-      // AI explicitly extracted a non-zero received amount
-      setState(() {
-        _receivedAmount = header.receivedAmount!;
-      });
-    } else if (mounted) {
-      // Default: full payment (no credit info found)
-      setState(() {
-        _receivedAmount = _activeTotalAmount(widget.group);
+        _receivedAmount = initialReceived;
+        _paidAmountController.text = initialReceived.toStringAsFixed(0);
+        final total = _activeTotalAmount(widget.group);
+        _paymentMode = (total - initialReceived).abs() < 0.01 ? 'Cash' : 'Credit';
       });
     }
+
     // Load credit details
     final savedCreditDetails = prefs.getString('credit_details_$receipt');
     if (savedCreditDetails != null && mounted) {
@@ -264,6 +264,71 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
+  void _showEditTotalDialog(double currentCalculatedTotal) {
+    final controller = TextEditingController(text: (_manualTotalAmount ?? currentCalculatedTotal).round().toString());
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Adjust Grand Total'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enter the correct total from the bill. We will adjust the extras to match.',
+              style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Total Bill Amount (₹)',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _manualTotalAmount = null;
+                _isTotalManuallyEdited = false;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Reset to Auto'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final newTotal = double.tryParse(controller.text);
+              if (newTotal != null) {
+                final wasPaid = (currentCalculatedTotal - _receivedAmount).abs() < 0.01;
+                setState(() {
+                  _manualTotalAmount = newTotal;
+                  _isTotalManuallyEdited = true;
+                  if (wasPaid) {
+                    _receivedAmount = newTotal;
+                    _paidAmountController.text = newTotal.toStringAsFixed(0);
+                  }
+                });
+                _saveTotalAmount(newTotal);
+                if (wasPaid) _saveReceivedAmount(newTotal);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Update Total'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatInput(double? amount) {
     return CurrencyFormatter.formatInput(amount);
   }
@@ -279,8 +344,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     if (header != null) {
       final grandTotal = _activeTotalAmount(group);
-      final balanceDue = grandTotal - _receivedAmount;
-      final paymentMode = balanceDue > 0 ? 'Credit' : 'Cash';
+      final receivedFromInput = double.tryParse(_paidAmountController.text) ?? _receivedAmount;
+      final balanceDue = (grandTotal - receivedFromInput).clamp(0.0, double.infinity);
+      final paymentMode = _paymentMode;
       
       var customerName = header.customerName?.trim() ?? '';
       if (customerName.isEmpty) {
@@ -291,10 +357,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           verificationStatus: 'Done',
           paymentMode: paymentMode,
           amount: grandTotal,
-          receivedAmount: _receivedAmount,
+          receivedAmount: receivedFromInput,
           balanceDue: balanceDue,
           totalBillAmount: grandTotal,
-          customerDetails: balanceDue > 0 ? _creditDetailsController.text : null,
+          customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
           gstMode: _gstMode.name,
           customerName: customerName,
       );
@@ -694,18 +760,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Widget _buildActionPanel(InvoiceReviewGroup group, bool hasAnyError) {
     final state = ref.watch(reviewProvider);
     final total = _activeTotalAmount(group);
-    final balance = total - _receivedAmount;
+    final paidAmount = double.tryParse(_paidAmountController.text) ?? 0.0;
+    final balance = (total - paidAmount).clamp(0.0, double.infinity);
+    final hasNext = widget.currentIndex != -1 && widget.currentIndex < _localAllGroups.length - 1;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 12),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
         color: context.surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: context.textColor.withValues(alpha: context.isDark ? 0.3 : 0.08),
-            offset: const Offset(0, -6),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
@@ -713,140 +781,106 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Total (Tap to Edit)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showEditTotalDialog(total),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total Bill', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text('₹${total.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                          const SizedBox(width: 4),
+                          Icon(LucideIcons.pencil, size: 12, color: context.primaryColor.withValues(alpha: 0.6)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Paid Input
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _paidAmountController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  onChanged: (val) {
+                    final paid = double.tryParse(val) ?? 0.0;
+                    setState(() {
+                      _receivedAmount = paid;
+                      _paymentMode = (total - paid).abs() < 0.01 ? 'Cash' : 'Credit';
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Amount Paid',
+                    labelStyle: TextStyle(fontSize: 10, color: context.textSecondaryColor),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Balance
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Balance Due', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                  const SizedBox(height: 2),
+                  Text('₹${balance.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: balance > 0 ? context.errorColor : context.successColor,
+                      )),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text('Total (₹)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
-                    ),
-                    DebouncedReviewField(
-                      initialValue: _formatInput(total),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.borderColor)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
-                        fillColor: context.surfaceColor,
-                        filled: true,
-                      ),
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                      onSaved: (val) {
-                        final nt = double.tryParse(val);
-                        if (nt != null) {
-                          final wasPaid = (total - _receivedAmount).abs() < 0.01;
-                          setState(() {
-                            _manualTotalAmount = nt;
-                            _isTotalManuallyEdited = true;
-                            if (wasPaid) _receivedAmount = nt;
-                          });
-                          _saveTotalAmount(nt);
-                          if (wasPaid) _saveReceivedAmount(nt);
-                        }
-                      },
-                    ),
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'Cash', label: Text('Cash')),
+                    ButtonSegment(value: 'Credit', label: Text('Credit')),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text('Received (₹)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.primaryColor)),
-                    ),
-                    DebouncedReviewField(
-                      initialValue: _formatInput(_receivedAmount),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.5))),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.primaryColor, width: 2)),
-                        fillColor: context.primaryColor.withValues(alpha: 0.05),
-                        filled: true,
-                      ),
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.primaryColor),
-                      onSaved: (val) {
-                        final nr = double.tryParse(val) ?? 0.0;
-                        setState(() => _receivedAmount = nr);
-                        _saveReceivedAmount(nr);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text('Balance (₹)',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.errorColor)),
-                    ),
-                    DebouncedReviewField(
-                      initialValue: _formatInput(balance),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.errorColor.withValues(alpha: 0.5))),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.errorColor, width: 2)),
-                        fillColor: context.errorColor.withValues(alpha: 0.05),
-                        filled: true,
-                      ),
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: context.errorColor),
-                      onSaved: (val) {
-                        final nb = double.tryParse(val) ?? 0.0;
-                        final nr = (total - nb).clamp(0.0, total);
-                        setState(() => _receivedAmount = nr);
-                        _saveReceivedAmount(nr);
-                      },
-                    ),
-                  ],
+                  selected: {_paymentMode},
+                  onSelectionChanged: (newSelection) {
+                    setState(() {
+                      _paymentMode = newSelection.first;
+                      if (_paymentMode == 'Cash') {
+                        _paidAmountController.text = total.round().toString();
+                        _receivedAmount = total;
+                      } else {
+                        _paidAmountController.text = '0';
+                        _receivedAmount = 0;
+                      }
+                    });
+                  },
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: Container(
-                  height: 54,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: LinearGradient(
-                      colors: [context.primaryColor, context.primaryColor.withValues(alpha: 0.8)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.primaryColor.withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
+                child: SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
                     onPressed: state.isSyncing ? null : _markAllDone,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.primaryColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: state.isSyncing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -854,21 +888,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     label: Text(
                       state.isSyncing
                           ? 'Saving...'
-                          : (widget.currentIndex == -1 || widget.currentIndex == widget.allGroups.length - 1
-                              ? 'Sync & Finish'
-                              : 'Save & Next'),
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5),
+                          : (hasNext ? 'Save & Next Bill' : 'Save & Finish'),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Container(
-                height: 54,
-                width: 54,
+                height: 52,
+                width: 52,
                 decoration: BoxDecoration(
                   color: const Color(0xFF25D366).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3)),
                 ),
                 child: IconButton(

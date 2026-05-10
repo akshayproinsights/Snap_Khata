@@ -513,13 +513,7 @@ def convert_to_inventory_rows(
     
     # Normalize date
     raw_date = header.get("date", "")
-    normalized_date = normalize_date(raw_date)
-    if normalized_date:
-        date_to_store = format_to_db(normalized_date)
-    elif raw_date and raw_date.strip():
-        date_to_store = raw_date
-    else:
-        date_to_store = None
+    date_to_store = format_to_db(raw_date)
     
     def safe_float(val: Any, default: float = 0.0) -> float:
         """Safely convert to float"""

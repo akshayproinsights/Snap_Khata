@@ -16,6 +16,7 @@ from auth import get_current_user, get_current_user_r2_bucket
 from services.storage import get_storage_client
 from utils.image_optimizer import optimize_image_for_gemini, should_optimize_image, validate_image_quality
 from config import get_purchases_folder
+from utils.date_helpers import format_to_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1183,11 +1184,11 @@ async def verify_inventory_invoice(
             "username": username,
             "invoice_number": request.invoice_number,
             "vendor_name": request.vendor_name,
-            "invoice_date": request.invoice_date,
+            "invoice_date": format_to_db(request.invoice_date),
             "receipt_link": receipt_link,
             "total_amount": total_amount,
             "payment_mode": request.payment_mode,
-            "payment_date": request.payment_date,
+            "payment_date": format_to_db(request.payment_date) if request.payment_date else None,
             "amount_paid": request.amount_paid,
             "balance_owed": request.balance_owed,
             "vendor_notes": request.vendor_notes,
@@ -1281,7 +1282,7 @@ async def verify_inventory_invoice(
                 adj_inserts.append({
                     "username": username,
                     "invoice_number": request.invoice_number,
-                    "invoice_date": request.invoice_date,
+                    "invoice_date": format_to_db(request.invoice_date),
                     "image_hash": image_hash,
                     "adjustment_type": adj.get("adjustment_type") or adj.get("adjustmentType", "OTHER"),
                     "amount": float(adj.get("amount", 0)),

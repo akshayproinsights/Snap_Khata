@@ -8,7 +8,7 @@ import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-from utils.date_helpers import normalize_date, safe_format_date_series
+from utils.date_helpers import normalize_date, safe_format_date_series, format_to_db
 
 logger = logging.getLogger(__name__)
 
@@ -662,7 +662,7 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
                 # ROBUST: Receipt Link may be empty/missing — always use str strip safely
                 date_done['Receipt Link_clean'] = date_done['Receipt Link'].fillna('').astype(str).str.strip()
                 date_done['Receipt Number'] = date_done['Receipt Number'].astype(str).str.replace(r'\.0$', '', regex=True)
-                date_done['Date'] = date_done['Date'].apply(normalize_date)
+                date_done['Date'] = date_done['Date'].apply(format_to_db)
                 
                 # Pre-build a safe 'Receipt Link' series for df_raw (handles missing/null)
                 df_raw_link_series = df_raw['Receipt Link'].fillna('').astype(str).str.strip()

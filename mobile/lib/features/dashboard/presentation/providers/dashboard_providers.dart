@@ -55,13 +55,23 @@ class DashboardTotalsNotifier extends AsyncNotifier<DashboardSummary> {
 }
 
 /// Provider for pending supplier reviews count.
+/// Filters for recent items (last 48 hours) to avoid overwhelming users with stale data.
 final pendingSupplierReviewsProvider = Provider<int>((ref) {
   final inventoryState = ref.watch(inventoryProvider);
   final items = inventoryState.items;
   
   final Map<String, bool> unverifiedReceipts = {};
+  final now = DateTime.now();
+  final threshold = now.subtract(const Duration(hours: 48));
+
   for (final item in items) {
     if (item.verificationStatus != 'Done') {
+      // Only count recent items for the dashboard badge
+      final createdAt = item.createdAt != null ? DateTime.tryParse(item.createdAt!) : null;
+      if (createdAt != null && createdAt.isBefore(threshold)) {
+        continue; // Skip stale items for dashboard count
+      }
+
       final key = item.invoiceNumber.isNotEmpty
           ? item.invoiceNumber
           : '${item.invoiceDate}_${item.vendorName ?? ''}';

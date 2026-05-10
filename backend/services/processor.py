@@ -857,7 +857,7 @@ def convert_to_dataframe_rows(
         # row["line_item_row_bbox"] = get_bbox_json(item, "line_item_row")
         
         # Core business columns (from Gemini JSON)
-        row["receipt_number"] = header.get("receipt_number", "")
+        row["receipt_number"] = receipt_num_val
         row["date"] = date_to_store
         row["description"] = normalize_text_field(item.get("description", ""), "general")  # Clean and standardize
         row["quantity"] = qty

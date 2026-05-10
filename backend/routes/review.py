@@ -13,27 +13,12 @@ from database_helpers import (
 )
 from database import get_database_client
 from services.storage import get_storage_client
+from utils.date_helpers import format_to_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _normalize_date_for_supabase(date_str: str) -> str:
-    """
-    Convert an Indian-format date (dd-MM-yyyy) to Supabase-compatible ISO format (yyyy-MM-dd).
-    If the date is already in ISO format or cannot be parsed, it is returned unchanged.
-    """
-    if not date_str:
-        return date_str
-    # Try Indian format first (dd-MM-yyyy)
-    from datetime import datetime
-    for fmt_in, fmt_out in [('%d-%m-%Y', '%Y-%m-%d'), ('%d/%m/%Y', '%Y-%m-%d')]:
-        try:
-            return datetime.strptime(date_str, fmt_in).strftime(fmt_out)
-        except ValueError:
-            pass
-    # Already ISO or unknown — return as-is
-    return date_str
 
 
 def _resolve_receipt_link(receipt_link: str) -> str:
@@ -234,7 +219,7 @@ async def update_single_review_date(
         
         # Normalize date to ISO format (yyyy-MM-dd) that Supabase requires
         if 'date' in update_data and update_data['date']:
-            update_data['date'] = _normalize_date_for_supabase(update_data['date'])
+            update_data['date'] = format_to_db(update_data['date'])
             logger.info(f"Normalized date to: {update_data['date']}")
         
         # UPDATE 1: Update the header record itself

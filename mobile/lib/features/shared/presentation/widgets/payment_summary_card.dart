@@ -32,7 +32,6 @@ class PaymentSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGstInvoice = gstMode != GstMode.none;
-    final hasLabor = laborSubtotal > 0.01;
 
     return Container(
       decoration: BoxDecoration(
@@ -163,21 +162,6 @@ class PaymentSummaryCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             child: Column(
               children: [
-                _AmountRow(
-                  label: isAutomobile ? 'Parts Subtotal' : 'Subtotal',
-                  value: CurrencyFormatter.format(partsSubtotal + (isAutomobile ? 0 : laborSubtotal)),
-                  labelColor: Colors.white.withValues(alpha: 0.7),
-                  valueColor: Colors.white.withValues(alpha: 0.9),
-                ),
-                if (isAutomobile && hasLabor) ...[
-                  const SizedBox(height: 8),
-                  _AmountRow(
-                    label: 'Labor / Service (no GST)',
-                    value: CurrencyFormatter.format(laborSubtotal),
-                    labelColor: Colors.white.withValues(alpha: 0.45),
-                    valueColor: Colors.white.withValues(alpha: 0.5),
-                  ),
-                ],
                 if (isGstInvoice) ...[
                   const SizedBox(height: 10),
                   _AmountRow(

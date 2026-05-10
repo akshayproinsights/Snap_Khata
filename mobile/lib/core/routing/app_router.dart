@@ -36,6 +36,7 @@ import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledg
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/dashboard/presentation/pages/home_dashboard_page.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -253,11 +254,30 @@ class AppRouter {
         path: '/inventory-invoice-review',
         name: 'inventory-invoice-review',
         parentNavigatorKey: _rootNavigatorKey,
-        redirect: (context, state) {
-          if (state.extra == null) return '/inventory-review';
-          return null;
-        },
         builder: (context, state) {
+          if (state.extra == null) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Review Bill')),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Review data missing',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text('Please go back and try again.'),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () => context.pop(),
+                      child: const Text('Go Back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           final extra = state.extra as Map<String, dynamic>;
           final bundle = extra['bundle'] as InventoryInvoiceBundle;
           final allBundles = extra['allBundles'] as List<InventoryInvoiceBundle>? ?? [];
@@ -346,11 +366,30 @@ class AppRouter {
         path: '/order-detail',
         name: 'order-detail',
         parentNavigatorKey: _rootNavigatorKey,
-        redirect: (context, state) {
-          if (state.extra == null) return '/';
-          return null;
-        },
         builder: (context, state) {
+          if (state.extra == null) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Order Details')),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Order details missing',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text('Please go back and try again.'),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () => context.pop(),
+                      child: const Text('Go Back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           final group = state.extra as InvoiceGroup;
           return OrderDetailPage(group: group);
         },
@@ -359,11 +398,30 @@ class AppRouter {
         path: '/vendor-delivery-detail',
         name: 'vendor-delivery-detail',
         parentNavigatorKey: _rootNavigatorKey,
-        redirect: (context, state) {
-          if (state.extra == null) return '/inventory/vendor-ledger';
-          return null;
-        },
         builder: (context, state) {
+          if (state.extra == null) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Delivery Details')),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+                    const SizedBox(height: 16),
+                    const Text('Delivery details missing',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text('Please go back and try again.'),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () => context.pop(),
+                      child: const Text('Go Back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           final bundle = state.extra as InventoryInvoiceBundle;
           return VendorDeliveryDetailPage(bundle: bundle);
         },

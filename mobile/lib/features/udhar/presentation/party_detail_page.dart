@@ -740,7 +740,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       group.totalAmount = records.fold(0, (sum, item) => sum + item.amount);
 
       if (mounted) {
-        context.pushNamed('order-detail', extra: group);
+        // Use await to refresh data when returning from details
+        await context.pushNamed('order-detail', extra: group);
+        if (mounted) {
+          _loadTransactions();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1055,7 +1059,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ),
                 if (_transactions != null && _transactions!.isNotEmpty)
                   Text(
-                    '${_transactions!.where((tx) => !(tx.transactionType == 'PAYMENT' && tx.linkedTransactionId != null)).length} Entries',
+                    '${_transactions!.length} Entries',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -1073,13 +1077,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ? _buildEmptyState()
                 : Builder(
                     builder: (context) {
-                      final visibleTxs = _transactions!
-                          .where(
-                            (tx) =>
-                                !(tx.transactionType == 'PAYMENT' &&
-                                    tx.linkedTransactionId != null),
-                          )
-                          .toList();
+                      final visibleTxs = _transactions!.toList();
                       if (visibleTxs.isEmpty) return _buildEmptyState();
                       return ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),

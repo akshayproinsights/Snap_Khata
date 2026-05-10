@@ -226,7 +226,7 @@ class _VendorLedgerDetailPageState
     }
   }
 
-  void _navigateToBillDetails(String invoiceNumber) {
+  Future<void> _navigateToBillDetails(String invoiceNumber) async {
     if (invoiceNumber.isEmpty) return;
 
     final invoice = _purchaseInvoices?.firstWhere(
@@ -258,7 +258,10 @@ class _VendorLedgerDetailPageState
     );
 
     if (mounted) {
-      context.pushNamed('vendor-delivery-detail', extra: bundle);
+      await context.pushNamed('vendor-delivery-detail', extra: bundle);
+      if (mounted) {
+        _loadData();
+      }
     }
   }
 
