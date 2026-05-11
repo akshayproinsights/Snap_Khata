@@ -42,6 +42,10 @@ class _CustomerAutocompleteFieldState
   bool _isNew = false;
   CustomerLedger? _selectedParty;
   bool _isFocused = false;
+  // Track the last name that was explicitly selected from the dropdown.
+  // If the user edits the text away from this value we immediately clear the
+  // selection so the receipt is NOT silently merged into an existing ledger.
+  String? _lastExplicitlySelectedName;
 
   @override
   void initState() {
@@ -78,11 +82,13 @@ class _CustomerAutocompleteFieldState
   void _matchInitialParty(String value) {
     if (value.isEmpty) return;
     final ledgers = ref.read(udharProvider).ledgers;
+    // STRICT: only an exact (case-insensitive) match counts as an existing party.
     final match = ledgers.where((l) =>
         l.customerName.trim().toLowerCase() == value.trim().toLowerCase()).firstOrNull;
     if (match != null && mounted) {
       setState(() {
         _selectedParty = match;
+        _lastExplicitlySelectedName = match.customerName;
         _isNew = false;
       });
     } else if (value.isNotEmpty && mounted) {
@@ -96,17 +102,34 @@ class _CustomerAutocompleteFieldState
         setState(() {
           _isNew = false;
           _selectedParty = null;
+          _lastExplicitlySelectedName = null;
         });
       }
       return;
     }
 
+    // ── Guard: if user edits text away from the explicitly selected name,
+    // clear the selection immediately so the receipt is treated as a NEW customer
+    // or re-matched by exact name — never silently merged.
+    if (_lastExplicitlySelectedName != null &&
+        value.trim().toLowerCase() != _lastExplicitlySelectedName!.toLowerCase()) {
+      _lastExplicitlySelectedName = null;
+      setState(() {
+        _selectedParty = null;
+        _isNew = true; // will be corrected by exact-match check below
+      });
+    }
+
+    // STRICT: only exact (case-insensitive) match → existing party.
     final ledgers = ref.read(udharProvider).ledgers;
     final match = ledgers.where((l) =>
         l.customerName.trim().toLowerCase() == value.trim().toLowerCase()).firstOrNull;
 
     setState(() {
       _selectedParty = match;
+      if (match != null) {
+        _lastExplicitlySelectedName = match.customerName;
+      }
       _isNew = match == null;
     });
   }
@@ -117,6 +140,23 @@ class _CustomerAutocompleteFieldState
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       _save();
     });
+  }
+
+  /// Splits [query] into words and returns true only if every word in the query
+  /// is found as a case-insensitive **prefix** of at least one word in [name].
+  /// This prevents "Deshmukh" from showing when the user has typed "Deshmukh 123"
+  /// (since "123" is not a prefix of any word in "Deshmukh").
+  bool _matchesQuery(String name, String query) {
+    if (query.isEmpty) return true;
+    final nameLower = name.toLowerCase();
+    final queryWords = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final nameWords = nameLower.split(RegExp(r'\s+'));
+    for (final qWord in queryWords) {
+      // Each query word must be a prefix of at least one word in the name
+      final found = nameWords.any((nWord) => nWord.startsWith(qWord));
+      if (!found) return false;
+    }
+    return true;
   }
 
   String _formatBalance(double balance) {
@@ -161,14 +201,19 @@ class _CustomerAutocompleteFieldState
           }
           return const Iterable<CustomerLedger>.empty();
         }
+        // STRICT word-prefix matching: every word in the query must be a prefix
+        // of at least one word in the candidate name.
+        // Example: query="Deshmukh 123" → "Deshmukh" is NOT shown because "123"
+        // is not a prefix of any word in "Deshmukh".
         return sortedLedgers.where((CustomerLedger option) {
-          return option.customerName
-              .toLowerCase()
-              .contains(textEditingValue.text.toLowerCase());
+          return _matchesQuery(option.customerName, textEditingValue.text);
         });
       },
       onSelected: (CustomerLedger selection) {
+        // User explicitly tapped an existing party from the dropdown.
+        // Record the name so we can detect if they later edit the text.
         _controller.text = selection.customerName;
+        _lastExplicitlySelectedName = selection.customerName;
         setState(() {
           _selectedParty = selection;
           _isNew = false;
@@ -411,6 +456,26 @@ class _CustomerAutocompleteFieldState
   }
 
   Widget? _buildSuffixIcon(BuildContext context) {
+    // When a party is explicitly selected (green border state) show a clear (×)
+    // button so the user can reset and type a different / new name.
+    if (_selectedParty != null) {
+      return GestureDetector(
+        onTap: () {
+          _controller.clear();
+          _lastExplicitlySelectedName = null;
+          setState(() {
+            _selectedParty = null;
+            _isNew = false;
+          });
+          _save();
+        },
+        child: Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Icon(LucideIcons.x, size: 16,
+              color: context.textSecondaryColor.withValues(alpha: 0.7)),
+        ),
+      );
+    }
     if (_isNew && _controller.text.isNotEmpty) {
       return Container(
         margin: const EdgeInsets.only(right: 10),
