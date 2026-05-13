@@ -324,6 +324,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         paymentMode: _paymentMode,
         receivedAmount: _paymentMode == 'Cash' ? manualGrandTotal : manualReceived,
         balanceDue: _paymentMode == 'Cash' ? 0.0 : manualDue,
+        totalBillAmount: manualGrandTotal,
         customerDetails: _creditDetailsController.text,
         extraFields: newExtraFields,
       );

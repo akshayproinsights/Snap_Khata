@@ -17,6 +17,7 @@ class VerifiedInvoice {
   final double? receivedAmount;
   final double? balanceDue;
   final String? customerDetails;
+  final double? totalBillAmount;
   final Map<String, dynamic> extraFields;
 
   VerifiedInvoice({
@@ -38,6 +39,7 @@ class VerifiedInvoice {
     this.receivedAmount,
     this.balanceDue,
     this.customerDetails,
+    this.totalBillAmount,
     this.extraFields = const {},
   });
 
@@ -92,6 +94,7 @@ class VerifiedInvoice {
       receivedAmount: double.tryParse((json['received_amount'] ?? json['Received Amount'])?.toString() ?? ''),
       balanceDue: double.tryParse((json['balance_due'] ?? json['Balance Due'])?.toString() ?? ''),
       customerDetails: json['customer_details']?.toString() ?? json['Customer Details']?.toString(),
+      totalBillAmount: double.tryParse((json['total_bill_amount'] ?? json['Total Bill Amount'])?.toString() ?? ''),
       extraFields: extra,
     );
   }
@@ -116,6 +119,7 @@ class VerifiedInvoice {
       if (receivedAmount != null) 'received_amount': receivedAmount,
       if (balanceDue != null) 'balance_due': balanceDue,
       if (customerDetails != null) 'customer_details': customerDetails,
+      if (totalBillAmount != null) 'total_bill_amount': totalBillAmount,
       'extra_fields': extraFields,
     };
   }
@@ -139,6 +143,7 @@ class VerifiedInvoice {
     double? receivedAmount,
     double? balanceDue,
     String? customerDetails,
+    double? totalBillAmount,
     Map<String, dynamic>? extraFields,
   }) {
     return VerifiedInvoice(
@@ -160,6 +165,7 @@ class VerifiedInvoice {
       receivedAmount: receivedAmount ?? this.receivedAmount,
       balanceDue: balanceDue ?? this.balanceDue,
       customerDetails: customerDetails ?? this.customerDetails,
+      totalBillAmount: totalBillAmount ?? this.totalBillAmount,
       extraFields: extraFields ?? this.extraFields,
     );
   }
