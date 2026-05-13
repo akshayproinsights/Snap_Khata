@@ -426,19 +426,7 @@ class HomeDashboardPage extends ConsumerWidget {
               isDark: isDark,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => context.push('/galla'),
-              child: _SummaryCard(
-                label: 'GALLA',
-                amount: CurrencyFormatter.format(totals.cashInHand),
-                color: context.primaryColor,
-                isDark: isDark,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
           Expanded(
             child: _SummaryCard(
               label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
@@ -460,17 +448,7 @@ class HomeDashboardPage extends ConsumerWidget {
               isDark: isDark,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _SummaryCard(
-              label: 'GALLA',
-              amount: '...',
-              isLoading: true,
-              color: context.primaryColor,
-              isDark: isDark,
-            ),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
           Expanded(
             child: _SummaryCard(
               label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
@@ -495,19 +473,7 @@ class HomeDashboardPage extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
-              child: _SummaryCard(
-                label: 'GALLA',
-                amount: 'Retry',
-                color: context.errorColor,
-                isDark: isDark,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
           Expanded(
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),

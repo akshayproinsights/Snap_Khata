@@ -763,6 +763,15 @@ async def get_dashboard_analytics(
         purchase_resp = purchase_query.execute()
         purchase_items = purchase_resp.data or []
         
+        # 3. Query Cash (galla_transactions)
+        cash_query = db.client.table("galla_transactions").select("created_at, amount, transaction_type")
+        cash_query = cash_query.eq("username", username)
+        cash_query = cash_query.gte("created_at", date_from_str)
+        cash_query = cash_query.lte("created_at", date_to_str + "T23:59:59Z") # It's a timestamp
+        
+        cash_resp = cash_query.execute()
+        cash_items = cash_resp.data or []
+        
         # Aggregate Sales by date
         sales_by_date = {}
         total_sales_amount = 0
@@ -797,6 +806,30 @@ async def get_dashboard_analytics(
             purchase_by_date[date_key]["count"] += 1
             total_purchase_amount += amount
             
+        # Aggregate Cash Flow by date
+        cash_by_date = {}
+        total_cash_in = 0
+        total_cash_out = 0
+        for item in cash_items:
+            date_str = item.get("created_at")
+            if not date_str:
+                continue
+            date_key = date_str[:10]  # Normalize to YYYY-MM-DD
+            amount = float(item.get("amount") or 0)
+            tx_type = item.get("transaction_type", "")
+            
+            if date_key not in cash_by_date:
+                cash_by_date[date_key] = {"net_amount": 0, "count": 0}
+                
+            if tx_type in ["CASH_SALE", "MONEY_IN"]:
+                cash_by_date[date_key]["net_amount"] += amount
+                total_cash_in += amount
+            elif tx_type == "MONEY_OUT":
+                cash_by_date[date_key]["net_amount"] -= amount
+                total_cash_out += amount
+                
+            cash_by_date[date_key]["count"] += 1
+            
         # Convert to response model lists
         sales_list = [
             AnalyticsDataPoint(
@@ -816,13 +849,26 @@ async def get_dashboard_analytics(
             for k, v in sorted(purchase_by_date.items())
         ]
         
+        cash_list = [
+            AnalyticsDataPoint(
+                date=k,
+                amount=int(round(v["net_amount"])),
+                count=v["count"]
+            )
+            for k, v in sorted(cash_by_date.items())
+        ]
+        
         return DashboardAnalytics(
             sales=sales_list,
             purchases=purchase_list,
+            cash_flow=cash_list,
             total_sales_amount=int(round(total_sales_amount)),
             total_sales_count=len(sales_items),
             total_purchase_amount=int(round(total_purchase_amount)),
-            total_purchase_count=len(purchase_items)
+            total_purchase_count=len(purchase_items),
+            total_cash_in=int(round(total_cash_in)),
+            total_cash_out=int(round(total_cash_out)),
+            net_cash_flow=int(round(total_cash_in - total_cash_out))
         )
         
     except Exception as e:

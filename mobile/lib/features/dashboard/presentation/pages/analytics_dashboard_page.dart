@@ -70,6 +70,15 @@ class _AnalyticsDashboardPageState extends ConsumerState<AnalyticsDashboardPage>
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _buildSummaryCard(
+          context,
+          'Net Cash Flow',
+          '${data.netCashFlow >= 0 ? '+' : '-'}₹${data.netCashFlow.abs()}',
+          '₹${data.totalCashIn} In, ₹${data.totalCashOut} Out',
+          data.netCashFlow >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+          LucideIcons.wallet,
+        ),
         const SizedBox(height: 20),
         
         // Chart 1: Sales
@@ -87,6 +96,15 @@ class _AnalyticsDashboardPageState extends ConsumerState<AnalyticsDashboardPage>
           'Purchases (Supplier)',
           data.purchases,
           const Color(0xFF8B5CF6),
+        ),
+        const SizedBox(height: 20),
+
+        // Chart 3: Cash Flow
+        _buildChartContainer(
+          context,
+          'Net Cash Flow (Cash Box)',
+          data.cashFlow,
+          const Color(0xFF10B981),
         ),
       ],
     );

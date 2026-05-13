@@ -231,28 +231,40 @@ class AnalyticsDataPoint {
 class DashboardAnalytics {
   final List<AnalyticsDataPoint> sales;
   final List<AnalyticsDataPoint> purchases;
+  final List<AnalyticsDataPoint> cashFlow; // Net cash flow per day
   final int totalSalesAmount;
   final int totalSalesCount;
   final int totalPurchaseAmount;
   final int totalPurchaseCount;
+  final int totalCashIn;
+  final int totalCashOut;
+  final int netCashFlow;
 
   DashboardAnalytics({
     required this.sales,
     required this.purchases,
+    required this.cashFlow,
     required this.totalSalesAmount,
     required this.totalSalesCount,
     required this.totalPurchaseAmount,
     required this.totalPurchaseCount,
+    required this.totalCashIn,
+    required this.totalCashOut,
+    required this.netCashFlow,
   });
 
   factory DashboardAnalytics.fromJson(Map<String, dynamic> json) {
     return DashboardAnalytics(
       sales: (json['sales'] as List?)?.map((e) => AnalyticsDataPoint.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? [],
       purchases: (json['purchases'] as List?)?.map((e) => AnalyticsDataPoint.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? [],
+      cashFlow: (json['cash_flow'] as List?)?.map((e) => AnalyticsDataPoint.fromJson(Map<String, dynamic>.from(e as Map))).toList() ?? [],
       totalSalesAmount: _parseInt(json['total_sales_amount']),
       totalSalesCount: _parseInt(json['total_sales_count']),
       totalPurchaseAmount: _parseInt(json['total_purchase_amount']),
       totalPurchaseCount: _parseInt(json['total_purchase_count']),
+      totalCashIn: _parseInt(json['total_cash_in']),
+      totalCashOut: _parseInt(json['total_cash_out']),
+      netCashFlow: _parseInt(json['net_cash_flow']),
     );
   }
 }
