@@ -118,3 +118,88 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
 
     except Exception as e:
         logger.error(f"Error syncing customer ledgers from invoices: {e}")
+
+async def sync_galla_transactions_from_invoices(current_user: Dict):
+    """
+    Reconcile galla_transactions against verified_invoices.
+    Scans all Cash verified_invoices and ensures a matching CASH_SALE transaction exists.
+    Updates amount if there's a discrepancy.
+    """
+    username = current_user.get("username")
+    if not username:
+        return
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # 1. Fetch all Cash invoices
+        invoices_resp = db.client.table("verified_invoices") \
+            .select("id, receipt_number, total_bill_amount, amount, balance_due, received_amount, verification_date, created_at") \
+            .eq("username", username) \
+            .eq("payment_mode", "Cash") \
+            .execute()
+
+        invoices = invoices_resp.data or []
+        if not invoices:
+            return
+
+        # Need to group by receipt_number to get authoritative grand_total
+        grouped_invoices = {}
+        for inv in invoices:
+            rn = inv.get("receipt_number")
+            if not rn:
+                continue
+            if rn not in grouped_invoices:
+                grouped_invoices[rn] = []
+            grouped_invoices[rn].append(inv)
+            
+        receipt_numbers = list(grouped_invoices.keys())
+
+        # 2. Fetch existing galla transactions
+        existing_tx_resp = db.client.table("galla_transactions") \
+            .select("id, receipt_number, amount") \
+            .eq("username", username) \
+            .eq("transaction_type", "CASH_SALE") \
+            .in_("receipt_number", receipt_numbers) \
+            .execute()
+
+        existing_txs = {tx["receipt_number"]: tx for tx in (existing_tx_resp.data or []) if tx.get("receipt_number")}
+        
+        now = datetime.utcnow().isoformat()
+
+        for rn, items in grouped_invoices.items():
+            first_item = items[0]
+            items_total = sum(float(i.get('amount') or 0.0) for i in items)
+            
+            # Authoritative grand total logic identical to udhar.py
+            tba_max = max((float(i.get('total_bill_amount') or 0.0) for i in items), default=0.0)
+            total_amount = tba_max if tba_max > 0 else items_total
+            
+            if total_amount <= 0:
+                continue
+
+            created_timestamps = [i.get('created_at') for i in items if i.get('created_at')]
+            latest_created_ts = max(created_timestamps) if created_timestamps else first_item.get('created_at')
+
+            if rn in existing_txs:
+                # Update if amount differs
+                existing_tx = existing_txs[rn]
+                if abs(float(existing_tx["amount"]) - total_amount) > 0.01:
+                    db.client.table("galla_transactions").update({
+                        "amount": total_amount,
+                        "updated_at": now
+                    }).eq("id", existing_tx["id"]).execute()
+            else:
+                # Insert new transaction
+                db.client.table("galla_transactions").insert({
+                    "username": username,
+                    "transaction_type": "CASH_SALE",
+                    "amount": total_amount,
+                    "receipt_number": rn,
+                    "created_at": first_item.get("verification_date") or latest_created_ts or now,
+                    "notes": "Cash Bill"
+                }).execute()
+
+    except Exception as e:
+        logger.error(f"Error syncing galla transactions from invoices: {e}")

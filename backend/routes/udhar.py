@@ -1578,8 +1578,45 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                         f"(Cash→Credit conversion, received_amount=0)"
                     )
 
+        # 5. Sync Cash invoices to galla_transactions
+        cash_invoices = {rn: data for rn, data in grouped_invoices.items() if str(data.get("payment_mode") or "Cash").strip().lower() == "cash"}
+        
+        if cash_invoices:
+            cash_receipt_numbers = list(cash_invoices.keys())
+            existing_galla_resp = db.client.table("galla_transactions") \
+                .select("id, receipt_number, amount") \
+                .eq("username", username) \
+                .eq("transaction_type", "CASH_SALE") \
+                .in_("receipt_number", cash_receipt_numbers) \
+                .execute()
+
+            existing_galla = {tx["receipt_number"]: tx for tx in (existing_galla_resp.data or []) if tx.get("receipt_number")}
+
+            for rn, data in cash_invoices.items():
+                tba = data.get("total_bill_amount", 0.0)
+                total_amount = tba if tba and tba > 0 else data["total_amount"]
                 
-        # 4. Reconcile all balances efficiently
+                if total_amount <= 0:
+                    continue
+
+                if rn in existing_galla:
+                    tx = existing_galla[rn]
+                    if abs(float(tx["amount"]) - total_amount) > 0.01:
+                        db.client.table("galla_transactions").update({
+                            "amount": total_amount,
+                            "updated_at": now
+                        }).eq("id", tx["id"]).execute()
+                else:
+                    db.client.table("galla_transactions").insert({
+                        "username": username,
+                        "transaction_type": "CASH_SALE",
+                        "amount": total_amount,
+                        "receipt_number": rn,
+                        "created_at": data["date"] or now,
+                        "notes": "Cash Bill"
+                    }).execute()
+                
+        # 6. Reconcile all balances efficiently
         await reconcile_all_customer_ledger_balances(current_user)
 
     except Exception as e:
@@ -1745,12 +1782,26 @@ async def get_dashboard_summary(current_user: Dict = Depends(get_current_user)):
                 "cash_out": flow["cash_out"],
                 "net_cashflow": flow["cash_in"] - flow["cash_out"]
             })
+        # --- Compute cash_in_hand from galla_transactions ---
+        galla_resp = db.client.table('galla_transactions') \
+            .select('amount, transaction_type') \
+            .eq('username', username) \
+            .execute()
+        cash_in_hand = 0.0
+        for tx in (galla_resp.data or []):
+            amt = float(tx.get('amount') or 0)
+            ttype = tx.get('transaction_type')
+            if ttype in ('CASH_SALE', 'MONEY_IN'):
+                cash_in_hand += amt
+            elif ttype == 'MONEY_OUT':
+                cash_in_hand -= amt
 
         return {
             "status": "success",
             "data": {
                 "total_receivable": total_receivable,
                 "total_payable": total_payable,
+                "cash_in_hand": round(cash_in_hand, 2),
                 "chart_data": chart_data
             }
         }

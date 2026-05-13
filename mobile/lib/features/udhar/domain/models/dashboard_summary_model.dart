@@ -24,11 +24,13 @@ class ChartDataPoint {
 class DashboardSummary {
   final double totalReceivable;
   final double totalPayable;
+  final double cashInHand;
   final List<ChartDataPoint> chartData;
 
   DashboardSummary({
     required this.totalReceivable,
     required this.totalPayable,
+    required this.cashInHand,
     required this.chartData,
   });
 
@@ -36,6 +38,7 @@ class DashboardSummary {
     return DashboardSummary(
       totalReceivable: double.tryParse(json['total_receivable']?.toString() ?? '0') ?? 0.0,
       totalPayable: double.tryParse(json['total_payable']?.toString() ?? '0') ?? 0.0,
+      cashInHand: double.tryParse(json['cash_in_hand']?.toString() ?? '0') ?? 0.0,
       chartData: (json['chart_data'] as List?)
               ?.map((e) => ChartDataPoint.fromJson(e as Map<String, dynamic>))
               .toList() ??

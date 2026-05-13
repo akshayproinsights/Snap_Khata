@@ -37,6 +37,7 @@ import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledg
 import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledger_detail_page.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/dashboard/presentation/pages/home_dashboard_page.dart';
+import 'package:mobile/features/galla/presentation/galla_dashboard_page.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -438,6 +439,12 @@ class AppRouter {
         name: 'analytics',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const AnalyticsDashboardPage(),
+      ),
+      GoRoute(
+        path: '/galla',
+        name: 'galla',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const GallaDashboardPage(),
       ),
     ],
   );

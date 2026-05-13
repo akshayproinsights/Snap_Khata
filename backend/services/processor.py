@@ -18,7 +18,7 @@ from PIL import Image
 
 from config import get_google_api_key
 from config_loader import get_user_config, get_gemini_prompt
-from database import get_database_client, create_fresh_database_client
+from database import get_database_client, create_fresh_database_client, save_rows_with_retry
 from services.storage import get_storage_client
 from utils.date_helpers import normalize_date, format_to_db, get_ist_now_str
 from utils.hash_utils import calculate_image_hash
@@ -932,7 +932,8 @@ def process_invoices_batch(
     username: str,
     progress_callback: Optional[Callable[[int, int, int, str], None]] = None,
     force_upload: bool = False,
-    customer_name: Optional[str] = None
+    customer_name: Optional[str] = None,
+    task_id: Optional[str] = None  # Required for persisting failed rows for recovery
 ) -> Dict[str, Any]:
     """
     Process a batch of invoices from R2 storage with parallel processing
@@ -954,6 +955,7 @@ def process_invoices_batch(
         "total": len(file_keys),
         "processed": 0,
         "failed": 0,
+        "failed_db_rows": 0,  # NEW: tracks DB-save failures separately from AI failures
         "errors": [],
         "duplicates": []  # Track detected duplicates
     }
@@ -1163,87 +1165,159 @@ def process_invoices_batch(
     logger.info(f"Parallel processing complete. Processed: {results['processed']}, Failed: {results['failed']}")
     
     
-    # Save to Supabase database if we have data
+    # =========================================================================
+    # PHASE 3: RESILIENT DATABASE SAVE
+    # =========================================================================
+    # Uses save_rows_with_retry (3 attempts per row, fresh HTTP connection per
+    # retry) to guarantee every AI-processed row lands in the database.
+    # If a row permanently fails all retries, it is stored in upload_tasks so
+    # the user can retry with a single tap — without re-running AI or re-billing.
+    # =========================================================================
     if all_rows:
+        INVOICES_EXCLUDED_COLUMNS = {
+            'amount_mismatch',
+            'calculated_amount',
+            'review_status',
+            'confidence',
+            'receipt_number_confidence',
+            'date_confidence',
+            'receipt_number_bbox',
+            'date_bbox',
+            'date_and_receipt_combined_bbox',
+            'line_item_row_bbox',
+            'description_bbox',
+            'quantity_bbox',
+            'rate_bbox',
+            'amount_bbox',
+            'industry_type',
+            'model_used',
+            'model_accuracy',
+            'input_tokens',
+            'output_tokens',
+            'total_tokens',
+            'cost_inr',
+            'fallback_attempted',
+            'fallback_reason',
+            'processing_errors',
+            'mapped_inventory_item_id'
+        }
+
         try:
             if progress_callback:
                 progress_callback(results["processed"], results["failed"], len(file_keys), "Saving to Supabase database...")
-            
+
             logger.info(f"Saving {len(all_rows)} new rows to Supabase invoices table")
-            
-            # Get database client
-            db = get_database_client()
-            
-            # Insert rows into Supabase (batch insert)
-            saved_count: int = 0
-            failed_inserts: int = 0
-            
-            for row in all_rows:
-                try:
-                    # Remove columns that don't exist in invoices table
-                    # invoices schema: id, row_id, username, receipt_number, date, customer, vehicle_number,
-                    #                  description, type, quantity, rate, amount, receipt_link,
-                    #                  upload_date, image_hash, created_at, updated_at
-                    # 
-                    # Note: Many fields like customer_name, mobile_number, etc. are NOT in invoices
-                    # but WILL BE in verified_invoices, so we keep them in the row data for later use
-                    # 
-                    # IMPORTANT: row_id is NOW in invoices table after migration!
-                    excluded_columns = {
-                        'amount_mismatch',      # Only for verification_amounts table
-                        'calculated_amount',    # Only for verification tables  
-                        'review_status',       # Not in invoices table
-                        'confidence',          # Not in invoices
-                        'receipt_number_confidence', # Not in invoices
-                        'date_confidence',     # Not in invoices
-                        'receipt_number_bbox', # Not in invoices
-                        'date_bbox',           # Not in invoices
-                        'date_and_receipt_combined_bbox',  # Not in invoices
-                        'line_item_row_bbox',  # Not in invoices
-                        'description_bbox',    # Not in invoices
-                        'quantity_bbox',       # Not in invoices
-                        'rate_bbox',           # Not in invoices
-                        'amount_bbox',         # Not in invoices
-                        'industry_type',       # Not in invoices
-                        'model_used',          # Not in invoices
-                        'model_accuracy',      # Not in invoices
-                        'input_tokens',        # Not in invoices
-                        'output_tokens',       # Not in invoices
-                        'total_tokens',        # Not in invoices
-                        'cost_inr',            # Not in invoices
-                        'fallback_attempted',  # Not in invoices
-                        'fallback_reason',     # Not in invoices
-                        'processing_errors',   # Not in invoices
-                        'mapped_inventory_item_id'  # Not in invoices
-                    }
-                    
-                    row_for_invoices = {k: v for k, v in row.items() if k not in excluded_columns}
-                    
-                    # Use upsert to handle duplicates (update if exists)
-                    db.upsert('invoices', row_for_invoices)
-                    saved_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to upsert row {row.get('row_id')}:  {e}")
-                    failed_inserts += 1
-            
-            logger.info(f"✅ SUCCESS: Saved {saved_count} rows to Supabase (failed: {failed_inserts})")
-            
+
+            # --- RESILIENT SAVE (replaces the old fragile loop) ---
+            saved_count, failed_rows = save_rows_with_retry(
+                rows=all_rows,
+                table='invoices',
+                excluded_columns=INVOICES_EXCLUDED_COLUMNS,
+                max_retries=3
+            )
+
+            results["failed_db_rows"] = len(failed_rows)
+
+            if failed_rows:
+                # ── PERSIST FAILED ROWS FOR RECOVERY ──────────────────────────
+                # Store unrecoverable rows in upload_tasks so they can be re-saved
+                # later without re-running AI (no extra cost, no data loss).
+                # If task_id is not available, log and continue gracefully.
+                # ──────────────────────────────────────────────────────────────
+                logger.error(
+                    f"\U0001f6a8 PARTIAL SAVE: {len(failed_rows)}/{len(all_rows)} rows failed "
+                    f"after 3 retries each. Persisting for recovery."
+                )
+
+                if task_id:
+                    try:
+                        import json
+                        recovery_db = create_fresh_database_client()
+                        # Sanitize rows for JSON serialization (remove non-serializable types)
+                        safe_failed_rows = []
+                        for fr in failed_rows:
+                            safe_row = {}
+                            for k, v in fr.items():
+                                try:
+                                    json.dumps(v)  # test serializability
+                                    safe_row[k] = v
+                                except (TypeError, ValueError):
+                                    safe_row[k] = str(v)
+                            safe_failed_rows.append(safe_row)
+
+                        recovery_db.client.table('upload_tasks').update({
+                            'failed_rows': safe_failed_rows,
+                            'failed_db_rows_count': len(failed_rows),
+                            'db_save_status': 'partial'
+                        }).eq('task_id', task_id).execute()
+
+                        logger.info(
+                            f"\u2705 Recovery data saved: {len(failed_rows)} rows stored in "
+                            f"upload_tasks.failed_rows for task {task_id}"
+                        )
+                    except Exception as persist_err:
+                        logger.error(f"Failed to persist recovery data to upload_tasks: {persist_err}")
+                else:
+                    logger.warning(
+                        "task_id not provided to process_invoices_batch — "
+                        "failed rows cannot be persisted for recovery. "
+                        "Pass task_id from routes/upload.py to enable recovery."
+                    )
+            else:
+                # All rows saved successfully — mark db_save_status explicitly
+                if task_id:
+                    try:
+                        recovery_db = create_fresh_database_client()
+                        recovery_db.client.table('upload_tasks').update({
+                            'db_save_status': 'complete',
+                            'failed_db_rows_count': 0
+                        }).eq('task_id', task_id).execute()
+                    except Exception as e:
+                        logger.warning(f"Could not update db_save_status to complete: {e}")
+
+            logger.info(f"\u2705 DB SAVE RESULT: {saved_count}/{len(all_rows)} rows saved, {len(failed_rows)} permanently failed")
+
             if progress_callback:
                 progress_callback(results["processed"], results["failed"], len(file_keys), "Creating verification records...")
-            
-            # Create verification records in Supabase
+
+            # Create verification records in Supabase (uses its own fresh client internally)
             create_verification_records_supabase(all_rows, username)
-            
+
             # Create duplicate records in verification_dates for skipped duplicates
             if results.get("duplicates"):
                 create_duplicate_records_supabase(results["duplicates"], username)
-            
+
             if progress_callback:
                 progress_callback(results["processed"], results["failed"], len(file_keys), "Complete!")
-            
+
         except Exception as e:
-            logger.error(f"Error saving to Supabase: {e}")
+            logger.error(f"Error in DB save phase: {e}")
             results["errors"].append(f"Database save error: {str(e)}")
+            results["failed_db_rows"] = len(all_rows)  # Assume all failed if unexpected exception
+
+            # Persist the entire all_rows as failed for recovery
+            if task_id:
+                try:
+                    import json
+                    recovery_db = create_fresh_database_client()
+                    safe_rows = []
+                    for fr in all_rows:
+                        safe_row = {}
+                        for k, v in fr.items():
+                            try:
+                                json.dumps(v)
+                                safe_row[k] = v
+                            except (TypeError, ValueError):
+                                safe_row[k] = str(v)
+                        safe_rows.append(safe_row)
+                    recovery_db.client.table('upload_tasks').update({
+                        'failed_rows': safe_rows,
+                        'failed_db_rows_count': len(all_rows),
+                        'db_save_status': 'failed'
+                    }).eq('task_id', task_id).execute()
+                    logger.info(f"Recovery data saved for catastrophic DB failure: task {task_id}")
+                except Exception as persist_err:
+                    logger.error(f"Could not persist recovery data after catastrophic failure: {persist_err}")
     
     return results
 

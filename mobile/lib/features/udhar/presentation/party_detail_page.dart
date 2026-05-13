@@ -1401,7 +1401,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        bool useReceiptPhoto = false;
+        bool useReceiptPhoto = true;
         LedgerTransaction? selectedTx = invoicesWithReceipts.isNotEmpty
             ? invoicesWithReceipts.first
             : null;

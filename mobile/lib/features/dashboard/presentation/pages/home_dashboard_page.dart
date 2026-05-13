@@ -426,7 +426,19 @@ class HomeDashboardPage extends ConsumerWidget {
               isDark: isDark,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.push('/galla'),
+              child: _SummaryCard(
+                label: 'GALLA',
+                amount: CurrencyFormatter.format(totals.cashInHand),
+                color: context.primaryColor,
+                isDark: isDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: _SummaryCard(
               label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
@@ -448,7 +460,17 @@ class HomeDashboardPage extends ConsumerWidget {
               isDark: isDark,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _SummaryCard(
+              label: 'GALLA',
+              amount: '...',
+              isLoading: true,
+              color: context.primaryColor,
+              isDark: isDark,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: _SummaryCard(
               label: AppLocalizations.of(context)?.toGive ?? 'TO GIVE',
@@ -473,7 +495,19 @@ class HomeDashboardPage extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
+              child: _SummaryCard(
+                label: 'GALLA',
+                amount: 'Retry',
+                color: context.errorColor,
+                isDark: isDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: GestureDetector(
               onTap: () => ref.read(dashboardTotalsProvider.notifier).refresh(),
@@ -597,24 +631,11 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Counter',
+            label: 'Galla',
             isSelected: currentFilter == HomePartyFilter.counter,
             onTap: () {
-              // Direct Navigation to Counter Ledger
-              final ledgers = ref.read(udharProvider).ledgers;
-              try {
-                final counterLedger = ledgers.firstWhere(
-                  (l) => l.customerName == 'Counter',
-                );
-                context.pushNamed(
-                  'party-detail',
-                  pathParameters: {'id': counterLedger.id.toString()},
-                  extra: counterLedger,
-                );
-              } catch (_) {
-                // Fallback: just set the filter if ledger not found yet
-                ref.read(homePartyFilterProvider.notifier).setFilter(HomePartyFilter.counter);
-              }
+              // Direct Navigation to Galla Page
+              context.push('/galla');
             },
             highlightColor: context.primaryColor,
           ),
@@ -734,9 +755,11 @@ class _SummaryCard extends StatelessWidget {
             right: -12,
             top: -12,
             child: Icon(
-              label.contains('COLLECT')
-                  ? LucideIcons.arrowDownLeft
-                  : LucideIcons.arrowUpRight,
+              label.contains('GALLA')
+                  ? LucideIcons.wallet
+                  : label.contains('COLLECT')
+                      ? LucideIcons.arrowDownLeft
+                      : LucideIcons.arrowUpRight,
               color: color.withValues(alpha: 0.06),
               size: 72,
             ),
@@ -754,7 +777,11 @@ class _SummaryCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      label.contains(AppLocalizations.of(context)?.toCollect ?? 'COLLECT') ? LucideIcons.trendingDown : LucideIcons.trendingUp,
+                      label.contains('GALLA')
+                          ? LucideIcons.wallet
+                          : label.contains(AppLocalizations.of(context)?.toCollect ?? 'COLLECT') 
+                              ? LucideIcons.trendingDown 
+                              : LucideIcons.trendingUp,
                       size: 12,
                       color: color,
                     ),

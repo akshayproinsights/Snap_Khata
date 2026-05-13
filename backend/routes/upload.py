@@ -850,7 +850,8 @@ def process_invoices_sync(
             username=username,
             progress_callback=update_progress,
             force_upload=force_upload,
-            customer_name=customer_name
+            customer_name=customer_name,
+            task_id=task_id  # CRITICAL: enables failed-row recovery
         )
         
         logger.info(f"Processing completed. Results: {results}")
@@ -876,18 +877,35 @@ def process_invoices_sync(
             parts.append(f"{results['failed']} failed")
         completion_msg = ", ".join(parts) if parts else "No invoices were processed"
 
-        # Always mark completed — summary screen will show the breakdown
+        # Determine final status: 'completed' only if ALL rows saved, 'partial' if some DB writes failed
+        failed_db_rows = results.get("failed_db_rows", 0)
+        final_status = "partial" if failed_db_rows > 0 else "completed"
+
+        if final_status == "partial":
+            logger.error(
+                f"🚨 PARTIAL COMPLETION for task {task_id}: "
+                f"{failed_db_rows} rows could not be saved to DB. "
+                f"Recovery data stored in upload_tasks.failed_rows. "
+                f"User should use retry-failed endpoint."
+            )
+            completion_msg = (
+                f"{results['processed']} invoices processed, but {failed_db_rows} "
+                f"line item(s) couldn't be saved due to a connection issue. "
+                f"Tap 'Retry' to recover them without re-scanning."
+            )
+
         update_db_status({
-            "status": "completed",
+            "status": final_status,
             "progress": {
                 "total": results["total"],
                 "processed": results["processed"],
                 "failed": results["failed"],
+                "failed_db_rows": failed_db_rows,
                 "skipped": skipped_count,
                 "skipped_details": skipped_summary,
                 "errors": results.get("errors", []),
             },
-            "duplicates": duplicate_list,   # keep for backwards-compat
+            "duplicates": duplicate_list,
             "uploaded_r2_keys": r2_file_keys,
             "end_time": datetime.now().isoformat(),
             "message": completion_msg,
@@ -955,6 +973,126 @@ def process_invoices_sync(
     finally:
         # Phase 3: Cleanup (No temp files to clean up anymore)
         logger.info("=== BACKGROUND TASK COMPLETED ===")
+
+
+@router.post("/retry-failed/{task_id}")
+async def retry_failed_rows(
+    task_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Re-save rows that failed to write to the DB during a previous upload task.
+
+    This endpoint:
+    - Does NOT re-run AI (no extra cost)
+    - Does NOT re-upload images
+    - Reads 'failed_rows' from upload_tasks and attempts to save them again
+    - Updates the task's db_save_status when done
+
+    Use this when the task status is 'partial'.
+    """
+    username = current_user.get("username")
+
+    try:
+        db = get_database_client()
+        # Fetch the task and its failed_rows
+        response = db.client.table("upload_tasks") \
+            .select("task_id, username, failed_rows, failed_db_rows_count, db_save_status") \
+            .eq("task_id", task_id) \
+            .eq("username", username) \
+            .limit(1) \
+            .execute()
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        task = response.data[0]
+        failed_rows = task.get("failed_rows")
+
+        if not failed_rows:
+            return {
+                "success": True,
+                "message": "No failed rows to retry — task is already complete.",
+                "saved": 0,
+                "still_failed": 0
+            }
+
+        if task.get("db_save_status") == "complete":
+            return {
+                "success": True,
+                "message": "Task already completed successfully.",
+                "saved": 0,
+                "still_failed": 0
+            }
+
+        logger.info(
+            f"[RETRY-FAILED] Retrying {len(failed_rows)} failed rows "
+            f"for task {task_id} (user: {username})"
+        )
+
+        # Use save_rows_with_retry with a fresh client
+        from database import save_rows_with_retry
+        INVOICES_EXCLUDED_COLUMNS = {
+            'amount_mismatch', 'calculated_amount', 'review_status', 'confidence',
+            'receipt_number_confidence', 'date_confidence', 'receipt_number_bbox',
+            'date_bbox', 'date_and_receipt_combined_bbox', 'line_item_row_bbox',
+            'description_bbox', 'quantity_bbox', 'rate_bbox', 'amount_bbox',
+            'industry_type', 'model_used', 'model_accuracy', 'input_tokens',
+            'output_tokens', 'total_tokens', 'cost_inr', 'fallback_attempted',
+            'fallback_reason', 'processing_errors', 'mapped_inventory_item_id'
+        }
+
+        saved_count, still_failed = save_rows_with_retry(
+            rows=failed_rows,
+            table='invoices',
+            excluded_columns=INVOICES_EXCLUDED_COLUMNS,
+            max_retries=3
+        )
+
+        # Update task with new state
+        if still_failed:
+            import json
+            safe_still_failed = []
+            for fr in still_failed:
+                safe_row = {}
+                for k, v in fr.items():
+                    try:
+                        json.dumps(v)
+                        safe_row[k] = v
+                    except (TypeError, ValueError):
+                        safe_row[k] = str(v)
+                safe_still_failed.append(safe_row)
+
+            db.client.table('upload_tasks').update({
+                'failed_rows': safe_still_failed,
+                'failed_db_rows_count': len(still_failed),
+                'db_save_status': 'partial',
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('task_id', task_id).execute()
+            message = f"Saved {saved_count} rows, {len(still_failed)} still failing. Try again later."
+        else:
+            db.client.table('upload_tasks').update({
+                'failed_rows': None,
+                'failed_db_rows_count': 0,
+                'db_save_status': 'complete',
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('task_id', task_id).execute()
+            message = f"All {saved_count} rows recovered successfully! 🎉"
+
+        logger.info(f"[RETRY-FAILED] Result: saved={saved_count}, still_failed={len(still_failed)}")
+
+        return {
+            "success": len(still_failed) == 0,
+            "message": message,
+            "saved": saved_count,
+            "still_failed": len(still_failed)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[RETRY-FAILED] Error retrying failed rows for task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Retry failed: {str(e)}")
 
 
 @router.delete("/files/{file_key:path}")

@@ -155,7 +155,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Startup Error Handling
 try:
     # Import routers
-    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes, udhar, vendor_ledgers, download, register, usage_routes, paginated_api
+    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes, udhar, vendor_ledgers, download, register, usage_routes, paginated_api, galla_routes
 except Exception as e:
     import traceback
     print("CRITICAL STARTUP ERROR: Failed to import routers", flush=True)
@@ -180,6 +180,7 @@ app.include_router(review.router, prefix="/api/review", tags=["Review"])
 app.include_router(verified.router, prefix="/api/verified", tags=["Verified Invoices"])
 app.include_router(udhar.router, prefix="/api/udhar", tags=["Udhar Tracking"])
 app.include_router(vendor_ledgers.router, prefix="/api/vendor-ledgers", tags=["Vendor Ledgers"])
+app.include_router(galla_routes.router, prefix="/api/galla", tags=["Galla"])
 app.include_router(public_routes.router, prefix="/api/public", tags=["Public"])
 app.include_router(download.router, prefix="/api", tags=["Download"])
 app.include_router(usage_routes.router, prefix="/api/usage", tags=["Usage Metrics"])
