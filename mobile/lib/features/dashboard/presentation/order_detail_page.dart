@@ -113,19 +113,47 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         'gst_mode_order_${widget.group.receiptNumber}', mode.name);
   }
 
-  double _partsSubtotal(InvoiceGroup group) => group.items
+  double _partsSubtotal(InvoiceGroup group) {
+    if (isEditing && itemCtrls.isNotEmpty) {
+      double total = 0;
+      for (int i = 0; i < group.items.length; i++) {
+        final ctrl = itemCtrls[i];
+        final double amt = double.tryParse(ctrl.amtCtrl.text) ?? 0.0;
+        final type = ctrl.typeCtrl.text.toUpperCase();
+        if (!type.contains('LABOR') && !type.contains('LABOUR') && !type.contains('SERVICE')) {
+          total += amt;
+        }
+      }
+      return total;
+    }
+    return group.items
       .where((i) {
         final type = i.type.toUpperCase();
         return !type.contains('LABOR') && !type.contains('LABOUR') && !type.contains('SERVICE');
       })
       .fold(0.0, (s, i) => s + i.amount);
+  }
 
-  double _laborSubtotal(InvoiceGroup group) => group.items
+  double _laborSubtotal(InvoiceGroup group) {
+    if (isEditing && itemCtrls.isNotEmpty) {
+      double total = 0;
+      for (int i = 0; i < group.items.length; i++) {
+        final ctrl = itemCtrls[i];
+        final double amt = double.tryParse(ctrl.amtCtrl.text) ?? 0.0;
+        final type = ctrl.typeCtrl.text.toUpperCase();
+        if (type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE')) {
+          total += amt;
+        }
+      }
+      return total;
+    }
+    return group.items
       .where((i) {
         final type = i.type.toUpperCase();
         return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
       })
       .fold(0.0, (s, i) => s + i.amount);
+  }
 
   double _gstAmount(double amount) {
     if (_gstMode == GstMode.excluded) return amount * 0.18;
@@ -220,6 +248,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _balanceDueController.dispose();
     _creditDetailsController.dispose();
     super.dispose();
+  }
+
+  void _recalculateTotals() {
+    final grandTotal = _totalAfterGst(widget.group);
+    
+    _totalAmountController.text = _formatInput(grandTotal);
+    
+    final received = double.tryParse(_receivedAmountController.text) ?? 0.0;
+    _balanceDueController.text = _formatInput(grandTotal - received);
+    
+    setState(() {});
   }
 
   Future<void> _saveChanges() async {
@@ -1133,6 +1172,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 isLast: e.key == widget.group.items.length - 1,
                 isEditing: true,
                 isAutomobile: isAutomobile,
+                onAmountChanged: _recalculateTotals,
               );
             }),
           ],
@@ -1340,6 +1380,7 @@ class _ItemRow extends StatelessWidget {
   final bool isLast;
   final bool isEditing;
   final bool isAutomobile;
+  final VoidCallback? onAmountChanged;
 
   const _ItemRow({
     required this.index,
@@ -1348,7 +1389,16 @@ class _ItemRow extends StatelessWidget {
     required this.isLast,
     required this.isEditing,
     this.isAutomobile = false,
+    this.onAmountChanged,
   });
+
+  void _recalcAmount() {
+    final qty = double.tryParse(ctrl.qtyCtrl.text) ?? 0.0;
+    final rate = double.tryParse(ctrl.rateCtrl.text) ?? 0.0;
+    final amt = qty * rate;
+    ctrl.amtCtrl.text = amt == amt.truncateToDouble() ? amt.toInt().toString() : amt.toStringAsFixed(2);
+    onAmountChanged?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1464,15 +1514,15 @@ class _ItemRow extends StatelessWidget {
                 ),
               Expanded(
                   flex: 1,
-                  child: _buildTextField(context, ctrl.qtyCtrl, 'Qty', isNumber: true)),
+                  child: _buildTextField(context, ctrl.qtyCtrl, 'Qty', isNumber: true, onChanged: (_) => _recalcAmount())),
               const SizedBox(width: 8),
               Expanded(
                   flex: 2,
-                  child: _buildTextField(context, ctrl.rateCtrl, 'Rate', isNumber: true)),
+                  child: _buildTextField(context, ctrl.rateCtrl, 'Rate', isNumber: true, onChanged: (_) => _recalcAmount())),
               const SizedBox(width: 8),
               Expanded(
                   flex: 2,
-                  child: _buildTextField(context, ctrl.amtCtrl, 'Amount', isNumber: true)),
+                  child: _buildTextField(context, ctrl.amtCtrl, 'Amount', isNumber: true, readOnly: true)),
             ],
           ),
         ),
@@ -1500,17 +1550,25 @@ class _ItemRow extends StatelessWidget {
   }
 
   Widget _buildTextField(BuildContext context, TextEditingController controller, String hint,
-      {bool isNumber = false}) {
+      {bool isNumber = false, bool readOnly = false, void Function(String)? onChanged}) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      onChanged: onChanged,
       keyboardType: isNumber
           ? const TextInputType.numberWithOptions(decimal: true)
           : TextInputType.text,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      style: TextStyle(
+          fontSize: 13, 
+          fontWeight: FontWeight.w600,
+          color: readOnly ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6) : Theme.of(context).colorScheme.onSurface,
+      ),
       decoration: InputDecoration(
         hintText: hint,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         isDense: true,
+        fillColor: readOnly ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3) : null,
+        filled: readOnly,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
             borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
@@ -1519,7 +1577,7 @@ class _ItemRow extends StatelessWidget {
             borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.2)),
+            borderSide: BorderSide(color: readOnly ? Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4) : Theme.of(context).colorScheme.primary, width: readOnly ? 0.5 : 1.2)),
       ),
     );
   }

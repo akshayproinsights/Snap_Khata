@@ -80,7 +80,10 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
       state = state.copyWith(records: newRecords);
 
       await _repository.updateVerifiedInvoice(record);
-      ref.invalidate(udharProvider);
+      // IMPORTANT: Use silent refresh instead of ref.invalidate(udharProvider).
+      // Invalidating wipes the ledger list (sets isLoading=true, ledgers=[]),
+      // which causes blank screens in the back-stack (PartyDetailPage etc.).
+      unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to update record: $e');
@@ -104,7 +107,11 @@ class VerifiedNotifier extends Notifier<VerifiedState> {
       state = state.copyWith(records: newRecords);
 
       await _repository.updateVerifiedInvoicesBulk(recordsToUpdate);
-      ref.invalidate(udharProvider);
+      // IMPORTANT: Use silent refresh instead of ref.invalidate(udharProvider).
+      // Invalidating wipes the ledger list (sets isLoading=true, ledgers=[]),
+      // which causes blank screens in the back-stack (PartyDetailPage etc.).
+      // Silent fetch keeps existing data visible while syncing in background.
+      unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     } catch (e) {
       state = state.copyWith(error: 'Failed to update records in bulk: $e');
