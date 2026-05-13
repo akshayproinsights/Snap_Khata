@@ -1412,7 +1412,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       isAutomobile: isAutomobile,
       onAmountChanged: (rowId, amount) {
         // Live update — just refresh local overrides so grand total recomputes
-        setState(() => _localAmountOverrides[rowId] = amount);
+        setState(() {
+          final oldTotal = _activeTotalAmount(widget.group);
+          final wasPaid = (oldTotal - _receivedAmount).abs() < 0.01;
+          
+          _localAmountOverrides[rowId] = amount;
+          _isTotalManuallyEdited = false;
+          _manualTotalAmount = null;
+          
+          if (wasPaid) {
+            final newTotal = _activeTotalAmount(widget.group);
+            _receivedAmount = newTotal;
+            _paidAmountController.text = newTotal.toStringAsFixed(0);
+          }
+        });
       },
       onSaved: (updatedItem) {
         // Persist to provider (optimistic update, server save in background)
@@ -1426,7 +1439,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 // _LineItemInlineEditor — handles live qty × rate → price with last-edit-wins
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _LastLineEdit { qtyRate, price }
 
 class _LineItemInlineEditor extends StatefulWidget {
   final ReviewRecord item;
@@ -1459,8 +1471,6 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
   final _rateFocus = FocusNode();
   final _priceFocus = FocusNode();
 
-  _LastLineEdit _lastEdit = _LastLineEdit.qtyRate;
-
   bool get _anyFocused =>
       _descFocus.hasFocus || _qtyFocus.hasFocus ||
       _rateFocus.hasFocus || _priceFocus.hasFocus;
@@ -1469,16 +1479,6 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
     if (v == null) return '';
     if (v == v.truncateToDouble()) return v.toInt().toString();
     return v.toStringAsFixed(2);
-  }
-
-  /// True when the current price field differs from qty × rate by ≥ ₹1.
-  /// Used to show the silent ▲ triangle (no dialog, no blocking).
-  bool get _showMismatchTriangle {
-    final price = double.tryParse(_priceCtrl.text) ?? 0.0;
-    final qty = double.tryParse(_qtyCtrl.text);
-    final rate = double.tryParse(_rateCtrl.text);
-    if (qty == null || rate == null || rate == 0) return false;
-    return (price - qty * rate).abs() >= 1.0;
   }
 
   @override
@@ -1529,18 +1529,7 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
       // Update price field live
       final formatted = _fmt(computed);
       if (_priceCtrl.text != formatted) _priceCtrl.text = formatted;
-      _lastEdit = _LastLineEdit.qtyRate;
       widget.onAmountChanged(widget.item.rowId, computed);
-      setState(() {}); // refresh mismatch triangle
-    }
-  }
-
-  void _onPriceChanged(String val) {
-    final price = double.tryParse(val);
-    if (price != null) {
-      _lastEdit = _LastLineEdit.price;
-      widget.onAmountChanged(widget.item.rowId, price);
-      setState(() {}); // refresh mismatch triangle
     }
   }
 
@@ -1548,10 +1537,12 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
     final qty = double.tryParse(_qtyCtrl.text);
     final rate = double.tryParse(_rateCtrl.text);
     double price = double.tryParse(_priceCtrl.text) ?? widget.item.amount;
-    // Honour last-edit-wins: if qty/rate were last edited, recalculate price
-    if (_lastEdit == _LastLineEdit.qtyRate && qty != null && rate != null) {
+    
+    // Always use qty * rate if both exist
+    if (qty != null && rate != null) {
       price = qty * rate;
     }
+    
     final updated = widget.item.copyWith(
       description: _descCtrl.text.trim().isEmpty ? widget.item.description : _descCtrl.text,
       quantity: qty,
@@ -1565,10 +1556,7 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
   Widget build(BuildContext context) {
     final item = widget.item;
     // Card border: use mismatch warning color (amber) only if triangle visible, otherwise normal
-    final hasMismatch = _showMismatchTriangle;
-    final borderColor = hasMismatch
-        ? context.warningColor.withValues(alpha: 0.35)
-        : context.borderColor;
+    final borderColor = context.borderColor;
     final cardColor = context.surfaceColor;
 
     return Card(
@@ -1606,24 +1594,15 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Silent ▲ triangle — no scary text, no dialog
-                if (hasMismatch)
-                  Tooltip(
-                    message: 'Printed amount differs — your edit is saved',
-                    child: Icon(Icons.warning_amber_rounded,
-                        size: 14, color: context.warningColor),
-                  ),
-                const SizedBox(width: 4),
-                // Price field
+                // Price field (read-only)
                 SizedBox(
                   width: 80,
                   child: TextField(
                     controller: _priceCtrl,
                     focusNode: _priceFocus,
+                    readOnly: true,
                     textAlign: TextAlign.right,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: _onPriceChanged,
-                    onTapOutside: (_) => _priceFocus.unfocus(),
                     textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
                       isDense: true,
@@ -1631,19 +1610,19 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(color: context.borderColor),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: context.primaryColor, width: 2),
+                        borderSide: BorderSide(color: context.borderColor),
                       ),
-                      fillColor: context.primaryColor.withValues(alpha: 0.05),
+                      fillColor: context.surfaceColor,
                       filled: true,
                       hintText: '0',
                       prefixText: '₹',
-                      prefixStyle: TextStyle(fontWeight: FontWeight.w700, color: context.primaryColor, fontSize: 13),
+                      prefixStyle: TextStyle(fontWeight: FontWeight.w700, color: context.textSecondaryColor, fontSize: 13),
                     ),
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: context.primaryColor),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: context.textSecondaryColor),
                   ),
                 ),
               ],

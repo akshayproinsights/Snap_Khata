@@ -21,19 +21,14 @@ class InvoiceItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMismatch = item.amountMismatch.abs() > 1.0;
-    // or if item.needsReview is explicitly true
     final needsReview = hasMismatch || (item.needsReview ?? false);
     final hasPriceHike = item.priceHikeAmount != null && item.priceHikeAmount! > 0;
 
-    Color borderColor = context.borderColor;
-    Color bgColor = context.surfaceColor;
-    if (needsReview) {
-      borderColor = context.errorColor;
-      bgColor = context.errorColor.withValues(alpha: 0.05);
-    } else if (hasPriceHike) {
-      borderColor = context.warningColor;
-      bgColor = context.warningColor.withValues(alpha: 0.05);
-    }
+    // Always use neutral card colors — mismatches are informational, not errors.
+    // A tiny amber ⚠ triangle is shown instead of red UI to avoid scaring
+    // non-technical SMB users.
+    const Color borderColor = AppTheme.border;
+    final Color bgColor = context.surfaceColor;
 
     // Determine tax details (omitted, unused)
     
@@ -42,7 +37,10 @@ class InvoiceItemCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: needsReview ? 1.5 : 1),
+        border: Border.all(
+          color: hasPriceHike ? context.warningColor : borderColor,
+          width: 1,
+        ),
         boxShadow: context.premiumShadow,
       ),
       padding: const EdgeInsets.all(12),
@@ -68,27 +66,18 @@ class InvoiceItemCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              // Subtle amber triangle for mismatches — non-blocking, non-scary.
+              // Replaces the aggressive red "Review Needed" badge.
               if (needsReview)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.alertTriangle, size: 10, color: context.errorColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Review Needed',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: context.errorColor,
-                        ),
-                      ),
-                    ],
+                Tooltip(
+                  message: 'Check amount — calculated vs printed may differ',
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: context.warningColor,
+                    ),
                   ),
                 ),
               const SizedBox(width: 8),
@@ -183,33 +172,6 @@ class InvoiceItemCard extends StatelessWidget {
             ],
           ),
 
-          if (needsReview && item.printedTotal != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.calculator, size: 14, color: Colors.red.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Calculated Net (${CurrencyFormatter.format(item.netAmount ?? 0)}) does not match Printed Total (${CurrencyFormatter.format(item.printedTotal ?? 0)}). Difference: ${CurrencyFormatter.format(item.amountMismatch)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.red.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            )
-          ]
         ],
       ),
     );

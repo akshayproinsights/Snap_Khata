@@ -381,34 +381,34 @@ class _InventoryInvoiceReviewPageState
 
   void _goToNextInvoice() {
     if (_isNavigatingAway) return;
-    
+
     final pendingBundles = widget.allBundles
         .where((b) => !b.isVerified)
         .toList();
-    
+
     // Find next bundle after the current index
     InventoryInvoiceBundle? nextBundle;
     int nextIdx = -1;
-    
+
     if (widget.currentIndex != -1 && widget.currentIndex < widget.allBundles.length - 1) {
-        for (int i = widget.currentIndex + 1; i < widget.allBundles.length; i++) {
-            if (!widget.allBundles[i].isVerified) {
-                nextBundle = widget.allBundles[i];
-                nextIdx = i;
-                break;
-            }
+      for (int i = widget.currentIndex + 1; i < widget.allBundles.length; i++) {
+        if (!widget.allBundles[i].isVerified) {
+          nextBundle = widget.allBundles[i];
+          nextIdx = i;
+          break;
         }
+      }
     }
-    
+
     // If no next found, pick the first pending one that isn't the current one
     if (nextBundle == null && pendingBundles.isNotEmpty) {
-        for (final b in pendingBundles) {
-            if (b.invoiceNumber != widget.bundle.invoiceNumber) {
-                nextBundle = b;
-                nextIdx = widget.allBundles.indexOf(b);
-                break;
-            }
+      for (final b in pendingBundles) {
+        if (b.invoiceNumber != widget.bundle.invoiceNumber) {
+          nextBundle = b;
+          nextIdx = widget.allBundles.indexOf(b);
+          break;
         }
+      }
     }
 
     setState(() => _isNavigatingAway = true);
@@ -422,22 +422,17 @@ class _InventoryInvoiceReviewPageState
           'currentIndex': nextIdx,
         });
       } else {
-        // Auto-sync and navigate to dashboard when no more pending bills
-        setState(() => _isLoading = true);
-        ref.read(inventoryProvider.notifier).syncAndFinish().then((_) {
-          if (!mounted) return;
-          final state = ref.read(inventoryProvider);
-          if (state.error != null) {
-            setState(() {
-              _isLoading = false;
-              _isNavigatingAway = false;
-            });
-            AppToast.showError(context, state.error!, title: 'Sync Failed');
-          } else {
-            AppToast.showSuccess(context, 'Inventory synced successfully!', title: 'Sync Complete');
-            context.go('/');
-          }
-        });
+        // ⚡ Navigate home FIRST, then sync in background.
+        // This eliminates the blank screen caused by awaiting sync
+        // while the widget is still in the tree (same pattern as ReceiptReviewPage).
+        AppToast.showSuccess(
+          context,
+          'Syncing inventory in background…',
+          title: 'Saved ✔',
+        );
+        context.go('/');
+        // Fire-and-forget — the dashboard shows a banner if inventory is ready.
+        ref.read(inventoryProvider.notifier).syncAndFinish();
       }
     });
   }
@@ -655,18 +650,9 @@ class _InventoryInvoiceReviewPageState
   @override
   Widget build(BuildContext context) {
     if (_isNavigatingAway) {
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Saving...', style: TextStyle(color: AppTheme.textSecondary)),
-            ],
-          ),
-        ),
-      );
+      // ✅ Blank-screen guard: return a transparent scaffold so there's zero
+      // grey flash during the GoRouter transition after Save & Finish.
+      return Scaffold(backgroundColor: context.backgroundColor);
     }
 
     final state = ref.watch(inventoryProvider);
