@@ -1564,20 +1564,20 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             SegmentedButton<bool>(
                               segments: const [
                                 ButtonSegment(
-                                  value: false,
-                                  label: Text(
-                                    'Account Statement',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  icon: Icon(LucideIcons.fileText, size: 15),
-                                ),
-                                ButtonSegment(
                                   value: true,
                                   label: Text(
                                     'Receipt Photo',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                   icon: Icon(LucideIcons.image, size: 15),
+                                ),
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text(
+                                    'Account Statement',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  icon: Icon(LucideIcons.fileText, size: 15),
                                 ),
                               ],
                               selected: {useReceiptPhoto},
