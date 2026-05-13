@@ -58,7 +58,7 @@ class _CustomersTabState extends ConsumerState<CustomersTab> {
           date: record.date.isNotEmpty ? record.date : record.uploadDate,
           receiptLink: record.receiptLink,
           customerName: record.customerName,
-          mobileNumber: record.mobileNumber,
+          mobileNumber: record.mobileNumber.replaceAll(RegExp(r'\.0$'), ''),
           extraFields: record.extraFields,
           uploadDate: record.uploadDate,
           paymentMode: record.paymentMode,

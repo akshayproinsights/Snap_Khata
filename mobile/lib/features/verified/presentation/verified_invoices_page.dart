@@ -1096,7 +1096,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                         record.customerName.isNotEmpty)
                       _buildMetaTag(LucideIcons.user, record.customerName),
                     if (record.mobileNumber.isNotEmpty)
-                      _buildMetaTag(LucideIcons.phone, record.mobileNumber),
+                      _buildMetaTag(LucideIcons.phone, record.mobileNumber.replaceAll(RegExp(r'\.0$'), '')),
                     if (isAutomobile) ...[
                       if ((record.extraFields['car_number'] ?? record.extraFields['vehicle_number']) != null && 
                           (record.extraFields['car_number'] ?? record.extraFields['vehicle_number']).toString().isNotEmpty)

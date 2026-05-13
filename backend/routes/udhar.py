@@ -1235,8 +1235,23 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             # Use total_bill_amount (user-edited grand total) as the authoritative total
             tba = data.get("total_bill_amount", 0.0)
             authoritative_total = tba if tba and tba > 0 else data["total_amount"]
-            correct_balance = max(0.0, authoritative_total - float(data.get("received_amount") or 0))
+            received = float(data.get("received_amount") or 0)
+            payment_mode = str(data.get("payment_mode") or "Cash").strip().lower()
+            correct_balance = max(0.0, authoritative_total - received)
             stored_balance = float(data.get("balance_due") or 0)
+
+            # BUG FIX: If payment_mode is Credit but received_amount >= total,
+            # this is a Cash→Credit edit where received_amount wasn't cleared yet.
+            # The user explicitly set a balance_due (stored_balance) — trust it instead
+            # of computing a nonsensical correct_balance of 0 for a credit bill.
+            if payment_mode == "credit" and received >= authoritative_total > 0:
+                logger.info(
+                    f"⏭️ SKIP REPAIR for receipt {rn}: Credit bill with received={received:.0f} "
+                    f">= total={authoritative_total:.0f} (Cash→Credit edit). "
+                    f"Trusting stored balance_due={stored_balance:.0f}."
+                )
+                continue
+
             # Repair if difference is more than 1 rupee (to avoid floating point noise)
             if abs(correct_balance - stored_balance) > 1.0:
                 repairs_needed.append((rn, correct_balance))
@@ -1244,7 +1259,7 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                     f"🔧 REPAIR: Receipt {rn} has stale balance_due={stored_balance:.0f}, "
                     f"correct={correct_balance:.0f} (authoritative_total={authoritative_total:.0f}, "
                     f"line_item_sum={data['total_amount']:.0f}, "
-                    f"received={data.get('received_amount', 0):.0f})"
+                    f"received={received:.0f})"
                 )
         
         if repairs_needed:
@@ -1399,9 +1414,24 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             # - Credit: paid only when balance_due is 0 (i.e. fully settled)
             # - Cash/Online: always treated as paid at time of invoice
             if is_credit:
-                # CRITICAL: Always compute balance_due from total_amount (the authoritative
-                # grand total, now preferring total_bill_amount over the line-item sum).
-                balance_due = max(0, total_amount - received_amount)
+                # BUG FIX: For Cash→Credit edits, received_amount still holds the old
+                # Cash amount (= full total). In that case, use stored balance_due from DB.
+                # A genuine Credit sale with full received_amount would be settled, but
+                # a freshly converted bill must show the full amount as outstanding.
+                if raw_received >= total_amount > 0:
+                    # Use the stored balance_due (set by the user's edit) instead of 0
+                    stored_bd = float(data.get("balance_due") or 0)
+                    balance_due = stored_bd if stored_bd > 0 else total_amount
+                    # Also correct the received_amount for ledger accounting
+                    received_amount = total_amount - balance_due
+                    logger.info(
+                        f"🔄 Cash→Credit bill {rn}: received={raw_received:.0f} >= total={total_amount:.0f}. "
+                        f"Using stored balance_due={balance_due:.0f}, adjusted received={received_amount:.0f}"
+                    )
+                else:
+                    # CRITICAL: Always compute balance_due from total_amount (the authoritative
+                    # grand total, now preferring total_bill_amount over the line-item sum).
+                    balance_due = max(0, total_amount - received_amount)
                 is_paid_status = balance_due <= 0.01
             else:
                 is_paid_status = True
@@ -1534,6 +1564,20 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
                         "extra_fields": data["extra_fields"],
                         "linked_transaction_id": invoice_id
                     }).execute()
+            elif is_credit and rn in existing_payments:
+                # BUG FIX: Cash→Credit edit with no advance payment (received_amount = 0).
+                # The old Cash auto-sync PAYMENT row must be DELETED, otherwise the ledger
+                # shows: INVOICE ₹1059 - PAYMENT ₹1059 = ₹0 (wrong — it should show ₹1059 due).
+                # Only delete the auto-sync payment, NOT manually recorded "Record Payment" entries.
+                stale_payment = existing_payments[rn]
+                stale_notes = stale_payment.get("notes") or ""
+                if "Auto-sync payment" in stale_notes:
+                    db.client.table("ledger_transactions").delete().eq("id", stale_payment["id"]).execute()
+                    logger.info(
+                        f"🗑️ Deleted stale auto-sync PAYMENT for receipt {rn} "
+                        f"(Cash→Credit conversion, received_amount=0)"
+                    )
+
                 
         # 4. Reconcile all balances efficiently
         await reconcile_all_customer_ledger_balances(current_user)

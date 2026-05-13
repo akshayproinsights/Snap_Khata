@@ -47,14 +47,16 @@ class ReviewRecord {
     if (verificationStatus.toLowerCase() == 'duplicate receipt number') {
       return true;
     }
-    if (amountMismatch != null && amountMismatch!.abs() >= 1.0) {
-      return true;
-    }
     if (isHeader && date.trim().isEmpty) {
       return true;
     }
     return false;
   }
+
+  /// True when the AI-extracted amount differs from qty × rate by ≥ ₹1.
+  /// Shown as a silent ▲ triangle — NOT a blocking error. User can ignore.
+  bool get hasPriceMismatch =>
+      amountMismatch != null && amountMismatch!.abs() >= 1.0;
 
   bool get hasReceiptDoubt {
     return auditFindings != null &&

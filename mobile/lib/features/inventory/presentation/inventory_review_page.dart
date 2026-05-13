@@ -268,6 +268,21 @@ class _InventoryReviewPageState extends ConsumerState<InventoryReviewPage> {
         ],
       ),
       body: Builder(builder: (context) {
+        if (state.isSyncing) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 24),
+                Text('Syncing to Ledgers...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.textColor)),
+                const SizedBox(height: 8),
+                Text('Please wait while we update your records.', style: TextStyle(color: context.textSecondaryColor)),
+              ],
+            ),
+          );
+        }
+
         if (state.isLoading && allBundles.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }

@@ -165,7 +165,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     receiptCtrl = TextEditingController(text: widget.group.receiptNumber);
     dateCtrl = TextEditingController(text: widget.group.date);
     customerCtrl = TextEditingController(text: widget.group.customerName);
-    mobileCtrl = TextEditingController(text: widget.group.mobileNumber);
+    mobileCtrl = TextEditingController(text: widget.group.mobileNumber.replaceAll(RegExp(r'\.0$'), ''));
 
     // Dynamically create controllers for each extra field provided by the backend.
     // No forced fallback — if extra_fields is empty, the section simply won't render.
@@ -297,9 +297,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
     if (updatedItems.isNotEmpty) {
       await notifier.updateRecordsBulk(updatedItems);
-      // Silently refresh udhar ledgers in the background so the Home dashboard
-      // updates without wiping its current state (which causes a blank screen flash).
-      unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
+      // BUG FIX: Do NOT call fetchLedgersSilent() here — it was causing a blank
+      // screen when navigating back because the udhar provider rebuild wiped
+      // the navigation stack's widget tree mid-flight.
+      // Dashboard totals refresh is safe since it doesn't affect current route.
       unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
     }
 
@@ -588,6 +589,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     onTap: () {
                       setState(() {
                         _paymentMode = 'Credit';
+                        // BUG FIX: Clear received amount when switching to Credit so
+                        // balance_due = full amount, not 0 (old Cash received_amount).
+                        _receivedAmount = 0;
+                        _receivedAmountController.clear();
+                        _isReceivedChecked = false;
+                        final total = double.tryParse(_totalAmountController.text) ?? grandTotal;
+                        _balanceDueController.text = _formatInput(total);
                       });
                     },
                   ),
@@ -928,7 +936,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                             Expanded(
                               child: Text(
                                   widget.group.mobileNumber.isNotEmpty
-                                      ? widget.group.mobileNumber
+                                      ? widget.group.mobileNumber.replaceAll(RegExp(r'\.0$'), '')
                                       : '—',
                                   style: TextStyle(
                                       fontSize: 15,
@@ -991,7 +999,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                   if (mounted) {
                                     await WhatsAppUtils.shareReceiptWithOptions(
                                       context,
-                                      phone: widget.group.mobileNumber,
+                                      phone: widget.group.mobileNumber.replaceAll(RegExp(r'\.0$'), ''),
                                       shareUrl: shareUrl,
                                       imageUrl: widget.group.receiptLink,
                                       caption: caption,

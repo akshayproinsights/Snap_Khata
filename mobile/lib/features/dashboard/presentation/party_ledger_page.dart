@@ -456,7 +456,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                     if (!context.mounted) return;
                     await WhatsAppUtils.shareReceiptWithOptions(
                       context,
-                      phone: group.mobileNumber,
+                      phone: group.mobileNumber.replaceAll(RegExp(r'\.0$'), ''),
                       shareUrl: link,
                       imageUrl: group.receiptLink,
                       caption: caption,

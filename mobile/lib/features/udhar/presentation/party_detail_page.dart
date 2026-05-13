@@ -728,7 +728,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         date: first.date.isNotEmpty ? first.date : first.uploadDate,
         receiptLink: first.receiptLink,
         customerName: first.customerName,
-        mobileNumber: first.mobileNumber,
+        mobileNumber: first.mobileNumber.replaceAll(RegExp(r'\.0$'), ''),
         extraFields: first.extraFields,
         uploadDate: first.uploadDate,
         paymentMode: ledgerPaymentMode,
@@ -2003,276 +2003,270 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ? '${tx.paymentMode} Sale'
               : 'Credit Sale');
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: context.premiumShadow,
-        border: Border.all(
-          color: context.borderColor.withValues(alpha: 0.5),
-          width: 1,
+    return GestureDetector(
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        _confirmDeleteTransaction(tx);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: context.premiumShadow,
+          border: Border.all(
+            color: context.borderColor.withValues(alpha: 0.5),
+            width: 1,
+          ),
         ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          InkWell(
-            onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            InkWell(
+              onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(txIcon, color: accentColor, size: 22),
                     ),
-                    child: Icon(txIcon, color: accentColor, size: 22),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              txTitle,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            Text(
-                              '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 18,
-                                color: accentColor,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.calendar,
-                              size: 12,
-                              color: context.textSecondaryColor,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              DateFormat(
-                                'dd MMM yyyy',
-                              ).format(tx.createdAt.toLocal()),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: context.textSecondaryColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (tx.notes != null && tx.notes!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.textSecondaryColor.withValues(
-                                alpha: 0.05,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  LucideIcons.messageSquare,
-                                  size: 10,
-                                  color: context.textSecondaryColor,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                txTitle,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  letterSpacing: -0.5,
                                 ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    // Clean up auto-generated notes for SMB readability
-                                    tx.notes!.startsWith(
-                                          'Payment collected for Invoice',
-                                        )
-                                        ? 'Full balance collected'
-                                        : tx.notes!.startsWith(
-                                            'Auto-generated payment',
-                                          )
-                                        ? 'Payment for Invoice #${tx.receiptNumber ?? ""}'
-                                        : tx.notes!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: context.textSecondaryColor,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                              ),
+                              Text(
+                                '${isPayment ? '-' : '+'} ${CurrencyFormatter.format(tx.amount)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                  color: accentColor,
+                                  letterSpacing: -0.5,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(
+                                LucideIcons.calendar,
+                                size: 12,
+                                color: context.textSecondaryColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat(
+                                  'dd MMM yyyy',
+                                ).format(tx.createdAt.toLocal()),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.textSecondaryColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (tx.notes != null && tx.notes!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.textSecondaryColor.withValues(
+                                  alpha: 0.05,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.messageSquare,
+                                    size: 10,
+                                    color: context.textSecondaryColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      // Clean up auto-generated notes for SMB readability
+                                      tx.notes!.startsWith(
+                                            'Payment collected for Invoice',
+                                          )
+                                          ? 'Full balance collected'
+                                          : tx.notes!.startsWith(
+                                              'Auto-generated payment',
+                                            )
+                                          ? 'Payment for Invoice #${tx.receiptNumber ?? ""}'
+                                          : tx.notes!,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: context.textSecondaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-
-          // User Clarity Row: Bill, Paid, Balance
-          if (isInvoice)
+  
+            // User Clarity Row: Bill, Paid, Balance
+            if (isInvoice)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: context.textSecondaryColor.withValues(alpha: 0.03),
+                  border: Border(
+                    top: BorderSide(color: context.borderColor, width: 0.5),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildClarityItem(
+                      'Bill Amount',
+                      CurrencyFormatter.format(tx.amount),
+                    ),
+                    _buildClarityItem(
+                      'Paid',
+                      CurrencyFormatter.format(
+                        tx.receivedAmount ??
+                            (tx.amount -
+                                (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))),
+                      ),
+                    ),
+                    _buildClarityItem(
+                      'Balance',
+                      CurrencyFormatter.format(
+                        tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount),
+                      ),
+                      valueColor:
+                          (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)) <= 0
+                          ? context.successColor
+                          : context.errorColor,
+                    ),
+                  ],
+                ),
+              ),
+  
+            // Actions Row
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: context.textSecondaryColor.withValues(alpha: 0.03),
+                color: context.surfaceColor,
                 border: Border(
                   top: BorderSide(color: context.borderColor, width: 0.5),
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildClarityItem(
-                    'Bill Amount',
-                    CurrencyFormatter.format(tx.amount),
-                  ),
-                  _buildClarityItem(
-                    'Paid',
-                    CurrencyFormatter.format(
-                      tx.receivedAmount ??
-                          (tx.amount -
-                              (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))),
-                    ),
-                  ),
-                  _buildClarityItem(
-                    'Balance',
-                    CurrencyFormatter.format(
-                      tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount),
-                    ),
-                    valueColor:
-                        (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount)) <= 0
-                        ? context.successColor
-                        : context.errorColor,
-                  ),
-                ],
-              ),
-            ),
-
-          // Actions Row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: context.surfaceColor,
-              border: Border(
-                top: BorderSide(color: context.borderColor, width: 0.5),
-              ),
-            ),
-            child: Row(
-              children: [
-                if (tx.receiptNumber != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Text(
-                      '#${tx.receiptNumber}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: context.textSecondaryColor.withValues(
-                          alpha: 0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                const Spacer(),
-                if (canTap)
-                  TextButton.icon(
-                    onPressed: () => _showReceiptPhotoDialog(tx),
-                    icon: const Icon(LucideIcons.eye, size: 14),
-                    label: const Text(
-                      'VIEW BILL',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: context.primaryColor,
-                    ),
-                  ),
-                if (isInvoice) ...[
-                  // SETTLED badge for paid invoices
-                  if (tx.isPaid)
-                    Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 6,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.successColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: context.successColor.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            LucideIcons.checkCircle2,
-                            size: 10,
-                            color: context.successColor,
+                  if (tx.receiptNumber != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        '#${tx.receiptNumber}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: context.textSecondaryColor.withValues(
+                            alpha: 0.5,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'SETTLED',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  if (canTap)
+                    TextButton.icon(
+                      onPressed: () => _showReceiptPhotoDialog(tx),
+                      icon: const Icon(LucideIcons.eye, size: 14),
+                      label: const Text(
+                        'VIEW BILL',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: context.primaryColor,
+                      ),
+                    ),
+                  if (isInvoice) ...[
+                    // SETTLED badge for paid invoices
+                    if (tx.isPaid)
+                      Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 6,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.successColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: context.successColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.checkCircle2,
+                              size: 10,
                               color: context.successColor,
-                              letterSpacing: 0.5,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              'SETTLED',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: context.successColor,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  // COLLECT button removed — use RECORD PAYMENT button at bottom instead
+                  ],
+                  const SizedBox(width: 8),
                 ],
-                IconButton(
-                  icon: Icon(
-                    LucideIcons.trash2,
-                    size: 16,
-                    color: context.errorColor,
-                  ),
-                  onPressed: () => _confirmDeleteTransaction(tx),
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 8),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

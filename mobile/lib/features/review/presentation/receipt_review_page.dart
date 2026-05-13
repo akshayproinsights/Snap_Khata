@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/shared/widgets/robust_receipt_image.dart';
 import 'package:mobile/core/theme/app_theme.dart';
-import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/review/domain/models/review_models.dart';
 import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
@@ -56,6 +55,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   double? _manualTotalAmount;
   bool _isTotalManuallyEdited = false;
 
+  /// Live local amount overrides keyed by rowId — updated on every keystroke
+  /// so the grand total reflects the user's edits without waiting for a server save.
+  final Map<String, double> _localAmountOverrides = {};
+
   /// True when the user tried to save without a customer name.
   /// Turns the customer banner field red until user fills it in.
 
@@ -89,7 +92,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final mobile = header.mobileNumber?.trim().isNotEmpty == true
         ? header.mobileNumber!
         : (header.extraFields['mobile_number']?.toString().trim() ?? '');
-    _mobileController.text = mobile;
+    _mobileController.text = mobile.replaceAll(RegExp(r'\.0$'), '');
     // Auto-save when user leaves the field
     _mobileFocusNode.addListener(() {
       if (!_mobileFocusNode.hasFocus) {
@@ -188,13 +191,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   // ── GST computed helpers ─────────────────────────────────
   double _partsSubtotal(InvoiceReviewGroup group) {
+    double amountFor(ReviewRecord i) => _localAmountOverrides[i.rowId] ?? i.amount;
     final typed = group.lineItems.where((i) {
       final type = i.type?.toUpperCase() ?? '';
       return type.isNotEmpty;
     }).toList();
 
     if (typed.isEmpty) {
-      return group.lineItems.fold(0.0, (s, i) => s + i.amount);
+      return group.lineItems.fold(0.0, (s, i) => s + amountFor(i));
     }
 
     return group.lineItems
@@ -202,7 +206,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           final type = i.type?.toUpperCase() ?? '';
           return type.contains('PART') || type.isEmpty;
         })
-        .fold(0.0, (s, i) => s + i.amount);
+        .fold(0.0, (s, i) => s + amountFor(i));
   }
 
   double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
@@ -210,7 +214,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         final type = i.type?.toUpperCase() ?? '';
         return type.contains('LABOUR') || type.contains('LABOR') || type.contains('SERVICE');
       })
-      .fold(0.0, (s, i) => s + i.amount);
+      .fold(0.0, (s, i) => s + (_localAmountOverrides[i.rowId] ?? i.amount));
 
   double _gstAmount(double totalSubtotal) {
     if (_gstMode == GstMode.excluded) return totalSubtotal * 0.18;
@@ -329,9 +333,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  String _formatInput(double? amount) {
-    return CurrencyFormatter.formatInput(amount);
-  }
+
+
 
   Future<void> _saveCurrentState({String? updatePhoneNumber}) async {
     final notifier = ref.read(reviewProvider.notifier);
@@ -379,8 +382,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final recordsToUpdate = <ReviewRecord>[];
     for (var item in group.lineItems) {
-      if (item.verificationStatus != 'Done') {
-        recordsToUpdate.add(item.copyWith(verificationStatus: 'Done'));
+      final overrideAmount = _localAmountOverrides[item.rowId];
+      final recordToSave = overrideAmount != null 
+          ? item.copyWith(amount: overrideAmount, verificationStatus: 'Done')
+          : item.copyWith(verificationStatus: 'Done');
+      
+      if (item.verificationStatus != 'Done' || overrideAmount != null) {
+        recordsToUpdate.add(recordToSave);
       }
     }
     
@@ -390,37 +398,22 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   void _markAllDone() async {
-    // ── Validation: customer name is required ─────────────────────────
     final liveState = ref.read(reviewProvider);
     final liveGroup = liveState.groups.firstWhere(
       (g) => g.receiptNumber == widget.group.receiptNumber,
       orElse: () => widget.group,
     );
+    // Only block for genuinely broken data — amount mismatches are NOT an error.
     if (liveGroup.hasError) {
-      // Gather specific error messages
       final List<String> errorMessages = [];
       if (liveGroup.header?.verificationStatus.toLowerCase() == 'duplicate receipt number') {
-        errorMessages.add('• Duplicate receipt number');
+        errorMessages.add('\u2022 Duplicate receipt number detected');
       }
       if (liveGroup.header?.date.trim().isEmpty == true) {
-        errorMessages.add('• Receipt date is missing');
+        errorMessages.add('\u2022 Receipt date is missing');
       }
-      
-      int mismatchCount = 0;
-      for (var item in liveGroup.lineItems) {
-        if (item.amountMismatch != null && item.amountMismatch!.abs() >= 1.0) {
-          mismatchCount++;
-        }
-      }
-      if (mismatchCount > 0) {
-        errorMessages.add('• $mismatchCount line item(s) have amount mismatches');
-      }
+      if (errorMessages.isEmpty) errorMessages.add('\u2022 Some fields have errors');
 
-      if (errorMessages.isEmpty) {
-        errorMessages.add('• Some fields have errors');
-      }
-
-      // Show dialog
       final proceed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -428,14 +421,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             children: [
               Icon(LucideIcons.alertTriangle, color: context.errorColor),
               const SizedBox(width: 8),
-              const Text('Errors Found', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Check Before Saving', style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Please review the following errors before saving:'),
+              const Text('Please fix the following before saving:'),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -450,15 +443,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   style: TextStyle(color: context.errorColor, fontWeight: FontWeight.w600, height: 1.5, fontSize: 13),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text('Are you sure you want to save with these errors?'),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => context.pop(false),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => context.pop(false), child: const Text('Cancel')),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: context.errorColor),
               onPressed: () => context.pop(true),
@@ -467,10 +455,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           ],
         ),
       );
-
-      if (proceed != true) {
-        return; // User cancelled
-      }
+      if (proceed != true) return;
     }
 
     await _saveCurrentState();
@@ -546,12 +531,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final config = configAsync.value ?? {};
     final isAutomobile = config['industry'] == 'automobile';
 
-    ref.listen<ReviewState>(reviewProvider, (previous, next) {
-      if (next.error != null && next.error != previous?.error) {
-        AppToast.showError(context, next.error!, title: 'Sync Failed');
-      }
-    });
-    
+    // Individual item-edit errors are silently swallowed — optimistic updates
+    // keep the UI consistent and errors will surface if the user retries sync.
+    // We only surface errors from syncAndFinish, which are handled on the home screen.
+
     // Use live group from provider; fall back to widget.group only if still present.
     // When groups are cleared after sync, _isNavigatingAway is already true so
     // we never reach here with an empty groups list.
@@ -1423,26 +1406,192 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   Widget _buildLineItemCard(ReviewRecord item, bool isAutomobile) {
+    return _LineItemInlineEditor(
+      key: ValueKey(item.rowId),
+      item: item,
+      isAutomobile: isAutomobile,
+      onAmountChanged: (rowId, amount) {
+        // Live update — just refresh local overrides so grand total recomputes
+        setState(() => _localAmountOverrides[rowId] = amount);
+      },
+      onSaved: (updatedItem) {
+        // Persist to provider (optimistic update, server save in background)
+        ref.read(reviewProvider.notifier).updateAmountRecord(updatedItem);
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LineItemInlineEditor — handles live qty × rate → price with last-edit-wins
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum _LastLineEdit { qtyRate, price }
+
+class _LineItemInlineEditor extends StatefulWidget {
+  final ReviewRecord item;
+  final bool isAutomobile;
+  /// Called on every keystroke with the new computed amount for live grand total.
+  final void Function(String rowId, double amount) onAmountChanged;
+  /// Called on focus-out to persist the updated record to the provider.
+  final void Function(ReviewRecord updatedItem) onSaved;
+
+  const _LineItemInlineEditor({
+    super.key,
+    required this.item,
+    required this.isAutomobile,
+    required this.onAmountChanged,
+    required this.onSaved,
+  });
+
+  @override
+  State<_LineItemInlineEditor> createState() => _LineItemInlineEditorState();
+}
+
+class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _qtyCtrl;
+  late final TextEditingController _rateCtrl;
+  late final TextEditingController _priceCtrl;
+
+  final _descFocus = FocusNode();
+  final _qtyFocus = FocusNode();
+  final _rateFocus = FocusNode();
+  final _priceFocus = FocusNode();
+
+  _LastLineEdit _lastEdit = _LastLineEdit.qtyRate;
+
+  bool get _anyFocused =>
+      _descFocus.hasFocus || _qtyFocus.hasFocus ||
+      _rateFocus.hasFocus || _priceFocus.hasFocus;
+
+  static String _fmt(double? v) {
+    if (v == null) return '';
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(2);
+  }
+
+  /// True when the current price field differs from qty × rate by ≥ ₹1.
+  /// Used to show the silent ▲ triangle (no dialog, no blocking).
+  bool get _showMismatchTriangle {
+    final price = double.tryParse(_priceCtrl.text) ?? 0.0;
+    final qty = double.tryParse(_qtyCtrl.text);
+    final rate = double.tryParse(_rateCtrl.text);
+    if (qty == null || rate == null || rate == 0) return false;
+    return (price - qty * rate).abs() >= 1.0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    _descCtrl = TextEditingController(text: item.description);
+    _qtyCtrl = TextEditingController(text: _fmt(item.quantity));
+    _rateCtrl = TextEditingController(text: _fmt(item.rate));
+    _priceCtrl = TextEditingController(text: _fmt(item.amount));
+
+    _descFocus.addListener(() { if (!_descFocus.hasFocus) _save(); });
+    _qtyFocus.addListener(() { if (!_qtyFocus.hasFocus) _save(); });
+    _rateFocus.addListener(() { if (!_rateFocus.hasFocus) _save(); });
+    _priceFocus.addListener(() { if (!_priceFocus.hasFocus) _save(); });
+  }
+
+  @override
+  void didUpdateWidget(_LineItemInlineEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only sync from external provider state when not actively typing
+    if (_anyFocused) return;
+    final item = widget.item;
+    if (item.description != _descCtrl.text) _descCtrl.text = item.description;
+    final newQty = _fmt(item.quantity);
+    if (newQty != _qtyCtrl.text) _qtyCtrl.text = newQty;
+    final newRate = _fmt(item.rate);
+    if (newRate != _rateCtrl.text) _rateCtrl.text = newRate;
+    final newPrice = _fmt(item.amount);
+    if (newPrice != _priceCtrl.text) _priceCtrl.text = newPrice;
+  }
+
+  @override
+  void dispose() {
+    _save();
+    _descCtrl.dispose(); _qtyCtrl.dispose();
+    _rateCtrl.dispose(); _priceCtrl.dispose();
+    _descFocus.dispose(); _qtyFocus.dispose();
+    _rateFocus.dispose(); _priceFocus.dispose();
+    super.dispose();
+  }
+
+  void _onQtyOrRateChanged() {
+    final qty = double.tryParse(_qtyCtrl.text);
+    final rate = double.tryParse(_rateCtrl.text);
+    if (qty != null && rate != null) {
+      final computed = qty * rate;
+      // Update price field live
+      final formatted = _fmt(computed);
+      if (_priceCtrl.text != formatted) _priceCtrl.text = formatted;
+      _lastEdit = _LastLineEdit.qtyRate;
+      widget.onAmountChanged(widget.item.rowId, computed);
+      setState(() {}); // refresh mismatch triangle
+    }
+  }
+
+  void _onPriceChanged(String val) {
+    final price = double.tryParse(val);
+    if (price != null) {
+      _lastEdit = _LastLineEdit.price;
+      widget.onAmountChanged(widget.item.rowId, price);
+      setState(() {}); // refresh mismatch triangle
+    }
+  }
+
+  void _save() {
+    final qty = double.tryParse(_qtyCtrl.text);
+    final rate = double.tryParse(_rateCtrl.text);
+    double price = double.tryParse(_priceCtrl.text) ?? widget.item.amount;
+    // Honour last-edit-wins: if qty/rate were last edited, recalculate price
+    if (_lastEdit == _LastLineEdit.qtyRate && qty != null && rate != null) {
+      price = qty * rate;
+    }
+    final updated = widget.item.copyWith(
+      description: _descCtrl.text.trim().isEmpty ? widget.item.description : _descCtrl.text,
+      quantity: qty,
+      rate: rate,
+      amount: price,
+    );
+    widget.onSaved(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    // Card border: use mismatch warning color (amber) only if triangle visible, otherwise normal
+    final hasMismatch = _showMismatchTriangle;
+    final borderColor = hasMismatch
+        ? context.warningColor.withValues(alpha: 0.35)
+        : context.borderColor;
+    final cardColor = context.surfaceColor;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       elevation: 0,
-      color: item.hasError ? context.errorColor.withValues(alpha: 0.05) : context.surfaceColor,
+      color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: item.hasError ? context.errorColor.withValues(alpha: 0.3) : context.borderColor),
+        side: BorderSide(color: borderColor),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Row 1: Description (left) + Amount (right) ──────────────
+            // ── Row 1: Description (left) + Price (right with ▲ triangle) ─
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: DebouncedReviewField(
-                    initialValue: item.description,
+                  child: TextField(
+                    controller: _descCtrl,
+                    focusNode: _descFocus,
                     decoration: InputDecoration(
                       hintText: 'Item description',
                       isDense: true,
@@ -1452,19 +1601,30 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     ),
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     maxLines: null,
-                    onSaved: (val) {
-                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(description: val));
-                    },
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => _descFocus.unfocus(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Amount — right-aligned, primary color, editable
+                const SizedBox(width: 6),
+                // Silent ▲ triangle — no scary text, no dialog
+                if (hasMismatch)
+                  Tooltip(
+                    message: 'Printed amount differs — your edit is saved',
+                    child: Icon(Icons.warning_amber_rounded,
+                        size: 14, color: context.warningColor),
+                  ),
+                const SizedBox(width: 4),
+                // Price field
                 SizedBox(
                   width: 80,
-                  child: DebouncedReviewField(
-                    initialValue: _formatInput(item.amount),
+                  child: TextField(
+                    controller: _priceCtrl,
+                    focusNode: _priceFocus,
                     textAlign: TextAlign.right,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: _onPriceChanged,
+                    onTapOutside: (_) => _priceFocus.unfocus(),
+                    textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -1484,19 +1644,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       prefixStyle: TextStyle(fontWeight: FontWeight.w700, color: context.primaryColor, fontSize: 13),
                     ),
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: context.primaryColor),
-                    onSaved: (val) {
-                      final amt = double.tryParse(val) ?? 0.0;
-                      ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(amount: amt));
-                    },
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            // ── Row 2: QTY chip + RATE chip + (Part/Labor toggle if automobile) ──
+            // ── Row 2: Q chip + Rate chip + Part/Labor toggle ─────────────
             Row(
               children: [
-                // QTY — always visible
+                // QTY chip
                 Container(
                   padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
                   decoration: BoxDecoration(
@@ -1511,9 +1667,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       const SizedBox(width: 2),
                       SizedBox(
                         width: 38,
-                        child: DebouncedReviewField(
-                          initialValue: _formatInput(item.quantity),
+                        child: TextField(
+                          controller: _qtyCtrl,
+                          focusNode: _qtyFocus,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (_) => _onQtyOrRateChanged(),
+                          onTapOutside: (_) => _qtyFocus.unfocus(),
+                          textInputAction: TextInputAction.done,
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
@@ -1521,21 +1681,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             hintText: '1',
                           ),
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                          onSaved: (val) {
-                            final qty = double.tryParse(val);
-                            double amt = item.amount;
-                            if (qty != null && item.rate != null && item.rate! > 0) {
-                              amt = qty * item.rate!;
-                            }
-                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(quantity: qty, amount: amt));
-                          },
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 6),
-                // RATE
+                // RATE chip
                 Container(
                   padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
                   decoration: BoxDecoration(
@@ -1550,9 +1702,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       const SizedBox(width: 2),
                       SizedBox(
                         width: 62,
-                        child: DebouncedReviewField(
-                          initialValue: _formatInput(item.rate),
+                        child: TextField(
+                          controller: _rateCtrl,
+                          focusNode: _rateFocus,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (_) => _onQtyOrRateChanged(),
+                          onTapOutside: (_) => _rateFocus.unfocus(),
+                          textInputAction: TextInputAction.done,
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.zero,
@@ -1560,31 +1716,18 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             hintText: '-',
                           ),
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                          onSaved: (val) {
-                            final rate = double.tryParse(val);
-                            double amt = item.amount;
-                            if (rate != null && item.quantity != null && item.quantity! > 0) {
-                              amt = item.quantity! * rate;
-                            }
-                            ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(rate: rate, amount: amt));
-                          },
                         ),
                       ),
                     ],
                   ),
                 ),
-                // Error badge
-                if (item.hasError) ...[
-                  const SizedBox(width: 6),
-                  Icon(Icons.warning_amber_rounded, size: 14, color: context.errorColor),
-                ],
                 const Spacer(),
-                // Part/Labor toggle — only for automobile, moved to same row
-                if (isAutomobile) ...[
+                // Part/Labor toggle — only for automobile
+                if (widget.isAutomobile) ...[
                   _PartLaborToggle(
                     isPart: true,
                     selected: item.type?.toUpperCase().contains('PART') ?? false,
-                    onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'PART')),
+                    onTap: () => widget.onSaved(item.copyWith(type: 'PART')),
                   ),
                   const SizedBox(width: 6),
                   _PartLaborToggle(
@@ -1592,7 +1735,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     selected: (item.type?.toUpperCase().contains('LABOR') ?? false) ||
                         (item.type?.toUpperCase().contains('LABOUR') ?? false) ||
                         (item.type?.toUpperCase().contains('SERVICE') ?? false),
-                    onTap: () => ref.read(reviewProvider.notifier).updateAmountRecord(item.copyWith(type: 'LABOR')),
+                    onTap: () => widget.onSaved(item.copyWith(type: 'LABOR')),
                   ),
                 ],
               ],
@@ -1603,6 +1746,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 }
+
+
 
 class DebouncedReviewField extends StatefulWidget {
   final String initialValue;

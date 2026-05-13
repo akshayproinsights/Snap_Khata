@@ -67,7 +67,7 @@ class CustomerActivityCard extends ConsumerWidget {
                   date: invoiceDate.isNotEmpty ? invoiceDate : transactionDate.toIso8601String(),
                   receiptLink: receiptLink,
                   customerName: entityName,
-                  mobileNumber: mobileNumber,
+                  mobileNumber: mobileNumber.replaceAll(RegExp(r'\.0$'), ''),
                   uploadDate: invoiceDate.isNotEmpty ? invoiceDate : transactionDate.toIso8601String(),
                   paymentMode: paymentMode,
                   receivedAmount: receivedAmount,

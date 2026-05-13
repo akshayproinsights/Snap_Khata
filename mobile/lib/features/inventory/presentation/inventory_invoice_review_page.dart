@@ -423,8 +423,18 @@ class _InventoryInvoiceReviewPageState
         });
       } else {
         // Auto-sync and navigate to dashboard when no more pending bills
+        setState(() => _isLoading = true);
         ref.read(inventoryProvider.notifier).syncAndFinish().then((_) {
-          if (mounted) {
+          if (!mounted) return;
+          final state = ref.read(inventoryProvider);
+          if (state.error != null) {
+            setState(() {
+              _isLoading = false;
+              _isNavigatingAway = false;
+            });
+            AppToast.showError(context, state.error!, title: 'Sync Failed');
+          } else {
+            AppToast.showSuccess(context, 'Inventory synced successfully!', title: 'Sync Complete');
             context.go('/');
           }
         });

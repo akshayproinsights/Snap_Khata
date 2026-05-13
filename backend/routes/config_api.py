@@ -51,7 +51,8 @@ async def get_user_configuration(
             "r2_bucket": config.get("r2_bucket"),
             "dashboard_url": config.get("dashboard_url"),
             "columns": config.get("columns", {}),
-            "gemini_config_loaded": "gemini" in config
+            "gemini_config_loaded": "gemini" in config,
+            "dashboard_visuals": config.get("dashboard_visuals", {}),
         }
 
         logger.info(f"Configuration loaded for user: {username}, industry: {config.get('industry')}")
@@ -67,6 +68,30 @@ async def get_user_configuration(
             status_code=500,
             detail=f"Failed to load user configuration: {str(e)}"
         )
+
+
+@router.post("/config/clear-cache")
+async def clear_user_config_cache(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Clear the in-memory config cache for the authenticated user.
+    Call this whenever the user's industry or config is changed so the
+    next request picks up the fresh config from disk/DB instead of
+    serving a stale cached version.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="No username in token")
+
+    try:
+        from config_loader import _config_cache, _template_cache
+        _config_cache.pop(username, None)
+        logger.info(f"Config cache cleared for user: {username}")
+        return {"success": True, "message": f"Config cache cleared for '{username}'"}
+    except Exception as e:
+        logger.error(f"Error clearing config cache for {username}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear config cache")
 
 
 @router.get("/config/columns")
