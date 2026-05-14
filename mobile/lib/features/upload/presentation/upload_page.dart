@@ -32,7 +32,8 @@ class _UploadPageState extends ConsumerState<UploadPage>
 
   /// ── LOCAL guard: true until we've confirmed with the backend that
   ///    no task is active. The camera page CANNOT render while this is true.
-  bool _isCheckingBackend = true;
+  ///    Starts as FALSE — we only set it true if we actually need to check.
+  bool _isCheckingBackend = false;
   bool _isCapturing = false;
 
   @override
@@ -51,14 +52,31 @@ class _UploadPageState extends ConsumerState<UploadPage>
     // ── APPROACH 1 (Provider): re-attach overlay via state management
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(uploadProvider.notifier).resumeIfActive();
       ref.read(uploadProvider.notifier).setCustomerContext(widget.customerName);
       // Fresh review data to show "Already in review" badge correctly
       ref.read(reviewProvider.notifier).fetchReviewData();
-    });
 
-    // ── APPROACH 2 (Direct): ask the backend directly — bulletproof
-    _checkBackendForActiveTask();
+      // ── APPROACH 2 (Direct): ask the backend only when necessary.
+      // Skip the network call if the provider is already in a clean idle state
+      // (no active task, no stuck files, not restoring). This eliminates the
+      // 500ms–2s camera delay on the 2nd+ scan of the same session.
+      final currentState = ref.read(uploadProvider);
+      final needsBackendCheck = currentState.isActive ||
+          currentState.isRestoringState ||
+          currentState.allDone ||
+          currentState.fileItems.any(
+              (f) => f.status == UploadFileStatus.uploading);
+
+      if (needsBackendCheck) {
+        // Provider thinks something is active — verify with backend.
+        setState(() => _isCheckingBackend = true);
+        ref.read(uploadProvider.notifier).resumeIfActive();
+        _checkBackendForActiveTask();
+      } else {
+        // Provider is already clean — skip network, open camera instantly.
+        ref.read(uploadProvider.notifier).resumeIfActive();
+      }
+    });
   }
 
   /// Called whenever the app lifecycle changes (foreground/background).
@@ -75,10 +93,16 @@ class _UploadPageState extends ConsumerState<UploadPage>
       case AppLifecycleState.resumed:
         // App returned to foreground — do an immediate sync then resume backoff.
         ref.read(uploadProvider.notifier).resumePolling();
-        // Also run the full resumeIfActive() to handle cold-launch recovery.
         ref.read(uploadProvider.notifier).resumeIfActive();
-        if (mounted) setState(() => _isCheckingBackend = true);
-        _checkBackendForActiveTask();
+        // Only hit the backend if there was actually an active task when we
+        // went to background — avoids unnecessary network on foreground.
+        if (mounted) {
+          final s = ref.read(uploadProvider);
+          if (s.isActive || s.activeTaskId != null) {
+            setState(() => _isCheckingBackend = true);
+            _checkBackendForActiveTask();
+          }
+        }
         break;
       default:
         break;

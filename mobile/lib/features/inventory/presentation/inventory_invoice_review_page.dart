@@ -364,12 +364,9 @@ class _InventoryInvoiceReviewPageState
 
       if (!mounted) return;
 
-      AppToast.showSuccess(
-        context,
-        'Invoice saved successfully.',
-        title: 'Saved',
-      );
-
+      // ✅ No toast here — _goToNextInvoice() shows one consolidated toast
+      // when all invoices are done. For mid-flow (Save & Next), the page
+      // transition itself is the success feedback.
       _goToNextInvoice();
     } catch (e) {
       if (mounted) {
@@ -554,7 +551,7 @@ class _InventoryInvoiceReviewPageState
                 child: SizedBox(
                   height: 52,
                   child: FilledButton(
-                    onPressed: _isLoading ? null : () => _saveInvoice(widget.bundle.items, totalAmount),
+                    onPressed: (_isLoading || _isNavigatingAway) ? null : () => _saveInvoice(widget.bundle.items, totalAmount),
                     style: FilledButton.styleFrom(
                       backgroundColor: context.primaryColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -649,11 +646,10 @@ class _InventoryInvoiceReviewPageState
 
   @override
   Widget build(BuildContext context) {
-    if (_isNavigatingAway) {
-      // ✅ Blank-screen guard: return a transparent scaffold so there's zero
-      // grey flash during the GoRouter transition after Save & Finish.
-      return Scaffold(backgroundColor: context.backgroundColor);
-    }
+    // ✅ No early-return blank scaffold here.
+    // When _isNavigatingAway is true we simply keep the existing UI frozen
+    // and let GoRouter complete the transition on its own. Returning a bare
+    // Scaffold was exactly what caused the grey blank-screen flash.
 
     final state = ref.watch(inventoryProvider);
     final providerItemById = { for (final i in state.items) i.id: i };

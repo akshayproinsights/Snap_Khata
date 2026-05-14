@@ -9,8 +9,10 @@ import 'package:mobile/features/galla/presentation/providers/galla_provider.dart
 import 'package:mobile/features/galla/domain/models/galla_transaction.dart';
 import 'package:mobile/features/shared/domain/models/invoice_group.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
+import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class GallaDashboardPage extends ConsumerStatefulWidget {
   const GallaDashboardPage({super.key});
@@ -319,27 +321,32 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
   Widget build(BuildContext context) {
     final gallaState = ref.watch(gallaProvider);
     final transactions = gallaState.transactions;
+    final chartData = ref.read(gallaProvider.notifier).getCashEarnedChartData();
     
-    // Calculate total cash in hand from transactions
-    double cashInHand = 0.0;
+    // Calculate total cash earned for the period (Cash Sales + Money In)
+    double cashEarned = 0.0;
+    final cutoffDate = DateTime.now().subtract(Duration(days: gallaState.days));
     for (final tx in transactions) {
       if (tx.transactionType == 'CASH_SALE' || tx.transactionType == 'MONEY_IN') {
-        cashInHand += tx.amount;
-      } else if (tx.transactionType == 'MONEY_OUT') {
-        cashInHand -= tx.amount;
+        final txDateStr = (tx.invoiceDate != null && tx.invoiceDate!.isNotEmpty) ? tx.invoiceDate! : tx.createdAt;
+        final txDate = DateTime.tryParse(txDateStr) ?? DateTime.now();
+        if (gallaState.days == 365 || txDate.isAfter(cutoffDate)) {
+          cashEarned += tx.amount;
+        }
       }
     }
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Text('Galla (Cash Box)'),
+        title: const Text('Dashboard'),
         backgroundColor: context.surfaceColor,
         elevation: 0,
       ),
       body: gallaState.isLoading && transactions.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : ListView(
+              padding: const EdgeInsets.only(bottom: 100),
               children: [
                 Container(
                   margin: const EdgeInsets.all(16),
@@ -360,10 +367,10 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(LucideIcons.wallet, color: Colors.white.withValues(alpha: 0.8), size: 20),
+                          Icon(LucideIcons.indianRupee, color: Colors.white.withValues(alpha: 0.8), size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'CASH IN HAND',
+                            'CASH EARNED',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 12,
@@ -373,9 +380,18 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 4),
                       Text(
-                        CurrencyFormatter.format(cashInHand),
+                        'Cash sales & money in',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        CurrencyFormatter.format(cashEarned),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 36,
@@ -386,6 +402,12 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                     ],
                   ),
                 ),
+                
+                _buildFilterToggle(context, gallaState.days),
+                const SizedBox(height: 16),
+                
+                _buildChartContainer(context, chartData),
+                const SizedBox(height: 16),
                 
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -404,22 +426,26 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                   ),
                 ),
                 
-                Expanded(
-                  child: transactions.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No cash transactions yet.',
-                            style: TextStyle(color: context.textSecondaryColor),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                          itemCount: transactions.length,
-                          itemBuilder: (context, index) {
-                            return _buildTransactionCard(transactions[index]);
-                          },
-                        ),
-                ),
+                if (transactions.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Text(
+                        'No cash transactions yet.',
+                        style: TextStyle(color: context.textSecondaryColor),
+                      ),
+                    ),
+                  )
+                else
+                  ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: transactions.length,
+                    itemBuilder: (context, index) {
+                      return _buildTransactionCard(transactions[index]);
+                    },
+                  ),
               ],
             ),
       floatingActionButton: Row(
@@ -439,6 +465,190 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
             onPressed: () => _showAddTransactionDialog(context, ref, 'MONEY_IN'),
             icon: const Icon(LucideIcons.plus),
             label: const Text('IN', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterToggle(BuildContext context, int currentDays) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.borderColor, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          _buildFilterButton(context, '1 Week', 7, currentDays == 7),
+          _buildFilterButton(context, '1 Month', 30, currentDays == 30),
+          _buildFilterButton(context, 'All Time', 365, currentDays == 365),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(BuildContext context, String label, int days, bool isSelected) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => ref.read(gallaProvider.notifier).changePeriod(days),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? context.primaryColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : context.textColor,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartContainer(BuildContext context, List<AnalyticsDataPoint> points) {
+    double maxY = 10;
+    for (var p in points) {
+      if (p.amount > maxY) maxY = p.amount.toDouble();
+    }
+    maxY = maxY * 1.2;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.borderColor.withValues(alpha: 0.5), width: 1),
+        boxShadow: context.premiumShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.barChart2, size: 16, color: context.textSecondaryColor),
+              const SizedBox(width: 8),
+              Text(
+                'CASH FLOW TREND',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 180,
+            child: points.isEmpty
+                ? Center(
+                    child: Text(
+                      'No cash earned in this period',
+                      style: TextStyle(color: context.textSecondaryColor),
+                    ),
+                  )
+                : BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            return BarTooltipItem(
+                              '₹${rod.toY.toInt()}',
+                              TextStyle(
+                                color: const Color(0xFF10B981),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            getTitlesWidget: (value, meta) {
+                              if (value == 0) return const SizedBox();
+                              return Text(
+                                '₹${(value / 1000).toStringAsFixed(1)}k',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 10,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 32,
+                            getTitlesWidget: (value, meta) {
+                              final index = value.toInt();
+                              if (index >= 0 && index < points.length) {
+                                final dateStr = points[index].date;
+                                final parts = dateStr.split('-');
+                                if (parts.length >= 3) {
+                                  return SideTitleWidget(
+                                    meta: meta,
+                                    child: Text('${parts[2]}/${parts[1]}', style: const TextStyle(fontSize: 10)),
+                                  );
+                                }
+                                return SideTitleWidget(
+                                  meta: meta,
+                                  child: Text(dateStr, style: const TextStyle(fontSize: 10)),
+                                );
+                              }
+                              return const SizedBox();
+                            },
+                          ),
+                        ),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: maxY / 4 > 0 ? maxY / 4 : 10,
+                        getDrawingHorizontalLine: (value) => FlLine(
+                          color: context.borderColor.withValues(alpha: 0.3),
+                          strokeWidth: 1,
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      barGroups: points.asMap().entries.map((e) {
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: e.value.amount.toDouble(),
+                              color: const Color(0xFF10B981),
+                              width: 12,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
           ),
         ],
       ),

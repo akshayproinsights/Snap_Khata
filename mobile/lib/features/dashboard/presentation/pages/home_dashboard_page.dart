@@ -597,7 +597,7 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Galla',
+            label: 'Dashboard',
             isSelected: currentFilter == HomePartyFilter.counter,
             onTap: () {
               // Direct Navigation to Galla Page
@@ -721,7 +721,7 @@ class _SummaryCard extends StatelessWidget {
             right: -12,
             top: -12,
             child: Icon(
-              label.contains('GALLA')
+              label.contains('DASHBOARD')
                   ? LucideIcons.wallet
                   : label.contains('COLLECT')
                       ? LucideIcons.arrowDownLeft
@@ -743,7 +743,7 @@ class _SummaryCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      label.contains('GALLA')
+                      label.contains('DASHBOARD')
                           ? LucideIcons.wallet
                           : label.contains(AppLocalizations.of(context)?.toCollect ?? 'COLLECT') 
                               ? LucideIcons.trendingDown 

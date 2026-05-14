@@ -18,8 +18,9 @@ final cameraControllerProvider =
 
     final controller = CameraController(
       camera,
-      ResolutionPreset.veryHigh,
+      ResolutionPreset.high, // 'veryHigh' adds 400-800ms init on Android with no OCR benefit
       enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg, // explicit JPEG = faster init on most devices
     );
 
     try {
