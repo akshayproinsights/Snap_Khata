@@ -703,7 +703,9 @@ class WhatsAppUtils {
     }
   }
 
-  /// Minimal JS eval bridge using dart:js_interop.
-  @JS('eval')
-  external static String _jsEval(String code);
 }
+
+/// Minimal JS eval bridge using dart:js_interop.
+/// Must be top-level — dart:js_interop @JS members cannot live inside a plain class.
+@JS('eval')
+external String _jsEval(String code);
