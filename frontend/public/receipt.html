@@ -630,6 +630,21 @@
             const shopName = data.shop_name || 'Our Shop';
             document.title = `Receipt • ${shopName}`;
 
+            // ── Inject Open Graph tags so WhatsApp shows the receipt image as a
+            // rich preview card (no manual attachment needed by the user).
+            // WhatsApp's crawler fetches these tags when the link is shared.
+            const setMeta = (property, content) => {
+                let el = document.querySelector(`meta[property="${property}"]`);
+                if (!el) { el = document.createElement('meta'); el.setAttribute('property', property); document.head.appendChild(el); }
+                el.setAttribute('content', content);
+            };
+            setMeta('og:image', receiptLink);
+            setMeta('og:image:width', '600');
+            setMeta('og:image:height', '800');
+            setMeta('og:title', `Receipt from ${shopName}`);
+            setMeta('og:description', 'Tap to view your full receipt photo.');
+            setMeta('og:url', window.location.href);
+
             const html = `
             <div style="
                 min-height: 100vh;

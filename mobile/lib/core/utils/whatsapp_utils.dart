@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -479,14 +480,12 @@ class WhatsAppUtils {
         receiptPhotoUrl.isNotEmpty &&
         receiptPhotoUrl != 'null') {
       final invoiceRef =
-          receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
+          receiptNumber != null ? ' against Bill #$receiptNumber' : '';
       return 'Hi $name,\n\n'
-          '🙏 Friendly reminder from *$shop*\n\n'
-          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*\n\n'
-          'Your receipt$invoiceRef is attached 👇\n\n'
-          'Please clear the balance at your earliest convenience.\n\n'
-          'Thank you! 🙏\n'
-          '— *$shop*';
+          'This is a gentle reminder for your pending payment of *${formatIndianCurrency(balanceDue)}*$invoiceRef.\n\n'
+          'Your receipt is attached above. Kindly clear the dues at your convenience.\n\n'
+          'Thank you,\n'
+          '*$shop*';
     }
 
     // Account Statement mode.
@@ -496,22 +495,23 @@ class WhatsAppUtils {
     final bool hasBillingData = totalBilled > 0 || totalPaid > 0;
 
     String msg = 'Hi $name,\n\n'
-        '🙏 A friendly reminder from *$shop*\n\n';
+        'A gentle reminder that your current balance is *${formatIndianCurrency(balanceDue)}*.\n\n';
 
     if (hasBillingData) {
-      msg += '📋 Total Bill: ${formatIndianCurrency(totalBilled)}\n'
-          '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n';
+      msg += '📋 Total Billed: ${formatIndianCurrency(totalBilled)}\n'
+          '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n'
+          '⏳ Balance Due: *${formatIndianCurrency(balanceDue)}*\n\n';
     }
 
-    msg += '⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*\n\n'
-        'View your full account here:\n'
+    msg += 'View your full account statement here:\n'
         '$statementLink\n';
 
     if (upiId != null && upiId.isNotEmpty) {
       msg += '\n💳 Pay via UPI: $upiId\n';
     }
 
-    msg += '\nThank you for your business! 🙏\n— *$shop*';
+    msg += '\nThank you,\n'
+        '*$shop*';
     return msg;
   }
 
@@ -564,28 +564,9 @@ class WhatsAppUtils {
       final dio = Dio();
 
       if (kIsWeb) {
-        // ── PRE-FLIGHT: check navigator.canShare({files}) before downloading ──
-        // Saves 2-5 seconds on browsers that don't support file sharing.
-        if (!_canShareFiles()) {
-          debugPrint('⚠️ navigator.canShare(files) not supported — skipping download, using receipt link.');
-          if (context.mounted) {
-            messenger?.hideCurrentSnackBar();
-            await _fallbackShareWithImageUrl(
-              context,
-              phone: phone,
-              caption: caption,
-              imageUrl: imageUrl,
-              receiptNumber: receiptNumber,
-              username: username,
-            );
-          }
-          return;
-        }
-
         // ── WEB / PWA PATH ─────────────────────────────────────────────────
-        // Must use in-memory bytes + XFile.fromData to trigger the
-        // Web Share API with a real file. Using a file path on web
-        // silently fails — this was the production bug.
+        // Download image bytes first — needed for both Web Share API and
+        // the browser-download fallback.
         final response = await dio.get<List<int>>(
           imageUrl,
           options: Options(responseType: ResponseType.bytes),
@@ -596,22 +577,42 @@ class WhatsAppUtils {
 
         if (context.mounted) messenger?.hideCurrentSnackBar();
 
-        final result = await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile.fromData(bytes, mimeType: 'image/jpeg', name: fileName)],
-            text: caption,
-          ),
-        );
-
-        // On some Android Chrome PWAs, share() completes without error but
-        // the status indicates the share wasn't completed successfully.
-        // Fall back gracefully in those cases.
-        if (result.status != ShareResultStatus.success &&
-            result.status != ShareResultStatus.dismissed) {
-          debugPrint('⚠️ Web Share status: ${result.status}. Falling back to URL message.');
-          if (context.mounted) {
-            await _fallbackShareWithImageUrl(context, phone: phone, caption: caption, imageUrl: imageUrl);
+        // Try Web Share API with files (works on Android Chrome, iOS Safari 15+).
+        // On unsupported platforms (desktop Chrome, Firefox, etc.) this gracefully
+        // falls through to the browser-download path.
+        if (_canShareFiles()) {
+          try {
+            final result = await SharePlus.instance.share(
+              ShareParams(
+                files: [XFile.fromData(bytes, mimeType: 'image/jpeg', name: fileName)],
+                text: caption,
+              ),
+            );
+            // Success or dismissed — nothing more to do.
+            if (result.status == ShareResultStatus.success ||
+                result.status == ShareResultStatus.dismissed) {
+              return;
+            }
+            debugPrint('⚠️ Web Share status: ${result.status}. Falling back to download.');
+          } catch (e) {
+            debugPrint('⚠️ Web Share API threw: $e. Falling back to download.');
           }
+        } else {
+          debugPrint('⚠️ navigator.canShare(files) not supported — using browser download.');
+        }
+
+        // ── FALLBACK: send receipt.html?view=photo link ──────────────────────
+        // WhatsApp renders this as a rich preview card showing the receipt
+        // image thumbnail (via og:image) — no manual attachment needed.
+        if (context.mounted) {
+          await _fallbackShareWithImageUrl(
+            context,
+            phone: phone,
+            caption: caption,
+            imageUrl: imageUrl,
+            receiptNumber: receiptNumber,
+            username: username,
+          );
         }
       } else {
         // ── NATIVE (Android / iOS) PATH ────────────────────────────────────
@@ -672,7 +673,7 @@ class WhatsAppUtils {
       receiptPageUrl = imageUrl; // last resort: raw CDN URL
     }
 
-    final fallbackMessage = '$caption\n\n📎 View your receipt: $receiptPageUrl';
+    final fallbackMessage = '$caption\n\nView your receipt here:\n$receiptPageUrl';
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -686,10 +687,32 @@ class WhatsAppUtils {
     await openWhatsAppChat(phone: phone, message: fallbackMessage);
   }
 
+  /// Triggers a browser file-download of [bytes] with [fileName].
+  /// Uses a base64 data-URI so it works cross-origin without CORS issues.
+  /// No-op on non-web platforms.
+  static void _downloadImageWeb(Uint8List bytes, String fileName) {
+    if (!kIsWeb) return;
+    try {
+      final base64Data = base64Encode(bytes);
+      _jsEval('''
+        (function() {
+          var a = document.createElement('a');
+          a.href = 'data:image/jpeg;base64,$base64Data';
+          a.download = '$fileName';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('❌ _downloadImageWeb error: \$e');
+    }
+  }
+
   /// Returns true only if the browser's Web Share API supports sharing files.
   /// Checks [navigator.canShare] with a dummy image file — if this returns
-  /// false or throws (older Chrome, Firefox, iOS Safari < 15), we skip the
-  /// image download and go straight to the receipt link fallback.
+  /// false or throws (older Chrome, Firefox, iOS Safari < 15), we use the
+  /// browser-download fallback instead.
   static bool _canShareFiles() {
     if (!kIsWeb) return true; // native always supports file sharing
     try {
