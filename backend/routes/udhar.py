@@ -373,6 +373,43 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                         enrichment[rn]['date'] = vi['date']
                     if vi.get('upload_date'):
                         enrichment[rn]['upload_date'] = vi['upload_date']
+
+            # ── FALLBACK: for any receipt that has no data in verified_invoices (e.g.
+            # invoices still in the raw `invoices` table, not yet promoted), fetch
+            # the receipt_link and payment_mode from the raw `invoices` table so
+            # the WhatsApp "Receipt Photo" feature works even for these cases.
+            missing_rns = [rn for rn in receipt_numbers if rn not in enrichment or not enrichment[rn].get('receipt_link')]
+            if missing_rns:
+                try:
+                    raw_resp = db.client.table('invoices') \
+                        .select('receipt_number, receipt_link, payment_mode, total_bill_amount, date') \
+                        .eq('username', username) \
+                        .in_('receipt_number', missing_rns) \
+                        .execute()
+                    for raw in (raw_resp.data or []):
+                        rn = raw.get('receipt_number')
+                        if not rn:
+                            continue
+                        rl = raw.get('receipt_link') or ''
+                        if rn not in enrichment:
+                            enrichment[rn] = {
+                                'amount_sum': 0.0,
+                                'total_bill_amount': float(raw.get('total_bill_amount') or 0),
+                                'received_amount': 0.0,
+                                'balance_due': 0.0,
+                                'payment_mode': raw.get('payment_mode') or 'Cash',
+                                'receipt_link': rl,
+                                'date': raw.get('date') or '',
+                                'upload_date': '',
+                                'max_id': 0,
+                            }
+                        elif rl and not enrichment[rn].get('receipt_link'):
+                            # Patch only the missing receipt_link
+                            enrichment[rn]['receipt_link'] = rl
+                            if not enrichment[rn].get('payment_mode'):
+                                enrichment[rn]['payment_mode'] = raw.get('payment_mode') or 'Cash'
+                except Exception as raw_err:
+                    logger.warning(f"Could not fetch fallback receipt_link from invoices table: {raw_err}")
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:

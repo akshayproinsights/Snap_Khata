@@ -512,19 +512,43 @@ class WhatsAppUtils {
   /// on a mobile browser/PWA (file paths & getTemporaryDirectory don't exist on web).
   ///
   /// On native (Android/iOS): falls back to downloading to a temp file path.
+  ///
+  /// IMPORTANT: The Web Share API with files is NOT universally supported.
+  /// On unsupported PWA platforms, this gracefully falls back to opening WhatsApp
+  /// with the direct image URL so the recipient can tap it to view the receipt.
   static Future<void> shareActualImageOnWhatsApp({
     required BuildContext context,
     required String imageUrl,
     required String caption,
     String? phone,
   }) async {
-    try {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⏳ Preparing image for sharing...')),
-        );
-      }
+    ScaffoldMessengerState? messenger;
+    if (context.mounted) {
+      messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 14),
+              Text('Preparing receipt image…'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
 
+    try {
       final dio = Dio();
 
       if (kIsWeb) {
@@ -540,18 +564,33 @@ class WhatsAppUtils {
         final bytes = Uint8List.fromList(response.data!);
         final fileName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        await SharePlus.instance.share(
+        if (context.mounted) messenger?.hideCurrentSnackBar();
+
+        final result = await SharePlus.instance.share(
           ShareParams(
             files: [XFile.fromData(bytes, mimeType: 'image/jpeg', name: fileName)],
             text: caption,
           ),
         );
+
+        // On some Android Chrome PWAs, share() completes without error but
+        // the status indicates the share wasn't completed successfully.
+        // Fall back gracefully in those cases.
+        if (result.status != ShareResultStatus.success &&
+            result.status != ShareResultStatus.dismissed) {
+          debugPrint('⚠️ Web Share status: ${result.status}. Falling back to URL message.');
+          if (context.mounted) {
+            await _fallbackShareWithImageUrl(context, phone: phone, caption: caption, imageUrl: imageUrl);
+          }
+        }
       } else {
         // ── NATIVE (Android / iOS) PATH ────────────────────────────────────
         final tempDir = await getTemporaryDirectory();
         final tempFilePath = '${tempDir.path}/receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         await dio.download(imageUrl, tempFilePath);
+
+        if (context.mounted) messenger?.hideCurrentSnackBar();
 
         await SharePlus.instance.share(
           ShareParams(
@@ -561,14 +600,34 @@ class WhatsAppUtils {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error sharing image: $e');
+      debugPrint('❌ Error sharing receipt image: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e. Sending link instead.')),
-        );
-        // Graceful fallback: open WhatsApp with text message containing the URL
-        await openWhatsAppChat(phone: phone, message: '$caption\n\nReceipt Link: $imageUrl');
+        messenger?.hideCurrentSnackBar();
+        await _fallbackShareWithImageUrl(context, phone: phone, caption: caption, imageUrl: imageUrl);
       }
     }
+  }
+
+  /// Fallback: when file-based sharing fails, open WhatsApp with the direct
+  /// image URL embedded in the message so the recipient can tap to view the
+  /// receipt — far better UX than a confusing receipt.html link.
+  static Future<void> _fallbackShareWithImageUrl(
+    BuildContext context, {
+    String? phone,
+    required String caption,
+    required String imageUrl,
+  }) async {
+    final fallbackMessage = '$caption\n\n📎 View your receipt: $imageUrl';
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📤 Opening WhatsApp with receipt link…'),
+          backgroundColor: Color(0xFF25D366),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+    await openWhatsAppChat(phone: phone, message: fallbackMessage);
   }
 }
