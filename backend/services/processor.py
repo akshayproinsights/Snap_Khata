@@ -687,6 +687,63 @@ def check_duplicate_invoice(image_hash: str, username: str) -> Optional[Dict[str
         return None
 
 
+def check_duplicate_by_receipt_number(receipt_number: str, username: str) -> Optional[Dict[str, Any]]:
+    """
+    Fast duplicate check using receipt number — no image download required.
+    Runs in ~5ms (pure DB query). Called AFTER Gemini extracts the receipt number
+    but BEFORE saving to DB, so we can catch same-receipt-number re-uploads.
+
+    Checks BOTH invoices and verified_invoices tables.
+
+    Args:
+        receipt_number: Extracted receipt number from AI processing
+        username: Username for RLS filtering
+
+    Returns:
+        Dictionary with existing invoice data if duplicate found, None otherwise
+    """
+    if not receipt_number or str(receipt_number).strip() in ('', 'None', 'N/A', 'UNKNOWN'):
+        return None  # Skip check for missing/unknown receipt numbers
+
+    clean_number = str(receipt_number).strip()
+
+    try:
+        db = get_database_client()
+
+        # Check staging table (invoices) first
+        result = db.query('invoices', ['id', 'receipt_number', 'date', 'customer', 'receipt_link', 'upload_date']) \
+                    .eq('receipt_number', clean_number) \
+                    .eq('username', username) \
+                    .limit(1) \
+                    .execute()
+
+        if result.data and len(result.data) > 0:
+            dup = result.data[0]
+            logger.info(f"[RECEIPT-NUMBER-DUP] Found duplicate in invoices: Receipt #{clean_number} for {username}")
+            return dup
+
+        # Check verified table (completed invoices)
+        result_v = db.query('verified_invoices', ['row_id', 'receipt_number', 'date', 'customer_name', 'receipt_link', 'upload_date']) \
+                      .eq('receipt_number', clean_number) \
+                      .eq('username', username) \
+                      .limit(1) \
+                      .execute()
+
+        if result_v.data and len(result_v.data) > 0:
+            dup = result_v.data[0]
+            # Normalize field name (verified_invoices uses customer_name, invoices uses customer)
+            if 'customer_name' in dup and 'customer' not in dup:
+                dup['customer'] = dup.pop('customer_name')
+            logger.info(f"[RECEIPT-NUMBER-DUP] Found duplicate in verified_invoices: Receipt #{clean_number} for {username}")
+            return dup
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error checking receipt number duplicate for #{clean_number}: {e}")
+        return None  # Non-fatal: don't block upload on check failure
+
+
 def delete_invoice_by_hash(image_hash: str, username: str):
     """
     Delete all records with the given image hash from all Supabase tables.
@@ -1046,23 +1103,46 @@ def process_invoices_batch(
             if invoice_data:
                 # Add image hash to invoice data
                 invoice_data["image_hash"] = image_hash
-                
+
                 # Contextual upload: override customer name if provided
                 if customer_name:
                     if "header" not in invoice_data:
                         invoice_data["header"] = {}
                     invoice_data["header"]["customer_name"] = customer_name
-                
+
+                # ── RECEIPT NUMBER DUPLICATE GUARD ────────────────────────────
+                # After AI extracts the receipt number, check if it already exists
+                # in DB for this user. This catches re-uploads even when force_upload
+                # is True (e.g. user re-photographs the same physical receipt).
+                # Skips check for force_upload to allow intentional replacements.
+                extracted_receipt_number = invoice_data.get("header", {}).get("receipt_number", "")
+                if not force_upload and extracted_receipt_number:
+                    receipt_num_dup = check_duplicate_by_receipt_number(extracted_receipt_number, username)
+                    if receipt_num_dup:
+                        logger.warning(
+                            f"[RECEIPT-NUMBER-DUP] Skipping {file_key}: Receipt #{extracted_receipt_number} "
+                            f"already exists for {username} (uploaded: {receipt_num_dup.get('upload_date', 'N/A')})"
+                        )
+                        with results_lock:
+                            results["duplicates"].append({
+                                "file_key": file_key,
+                                "existing_invoice": receipt_num_dup,
+                                "image_hash": image_hash,
+                                "duplicate_type": "receipt_number"
+                            })
+                        return None  # Skip saving this file
+                # ── END RECEIPT NUMBER DUPLICATE GUARD ────────────────────────
+
                 # Convert to rows (with user-specific column mapping)
                 fallback_receipt_number = f"REC-{base_num + file_index + 1:05d}"
                 rows = convert_to_dataframe_rows(invoice_data, username, fallback_receipt_number=fallback_receipt_number)
                 with results_lock:
                     results["processed"] += 1
-                
+
                 # Update progress - completed
                 if progress_callback:
                     progress_callback(results["processed"], results["failed"], len(file_keys), f"Completed: {file_key}")
-                
+
                 return rows
             else:
                 with results_lock:

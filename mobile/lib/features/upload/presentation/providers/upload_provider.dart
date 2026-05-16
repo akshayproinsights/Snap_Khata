@@ -573,9 +573,11 @@ class UploadNotifier extends Notifier<UploadState> {
       );
 
       // 2. Start AI processing
+      // NOTE: forceUpload: false enables backend duplicate detection (hash + receipt number).
+      // The user can still choose to replace via the duplicate review UI.
       final initialStatus = await _repository.processInvoices(
         fileKeys,
-        forceUpload: true,
+        forceUpload: false,
         customerName: state.customerContext,
       );
 
@@ -711,6 +713,48 @@ class UploadNotifier extends Notifier<UploadState> {
   Future<void> _handleCompleted() async {
     await UploadPersistenceService.clearTask(); // ✅ clean up disk
     final completedStatus = state.processingStatus;
+
+    // ── DUPLICATE DETECTION ───────────────────────────────────────────────
+    // If the backend found duplicates, show the review UI instead of
+    // navigating away. The user gets a friendly card per duplicate.
+    final duplicates = completedStatus?.duplicates ?? [];
+    final processedCount = completedStatus?.processed ?? 0;
+
+    if (duplicates.isNotEmpty) {
+      // Mark all processing files as idle so the UI unlocks
+      final idled = state.fileItems.map((item) {
+        if (item.status == UploadFileStatus.processing) {
+          return item.copyWith(status: UploadFileStatus.idle);
+        }
+        return item;
+      }).toList();
+
+      _backgroundTask.clearTask();
+      unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
+
+      state = state.copyWith(
+        fileItems: idled,
+        isUploading: false,
+        isProcessing: false,
+        clearActiveTaskId: true,
+        hasDuplicate: true,
+        duplicateQueue: List<dynamic>.from(duplicates),
+        currentDuplicateIndex: 0,
+        filesToSkip: [],
+        filesToForceUpload: [],
+        allR2Keys: completedStatus?.duplicates
+                ?.map((d) => (d as Map<String, dynamic>)['file_key']?.toString() ?? '')
+                .where((k) => k.isNotEmpty)
+                .toList() ??
+            [],
+        // Track how many receipts actually saved so we can show a banner later
+        skippedDuplicatesCount: duplicates.length,
+        lastCompletedStatus: processedCount > 0 ? completedStatus : null,
+      );
+      return;
+    }
+    // ── END DUPLICATE DETECTION ───────────────────────────────────────────
+
     final done = state.fileItems.map((item) {
       if (item.status == UploadFileStatus.processing) {
         return item.copyWith(status: UploadFileStatus.done);
@@ -836,8 +880,16 @@ class UploadNotifier extends Notifier<UploadState> {
     );
 
     if (toProcess.isEmpty) {
-      // Nothing to process — go back to clean camera state
-      await forceReset();
+      // Nothing to re-process. But if receipts were already saved in this
+      // session before the duplicate was detected, send user to review them.
+      final alreadySaved = state.lastCompletedStatus?.processed ?? 0;
+      if (alreadySaved > 0) {
+        await forceReset();
+        AppRouter.router.go('/review', extra: {'autoLaunchReview': true});
+      } else {
+        // Nothing saved, nothing to replace — clean camera state.
+        await forceReset();
+      }
       return;
     }
 

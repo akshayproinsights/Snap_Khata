@@ -966,167 +966,325 @@ class _UploadPageState extends ConsumerState<UploadPage>
     );
   }
 
-  // ── DUPLICATE REVIEW SCREEN ────────────────────────────────────────────
+  // ── DUPLICATE REVIEW SCREEN ───────────────────────────────────────────
   Widget _buildDuplicateReviewView(UploadState state, WidgetRef ref, BuildContext context) {
     final duplicate = state.currentDuplicate as Map<String, dynamic>? ?? {};
+
     final existingInvoice = duplicate['existing_invoice'] as Map<String, dynamic>? ?? {};
     final index = state.currentDuplicateIndex + 1;
     final total = state.duplicateQueue.length;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+    final receiptNumber = existingInvoice['receipt_number']?.toString() ?? '';
+    final rawDate = existingInvoice['date']?.toString() ?? '';
+    final customer = (existingInvoice['customer'] ?? existingInvoice['customer_name'] ?? '').toString();
+    final uploadDate = existingInvoice['upload_date']?.toString() ?? '';
+
+    String formattedDate = rawDate;
+    try {
+      if (rawDate.isNotEmpty) {
+        final dt = DateTime.parse(rawDate);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        formattedDate = '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+      }
+    } catch (_) {}
+
+    String formattedUploadDate = '';
+    try {
+      if (uploadDate.isNotEmpty) {
+        final dt = DateTime.parse(uploadDate);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        formattedUploadDate = '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+      }
+    } catch (_) {}
+
+    final hasMultiple = total > 1;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header ──
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              children: [
-                const Icon(LucideIcons.alertTriangle,
-                    size: 48, color: Colors.orange),
-                const SizedBox(height: 12),
-                const Text(
-                  'Duplicate Invoice Detected',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
+          if (hasMultiple)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
                 ),
-                const SizedBox(height: 8),
-                Text(
+                child: Text(
                   'Duplicate $index of $total',
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE65100),
+                    letterSpacing: 0.3,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+              ),
+            ).animate().fadeIn(duration: 300.ms),
+          if (hasMultiple) const SizedBox(height: 20),
 
-          // ── Comparison Details ──
+          // ── Main card ──
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.border),
-              borderRadius: BorderRadius.circular(12),
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: const Color(0xFFFF9800).withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF9800).withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  spreadRadius: 4,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '📋 Existing Invoice',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.success,
+                // Orange header
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFF6F00), Color(0xFFFF9800)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(LucideIcons.fileWarning, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Receipt Already Uploaded',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        receiptNumber.isNotEmpty
+                            ? 'Receipt #$receiptNumber was uploaded before'
+                            : 'This receipt was already uploaded',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                _buildDetailRow('Invoice #', existingInvoice['receipt_number']?.toString() ?? 'N/A'),
-                _buildDetailRow('Date', existingInvoice['date']?.toString() ?? 'N/A'),
-                if (existingInvoice['customer'] != null && (existingInvoice['customer'] as String).isNotEmpty)
-                  _buildDetailRow('Customer', existingInvoice['customer']?.toString() ?? 'N/A'),
+                // Details
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'EXISTING RECORD',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textSecondary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (receiptNumber.isNotEmpty)
+                        _buildInfoTile(
+                          icon: LucideIcons.receipt,
+                          label: 'Receipt No.',
+                          value: '#$receiptNumber',
+                          valueColor: AppTheme.primary,
+                          bold: true,
+                        ),
+                      if (formattedDate.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _buildInfoTile(icon: LucideIcons.calendar, label: 'Invoice Date', value: formattedDate),
+                      ],
+                      if (customer.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _buildInfoTile(icon: LucideIcons.user, label: 'Customer', value: customer),
+                      ],
+                      if (formattedUploadDate.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _buildInfoTile(
+                          icon: LucideIcons.uploadCloud,
+                          label: 'Uploaded On',
+                          value: formattedUploadDate,
+                          valueColor: AppTheme.textSecondary,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      const Divider(color: AppTheme.border, height: 1),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(LucideIcons.info, size: 16, color: AppTheme.textSecondary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Skip if this is already in your records. '
+                              'Replace only if the old record had wrong details.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
+          ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+
           const SizedBox(height: 24),
 
           // ── Action Buttons ──
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    ref.read(uploadProvider.notifier).skipCurrentDuplicate();
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: const BorderSide(color: AppTheme.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Skip This File'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
+              SizedBox(
+                height: 56,
+                child: ElevatedButton.icon(
                   onPressed: () {
                     HapticFeedback.mediumImpact();
+                    ref.read(uploadProvider.notifier).skipCurrentDuplicate();
+                  },
+                  icon: const Icon(LucideIcons.skipForward, size: 20),
+                  label: const Text(
+                    'Skip — Keep Existing  →',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    shadowColor: AppTheme.primary.withValues(alpha: 0.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
                     ref.read(uploadProvider.notifier).replaceCurrentDuplicate();
                   },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  icon: const Icon(LucideIcons.refreshCw, size: 18),
+                  label: const Text(
+                    'Replace Old Record',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
-                  child: const Text('Replace Old Record'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFE65100),
+                    side: const BorderSide(color: Color(0xFFFF9800), width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
                 ),
               ),
             ],
-          ),
+          ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.15, end: 0),
 
-          const SizedBox(height: 16),
+          if (hasMultiple) ...[
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(total, (i) {
+                final isActive = i == state.currentDuplicateIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: isActive ? 20 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isActive ? const Color(0xFFFF9800) : AppTheme.border,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
-          // ── Progress indicator ──
-          ClipRRect(
+  // ── Info tile for duplicate card details ──
+  Widget _buildInfoTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+    bool bold = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: index / total,
-              minHeight: 6,
-              backgroundColor: AppTheme.border.withValues(alpha: 0.3),
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
-            ),
           ),
-        ],
-      ),
+          child: Icon(icon, size: 15, color: AppTheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: valueColor ?? AppTheme.textPrimary,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppTheme.textPrimary,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // _DuplicateReviewScreen and helper widgets removed
