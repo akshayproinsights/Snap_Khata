@@ -264,7 +264,9 @@ async def get_public_receipt(
                 trans_query = db.client.from_("ledger_transactions") \
                     .select("*") \
                     .eq("ledger_id", receipt_number) \
-                    .order("transaction_date", desc=True)
+                    .order("created_at", desc=True)
+                if u:
+                    trans_query = trans_query.eq("username", u)
                 trans_resp = trans_query.execute()
                 transactions = trans_resp.data or []
                 

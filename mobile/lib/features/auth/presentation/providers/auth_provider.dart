@@ -6,6 +6,11 @@ import 'package:mobile/features/auth/domain/models/user_model.dart';
 import 'package:mobile/core/routing/app_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+// Track whether GoogleSignIn.instance has been initialized.
+// initialize() must be called EXACTLY ONCE on the singleton — calling it
+// more than once throws: "Bad state: init() has already been called."
+bool _googleSignInInitialized = false;
+
 // Provides the AuthRepository instance
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
@@ -149,10 +154,17 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> loginWithGoogle() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      // v7 API: use singleton, initialize has no scopes param
-      await GoogleSignIn.instance.initialize();
+      // v7 API: initialize() must be called EXACTLY ONCE on the singleton.
+      // Guard with a flag to prevent the "Bad state: init() already called" crash
+      // that occurs when the user taps the button more than once.
+      if (!_googleSignInInitialized) {
+        await GoogleSignIn.instance.initialize(
+          clientId: '643787987175-b7e2dbngkom6uhtmnd1aunk09t4ui10d.apps.googleusercontent.com',
+        );
+        _googleSignInInitialized = true;
+      }
 
-      // Force sign out to ensure account selection popup shows up
+      // Force sign out to ensure account selection popup shows up every time
       await GoogleSignIn.instance.signOut();
 
       // authenticate() is non-nullable in v7; throws if canceled

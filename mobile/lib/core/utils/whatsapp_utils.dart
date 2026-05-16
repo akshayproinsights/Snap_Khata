@@ -489,12 +489,21 @@ class WhatsAppUtils {
           '— *$shop*';
     }
 
-    // Account Statement mode
+    // Account Statement mode.
+    // Guard: if both totalBilled and totalPaid are 0 (data hasn't loaded yet
+    // due to a race condition), skip the breakdown to avoid sending a confusing
+    // "Total Bill: ₹0 / Amount Paid: ₹0" message.
+    final bool hasBillingData = totalBilled > 0 || totalPaid > 0;
+
     String msg = 'Hi $name,\n\n'
-        '🙏 A friendly reminder from *$shop*\n\n'
-        '📋 Total Bill: ${formatIndianCurrency(totalBilled)}\n'
-        '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n'
-        '⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*\n\n'
+        '🙏 A friendly reminder from *$shop*\n\n';
+
+    if (hasBillingData) {
+      msg += '📋 Total Bill: ${formatIndianCurrency(totalBilled)}\n'
+          '✅ Amount Paid: ${formatIndianCurrency(totalPaid)}\n';
+    }
+
+    msg += '⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*\n\n'
         'View your full account here:\n'
         '$statementLink\n';
 

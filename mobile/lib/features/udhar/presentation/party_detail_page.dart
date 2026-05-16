@@ -1131,9 +1131,20 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   ),
                   padding: EdgeInsets.zero,
                 ),
-                onPressed: () =>
-                    _showWhatsAppReminderSheet(context, ref, currentLedger),
-                child: const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
+                onPressed: _isLoading
+                    ? null
+                    : () => _showWhatsAppReminderSheet(
+                        context, ref, currentLedger),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF25D366),
+                        ),
+                      )
+                    : const FaIcon(FontAwesomeIcons.whatsapp, size: 20),
               ),
             ),
             const SizedBox(width: 8),
