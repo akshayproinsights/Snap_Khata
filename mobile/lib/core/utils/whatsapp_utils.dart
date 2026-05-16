@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js_interop' if (dart.library.io) '';
 
 enum OrderPaymentStatus { fullyPaid, partiallyPaid, unpaid }
 
@@ -521,6 +523,8 @@ class WhatsAppUtils {
     required String imageUrl,
     required String caption,
     String? phone,
+    String? receiptNumber,  // used to build clean fallback link
+    String? username,       // used to build clean fallback link
   }) async {
     ScaffoldMessengerState? messenger;
     if (context.mounted) {
@@ -552,6 +556,24 @@ class WhatsAppUtils {
       final dio = Dio();
 
       if (kIsWeb) {
+        // ── PRE-FLIGHT: check navigator.canShare({files}) before downloading ──
+        // Saves 2-5 seconds on browsers that don't support file sharing.
+        if (!_canShareFiles()) {
+          debugPrint('⚠️ navigator.canShare(files) not supported — skipping download, using receipt link.');
+          if (context.mounted) {
+            messenger?.hideCurrentSnackBar();
+            await _fallbackShareWithImageUrl(
+              context,
+              phone: phone,
+              caption: caption,
+              imageUrl: imageUrl,
+              receiptNumber: receiptNumber,
+              username: username,
+            );
+          }
+          return;
+        }
+
         // ── WEB / PWA PATH ─────────────────────────────────────────────────
         // Must use in-memory bytes + XFile.fromData to trigger the
         // Web Share API with a real file. Using a file path on web
@@ -601,10 +623,16 @@ class WhatsAppUtils {
       }
     } catch (e) {
       debugPrint('❌ Error sharing receipt image: $e');
-      if (context.mounted) {
-        messenger?.hideCurrentSnackBar();
-        await _fallbackShareWithImageUrl(context, phone: phone, caption: caption, imageUrl: imageUrl);
-      }
+      if (context.mounted) messenger?.hideCurrentSnackBar();
+      if (!context.mounted) return;
+      await _fallbackShareWithImageUrl(
+        context,
+        phone: phone,
+        caption: caption,
+        imageUrl: imageUrl,
+        receiptNumber: receiptNumber,
+        username: username,
+      );
     }
   }
 
@@ -616,8 +644,27 @@ class WhatsAppUtils {
     String? phone,
     required String caption,
     required String imageUrl,
+    String? receiptNumber,
+    String? username,
   }) async {
-    final fallbackMessage = '$caption\n\n📎 View your receipt: $imageUrl';
+    // Build a clean, branded receipt link if we have the receipt info.
+    // This shows the original receipt photo on a professional SnapKhata-hosted page
+    // instead of exposing a raw CDN blob URL to the customer.
+    final String receiptPageUrl;
+    if (receiptNumber != null &&
+        receiptNumber.isNotEmpty &&
+        username != null &&
+        username.isNotEmpty) {
+      receiptPageUrl =
+          'https://snapkhata.com/receipt.html'
+          '?i=${Uri.encodeComponent(receiptNumber)}'
+          '&u=${Uri.encodeComponent(username)}'
+          '&view=photo';
+    } else {
+      receiptPageUrl = imageUrl; // last resort: raw CDN URL
+    }
+
+    final fallbackMessage = '$caption\n\n📎 View your receipt: $receiptPageUrl';
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -630,4 +677,33 @@ class WhatsAppUtils {
     }
     await openWhatsAppChat(phone: phone, message: fallbackMessage);
   }
+
+  /// Returns true only if the browser's Web Share API supports sharing files.
+  /// Checks [navigator.canShare] with a dummy image file — if this returns
+  /// false or throws (older Chrome, Firefox, iOS Safari < 15), we skip the
+  /// image download and go straight to the receipt link fallback.
+  static bool _canShareFiles() {
+    if (!kIsWeb) return true; // native always supports file sharing
+    try {
+      // Check navigator.share exists (not available in all browsers)
+      final navShare = _jsEval('typeof navigator.share === "function"');
+      if (navShare != 'true') return false;
+
+      // Check navigator.canShare exists
+      final navCanShare = _jsEval('typeof navigator.canShare === "function"');
+      if (navCanShare != 'true') return false;
+
+      // Check canShare with a dummy file object
+      final canShare = _jsEval(
+        'navigator.canShare({ files: [new File([], "t.jpg", {type:"image/jpeg"})] }).toString()',
+      );
+      return canShare == 'true';
+    } catch (_) {
+      return false; // degrade gracefully
+    }
+  }
+
+  /// Minimal JS eval bridge using dart:js_interop.
+  @JS('eval')
+  external static String _jsEval(String code);
 }

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/domain/models/user_model.dart';
 import 'package:mobile/core/routing/app_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 // Provides the AuthRepository instance
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -142,6 +143,58 @@ class AuthNotifier extends Notifier<AuthState> {
         error: e.toString().replaceAll('Exception: ', ''),
       );
       throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  Future<void> loginWithGoogle() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      // v7 API: use singleton, initialize has no scopes param
+      await GoogleSignIn.instance.initialize();
+
+      // Force sign out to ensure account selection popup shows up
+      await GoogleSignIn.instance.signOut();
+
+      // authenticate() is non-nullable in v7; throws if canceled
+      GoogleSignInAccount googleUser;
+      try {
+        googleUser = await GoogleSignIn.instance.authenticate();
+      } catch (_) {
+        // User canceled the sign-in flow
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      // In v7, authentication is no longer a Future — access idToken directly
+      final String? idToken = googleUser.authentication.idToken;
+      
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('Failed to retrieve ID token from Google.');
+      }
+
+      final response = await _repository.signInWithGoogle(idToken);
+
+      final token = response['access_token'] as String? ?? '';
+      if (token.isEmpty) {
+        throw Exception('No access token received from server');
+      }
+      final userJson = response['user'] as Map<String, dynamic>? ?? {};
+      final user = User.fromJson(userJson);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', token);
+      await prefs.setString('auth_username', user.username);
+
+      state = state.copyWith(
+        token: token,
+        user: user,
+        isLoading: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
     }
   }
 

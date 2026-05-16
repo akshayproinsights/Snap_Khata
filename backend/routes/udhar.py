@@ -381,35 +381,40 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             missing_rns = [rn for rn in receipt_numbers if rn not in enrichment or not enrichment[rn].get('receipt_link')]
             if missing_rns:
                 try:
+                    # IMPORTANT: `invoices` table does NOT have total_bill_amount.
+                    # Use amount, balance_due, received_amount instead.
                     raw_resp = db.client.table('invoices') \
-                        .select('receipt_number, receipt_link, payment_mode, total_bill_amount, date') \
+                        .select('receipt_number, receipt_link, payment_mode, amount, balance_due, received_amount, date') \
                         .eq('username', username) \
                         .in_('receipt_number', missing_rns) \
                         .execute()
+                    seen_rns = set()  # invoices has multiple rows per receipt (line items) — only use first
                     for raw in (raw_resp.data or []):
                         rn = raw.get('receipt_number')
                         if not rn:
                             continue
                         rl = raw.get('receipt_link') or ''
                         if rn not in enrichment:
-                            enrichment[rn] = {
-                                'amount_sum': 0.0,
-                                'total_bill_amount': float(raw.get('total_bill_amount') or 0),
-                                'received_amount': 0.0,
-                                'balance_due': 0.0,
-                                'payment_mode': raw.get('payment_mode') or 'Cash',
-                                'receipt_link': rl,
-                                'date': raw.get('date') or '',
-                                'upload_date': '',
-                                'max_id': 0,
-                            }
+                            if rn not in seen_rns:
+                                seen_rns.add(rn)
+                                enrichment[rn] = {
+                                    'amount_sum': float(raw.get('amount') or 0),
+                                    'total_bill_amount': 0.0,  # not available in raw invoices
+                                    'received_amount': float(raw.get('received_amount') or 0),
+                                    'balance_due': float(raw.get('balance_due') or 0),
+                                    'payment_mode': raw.get('payment_mode') or 'Cash',
+                                    'receipt_link': rl,
+                                    'date': str(raw.get('date') or ''),
+                                    'upload_date': '',
+                                    'max_id': 0,
+                                }
                         elif rl and not enrichment[rn].get('receipt_link'):
-                            # Patch only the missing receipt_link
+                            # Patch only the missing receipt_link (e.g. verified_invoices had no link)
                             enrichment[rn]['receipt_link'] = rl
                             if not enrichment[rn].get('payment_mode'):
                                 enrichment[rn]['payment_mode'] = raw.get('payment_mode') or 'Cash'
                 except Exception as raw_err:
-                    logger.warning(f"Could not fetch fallback receipt_link from invoices table: {raw_err}")
+                    logger.error(f"CRITICAL: Could not fetch fallback receipt_link from invoices table: {raw_err}")
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:

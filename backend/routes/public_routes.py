@@ -121,7 +121,29 @@ async def get_public_receipt(
                 username = header.get("username")
                 source_table = "verified_invoices"
 
-        # ── 3. Fall back to customer_ledgers (account statements) ─────────────────
+        # ── 3. Fall back to raw `invoices` table (receipts not yet promoted to verified) ──
+        if header is None:
+            try:
+                query_raw = db.client.from_("invoices") \
+                    .select("receipt_number, receipt_link, payment_mode, received_amount, balance_due, customer, date, created_at, username") \
+                    .eq("receipt_number", receipt_number)
+                if u:
+                    query_raw = query_raw.eq("username", u)
+                resp_raw = query_raw.limit(1).execute()
+                if resp_raw.data and len(resp_raw.data) > 0:
+                    raw_row = resp_raw.data[0]
+                    # Normalize column names to match what the rest of code expects
+                    header = {
+                        **raw_row,
+                        "customer_name": raw_row.get("customer") or "Walk-in Customer",
+                        "verification_status": "pending",
+                    }
+                    username = raw_row.get("username")
+                    source_table = "invoices"
+            except Exception as e:
+                logger.error(f"Error querying invoices table as fallback: {e}")
+
+        # ── 4. Fall back to customer_ledgers (account statements) ─────────────────
         if header is None:
             query_ledgers = db.client.from_("customer_ledgers") \
                 .select("*") \
@@ -177,6 +199,10 @@ async def get_public_receipt(
         if source_table == "verified_invoices":
             is_paid = True
         
+        if source_table == "invoices":
+            bal = float(header.get("balance_due") or 0)
+            is_paid = bal <= 0
+
         if source_table == "customer_ledgers":
             is_paid = float(header.get("balance_due", 0)) <= 0
 
@@ -285,7 +311,8 @@ async def get_public_receipt(
             "received_amount": header.get("received_amount") if source_table != "customer_ledgers" else None,
             "balance_due": header.get("balance_due"),
             "industry": header.get("industry") or "general",
-            "gst_mode": header.get("gst_mode") or "none"
+            "gst_mode": header.get("gst_mode") or "none",
+            "receipt_link": header.get("receipt_link") or "",
         }
 
     except HTTPException:

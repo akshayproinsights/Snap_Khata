@@ -166,6 +166,63 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                       ),
                               ),
                             ),
+                            const SizedBox(height: 24),
+                            
+                            // OR Divider
+                            Row(
+                              children: [
+                                Expanded(child: Divider(color: context.borderColor)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    'OR',
+                                    style: TextStyle(
+                                      color: context.textColor.withValues(alpha: 0.5),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: context.borderColor)),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Google Sign-In Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: OutlinedButton(
+                                onPressed: authState.isLoading 
+                                    ? null 
+                                    : () => ref.read(authProvider.notifier).loginWithGoogle(),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: context.surfaceColor,
+                                  side: BorderSide(color: context.borderColor),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Image.network(
+                                      'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                                      height: 24,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Sign in with Google',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),

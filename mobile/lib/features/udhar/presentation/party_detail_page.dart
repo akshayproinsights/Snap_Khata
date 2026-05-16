@@ -1857,6 +1857,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                   imageUrl: capturedReceiptLink,
                                   caption: capturedMessage,
                                   phone: phone,
+                                  receiptNumber: capturedReceiptNumber,
+                                  username: authState.user?.username,
                                 );
                               } else {
                                 if (phone.isNotEmpty) {

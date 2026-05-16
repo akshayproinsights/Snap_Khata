@@ -577,6 +577,13 @@
                 }
                 const data = await resp.json();
 
+                // ── Photo view mode: show only the receipt image ──────────────────
+                const viewMode = params.get('view');
+                if (viewMode === 'photo') {
+                    renderPhotoView(data);
+                    return;
+                }
+
                 // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
                 let gstMode = data.gst_mode && data.gst_mode !== 'none' ? data.gst_mode : 'none';
                 if (params.has('g')) gstMode = params.get('g');
@@ -605,6 +612,174 @@
                 if (err.message === 'not_found') showError('Receipt Not Found', 'We could not locate this receipt.');
                 else if (err.message === 'unauthorized') showError('Link Expired', 'This receipt link is invalid or has expired.');
                 else showError('Unable to Load', 'Please check your connection and try again.');
+            }
+        }
+
+        // ── PHOTO VIEW renderer ───────────────────────────────────────────────────
+        function renderPhotoView(data) {
+            // Switch to mobile-friendly viewport for full-screen photo experience
+            const viewportMeta = document.querySelector('meta[name="viewport"]');
+            if (viewportMeta) viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=5');
+
+            const receiptLink = data.receipt_link;
+            if (!receiptLink) {
+                showError('Photo Not Available', 'The receipt image could not be found. Please contact the shop.');
+                return;
+            }
+
+            const shopName = data.shop_name || 'Our Shop';
+            document.title = `Receipt • ${shopName}`;
+
+            const html = `
+            <div style="
+                min-height: 100vh;
+                background: #0d0d0d;
+                display: flex;
+                flex-direction: column;
+                font-family: 'Inter', -apple-system, sans-serif;
+            ">
+                <!-- Header -->
+                <div style="
+                    background: #1a1a1a;
+                    border-bottom: 1px solid #2a2a2a;
+                    padding: 14px 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                ">
+                    <div>
+                        <div style="
+                            font-size: 15px;
+                            font-weight: 700;
+                            color: #ffffff;
+                            letter-spacing: -0.2px;
+                        ">${shopName}</div>
+                        <div style="
+                            font-size: 11px;
+                            color: #888;
+                            margin-top: 1px;
+                        ">Receipt Photo</div>
+                    </div>
+                    <div style="
+                        background: #25D366;
+                        color: #ffffff;
+                        padding: 4px 12px;
+                        border-radius: 999px;
+                        font-size: 11px;
+                        font-weight: 700;
+                        letter-spacing: 0.3px;
+                    ">SnapKhata</div>
+                </div>
+
+                <!-- Image -->
+                <div style="
+                    flex: 1;
+                    display: flex;
+                    align-items: flex-start;
+                    justify-content: center;
+                    padding: 20px 12px;
+                    overflow-y: auto;
+                ">
+                    <img
+                        src="${receiptLink}"
+                        alt="Receipt from ${shopName}"
+                        style="
+                            width: 100%;
+                            max-width: 600px;
+                            height: auto;
+                            border-radius: 10px;
+                            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+                            display: block;
+                        "
+                        onerror="this.parentNode.innerHTML='<div style=\'text-align:center;color:#888;padding:40px;\'>\u26a0\ufe0f Could not load receipt image</div>';"
+                    />
+                </div>
+
+                <!-- Footer -->
+                <div style="
+                    background: #1a1a1a;
+                    border-top: 1px solid #2a2a2a;
+                    padding: 16px 20px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 12px;
+                ">
+                    <button
+                        onclick="downloadReceipt('${receiptLink}')"
+                        style="
+                            background: #25D366;
+                            color: #ffffff;
+                            border: none;
+                            border-radius: 10px;
+                            padding: 12px 28px;
+                            font-size: 14px;
+                            font-weight: 700;
+                            font-family: 'Inter', -apple-system, sans-serif;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            width: 100%;
+                            max-width: 320px;
+                            justify-content: center;
+                            transition: opacity 0.2s;
+                        "
+                        onmousedown="this.style.opacity='0.8'"
+                        onmouseup="this.style.opacity='1'"
+                        ontouchstart="this.style.opacity='0.8'"
+                        ontouchend="this.style.opacity='1'"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Save Image
+                    </button>
+                    <div>
+                        <span style="font-size: 12px; color: #555;">Powered by </span>
+                        <span style="font-size: 12px; font-weight: 700; color: #25D366;">SnapKhata</span>
+                    </div>
+                </div>
+            </div>`;
+
+
+            hide('loader');
+            hide('fabPrint');
+            const wrap = $('content-wrap');
+            wrap.innerHTML = html;
+            wrap.style.display = 'block';
+        }
+
+        // ── Download helper for photo view ────────────────────────────────────
+        // Must fetch as blob first because <a download> on a cross-origin URL
+        // is blocked by browsers — they open the URL instead of downloading it.
+        async function downloadReceipt(url) {
+            const btn = event.currentTarget;
+            const original = btn.innerHTML;
+            btn.innerHTML = '<span style="opacity:0.7">Saving…</span>';
+            btn.disabled = true;
+            try {
+                const resp = await fetch(url);
+                const blob = await resp.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.download = 'receipt.jpg';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(objUrl);
+            } catch (err) {
+                // Fallback: open image in new tab so user can long-press save
+                window.open(url, '_blank');
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
             }
         }
 
@@ -654,7 +829,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                     taxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || item.quantity || 1);
+                        const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         itemsHtml += `
@@ -671,7 +846,7 @@
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                     nonTaxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || item.quantity || 1);
+                        const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         itemsHtml += `
@@ -686,7 +861,7 @@
                 }
             } else {
                 items.forEach((item, idx) => {
-                    const qty = Number(item.qty || item.quantity || 1);
+                    const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
                     itemsHtml += `
@@ -700,7 +875,7 @@
                 });
             }
             
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
+            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
             if (items.length > 0) {
                 itemsHtml += `
                 <tr>
@@ -884,7 +1059,7 @@
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
                     taxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || item.quantity || 1);
+                        const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -907,7 +1082,7 @@
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
                     nonTaxableItems.forEach((item, idx) => {
-                        const qty = Number(item.qty || item.quantity || 1);
+                        const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
                         const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -928,7 +1103,7 @@
                 }
             } else {
                 items.forEach((item, idx) => {
-                    const qty = Number(item.qty || item.quantity || 1);
+                    const qty = Number(item.qty || 1);
                     const rate = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
                     const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
@@ -948,7 +1123,7 @@
                 });
             }
             
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0);
+            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
             if (items.length > 0) {
                 itemsHtml += `
                 <tr>

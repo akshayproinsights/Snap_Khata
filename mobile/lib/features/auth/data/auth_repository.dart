@@ -84,4 +84,21 @@ class AuthRepository {
       throw Exception('Registration failed. Please try again.');
     }
   }
+
+  Future<Map<String, dynamic>> signInWithGoogle(String idToken) async {
+    try {
+      final response = await _dio.post('/api/auth/google', data: {
+        'id_token': idToken,
+      });
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response != null && e.response?.data != null) {
+        final data = e.response!.data;
+        if (data is Map<String, dynamic> && data['detail'] != null) {
+          throw Exception(data['detail']);
+        }
+      }
+      throw Exception('Google Sign-In failed on the server. Please try again.');
+    }
+  }
 }
