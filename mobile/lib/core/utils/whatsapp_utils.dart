@@ -6,8 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:js_interop' if (dart.library.io) '';
+import 'js_interop_stub.dart' if (dart.library.js_interop) 'js_interop_web.dart';
 
 enum OrderPaymentStatus { fullyPaid, partiallyPaid, unpaid }
 
@@ -705,7 +704,6 @@ class WhatsAppUtils {
 
 }
 
-/// Minimal JS eval bridge using dart:js_interop.
-/// Must be top-level — dart:js_interop @JS members cannot live inside a plain class.
-@JS('eval')
-external String _jsEval(String code);
+/// Thin wrapper so call-sites inside this file use the private-looking name.
+/// The real implementation lives in js_interop_web.dart (web) / js_interop_stub.dart (native).
+String _jsEval(String code) => jsEval(code);
