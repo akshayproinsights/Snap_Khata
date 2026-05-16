@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -685,28 +684,6 @@ class WhatsAppUtils {
       );
     }
     await openWhatsAppChat(phone: phone, message: fallbackMessage);
-  }
-
-  /// Triggers a browser file-download of [bytes] with [fileName].
-  /// Uses a base64 data-URI so it works cross-origin without CORS issues.
-  /// No-op on non-web platforms.
-  static void _downloadImageWeb(Uint8List bytes, String fileName) {
-    if (!kIsWeb) return;
-    try {
-      final base64Data = base64Encode(bytes);
-      _jsEval('''
-        (function() {
-          var a = document.createElement('a');
-          a.href = 'data:image/jpeg;base64,$base64Data';
-          a.download = '$fileName';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        })();
-      ''');
-    } catch (e) {
-      debugPrint('❌ _downloadImageWeb error: \$e');
-    }
   }
 
   /// Returns true only if the browser's Web Share API supports sharing files.
