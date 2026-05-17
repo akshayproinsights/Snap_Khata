@@ -8,6 +8,7 @@ import 'package:mobile/features/dashboard/presentation/providers/dashboard_provi
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/activities/presentation/providers/activity_provider.dart';
+import 'package:mobile/features/upload/presentation/providers/upload_provider.dart';
 
 final reviewRepositoryProvider =
     Provider<ReviewRepository>((ref) => ReviewRepository());
@@ -95,7 +96,10 @@ class ReviewNotifier extends Notifier<ReviewState> {
       final datesResult = await _repository.fetchDates();
       final amountsResult = await _repository.fetchAmounts();
 
-      final grouped = _groupRecords(datesResult, amountsResult);
+      final uploadState = ref.read(uploadProvider);
+      final skippedReceipts = uploadState.skippedReceiptNumbers;
+
+      final grouped = _groupRecords(datesResult, amountsResult, skippedReceipts: skippedReceipts);
       state = state.copyWith(groups: grouped, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: _friendlyError(e));
@@ -103,7 +107,7 @@ class ReviewNotifier extends Notifier<ReviewState> {
   }
 
   List<InvoiceReviewGroup> _groupRecords(
-      List<ReviewRecord> dates, List<ReviewRecord> amounts) {
+      List<ReviewRecord> dates, List<ReviewRecord> amounts, {List<String> skippedReceipts = const []}) {
     final Map<String, InvoiceReviewGroup> map = {};
 
     // Compute today's date in dd-MM-yyyy format once (reused for empty dates)
@@ -114,6 +118,10 @@ class ReviewNotifier extends Notifier<ReviewState> {
     int missingReceiptCounter = 1;
     for (var date in dates) {
       String receiptNo = date.receiptNumber;
+
+      if (skippedReceipts.contains(receiptNo)) {
+        continue;
+      }
 
       // ── Auto-fill missing receipt number (clean "NEW-N" format) ──────────
       if (receiptNo.trim().isEmpty) {
@@ -146,6 +154,10 @@ class ReviewNotifier extends Notifier<ReviewState> {
     }
 
     for (var amount in deduplicatedAmounts.values) {
+      if (skippedReceipts.contains(amount.receiptNumber)) {
+        continue;
+      }
+      
       final groupKey = amount.receiptLink.isNotEmpty ? amount.receiptLink : amount.receiptNumber;
       
       if (map.containsKey(groupKey)) {

@@ -66,6 +66,9 @@ class UploadState {
   /// All R2 keys that were uploaded in the initial upload phase.
   final List<String> allR2Keys;
 
+  /// Receipt numbers of duplicates that the user chose to skip in this session.
+  final List<String> skippedReceiptNumbers;
+
   /// Number of skipped duplicates from the current upload session.
   final int skippedDuplicatesCount;
 
@@ -88,6 +91,7 @@ class UploadState {
     this.filesToSkip = const [],
     this.filesToForceUpload = const [],
     this.allR2Keys = const [],
+    this.skippedReceiptNumbers = const [],
     this.skippedDuplicatesCount = 0,
     this.lastCompletedStatus,
     this.customerContext,
@@ -131,6 +135,7 @@ class UploadState {
     List<String>? filesToSkip,
     List<String>? filesToForceUpload,
     List<String>? allR2Keys,
+    List<String>? skippedReceiptNumbers,
     int? skippedDuplicatesCount,
     UploadTaskStatus? lastCompletedStatus,
     bool clearLastCompletedStatus = false,
@@ -157,6 +162,7 @@ class UploadState {
       filesToSkip: filesToSkip ?? this.filesToSkip,
       filesToForceUpload: filesToForceUpload ?? this.filesToForceUpload,
       allR2Keys: allR2Keys ?? this.allR2Keys,
+      skippedReceiptNumbers: skippedReceiptNumbers ?? this.skippedReceiptNumbers,
       skippedDuplicatesCount:
           skippedDuplicatesCount ?? this.skippedDuplicatesCount,
       lastCompletedStatus: clearLastCompletedStatus
@@ -256,6 +262,7 @@ class UploadNotifier extends Notifier<UploadState> {
       historyError: state.historyError,
       isRestoringState: false,
       customerContext: null, // Clear context on explicit clear
+      skippedReceiptNumbers: state.skippedReceiptNumbers,
     );
     // Belt-and-suspenders disk cleanup
     UploadPersistenceService.clearTask();
@@ -280,6 +287,7 @@ class UploadNotifier extends Notifier<UploadState> {
       historyError: state.historyError,
       isRestoringState: false,
       skippedDuplicatesCount: 0,
+      skippedReceiptNumbers: state.skippedReceiptNumbers,
     );
   }
 
@@ -810,23 +818,34 @@ class UploadNotifier extends Notifier<UploadState> {
   void skipCurrentDuplicate() {
     final current = state.currentDuplicate;
     if (current == null) return;
-    final fileKey =
-        (current as Map<String, dynamic>)['file_key'] as String? ?? '';
+    
+    final duplicateMap = current as Map<String, dynamic>;
+    final fileKey = duplicateMap['file_key'] as String? ?? '';
+    final receiptNo = duplicateMap['receipt_number'] as String? ?? '';
+    
     final updatedSkip = [
       ...state.filesToSkip,
       if (fileKey.isNotEmpty) fileKey,
     ];
+    
+    final updatedSkippedReceipts = [
+      ...state.skippedReceiptNumbers,
+      if (receiptNo.isNotEmpty) receiptNo,
+    ];
+    
     final nextIndex = state.currentDuplicateIndex + 1;
 
     if (nextIndex >= state.duplicateQueue.length) {
       state = state.copyWith(
         filesToSkip: updatedSkip,
+        skippedReceiptNumbers: updatedSkippedReceipts,
         currentDuplicateIndex: nextIndex,
       );
       finishDuplicateReview();
     } else {
       state = state.copyWith(
         filesToSkip: updatedSkip,
+        skippedReceiptNumbers: updatedSkippedReceipts,
         currentDuplicateIndex: nextIndex,
       );
     }

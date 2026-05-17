@@ -94,7 +94,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             const BrandWordmark(fontSize: 32),
                             const SizedBox(height: 16),
                             ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 400),
+                              constraints: const BoxConstraints(maxHeight: 200),
                               child: Image.asset(
                                 'assets/images/login_hero_v2.png',
                                 fit: BoxFit.contain,
@@ -125,24 +125,67 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           children: [
                             Center(
                               child: Text(
-                                'SMART DIGITAL MUNIM',
+                                'Welcome Back',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w800,
-                                  color: context.textColor.withValues(alpha: 0.6),
-                                  letterSpacing: 1.5,
+                                  color: context.textColor,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 4),
+                            Center(
+                              child: Text(
+                                'Smart Digital Munim',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textColor.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
 
-                            Text('User ID',
+                            // Google Sign-In Button (Official GSI button for web)
+                            // On web, authenticate() is NOT supported.
+                            // renderGoogleSignInButton() renders Google's own button which
+                            // handles the popup and emits events via
+                            // authenticationEvents stream (handled in initState).
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: renderGoogleSignInButton(),
+                            ),
+                            const SizedBox(height: 24),
+                            
+                            // OR Divider
+                            Row(
+                              children: [
+                                Expanded(child: Divider(color: context.borderColor)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    'OR',
+                                    style: TextStyle(
+                                      color: context.textColor.withValues(alpha: 0.5),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider(color: context.borderColor)),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+
+                            Text('User Name',
                                 style: TextStyle(
                                     fontWeight: FontWeight.w600, fontSize: 13, color: context.textColor)),
                             const SizedBox(height: 6),
                             MobileTextField(
                               initialValue: _username,
-                              placeholder: 'Enter your User ID',
+                              placeholder: 'Enter your User Name',
                               textInputAction: TextInputAction.next,
                               onSave: (val) {
                                 setState(() {
@@ -197,38 +240,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                             color: Colors.white),
                                       ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            
-                            // OR Divider
-                            Row(
-                              children: [
-                                Expanded(child: Divider(color: context.borderColor)),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: Text(
-                                    'OR',
-                                    style: TextStyle(
-                                      color: context.textColor.withValues(alpha: 0.5),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(child: Divider(color: context.borderColor)),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Google Sign-In Button (Official GSI button for web)
-                            // On web, authenticate() is NOT supported.
-                            // renderGoogleSignInButton() renders Google's own button which
-                            // handles the popup and emits events via
-                            // authenticationEvents stream (handled in initState).
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: renderGoogleSignInButton(),
                             ),
                           ],
                         ),
