@@ -143,12 +143,19 @@ async def get_receipt_photo_preview(
         return RedirectResponse(url=redirect_url, status_code=302)
 
     # For crawlers: return minimal HTML with og:image in static <head>
-    # This is what WhatsApp reads to build the rich link preview card.
-    og_image = receipt_link or "https://snapkhata.com/logo.png"
-    receipt_page_url = f"https://snapkhata.com/receipt.html?i={receipt_number}"
+    # og:image points to OUR proxy endpoint, not the raw R2 CDN URL.
+    # WhatsApp trusts snapkhata.com and will render the image thumbnail.
+    if receipt_link:
+        # Proxy URL served from our domain so WhatsApp's crawler can fetch it
+        og_image = f"https://snapkhata.com/api/public/receipts/{receipt_number}/photo"
+        if u:
+            og_image += f"?u={u}"
+    else:
+        og_image = "https://snapkhata.com/logo.png"
     if u:
-        receipt_page_url += f"&u={u}"
-    receipt_page_url += "&view=photo"
+        receipt_page_url = f"https://snapkhata.com/r/{u}/{receipt_number}"
+    else:
+        receipt_page_url = f"https://snapkhata.com/r/{receipt_number}"
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -173,6 +180,53 @@ async def get_receipt_photo_preview(
 </html>"""
     return HTMLResponse(content=html)
 
+
+@router.get("/receipts/{receipt_number:path}/photo")
+async def get_receipt_photo_image(
+    receipt_number: str,
+    u: Optional[str] = None,
+):
+    """
+    Proxy endpoint that fetches the receipt image from R2 and serves it
+    directly from snapkhata.com. This ensures WhatsApp's crawler can load
+    the og:image without hitting the raw CDN hostname.
+    """
+    import httpx
+    from fastapi.responses import Response
+
+    receipt_link = ""
+    try:
+        db = get_database_client()
+        for table in ["verification_dates", "verified_invoices", "invoices"]:
+            q = db.client.from_(table).select("receipt_link").eq("receipt_number", receipt_number)
+            if u:
+                q = q.eq("username", u)
+            resp = q.limit(1).execute()
+            if resp.data and resp.data[0].get("receipt_link"):
+                receipt_link = resp.data[0]["receipt_link"]
+                break
+    except Exception as e:
+        logger.error(f"Error fetching receipt_link for photo proxy {receipt_number}: {e}")
+
+    if not receipt_link:
+        raise HTTPException(status_code=404, detail="Receipt photo not found")
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(receipt_link)
+            r.raise_for_status()
+            content_type = r.headers.get("content-type", "image/jpeg")
+            return Response(
+                content=r.content,
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=86400",  # cache 24h
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+    except Exception as e:
+        logger.error(f"Error proxying receipt photo {receipt_number}: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch receipt photo")
 
 @router.get("/receipts/{receipt_number:path}")
 async def get_public_receipt(

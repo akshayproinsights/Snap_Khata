@@ -675,12 +675,12 @@ class WhatsAppUtils {
         receiptNumber.isNotEmpty &&
         username != null &&
         username.isNotEmpty) {
-      // Use clean branded short URL: snapkhata.com/r/{receipt}?u={user}
+      // Use clean branded short URL: snapkhata.com/r/{user}/{receipt}
       // Nginx proxies this to the backend photo-preview endpoint internally.
       receiptPageUrl =
           'https://snapkhata.com/r'
-          '/${Uri.encodeComponent(receiptNumber)}'
-          '?u=${Uri.encodeComponent(username)}';
+          '/${Uri.encodeComponent(username)}'
+          '/${Uri.encodeComponent(receiptNumber)}';
     } else {
       // Last resort: use the raw CDN URL directly (still tappable in WhatsApp)
       receiptPageUrl = imageUrl;

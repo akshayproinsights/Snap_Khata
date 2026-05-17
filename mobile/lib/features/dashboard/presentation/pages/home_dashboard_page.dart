@@ -47,7 +47,8 @@ class HomeDashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final parties = ref.watch(unifiedPartiesProvider);
+    final parties = ref.watch(unifiedPartiesProvider);           // full list — for count, delete, empty-state
+    final displayedParties = ref.watch(displayedUnifiedPartiesProvider); // windowed — for rendering
     final isLoading = ref.watch(unifiedPartiesLoadingProvider);
     final currentFilter = ref.watch(homePartyFilterProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -132,16 +133,29 @@ class HomeDashboardPage extends ConsumerWidget {
         child: SafeArea(
           child: RefreshIndicator(
             onRefresh: () async {
-              // Silent refreshes — list stays visible during pull-to-refresh.
-              // No spinner takeover, no blank flash.
+              // Reset the display window so new data renders from the top.
+              ref.read(displayedPartiesCountProvider.notifier).reset();
               await Future.wait([
                 ref.read(udharProvider.notifier).fetchLedgersSilent(),
                 ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent(),
                 ref.read(dashboardTotalsProvider.notifier).refreshSilent(),
               ]);
             },
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (notification) {
+                // When user stops scrolling near the bottom, reveal the next page.
+                final m = notification.metrics;
+                if (m.pixels >= m.maxScrollExtent - 300) {
+                  final current = ref.read(displayedPartiesCountProvider);
+                  final total = ref.read(unifiedPartiesProvider).length;
+                  if (current < total) {
+                    ref.read(displayedPartiesCountProvider.notifier).increment(kPartiesPageSize, total);
+                  }
+                }
+                return false;
+              },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 // ── Header with Greeting & Actions ──
                 SliverToBoxAdapter(
@@ -243,12 +257,13 @@ class HomeDashboardPage extends ConsumerWidget {
                       ),
                     ),
                   )
-                else
+                else ...[  
+                  // ── Rendered slice (virtual window) ──
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, index) {
-                        final party = parties[index];
+                        final party = displayedParties[index]; // windowed slice
                         return SwipeablePartyCard(
                           party: party,
                           isSelected: selectedParties.contains(party.uniqueId),
@@ -283,14 +298,26 @@ class HomeDashboardPage extends ConsumerWidget {
                                 .toggle(party.uniqueId);
                           },
                         );
-                      }, childCount: parties.length),
+                      }, childCount: displayedParties.length), // windowed count
                     ),
                   ),
+
+                  // ── Load-more footer / FAB spacer ──
+                  SliverToBoxAdapter(
+                    child: displayedParties.length < parties.length
+                        ? _LoadMoreFooter(
+                            remaining: parties.length - displayedParties.length,
+                          )
+                        : const SizedBox(height: 100),
+                  ),
+                ],
               ],
-            ),
+              ),  // end CustomScrollView
+            ),    // end NotificationListener
           ),
         ),
       ),
+
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _buildScanBillFab(context),
     );
@@ -966,6 +993,51 @@ class _PartySkeletonCardState extends State<_PartySkeletonCard>
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown at the bottom of the parties list when more items are off-screen.
+/// Tapping or scrolling past it triggers the NotificationListener to
+/// reveal the next page automatically.
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.remaining});
+  final int remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.borderColor.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: context.primaryColor.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Scroll to load $remaining more…',
+            style: TextStyle(
+              color: context.textSecondaryColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -77,3 +77,39 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
 
   return unifiedList;
 });
+
+// ─────────────────────────────────────────────────────────────
+// Virtual-scroll windowing — Phase 1 performance fix
+// The full unifiedPartiesProvider list stays in memory so that
+// autocomplete, search, navigation and mutations are unaffected.
+// Only the home screen *renders* a limited slice at a time.
+// ─────────────────────────────────────────────────────────────
+
+/// How many party cards are built at a time on the home screen.
+const int kPartiesPageSize = 30;
+
+/// Controls how many party cards are currently rendered.
+/// Starts at [kPartiesPageSize], grows when the user scrolls to the bottom.
+class DisplayedPartiesCountNotifier extends Notifier<int> {
+  @override
+  int build() => kPartiesPageSize;
+
+  void increment(int by, int max) {
+    state = (state + by).clamp(0, max);
+  }
+
+  void reset() {
+    state = kPartiesPageSize;
+  }
+}
+
+final displayedPartiesCountProvider = NotifierProvider<DisplayedPartiesCountNotifier, int>(DisplayedPartiesCountNotifier.new);
+
+/// The visible slice of [unifiedPartiesProvider] for home-screen rendering.
+/// All parties remain in memory — search, autocomplete and mutations are unaffected.
+final displayedUnifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
+  final all = ref.watch(unifiedPartiesProvider);
+  final count = ref.watch(displayedPartiesCountProvider);
+  if (count >= all.length) return all;
+  return all.sublist(0, count);
+});
