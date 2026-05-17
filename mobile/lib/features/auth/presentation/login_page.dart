@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/google_signin_button.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
@@ -18,6 +21,35 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   String _username = '';
   String _password = '';
+  StreamSubscription<GoogleSignInAuthenticationEvent>? _googleAuthSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initGoogleSignIn();
+  }
+
+  Future<void> _initGoogleSignIn() async {
+    // Initialize the GoogleSignIn singleton (idempotent — safe to call after
+    // first time due to the _googleSignInInitialized guard in auth_provider.dart).
+    await ensureGoogleSignInInitialized();
+    // Listen to the auth events emitted by the GSI button (web-only approach).
+    _googleAuthSubscription = GoogleSignIn.instance.authenticationEvents
+        .listen((GoogleSignInAuthenticationEvent event) {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        // User successfully signed in via the Google GSI button.
+        ref
+            .read(authProvider.notifier)
+            .handleGoogleSignInAccount(event.user);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _googleAuthSubscription?.cancel();
+    super.dispose();
+  }
 
   void _handleLogin() async {
     if (_username.isEmpty || _password.isEmpty) return;
@@ -188,40 +220,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                             const SizedBox(height: 24),
 
-                            // Google Sign-In Button
+                            // Google Sign-In Button (Official GSI button for web)
+                            // On web, authenticate() is NOT supported.
+                            // renderGoogleSignInButton() renders Google's own button which
+                            // handles the popup and emits events via
+                            // authenticationEvents stream (handled in initState).
                             SizedBox(
                               width: double.infinity,
                               height: 50,
-                              child: OutlinedButton(
-                                onPressed: authState.isLoading 
-                                    ? null 
-                                    : () => ref.read(authProvider.notifier).loginWithGoogle(),
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: context.surfaceColor,
-                                  side: BorderSide(color: context.borderColor),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Image.network(
-                                      'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
-                                      height: 24,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      'Sign in with Google',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: context.textColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              child: renderGoogleSignInButton(),
                             ),
                           ],
                         ),

@@ -14,6 +14,17 @@ class WhatsAppUtils {
   WhatsAppUtils._();
 
   /// Formats double amount into Indian Rupee format (e.g., ₹1,25,000)
+  /// Strips the parenthetical Marathi/regional-script suffix from a bilingual
+  /// customer name so greetings show only the primary name.
+  /// e.g. "Patange Electricals (पतंगे इलेक्ट्रिक्लस)" → "Patange Electricals"
+  static String _cleanDisplayName(String name) {
+    final trimmed = name.trim();
+    final idx = trimmed.indexOf('(');
+    // Only strip if the bracket is not the very first character
+    if (idx > 0) return trimmed.substring(0, idx).trim();
+    return trimmed;
+  }
+
   static String formatIndianCurrency(double amount) {
     String val = amount.toStringAsFixed(0);
     if (val.length <= 3) return '₹$val';
@@ -63,13 +74,13 @@ class WhatsAppUtils {
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
-        return 'Hi $customerName,\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order from *${businessName.trim()}* is ready. 📝\n\n'
             '⚠️ *Amount Due: $totalFmt*$extraTexts\n\n'
             'Thank you for choosing *${businessName.trim()}*.';
 
       case OrderPaymentStatus.partiallyPaid:
-        return 'Hi $customerName,\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             'Here is your payment summary:\n'
             '🛒 Total Bill: $totalFmt\n'
@@ -77,7 +88,7 @@ class WhatsAppUtils {
             '⏳ Pending Due: $pendingFmt$extraTexts';
 
       case OrderPaymentStatus.fullyPaid:
-        return 'Hi $customerName,\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             '💳 Amount Paid: $totalFmt$extraTexts';
     }
@@ -471,7 +482,7 @@ class WhatsAppUtils {
     String? receiptPhotoUrl,
     String? receiptNumber,
   }) {
-    final name = customerName.trim();
+    final name = _cleanDisplayName(customerName);
     final shop = shopName.trim();
 
     if (useReceiptPhoto &&
@@ -506,10 +517,10 @@ class WhatsAppUtils {
         '$statementLink\n';
 
     if (upiId != null && upiId.isNotEmpty) {
-      msg += '\n💳 Pay via UPI: $upiId\n';
+      msg += '\n💳 Pay via UPI: $upiId';
     }
 
-    msg += '\nThank you,\n'
+    msg += '\n\nThank you,\n'
         '*$shop*';
     return msg;
   }
@@ -645,7 +656,7 @@ class WhatsAppUtils {
   }
 
   /// Fallback: when file-based sharing fails on desktop/web, send a link to the
-  /// server-rendered photo-preview page which has static og:image in its <head>.
+  /// server-rendered photo-preview page which has static og:image in its `<head>`.
   /// WhatsApp's crawler reads these tags (no JS executed) and shows the receipt
   /// image as a rich preview card — no manual attachment needed by the user.
   static Future<void> _fallbackShareWithImageUrl(
@@ -664,10 +675,11 @@ class WhatsAppUtils {
         receiptNumber.isNotEmpty &&
         username != null &&
         username.isNotEmpty) {
+      // Use clean branded short URL: snapkhata.com/r/{receipt}?u={user}
+      // Nginx proxies this to the backend photo-preview endpoint internally.
       receiptPageUrl =
-          'https://api.snapkhata.com/api/public/receipts'
+          'https://snapkhata.com/r'
           '/${Uri.encodeComponent(receiptNumber)}'
-          '/photo-preview'
           '?u=${Uri.encodeComponent(username)}';
     } else {
       // Last resort: use the raw CDN URL directly (still tappable in WhatsApp)
@@ -683,7 +695,18 @@ class WhatsAppUtils {
         )
         .trim();
 
-    final fallbackMessage = '$cleanCaption\n\nView your receipt here:\n$receiptPageUrl';
+    // Place the receipt link BEFORE the thank-you sign-off for a professional look
+    // Split caption at the last "Thank you" to insert the link before the sign-off
+    const signoffMarker = 'Thank you,';
+    final signoffIndex = cleanCaption.lastIndexOf(signoffMarker);
+    final String fallbackMessage;
+    if (signoffIndex > 0) {
+      final bodyPart = cleanCaption.substring(0, signoffIndex).trimRight();
+      final signoffPart = cleanCaption.substring(signoffIndex);
+      fallbackMessage = '$bodyPart\n\nView your receipt here:\n$receiptPageUrl\n\n$signoffPart';
+    } else {
+      fallbackMessage = '$cleanCaption\n\nView your receipt here:\n$receiptPageUrl';
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

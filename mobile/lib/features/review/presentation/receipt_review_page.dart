@@ -18,6 +18,7 @@ import 'package:mobile/features/config/presentation/providers/config_provider.da
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:mobile/core/utils/contact_utils.dart';
 
 
 
@@ -1360,9 +1361,23 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   ),
                   fillColor: context.primaryColor.withValues(alpha: 0.03),
                   filled: true,
-                  suffixIcon: isEmpty
-                      ? null
-                      : Padding(
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
+                        onPressed: () async {
+                          final phone = await ContactUtils.pickContactPhone();
+                          if (phone != null && mounted) {
+                            setState(() {
+                              _mobileController.text = phone;
+                            });
+                            _saveMobileNumberFromController();
+                          }
+                        },
+                      ),
+                      if (!isEmpty)
+                        Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Icon(
                             isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
@@ -1370,6 +1385,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             color: isValid ? context.successColor : context.warningColor,
                           ),
                         ),
+                    ],
+                  ),
                 ),
                 onChanged: (_) => setState(() {}), // Refresh validation icon
                 onSubmitted: (_) => _saveMobileNumberFromController(),

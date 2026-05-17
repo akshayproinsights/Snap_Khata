@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/utils/google_signin_button.dart';
 import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mobile/shared/widgets/mobile_text_field.dart';
@@ -24,11 +27,31 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
   List<Map<String, dynamic>> _industries = [];
   bool _isLoadingIndustries = true;
   bool _isPasswordVisible = false;
+  StreamSubscription<GoogleSignInAuthenticationEvent>? _googleAuthSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchIndustries();
+    _initGoogleSignIn();
+  }
+
+  Future<void> _initGoogleSignIn() async {
+    await ensureGoogleSignInInitialized();
+    _googleAuthSubscription = GoogleSignIn.instance.authenticationEvents
+        .listen((GoogleSignInAuthenticationEvent event) {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        ref
+            .read(authProvider.notifier)
+            .handleGoogleSignInAccount(event.user);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _googleAuthSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchIndustries() async {
@@ -339,36 +362,7 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       SizedBox(
                         width: double.infinity,
                         height: 56,
-                        child: OutlinedButton(
-                          onPressed: authState.isLoading 
-                              ? null 
-                              : () => ref.read(authProvider.notifier).loginWithGoogle(),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: context.surfaceColor,
-                            side: BorderSide(color: context.borderColor),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image.network(
-                                'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
-                                height: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Sign up with Google',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: context.textColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        child: renderGoogleSignInButton(),
                       ),
                     ],
                   ),

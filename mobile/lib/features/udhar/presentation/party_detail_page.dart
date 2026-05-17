@@ -17,6 +17,7 @@ import 'package:mobile/features/settings/presentation/providers/shop_provider.da
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
+import 'package:mobile/core/utils/contact_utils.dart';
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -591,6 +592,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       filled: true,
                       fillColor: context.textSecondaryColor.withValues(
                         alpha: 0.03,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
+                        onPressed: () async {
+                          final phone = await ContactUtils.pickContactPhone();
+                          if (phone != null && mounted) {
+                            setState(() {
+                              phoneController.text = phone;
+                            });
+                          }
+                        },
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -1734,6 +1746,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 filled: true,
                                 fillColor: context.textSecondaryColor
                                     .withValues(alpha: 0.03),
+                                suffixIcon: IconButton(
+                                  icon: Icon(LucideIcons.contact, color: context.primaryColor),
+                                  onPressed: () async {
+                                    final phone = await ContactUtils.pickContactPhone();
+                                    if (phone != null) {
+                                      phoneController.text = phone;
+                                    }
+                                  },
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
