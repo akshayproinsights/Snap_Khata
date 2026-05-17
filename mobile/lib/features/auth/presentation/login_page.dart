@@ -21,6 +21,7 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   String _username = '';
   String _password = '';
+  bool _isPasswordVisible = false;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _googleAuthSubscription;
 
   @override
@@ -127,21 +128,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               child: Text(
                                 'Welcome Back',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                   color: context.textColor,
                                   letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Center(
-                              child: Text(
-                                'Smart Digital Munim',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: context.textColor.withValues(alpha: 0.6),
                                 ),
                               ),
                             ),
@@ -157,8 +147,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               height: 50,
                               child: renderGoogleSignInButton(),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
                             
+                            // Create an Account
+                            Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text("New user? ", style: TextStyle(color: context.textColor, fontSize: 13)),
+                                  GestureDetector(
+                                    onTap: () => context.push('/register'),
+                                    child: Text(
+                                      "Create an Account",
+                                      style: TextStyle(
+                                          color: context.primaryColor,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
                             // OR Divider
                             Row(
                               children: [
@@ -202,14 +213,54 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             MobileTextField(
                               initialValue: _password,
                               placeholder: 'Enter your password',
-                              obscureText: true,
+                              obscureText: !_isPasswordVisible,
                               textInputAction: TextInputAction.done,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  color: context.textColor.withValues(alpha: 0.5),
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isPasswordVisible = !_isPasswordVisible;
+                                  });
+                                },
+                              ),
                               onSubmitted: (_) => _handleLogin(),
                               onSave: (val) {
                                 setState(() {
                                   _password = val;
                                 });
                               },
+                            ),
+                            const SizedBox(height: 8),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Please contact 9146514132 to reset your password.'),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(
+                                    color: context.primaryColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 24),
 
@@ -245,15 +296,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ),
                       ),
 
-                      const SizedBox(height: 16),
-                      Center(
-                        child: TextButton(
-                          onPressed: () => context.push('/register'),
-                          child: Text('New user? Sign Up here', 
-                            style: TextStyle(color: context.primaryColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
 
                       // Trust Badge & Footer
                       Row(
