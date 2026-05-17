@@ -74,23 +74,24 @@ class WhatsAppUtils {
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
-        return 'Hi ${_cleanDisplayName(customerName)},\n'
+        return 'Dear ${_cleanDisplayName(customerName)},\n'
             'Your order from *${businessName.trim()}* is ready. 📝\n\n'
             '⚠️ *Amount Due: $totalFmt*$extraTexts\n\n'
-            'Thank you for choosing *${businessName.trim()}*.';
+            '- *${businessName.trim()}*';
 
       case OrderPaymentStatus.partiallyPaid:
-        return 'Hi ${_cleanDisplayName(customerName)},\n'
+        return 'Dear ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            'Here is your payment summary:\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
-            '⏳ Pending Due: $pendingFmt$extraTexts';
+            '⏳ Pending Due: $pendingFmt$extraTexts\n\n'
+            '- *${businessName.trim()}*';
 
       case OrderPaymentStatus.fullyPaid:
-        return 'Hi ${_cleanDisplayName(customerName)},\n'
+        return 'Dear ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            '💳 Amount Paid: $totalFmt$extraTexts';
+            '💳 Amount Paid: $totalFmt$extraTexts\n\n'
+            '- *${businessName.trim()}*';
     }
   }
 
@@ -260,8 +261,8 @@ class WhatsAppUtils {
                 imageUrl != 'null';
 
             final message = isSharingPhoto
-                ? '$caption\n\nThank you!\n— *${shopName.trim()}*'
-                : '$caption\n\nView details:\n$shareUrl\n\nThank you!\n— *${shopName.trim()}*';
+                ? '$caption\n\n- *${shopName.trim()}*'
+                : '$caption\n\nView details:\n$shareUrl\n\n- *${shopName.trim()}*';
 
             if (isSharingPhoto) {
               await shareActualImageOnWhatsApp(
@@ -491,11 +492,10 @@ class WhatsAppUtils {
         receiptPhotoUrl != 'null') {
       final invoiceRef =
           receiptNumber != null ? ' against Bill #$receiptNumber' : '';
-      return 'Hi $name,\n\n'
-          'This is a gentle reminder for your pending payment of *${formatIndianCurrency(balanceDue)}*$invoiceRef.\n\n'
-          'Your receipt is attached above. Kindly clear the dues at your convenience.\n\n'
-          'Thank you,\n'
-          '*$shop*';
+      return 'Dear $name,\n'
+          'Reminder: A payment of *${formatIndianCurrency(balanceDue)}*$invoiceRef is pending.\n'
+          'Please clear the dues at your earliest convenience.\n\n'
+          '- *$shop*';
     }
 
     // Account Statement mode.
@@ -504,8 +504,8 @@ class WhatsAppUtils {
     // "Total Bill: ₹0 / Amount Paid: ₹0" message.
     final bool hasBillingData = totalBilled > 0 || totalPaid > 0;
 
-    String msg = 'Hi $name,\n\n'
-        'A gentle reminder that your current balance is *${formatIndianCurrency(balanceDue)}*.\n\n';
+    String msg = 'Dear $name,\n'
+        'Reminder: Your current balance is *${formatIndianCurrency(balanceDue)}*.\n\n';
 
     if (hasBillingData) {
       msg += '📋 Total Billed: ${formatIndianCurrency(totalBilled)}\n'
@@ -513,15 +513,14 @@ class WhatsAppUtils {
           '⏳ Balance Due: *${formatIndianCurrency(balanceDue)}*\n\n';
     }
 
-    msg += 'View your full account statement here:\n'
+    msg += '🧾 View full account statement:\n'
         '$statementLink\n';
 
     if (upiId != null && upiId.isNotEmpty) {
       msg += '\n💳 Pay via UPI: $upiId';
     }
 
-    msg += '\n\nThank you,\n'
-        '*$shop*';
+    msg += '\n\n- *$shop*';
     return msg;
   }
 
@@ -686,26 +685,17 @@ class WhatsAppUtils {
       receiptPageUrl = imageUrl;
     }
 
-    // Remove any "attached above" line from the caption since on desktop PWA
-    // there is no actual attachment — replace with a clean "View receipt" line.
-    final String cleanCaption = caption
-        .replaceAll(
-          'Your receipt is attached above. Kindly clear the dues at your convenience.',
-          'Kindly clear the dues at your convenience.',
-        )
-        .trim();
-
-    // Place the receipt link BEFORE the thank-you sign-off for a professional look
-    // Split caption at the last "Thank you" to insert the link before the sign-off
-    const signoffMarker = 'Thank you,';
-    final signoffIndex = cleanCaption.lastIndexOf(signoffMarker);
+    // Place the receipt link BEFORE the sign-off for a professional look
+    // Split caption at the last "- *" to insert the link before the sign-off
+    const signoffMarker = '- *';
+    final signoffIndex = caption.lastIndexOf(signoffMarker);
     final String fallbackMessage;
     if (signoffIndex > 0) {
-      final bodyPart = cleanCaption.substring(0, signoffIndex).trimRight();
-      final signoffPart = cleanCaption.substring(signoffIndex);
-      fallbackMessage = '$bodyPart\n\nView your receipt here:\n$receiptPageUrl\n\n$signoffPart';
+      final bodyPart = caption.substring(0, signoffIndex).trimRight();
+      final signoffPart = caption.substring(signoffIndex);
+      fallbackMessage = '$bodyPart\n\n🧾 View Receipt:\n$receiptPageUrl\n\n$signoffPart';
     } else {
-      fallbackMessage = '$cleanCaption\n\nView your receipt here:\n$receiptPageUrl';
+      fallbackMessage = '$caption\n\n🧾 View Receipt:\n$receiptPageUrl';
     }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
