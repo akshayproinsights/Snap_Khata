@@ -3,7 +3,8 @@ import hashlib
 import hmac
 import os
 import time
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from typing import Any, Dict, Optional
 from auth import get_current_user
 from database import get_database_client
@@ -66,6 +67,111 @@ async def create_public_receipt_share_token(
         "st": token,
         "share_url": f"https://snapkhata.com/receipt.html?i={receipt_number}&u={username}",
     }
+
+
+@router.get("/receipts/{receipt_number:path}/photo-preview", response_class=HTMLResponse)
+async def get_receipt_photo_preview(
+    receipt_number: str,
+    request: Request,
+    u: Optional[str] = None,
+):
+    """
+    Server-rendered HTML page for WhatsApp link preview of a receipt photo.
+    
+    WhatsApp's crawler (facebookexternalhit) cannot execute JavaScript, so
+    dynamically injecting og:image in JS never works for link previews.
+    This endpoint bakes the og:image URL into the static HTML <head> so
+    WhatsApp shows the receipt photo as a rich preview card.
+    
+    - WhatsApp crawler → served the og:image HTML directly
+    - Regular users    → 302 redirect to receipt.html?i=...&u=...&view=photo
+    """
+    user_agent = request.headers.get("user-agent", "").lower()
+    is_crawler = any(bot in user_agent for bot in [
+        "facebookexternalhit", "whatsapp", "twitterbot", "linkedinbot",
+        "slackbot", "telegrambot", "discordbot", "googlebot", "bingbot",
+    ])
+
+    # Fetch receipt data to get receipt_link + shop_name
+    receipt_link = ""
+    shop_name = "Our Shop"
+
+    try:
+        db = get_database_client()
+
+        # Try verification_dates first
+        header = None
+        for table, col in [
+            ("verification_dates", "receipt_number"),
+            ("verified_invoices", "receipt_number"),
+        ]:
+            q = db.client.from_(table).select("receipt_link, username").eq("receipt_number", receipt_number)
+            if u:
+                q = q.eq("username", u)
+            resp = q.limit(1).execute()
+            if resp.data:
+                header = resp.data[0]
+                break
+
+        # Fallback to invoices table
+        if header is None:
+            q = db.client.from_("invoices").select("receipt_link, username").eq("receipt_number", receipt_number)
+            if u:
+                q = q.eq("username", u)
+            resp = q.limit(1).execute()
+            if resp.data:
+                header = resp.data[0]
+
+        if header:
+            receipt_link = header.get("receipt_link") or ""
+            uname = header.get("username") or u or ""
+            # Fetch shop name
+            if uname:
+                pr = db.client.from_("user_profiles").select("shop_name").eq("username", uname).limit(1).execute()
+                if pr.data:
+                    shop_name = pr.data[0].get("shop_name") or shop_name
+    except Exception as e:
+        logger.error(f"Error in photo-preview for {receipt_number}: {e}")
+
+    # For regular users, redirect to the full JS-powered page
+    if not is_crawler:
+        redirect_url = f"https://snapkhata.com/receipt.html?i={receipt_number}"
+        if u:
+            redirect_url += f"&u={u}"
+        redirect_url += "&view=photo"
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    # For crawlers: return minimal HTML with og:image in static <head>
+    # This is what WhatsApp reads to build the rich link preview card.
+    og_image = receipt_link or "https://snapkhata.com/logo.png"
+    receipt_page_url = f"https://snapkhata.com/receipt.html?i={receipt_number}"
+    if u:
+        receipt_page_url += f"&u={u}"
+    receipt_page_url += "&view=photo"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Receipt from {shop_name} • SnapKhata</title>
+  <meta property="og:title" content="Receipt from {shop_name}" />
+  <meta property="og:description" content="Tap to view your full receipt photo." />
+  <meta property="og:image" content="{og_image}" />
+  <meta property="og:image:width" content="600" />
+  <meta property="og:image:height" content="800" />
+  <meta property="og:url" content="{receipt_page_url}" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="{og_image}" />
+  <meta http-equiv="refresh" content="0;url={receipt_page_url}" />
+</head>
+<body>
+  <p>Redirecting to receipt…</p>
+  <a href="{receipt_page_url}">View Receipt</a>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @router.get("/receipts/{receipt_number:path}")

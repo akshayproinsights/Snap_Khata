@@ -632,80 +632,92 @@
 
             const html = `
             <div style="
-                min-height: 100vh;
+                height: 100dvh;
                 background: #0d0d0d;
                 display: flex;
                 flex-direction: column;
                 font-family: 'Inter', -apple-system, sans-serif;
+                overflow: hidden;
             ">
-                <!-- Header -->
+                <!-- Header: shop name only, no SnapKhata badge -->
                 <div style="
-                    background: #1a1a1a;
-                    border-bottom: 1px solid #2a2a2a;
-                    padding: 14px 20px;
+                    background: #111111;
+                    border-bottom: 1px solid #1f1f1f;
+                    padding: 12px 18px;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
+                    flex-shrink: 0;
                 ">
                     <div>
                         <div style="
                             font-size: 15px;
                             font-weight: 700;
-                            color: #ffffff;
+                            color: #f1f1f1;
                             letter-spacing: -0.2px;
+                            line-height: 1.2;
                         ">${shopName}</div>
                         <div style="
                             font-size: 11px;
-                            color: #888;
-                            margin-top: 1px;
+                            color: #666;
+                            margin-top: 2px;
+                            letter-spacing: 0.3px;
+                            text-transform: uppercase;
                         ">Receipt Photo</div>
                     </div>
+                    <!-- Pinch to zoom hint -->
                     <div style="
-                        background: #25D366;
-                        color: #ffffff;
-                        padding: 4px 12px;
-                        border-radius: 999px;
                         font-size: 11px;
-                        font-weight: 700;
-                        letter-spacing: 0.3px;
-                    ">SnapKhata</div>
+                        color: #555;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                    ">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+                        </svg>
+                        Pinch to zoom
+                    </div>
                 </div>
 
-                <!-- Image -->
+                <!-- Image area: fills remaining space, no scroll -->
                 <div style="
                     flex: 1;
+                    min-height: 0;
                     display: flex;
-                    align-items: flex-start;
+                    align-items: center;
                     justify-content: center;
-                    padding: 20px 12px;
-                    overflow-y: auto;
+                    padding: 12px;
+                    background: #0d0d0d;
+                    touch-action: pinch-zoom;
                 ">
                     <img
                         src="${receiptLink}"
                         alt="Receipt from ${shopName}"
                         style="
-                            width: 100%;
-                            max-width: 600px;
+                            max-width: 100%;
+                            max-height: 100%;
+                            width: auto;
                             height: auto;
-                            border-radius: 10px;
-                            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+                            object-fit: contain;
+                            border-radius: 8px;
+                            box-shadow: 0 4px 32px rgba(0,0,0,0.7);
                             display: block;
                         "
-                        onerror="this.parentNode.innerHTML='<div style=\'text-align:center;color:#888;padding:40px;\'>\u26a0\ufe0f Could not load receipt image</div>';"
+                        onerror="this.parentNode.innerHTML='<div style=\'text-align:center;color:#666;padding:40px;\'>\u26a0\ufe0f Could not load receipt image</div>';"
                     />
                 </div>
 
-                <!-- Footer -->
+                <!-- Footer: Save button + single SnapKhata credit -->
                 <div style="
-                    background: #1a1a1a;
-                    border-top: 1px solid #2a2a2a;
-                    padding: 16px 20px;
+                    background: #111111;
+                    border-top: 1px solid #1f1f1f;
+                    padding: 12px 18px;
                     display: flex;
-                    flex-direction: column;
                     align-items: center;
+                    justify-content: space-between;
+                    flex-shrink: 0;
                     gap: 12px;
                 ">
                     <button
@@ -715,7 +727,7 @@
                             color: #ffffff;
                             border: none;
                             border-radius: 10px;
-                            padding: 12px 28px;
+                            padding: 11px 24px;
                             font-size: 14px;
                             font-weight: 700;
                             font-family: 'Inter', -apple-system, sans-serif;
@@ -723,14 +735,14 @@
                             display: flex;
                             align-items: center;
                             gap: 8px;
-                            width: 100%;
-                            max-width: 320px;
+                            flex: 1;
                             justify-content: center;
-                            transition: opacity 0.2s;
+                            transition: opacity 0.15s;
+                            max-width: 280px;
                         "
-                        onmousedown="this.style.opacity='0.8'"
+                        onmousedown="this.style.opacity='0.75'"
                         onmouseup="this.style.opacity='1'"
-                        ontouchstart="this.style.opacity='0.8'"
+                        ontouchstart="this.style.opacity='0.75'"
                         ontouchend="this.style.opacity='1'"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -740,9 +752,9 @@
                         </svg>
                         Save Image
                     </button>
-                    <div>
-                        <span style="font-size: 12px; color: #555;">Powered by </span>
-                        <span style="font-size: 12px; font-weight: 700; color: #25D366;">SnapKhata</span>
+                    <div style="text-align: right; flex-shrink: 0;">
+                        <div style="font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 0.4px;">Powered by</div>
+                        <div style="font-size: 13px; font-weight: 700; color: #25D366; letter-spacing: -0.2px;">SnapKhata</div>
                     </div>
                 </div>
             </div>`;

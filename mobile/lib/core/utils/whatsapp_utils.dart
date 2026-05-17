@@ -644,9 +644,10 @@ class WhatsAppUtils {
     }
   }
 
-  /// Fallback: when file-based sharing fails, open WhatsApp with the direct
-  /// image URL embedded in the message so the recipient can tap to view the
-  /// receipt — far better UX than a confusing receipt.html link.
+  /// Fallback: when file-based sharing fails on desktop/web, send a link to the
+  /// server-rendered photo-preview page which has static og:image in its <head>.
+  /// WhatsApp's crawler reads these tags (no JS executed) and shows the receipt
+  /// image as a rich preview card — no manual attachment needed by the user.
   static Future<void> _fallbackShareWithImageUrl(
     BuildContext context, {
     String? phone,
@@ -655,24 +656,34 @@ class WhatsAppUtils {
     String? receiptNumber,
     String? username,
   }) async {
-    // Build a clean, branded receipt link if we have the receipt info.
-    // This shows the original receipt photo on a professional SnapKhata-hosted page
-    // instead of exposing a raw CDN blob URL to the customer.
+    // Use the server-rendered /photo-preview endpoint which has og:image baked
+    // into the static HTML <head>. WhatsApp's crawler can read these tags without
+    // executing JavaScript, so it renders a rich image preview card in the chat.
     final String receiptPageUrl;
     if (receiptNumber != null &&
         receiptNumber.isNotEmpty &&
         username != null &&
         username.isNotEmpty) {
       receiptPageUrl =
-          'https://snapkhata.com/receipt.html'
-          '?i=${Uri.encodeComponent(receiptNumber)}'
-          '&u=${Uri.encodeComponent(username)}'
-          '&view=photo';
+          'https://api.snapkhata.com/api/public/receipts'
+          '/${Uri.encodeComponent(receiptNumber)}'
+          '/photo-preview'
+          '?u=${Uri.encodeComponent(username)}';
     } else {
-      receiptPageUrl = imageUrl; // last resort: raw CDN URL
+      // Last resort: use the raw CDN URL directly (still tappable in WhatsApp)
+      receiptPageUrl = imageUrl;
     }
 
-    final fallbackMessage = '$caption\n\nView your receipt here:\n$receiptPageUrl';
+    // Remove any "attached above" line from the caption since on desktop PWA
+    // there is no actual attachment — replace with a clean "View receipt" line.
+    final String cleanCaption = caption
+        .replaceAll(
+          'Your receipt is attached above. Kindly clear the dues at your convenience.',
+          'Kindly clear the dues at your convenience.',
+        )
+        .trim();
+
+    final fallbackMessage = '$cleanCaption\n\nView your receipt here:\n$receiptPageUrl';
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
