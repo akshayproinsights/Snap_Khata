@@ -74,24 +74,24 @@ class WhatsAppUtils {
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
-        return 'Dear ${_cleanDisplayName(customerName)},\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order from *${businessName.trim()}* is ready. 📝\n\n'
             '⚠️ *Amount Due: $totalFmt*$extraTexts\n\n'
-            '- *${businessName.trim()}*';
+            'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.partiallyPaid:
-        return 'Dear ${_cleanDisplayName(customerName)},\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
             '⏳ Pending Due: $pendingFmt$extraTexts\n\n'
-            '- *${businessName.trim()}*';
+            'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.fullyPaid:
-        return 'Dear ${_cleanDisplayName(customerName)},\n'
+        return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             '💳 Amount Paid: $totalFmt$extraTexts\n\n'
-            '- *${businessName.trim()}*';
+            'Thank you! 🙏\n— *${businessName.trim()}*';
     }
   }
 
@@ -261,8 +261,8 @@ class WhatsAppUtils {
                 imageUrl != 'null';
 
             final message = isSharingPhoto
-                ? '$caption\n\n- *${shopName.trim()}*'
-                : '$caption\n\nView details:\n$shareUrl\n\n- *${shopName.trim()}*';
+                ? '$caption\n\nThank you! 🙏\n— *${shopName.trim()}*'
+                : '$caption\n\nView details:\n$shareUrl\n\nThank you! 🙏\n— *${shopName.trim()}*';
 
             if (isSharingPhoto) {
               await shareActualImageOnWhatsApp(
@@ -491,11 +491,12 @@ class WhatsAppUtils {
         receiptPhotoUrl.isNotEmpty &&
         receiptPhotoUrl != 'null') {
       final invoiceRef =
-          receiptNumber != null ? ' against Bill #$receiptNumber' : '';
-      return 'Dear $name,\n'
-          'Reminder: A payment of *${formatIndianCurrency(balanceDue)}*$invoiceRef is pending.\n'
-          'Please clear the dues at your earliest convenience.\n\n'
-          '- *$shop*';
+          receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
+      return 'Hi $name,\n\n'
+          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*$invoiceRef\n\n'
+          'Please settle this amount as soon as possible.\n\n'
+          'Thank you! 🙏\n'
+          '— *$shop*';
     }
 
     // Account Statement mode.
@@ -504,8 +505,8 @@ class WhatsAppUtils {
     // "Total Bill: ₹0 / Amount Paid: ₹0" message.
     final bool hasBillingData = totalBilled > 0 || totalPaid > 0;
 
-    String msg = 'Dear $name,\n'
-        'Reminder: Your current balance is *${formatIndianCurrency(balanceDue)}*.\n\n';
+    String msg = 'Hi $name,\n\n'
+        '⚠️ *Total Balance Due: ${formatIndianCurrency(balanceDue)}*\n\n';
 
     if (hasBillingData) {
       msg += '📋 Total Billed: ${formatIndianCurrency(totalBilled)}\n'
@@ -520,7 +521,8 @@ class WhatsAppUtils {
       msg += '\n💳 Pay via UPI: $upiId';
     }
 
-    msg += '\n\n- *$shop*';
+    msg += '\n\nThank you! 🙏\n'
+        '— *$shop*';
     return msg;
   }
 
@@ -686,8 +688,8 @@ class WhatsAppUtils {
     }
 
     // Place the receipt link BEFORE the sign-off for a professional look
-    // Split caption at the last "- *" to insert the link before the sign-off
-    const signoffMarker = '- *';
+    // Split caption at the last "Thank you! 🙏" to insert the link before the sign-off
+    const signoffMarker = 'Thank you! 🙏';
     final signoffIndex = caption.lastIndexOf(signoffMarker);
     final String fallbackMessage;
     if (signoffIndex > 0) {
