@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';

@@ -4,7 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/dashboard/presentation/providers/analytics_provider.dart';
 import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AnalyticsDashboardPage extends ConsumerStatefulWidget {
   const AnalyticsDashboardPage({super.key});

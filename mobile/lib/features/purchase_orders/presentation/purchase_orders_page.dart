@@ -3,7 +3,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/purchase_orders/domain/models/purchase_order_models.dart';
 import 'package:mobile/features/purchase_orders/presentation/providers/purchase_order_provider.dart';
@@ -1059,7 +1059,7 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData? icon;
+  final dynamic icon;
   final String label;
   final Color color;
   final VoidCallback onTap;
@@ -1083,7 +1083,10 @@ class _ActionButton extends StatelessWidget {
         ),
         child: Column(
           children: [
-            if (icon != null) Icon(icon, size: 16, color: color),
+            if (icon != null)
+              icon is FaIconData
+                  ? FaIcon(icon as FaIconData, size: 16, color: color)
+                  : Icon(icon as IconData, size: 16, color: color),
             const SizedBox(height: 3),
             Text(label,
                 style: TextStyle(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:mobile/features/upload/domain/models/upload_models.dart';
 import 'package:mobile/features/upload/presentation/providers/paginated_upload_provider.dart';
 import 'package:mobile/core/theme/context_extension.dart';

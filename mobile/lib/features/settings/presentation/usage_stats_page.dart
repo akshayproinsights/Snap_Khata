@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/features/settings/presentation/providers/usage_provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class UsageStatsPage extends ConsumerStatefulWidget {
   const UsageStatsPage({super.key});

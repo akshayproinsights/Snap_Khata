@@ -7,7 +7,7 @@ import 'package:mobile/features/dashboard/presentation/providers/dashboard_provi
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/core/theme/context_extension.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AddPartyEntrySheet extends ConsumerStatefulWidget {
   const AddPartyEntrySheet({super.key});
