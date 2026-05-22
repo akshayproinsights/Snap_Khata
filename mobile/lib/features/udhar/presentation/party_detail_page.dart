@@ -1429,6 +1429,27 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ? invoicesWithReceipts.first
             : null;
 
+        // ── Background pre-fetch ──────────────────────────────────────────────
+        // Start downloading the receipt image immediately when the sheet opens
+        // (Receipt Photo is the default mode). By the time the user reads the
+        // preview and taps “SEND ON WHATSAPP” (~2–4 s), the download is done.
+        String? prefetchedUrl = selectedTx?.receiptLink;
+        Future<Uint8List?> prefetchFuture =
+            (prefetchedUrl != null && prefetchedUrl.isNotEmpty && prefetchedUrl != 'null')
+                ? WhatsAppUtils.prefetchImageBytes(prefetchedUrl)
+                : Future<Uint8List?>.value(null);
+
+        // Restart the prefetch whenever the user switches receipt or mode.
+        void restartPrefetch(LedgerTransaction? tx, bool isReceiptPhoto) {
+          final url = isReceiptPhoto ? (tx?.receiptLink) : null;
+          if (url == prefetchedUrl) return; // same URL — no need to re-fetch
+          prefetchedUrl = url;
+          prefetchFuture = (url != null && url.isNotEmpty && url != 'null')
+              ? WhatsAppUtils.prefetchImageBytes(url)
+              : Future<Uint8List?>.value(null);
+        }
+        // ────────────────────────────────────────────────────────────
+
         return StatefulBuilder(
           builder: (ctx, setSheet) {
             final message = WhatsAppUtils.buildPartyReminderMessage(
@@ -1604,8 +1625,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 ),
                               ],
                               selected: {useReceiptPhoto},
-                              onSelectionChanged: (s) =>
-                                  setSheet(() => useReceiptPhoto = s.first),
+                              onSelectionChanged: (s) {
+                                  final newMode = s.first;
+                                  restartPrefetch(selectedTx, newMode);
+                                  setSheet(() => useReceiptPhoto = newMode);
+                              },
                               showSelectedIcon: false,
                               style: SegmentedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
@@ -1629,7 +1653,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               const SizedBox(height: 6),
                               ...invoicesWithReceipts.map(
                                 (tx) => InkWell(
-                                  onTap: () => setSheet(() => selectedTx = tx),
+                                  onTap: () {
+                                    restartPrefetch(tx, useReceiptPhoto);
+                                    setSheet(() => selectedTx = tx);
+                                  },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
                                     margin: const EdgeInsets.only(bottom: 8),
@@ -1883,12 +1910,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                   capturedReceiptLink != null &&
                                   capturedReceiptLink.isNotEmpty &&
                                   capturedReceiptLink != 'null') {
+                                // Await the pre-warmed bytes (usually already
+                                // done by the time the user taps the button).
+                                final prefetchedBytes = await prefetchFuture;
                                 if (!context.mounted) return;
                                 await WhatsAppUtils.shareActualImageOnWhatsApp(
                                   context: context,
                                   imageUrl: capturedReceiptLink,
                                   caption: capturedMessage,
                                   phone: phone,
+                                  prefetchedBytes: prefetchedBytes,
                                   receiptNumber: capturedReceiptNumber,
                                   username: authState.user?.username,
                                 );

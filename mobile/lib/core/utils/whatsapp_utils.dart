@@ -13,6 +13,33 @@ enum OrderPaymentStatus { fullyPaid, partiallyPaid, unpaid }
 class WhatsAppUtils {
   WhatsAppUtils._();
 
+  // ── Singleton Dio instance — avoids re-creating a client on every share ──
+  static Dio? _dioInstance;
+  static Dio get _dio => _dioInstance ??= Dio();
+
+  // ── Cached result of navigator.canShare(files) — never changes per session ──
+  static bool? _canShareFilesCache;
+
+  /// Pre-fetches the receipt image bytes in the background.
+  /// Call this as soon as the WhatsApp reminder sheet opens so the download
+  /// is (mostly) done by the time the user taps "SEND ON WHATSAPP".
+  /// Returns null silently on any error — the share flow falls back gracefully.
+  static Future<Uint8List?> prefetchImageBytes(String imageUrl) async {
+    if (imageUrl.isEmpty || imageUrl == 'null') return null;
+    try {
+      final response = await _dio.get<List<int>>(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (response.data == null) return null;
+      return Uint8List.fromList(response.data!);
+    } catch (e) {
+      debugPrint('⚠️ WhatsApp prefetch failed (will retry on share): $e');
+      return null;
+    }
+  }
+
+
   /// Formats double amount into Indian Rupee format (e.g., ₹1,25,000)
   /// Strips the parenthetical Marathi/regional-script suffix from a bilingual
   /// customer name so greetings show only the primary name.
@@ -542,6 +569,7 @@ class WhatsAppUtils {
     required String imageUrl,
     required String caption,
     String? phone,
+    Uint8List? prefetchedBytes,  // ← pre-warmed bytes from prefetchImageBytes()
     String? receiptNumber,  // used to build clean fallback link
     String? username,       // used to build clean fallback link
   }) async {
@@ -572,18 +600,22 @@ class WhatsAppUtils {
     }
 
     try {
-      final dio = Dio();
+
 
       if (kIsWeb) {
         // ── WEB / PWA PATH ─────────────────────────────────────────────────
-        // Download image bytes first — needed for both Web Share API and
-        // the browser-download fallback.
-        final response = await dio.get<List<int>>(
-          imageUrl,
-          options: Options(responseType: ResponseType.bytes),
-        );
+        // Use pre-warmed bytes if available (sheet opened them in background).
+        // Fall back to downloading now only if the prefetch didn't complete.
+        Uint8List? bytes = prefetchedBytes;
+        if (bytes == null) {
+          final response = await _dio.get<List<int>>(
+            imageUrl,
+            options: Options(responseType: ResponseType.bytes),
+          );
+          if (response.data != null) bytes = Uint8List.fromList(response.data!);
+        }
+        if (bytes == null) throw Exception('Failed to load receipt image bytes');
 
-        final bytes = Uint8List.fromList(response.data!);
         final fileName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         if (context.mounted) messenger?.hideCurrentSnackBar();
@@ -630,7 +662,7 @@ class WhatsAppUtils {
         final tempDir = await getTemporaryDirectory();
         final tempFilePath = '${tempDir.path}/receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        await dio.download(imageUrl, tempFilePath);
+        await _dio.download(imageUrl, tempFilePath);
 
         if (context.mounted) messenger?.hideCurrentSnackBar();
 
@@ -717,22 +749,35 @@ class WhatsAppUtils {
   /// false or throws (older Chrome, Firefox, iOS Safari < 15), we use the
   /// browser-download fallback instead.
   static bool _canShareFiles() {
-    if (!kIsWeb) return true; // native always supports file sharing
+    // Cache the result — browser capabilities never change within a session.
+    if (_canShareFilesCache != null) return _canShareFilesCache!;
+    if (!kIsWeb) {
+      _canShareFilesCache = true;
+      return true; // native always supports file sharing
+    }
     try {
       // Check navigator.share exists (not available in all browsers)
       final navShare = _jsEval('typeof navigator.share === "function"');
-      if (navShare != 'true') return false;
+      if (navShare != 'true') {
+        _canShareFilesCache = false;
+        return false;
+      }
 
       // Check navigator.canShare exists
       final navCanShare = _jsEval('typeof navigator.canShare === "function"');
-      if (navCanShare != 'true') return false;
+      if (navCanShare != 'true') {
+        _canShareFilesCache = false;
+        return false;
+      }
 
       // Check canShare with a dummy file object
       final canShare = _jsEval(
         'navigator.canShare({ files: [new File([], "t.jpg", {type:"image/jpeg"})] }).toString()',
       );
-      return canShare == 'true';
+      _canShareFilesCache = canShare == 'true';
+      return _canShareFilesCache!;
     } catch (_) {
+      _canShareFilesCache = false;
       return false; // degrade gracefully
     }
   }

@@ -18,7 +18,7 @@ enum HomePartyFilter { all, pending, customers, suppliers, counter }
 
 class HomePartyFilterNotifier extends Notifier<HomePartyFilter> {
   @override
-  HomePartyFilter build() => HomePartyFilter.pending;
+  HomePartyFilter build() => HomePartyFilter.all;
 
   void setFilter(HomePartyFilter filter) {
     state = filter;

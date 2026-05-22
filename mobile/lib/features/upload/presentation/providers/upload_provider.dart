@@ -821,7 +821,9 @@ class UploadNotifier extends Notifier<UploadState> {
     
     final duplicateMap = current as Map<String, dynamic>;
     final fileKey = duplicateMap['file_key'] as String? ?? '';
-    final receiptNo = duplicateMap['receipt_number'] as String? ?? '';
+    final existingInvoice = duplicateMap['existing_invoice'] as Map<String, dynamic>?;
+    final receiptNo = existingInvoice?['receipt_number']?.toString() ?? 
+                      duplicateMap['receipt_number']?.toString() ?? '';
     
     final updatedSkip = [
       ...state.filesToSkip,

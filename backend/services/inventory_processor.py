@@ -990,6 +990,22 @@ def process_inventory_batch(
         f"{max_workers} workers, force_upload={force_upload}"
     )
 
+    # ── Eagerly warm up the Gemini singleton BEFORE spawning threads ──────────
+    # Without this, all worker threads race to initialize the shared HTTP/2
+    # connection simultaneously, causing ConnectionTerminated errors for all
+    # but the first thread to succeed. Warming up here serializes the init.
+    try:
+        _get_gemini_client()
+        logger.info("Gemini client pre-warmed before parallel processing")
+    except Exception as e:
+        logger.error(f"Failed to pre-warm Gemini client: {e}")
+        # Return early — no point spawning workers if AI is unavailable
+        return {
+            "processed": 0, "failed": len(file_keys), "skipped_count": 0,
+            "skipped_duplicates": [], "errors": [f"Gemini client unavailable: {e}"],
+            "duplicates": [], "total": len(file_keys),
+        }
+
     counters: Dict[str, int] = {"processed": 0, "failed": 0, "skipped_count": 0, "completed_count": 0}
     skipped_duplicates: List[Dict[str, Any]] = []
     errors: List[str] = []

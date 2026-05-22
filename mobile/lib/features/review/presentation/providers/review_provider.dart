@@ -119,7 +119,8 @@ class ReviewNotifier extends Notifier<ReviewState> {
     for (var date in dates) {
       String receiptNo = date.receiptNumber;
 
-      if (skippedReceipts.contains(receiptNo)) {
+      if (skippedReceipts.contains(receiptNo) ||
+          date.verificationStatus.toLowerCase() == 'duplicate image') {
         continue;
       }
 
@@ -154,7 +155,8 @@ class ReviewNotifier extends Notifier<ReviewState> {
     }
 
     for (var amount in deduplicatedAmounts.values) {
-      if (skippedReceipts.contains(amount.receiptNumber)) {
+      if (skippedReceipts.contains(amount.receiptNumber) ||
+          amount.verificationStatus.toLowerCase() == 'duplicate image') {
         continue;
       }
       

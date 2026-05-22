@@ -362,9 +362,16 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 current_id = vi.get('id', 0)
                 if current_id > enrichment[rn]['max_id']:
                     enrichment[rn]['max_id'] = current_id
-                    enrichment[rn]['total_bill_amount'] = float(vi.get('total_bill_amount') or 0)
-                    enrichment[rn]['received_amount'] = float(vi.get('received_amount') or 0)
-                    enrichment[rn]['balance_due'] = float(vi.get('balance_due') or 0)
+                    # GUARD: Never overwrite a non-zero total_bill_amount with zero.
+                    new_tba = float(vi.get('total_bill_amount') or 0)
+                    if new_tba > 0 or enrichment[rn]['total_bill_amount'] <= 0:
+                        enrichment[rn]['total_bill_amount'] = new_tba
+                    new_recv = float(vi.get('received_amount') or 0)
+                    if new_recv > 0 or enrichment[rn]['received_amount'] <= 0:
+                        enrichment[rn]['received_amount'] = new_recv
+                    new_bal = float(vi.get('balance_due') or 0)
+                    if new_bal > 0 or enrichment[rn]['balance_due'] <= 0:
+                        enrichment[rn]['balance_due'] = new_bal
                     if vi.get('payment_mode'):
                         enrichment[rn]['payment_mode'] = vi['payment_mode']
                     if vi.get('receipt_link'):
@@ -1249,9 +1256,21 @@ async def sync_customer_ledgers_from_invoices(current_user: Dict):
             current_id = inv.get("id", 0)
             if current_id > grouped_invoices[rn]["max_id"]:
                 grouped_invoices[rn]["max_id"] = current_id
-                grouped_invoices[rn]["total_bill_amount"] = float(inv.get("total_bill_amount") or 0)
-                grouped_invoices[rn]["received_amount"] = float(inv.get("received_amount") or 0)
-                grouped_invoices[rn]["balance_due"] = float(inv.get("balance_due") or 0)
+                # GUARD: Never overwrite a non-zero total_bill_amount with zero.
+                # Line-item rows in verified_invoices often have total_bill_amount=0 (only the
+                # header row carries the user-edited value). Picking the newest row by id could
+                # silently erase the user's edit if a line-item row has a higher id.
+                new_tba = float(inv.get("total_bill_amount") or 0)
+                if new_tba > 0 or grouped_invoices[rn]["total_bill_amount"] <= 0:
+                    grouped_invoices[rn]["total_bill_amount"] = new_tba
+                # Same guard for received_amount: only overwrite if new value is non-zero
+                # OR existing value is also zero (i.e. nothing to protect).
+                new_recv = float(inv.get("received_amount") or 0)
+                if new_recv > 0 or grouped_invoices[rn]["received_amount"] <= 0:
+                    grouped_invoices[rn]["received_amount"] = new_recv
+                new_bal = float(inv.get("balance_due") or 0)
+                if new_bal > 0 or grouped_invoices[rn]["balance_due"] <= 0:
+                    grouped_invoices[rn]["balance_due"] = new_bal
                 grouped_invoices[rn]["payment_mode"] = inv.get("payment_mode") or "Cash"
             
             # Ensure we keep the latest metadata if multiple lines have different metadata
