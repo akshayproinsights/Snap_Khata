@@ -67,7 +67,11 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
       group.totalAmount = tx.amount;
 
       if (mounted) {
-        await context.pushNamed('order-detail', extra: group);
+        await context.pushNamed(
+          'order-detail',
+          extra: group,
+          queryParameters: {'receiptNumber': group.receiptNumber},
+        );
         if (mounted) {
           ref.read(gallaProvider.notifier).fetchTransactions();
         }

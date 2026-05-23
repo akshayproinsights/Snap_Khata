@@ -369,7 +369,21 @@ class AppRouter {
         name: 'order-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          if (state.extra == null) {
+          final receiptNumber = state.uri.queryParameters['receiptNumber'] ?? '';
+          final extra = state.extra;
+          final InvoiceGroup group;
+          if (extra is InvoiceGroup) {
+            group = extra;
+          } else if (receiptNumber.isNotEmpty) {
+            group = InvoiceGroup(
+              receiptNumber: receiptNumber,
+              date: '',
+              receiptLink: '',
+              customerName: 'Loading...',
+              mobileNumber: '',
+              uploadDate: '',
+            );
+          } else {
             return Scaffold(
               appBar: AppBar(title: const Text('Order Details')),
               body: Center(
@@ -392,7 +406,6 @@ class AppRouter {
               ),
             );
           }
-          final group = state.extra as InvoiceGroup;
           return OrderDetailPage(group: group);
         },
       ),
@@ -401,31 +414,44 @@ class AppRouter {
         name: 'vendor-delivery-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          if (state.extra == null) {
-            return Scaffold(
-              appBar: AppBar(title: const Text('Delivery Details')),
-              body: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
-                    const SizedBox(height: 16),
-                    const Text('Delivery details missing',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    const Text('Please go back and try again.'),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => context.pop(),
-                      child: const Text('Go Back'),
-                    ),
-                  ],
-                ),
-              ),
+          final invoiceNumber = state.uri.queryParameters['invoiceNumber'];
+          final vendorName = state.uri.queryParameters['vendorName'];
+          final date = state.uri.queryParameters['date'];
+          final extra = state.extra;
+
+          if (extra is InventoryInvoiceBundle) {
+            return VendorDeliveryDetailPage(bundle: extra);
+          } else if ((invoiceNumber != null && invoiceNumber.isNotEmpty) ||
+              (vendorName != null && vendorName.isNotEmpty)) {
+            return VendorDeliveryDetailPage(
+              bundle: null,
+              invoiceNumber: invoiceNumber,
+              vendorName: vendorName,
+              date: date,
             );
           }
-          final bundle = state.extra as InventoryInvoiceBundle;
-          return VendorDeliveryDetailPage(bundle: bundle);
+
+          return Scaffold(
+            appBar: AppBar(title: const Text('Delivery Details')),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text('Delivery details missing',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text('Please go back and try again.'),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => context.pop(),
+                    child: const Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
         },
       ),
       GoRoute(

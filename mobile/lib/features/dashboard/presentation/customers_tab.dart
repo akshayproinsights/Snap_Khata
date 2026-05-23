@@ -228,7 +228,11 @@ class _DashboardInvoiceGroupTile extends ConsumerWidget {
                       : BorderRadius.circular(18),
               onTap: () {
                 HapticFeedback.lightImpact();
-                context.pushNamed('order-detail', extra: group);
+                context.pushNamed(
+                  'order-detail',
+                  extra: group,
+                  queryParameters: {'receiptNumber': group.receiptNumber},
+                );
               },
               onLongPress: () {
                 HapticFeedback.heavyImpact();

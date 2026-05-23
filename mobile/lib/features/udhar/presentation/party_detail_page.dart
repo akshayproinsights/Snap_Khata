@@ -18,6 +18,7 @@ import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -753,7 +754,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
       if (mounted) {
         // Use await to refresh data when returning from details
-        await context.pushNamed('order-detail', extra: group);
+        await context.pushNamed(
+          'order-detail',
+          extra: group,
+          queryParameters: {'receiptNumber': group.receiptNumber},
+        );
         if (mounted) {
           _loadTransactions();
         }
@@ -1084,7 +1089,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? _buildTransactionSkeleton()
                 : _transactions == null || _transactions!.isEmpty
                 ? _buildEmptyState()
                 : Builder(
@@ -1301,7 +1306,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        NumberFormat('#,##,###.##').format(balance.abs()),
+                        CurrencyFormatter.formatPlain(balance.abs()),
                         style: TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.w900,
@@ -2045,6 +2050,105 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       ],
     );
   }
+
+  // ── Skeleton loader shown while transactions are fetching ──────────────────
+  // Mirrors the real transaction card shape so there's no layout jump when
+  // data arrives. Uses the shimmer package already present in pubspec.
+  Widget _buildTransactionSkeleton() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0);
+    final highlightColor = isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5);
+
+    Widget ghostCard() {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: context.borderColor.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon box placeholder
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: baseColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title + amount row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 110,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                      ),
+                      Container(
+                        width: 72,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Date row
+                  Container(
+                    width: 90,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: baseColor,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Balance chip placeholder
+                  Container(
+                    width: 130,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: baseColor,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Shimmer.fromColors(
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+        physics: const NeverScrollableScrollPhysics(),
+        children: List.generate(6, (_) => ghostCard()),
+      ),
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   Widget _buildTransactionCard(LedgerTransaction tx) {
     final isPayment = tx.transactionType == 'PAYMENT';

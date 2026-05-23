@@ -306,7 +306,15 @@ class _VendorLedgerDetailPageState
     );
 
     if (mounted) {
-      await context.pushNamed('vendor-delivery-detail', extra: bundle);
+      await context.pushNamed(
+        'vendor-delivery-detail',
+        extra: bundle,
+        queryParameters: {
+          'invoiceNumber': bundle.invoiceNumber,
+          'vendorName': bundle.vendorName,
+          'date': bundle.date,
+        },
+      );
       if (mounted) {
         _loadData();
       }
@@ -529,7 +537,7 @@ class _VendorLedgerDetailPageState
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    NumberFormat('#,##,###.##').format(balance.abs()),
+                    CurrencyFormatter.formatPlain(balance.abs()),
                     style: TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.w900,

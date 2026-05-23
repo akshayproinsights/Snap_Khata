@@ -12,12 +12,150 @@ import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_p
 import 'package:mobile/features/inventory/presentation/providers/inventory_items_provider.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/core/theme/context_extension.dart';
+import 'package:mobile/features/inventory/data/inventory_repository.dart';
 
-class VendorDeliveryDetailPage extends ConsumerWidget {
-  final InventoryInvoiceBundle bundle;
+class VendorDeliveryDetailPage extends ConsumerStatefulWidget {
+  final InventoryInvoiceBundle? bundle;
+  final String? invoiceNumber;
+  final String? vendorName;
+  final String? date;
 
-  const VendorDeliveryDetailPage({super.key, required this.bundle});
+  const VendorDeliveryDetailPage({
+    super.key,
+    this.bundle,
+    this.invoiceNumber,
+    this.vendorName,
+    this.date,
+  });
 
+  @override
+  ConsumerState<VendorDeliveryDetailPage> createState() => _VendorDeliveryDetailPageState();
+}
+
+class _VendorDeliveryDetailPageState extends ConsumerState<VendorDeliveryDetailPage> {
+  InventoryInvoiceBundle? _bundle;
+  bool _isLoading = false;
+  String? _errorMsg;
+
+  InventoryInvoiceBundle get bundle => _bundle ?? widget.bundle!;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.bundle == null) {
+      _loadBundle();
+    }
+  }
+
+  Future<void> _loadBundle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMsg = null;
+    });
+    try {
+      final repo = InventoryRepository();
+      List<InventoryItem> items = [];
+      
+      final invNum = widget.invoiceNumber ?? '';
+      if (invNum.isNotEmpty) {
+        items = await repo.getItemsByInvoiceNumber(invNum);
+      }
+      
+      if (items.isEmpty && widget.vendorName != null && widget.vendorName!.isNotEmpty) {
+        final allItems = await repo.getInventoryItems(showAll: true);
+        final targetDate = widget.date ?? '';
+        final targetVendor = widget.vendorName!.toLowerCase().trim();
+        
+        items = allItems.where((item) {
+          final itemVendor = item.vendorName?.toLowerCase().trim() ?? '';
+          final itemDate = item.invoiceDate;
+          
+          final vendorMatch = itemVendor == targetVendor || itemVendor.contains(targetVendor);
+          final dateMatch = itemDate == targetDate;
+          
+          return vendorMatch && dateMatch;
+        }).toList();
+      }
+
+      if (items.isEmpty) {
+        throw Exception('No delivery items found.');
+      }
+      
+      final first = items.first;
+      String effectivePaymentMode = first.paymentMode ?? 'Credit';
+      
+      var vendorState = ref.read(vendorLedgerProvider);
+      if (vendorState.ledgers.isEmpty) {
+        await ref.read(vendorLedgerProvider.notifier).fetchLedgers();
+        vendorState = ref.read(vendorLedgerProvider);
+      }
+      
+      final sName = (first.vendorName ?? widget.vendorName ?? '').toLowerCase().trim();
+      VendorLedger? match;
+      for (final l in vendorState.ledgers) {
+        final lName = l.vendorName.toLowerCase().trim();
+        if (sName.isNotEmpty && (lName == sName || lName.contains(sName))) {
+          match = l;
+          break;
+        }
+      }
+      
+      if (match != null) {
+        final allItemsList = await ref.read(vendorLedgerProvider.notifier).fetchInventoryItemsByVendor(match.vendorName);
+        final key = first.invoiceNumber.isNotEmpty
+            ? first.invoiceNumber
+            : '${first.invoiceDate}_${first.vendorName ?? ''}';
+            
+        final matchingInvoice = allItemsList.firstWhere(
+          (inv) {
+            final invNum = inv['invoice_number']?.toString() ?? '';
+            final invDate = inv['invoice_date']?.toString() ?? '';
+            final itemKey = invNum.isNotEmpty ? invNum : '${invDate}_${inv['vendor_name'] ?? ''}';
+            return itemKey == key;
+          },
+          orElse: () => <String, dynamic>{},
+        );
+        
+        if (matchingInvoice.isNotEmpty) {
+          final matchingItems = (matchingInvoice['items'] as List?)?.map((i) => InventoryItem.fromJson(i)).toList() ?? [];
+          if (matchingItems.isNotEmpty) {
+            bool hasCash = matchingItems.any((i) => i.paymentMode == 'Cash');
+            effectivePaymentMode = hasCash ? 'Cash' : 'Credit';
+          }
+        }
+      }
+
+      final newBundle = InventoryInvoiceBundle(
+        invoiceNumber: first.invoiceNumber,
+        date: first.invoiceDate,
+        vendorName: first.vendorName?.isNotEmpty == true
+            ? first.vendorName!
+            : (widget.vendorName ?? 'Unknown Vendor'),
+        receiptLink: first.receiptLink,
+        items: items,
+        totalAmount: items.fold(0.0, (sum, item) => sum + item.netBill),
+        hasMismatch: items.any((i) => i.amountMismatch.abs() > 1.0),
+        isVerified: items.every((i) => i.verificationStatus == 'Done'),
+        createdAt: first.createdAt ?? '',
+        headerAdjustments: first.headerAdjustments ?? [],
+        paymentMode: effectivePaymentMode,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _bundle = newBundle;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMsg = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _showReceiptDialog(BuildContext context) {
     if (bundle.receiptLink.isEmpty || bundle.receiptLink == 'null') return;
@@ -47,7 +185,53 @@ class VendorDeliveryDetailPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: context.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Bill Details'),
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMsg != null) {
+      return Scaffold(
+        backgroundColor: context.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Bill Details'),
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(_errorMsg!,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.pop(),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final hasLink = bundle.receiptLink.isNotEmpty && bundle.receiptLink != 'null';
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final totalAmount = bundle.totalAmount;

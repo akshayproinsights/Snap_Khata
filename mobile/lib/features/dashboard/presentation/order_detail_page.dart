@@ -84,11 +84,115 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   late TextEditingController _balanceDueController;
   late TextEditingController _creditDetailsController;
 
+  bool _isLoading = false;
+  String? _errorMsg;
+
   @override
   void initState() {
     super.initState();
-    _initControllers();
-    _loadPersistedSettings();
+    if (widget.group.customerName == 'Loading...' && widget.group.date.isEmpty) {
+      _loadGroupFromReceiptNumber();
+    } else {
+      _initControllers();
+      _loadPersistedSettings();
+    }
+  }
+
+  Future<void> _loadGroupFromReceiptNumber() async {
+    setState(() {
+      _isLoading = true;
+      _errorMsg = null;
+    });
+    try {
+      final repo = ref.read(verifiedRepositoryProvider);
+      final records = await repo.getVerifiedInvoices(
+        receiptNumber: widget.group.receiptNumber,
+      );
+
+      if (records.isEmpty) {
+        throw Exception('Could not find order details for #${widget.group.receiptNumber}.');
+      }
+
+      final first = records.first;
+      
+      // Fetch ledgers if empty
+      var udharState = ref.read(udharProvider);
+      if (udharState.ledgers.isEmpty) {
+        await ref.read(udharProvider.notifier).fetchLedgers();
+        udharState = ref.read(udharProvider);
+      }
+      
+      final sName = first.customerName.toLowerCase().trim();
+      final sDetails = (first.customerDetails ?? '').toLowerCase().trim();
+      
+      CustomerLedger? match;
+      for (final l in udharState.ledgers) {
+        final lName = l.customerName.toLowerCase().trim();
+        if (sName.isNotEmpty && lName == sName) {
+          match = l;
+          break;
+        }
+      }
+      if (match == null && sDetails.isNotEmpty) {
+        for (final l in udharState.ledgers) {
+          final lName = l.customerName.toLowerCase().trim();
+          if (lName == sDetails) {
+            match = l;
+            break;
+          }
+        }
+      }
+      
+      double ledgerTotalPaid = 0.0;
+      double ledgerBalanceDue = first.balanceDue ?? 0.0;
+      String ledgerPaymentMode = first.paymentMode ?? 'Credit';
+      
+      if (match != null) {
+        final transactions = await ref.read(udharProvider.notifier).fetchTransactions(match.id);
+        final double ledgerInvoiceAmount = records.fold(0.0, (sum, item) => sum + item.amount);
+        ledgerTotalPaid = transactions
+            .where((t) =>
+                t.transactionType == 'PAYMENT' &&
+                t.receiptNumber == widget.group.receiptNumber)
+            .fold(0.0, (sum, t) => sum + t.amount);
+        ledgerBalanceDue = (ledgerInvoiceAmount - ledgerTotalPaid).clamp(0.0, double.infinity);
+        ledgerPaymentMode = ledgerBalanceDue <= 0 ? 'Cash' : (first.paymentMode ?? 'Credit');
+      } else {
+        final double ledgerInvoiceAmount = records.fold(0.0, (sum, item) => sum + item.amount);
+        ledgerTotalPaid = first.receivedAmount ?? 0.0;
+        ledgerBalanceDue = first.balanceDue ?? (ledgerInvoiceAmount - ledgerTotalPaid).clamp(0.0, double.infinity);
+        ledgerPaymentMode = first.paymentMode ?? (ledgerBalanceDue <= 0 ? 'Cash' : 'Credit');
+      }
+
+      // Mutate the group object passed to the widget
+      widget.group.date = first.date.isNotEmpty ? first.date : first.uploadDate;
+      widget.group.receiptLink = first.receiptLink;
+      widget.group.customerName = first.customerName;
+      widget.group.mobileNumber = first.mobileNumber.replaceAll(RegExp(r'\.0$'), '');
+      widget.group.extraFields = first.extraFields;
+      widget.group.uploadDate = first.uploadDate;
+      widget.group.paymentMode = ledgerPaymentMode;
+      widget.group.receivedAmount = ledgerTotalPaid;
+      widget.group.balanceDue = ledgerBalanceDue;
+      widget.group.customerDetails = first.customerDetails;
+      widget.group.items = records;
+      widget.group.totalAmount = records.fold(0.0, (sum, item) => sum + item.amount);
+
+      if (mounted) {
+        _initControllers();
+        _loadPersistedSettings();
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMsg = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadPersistedSettings() async {
@@ -365,6 +469,63 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: context.surfaceColor,
+        appBar: AppBar(
+          title: const Text('Order Details',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              )),
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMsg != null) {
+      return Scaffold(
+        backgroundColor: context.surfaceColor,
+        appBar: AppBar(
+          title: const Text('Order Details',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              )),
+          backgroundColor: context.surfaceColor,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.alertCircle, size: 48, color: Colors.orange),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(_errorMsg!,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.pop(),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final config = ref.watch(configProvider).value;
     final isAutomobile = config?['industry'] == 'automobile';
     final hasLink = widget.group.receiptLink.isNotEmpty &&

@@ -754,7 +754,10 @@ class _VendorDeliveryCard extends ConsumerWidget {
     return InkWell(
       onTap: () {
         HapticFeedback.lightImpact();
-        context.push('/vendor-delivery-detail', extra: bundle);
+        context.push(
+          '/vendor-delivery-detail?invoiceNumber=${bundle.invoiceNumber}&vendorName=${Uri.encodeComponent(bundle.vendorName)}&date=${bundle.date}',
+          extra: bundle,
+        );
       },
       onLongPress: () {
         HapticFeedback.heavyImpact();

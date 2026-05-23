@@ -77,8 +77,11 @@ class CustomerActivityCard extends ConsumerWidget {
                 )
                   ..items = groupItems
                   ..totalAmount = billTotal;
-                
-                context.pushNamed('order-detail', extra: group);
+                context.pushNamed(
+                  'order-detail',
+                  extra: group,
+                  queryParameters: {'receiptNumber': group.receiptNumber},
+                );
                 return;
               }
 

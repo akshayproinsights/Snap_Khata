@@ -92,7 +92,15 @@ class VendorActivityCard extends ConsumerWidget {
                   paymentMode: isPaid ? 'Cash' : 'Credit',
                 );
 
-                context.pushNamed('vendor-delivery-detail', extra: bundle);
+                context.pushNamed(
+                  'vendor-delivery-detail',
+                  extra: bundle,
+                  queryParameters: {
+                    'invoiceNumber': bundle.invoiceNumber,
+                    'vendorName': bundle.vendorName,
+                    'date': bundle.date,
+                  },
+                );
                 return;
               }
 
