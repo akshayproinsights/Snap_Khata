@@ -86,6 +86,70 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
+  /// Immediately injects (or updates) a customer ledger entry in local state
+  /// so the home screen shows the new party card before the backend sync finishes.
+  ///
+  /// If a ledger with the same [customerName] (case-insensitive) already exists,
+  /// its [balanceDue] and bill fields are updated in-place instead of adding a
+  /// duplicate entry.
+  ///
+  /// A sentinel [id] of -1 is used for brand-new entries so [fetchLedgersSilent]
+  /// can cleanly overwrite them with the real server record on next refresh —
+  /// no stale ghost entries remain after sync completes.
+  void addOrUpdateLedgerOptimistic({
+    required String customerName,
+    required double totalBilled,
+    required double balanceDue,
+    String? receiptNumber,
+    String? mobileNumber,
+  }) {
+    if (customerName.isEmpty || customerName == 'Counter') return;
+
+    final now = DateTime.now();
+    // Exact case-sensitive match — "Akshay", "Akshay sir", "Akshay 123" are all
+    // different parties. Only trim() is applied to guard against accidental spaces.
+    final nameToMatch = customerName.trim();
+
+    final existingIndex = state.ledgers.indexWhere(
+      (l) => l.customerName.trim() == nameToMatch,
+    );
+
+    final List<CustomerLedger> updated = List.from(state.ledgers);
+
+    if (existingIndex >= 0) {
+      // Party exists — bump their balance and bill info optimistically.
+      final existing = updated[existingIndex];
+      updated[existingIndex] = existing.copyWith(
+        balanceDue: existing.balanceDue + balanceDue,
+        latestBillNumber: receiptNumber ?? existing.latestBillNumber,
+        latestBillAmount: totalBilled,
+        latestBillDate: now,
+        latestUploadDate: now,
+        updatedAt: now,
+      );
+      // Move the updated entry to the front so it appears at the top of the list.
+      final entry = updated.removeAt(existingIndex);
+      updated.insert(0, entry);
+    } else {
+      // Brand-new party — create a sentinel entry with id = -1.
+      final optimisticLedger = CustomerLedger(
+        id: -1,
+        customerName: customerName.trim(),
+        customerPhone: mobileNumber,
+        balanceDue: balanceDue,
+        latestBillNumber: receiptNumber,
+        latestBillAmount: totalBilled,
+        latestBillDate: now,
+        latestUploadDate: now,
+        updatedAt: now,
+      );
+      // Insert at the very front so it's the first card the user sees.
+      updated.insert(0, optimisticLedger);
+    }
+
+    state = state.copyWith(ledgers: updated);
+  }
+
   Future<List<LedgerTransaction>> fetchTransactions(int ledgerId) async {
     try {
       final response = await _dio.get(

@@ -461,46 +461,54 @@ def delete_records_by_receipt(username: str, receipt_number: str, table: str = '
 def update_verification_records(username: str, table: str, data: List[Dict[str, Any]]) -> bool:
     """
     Update verification records (replace all for user).
-    
+
     NOTE: This uses delete-all-then-batch-insert pattern intentionally!
     Verification tables need to remove "Done" records after Sync & Finish.
     The caller (verification.py) filters the data to only include records that should remain.
-    
+
+    IMPORTANT: The delete happens first. If the subsequent insert fails, the records
+    are gone from the DB. This function now raises on insert failure so the caller
+    (run_sync_verified_logic_supabase) can surface a real error to the user rather
+    than silently claiming success while data is in an inconsistent state.
+
     Args:
         username: Username for RLS filtering
         table: Table name ('verification_dates' or 'verification_amounts')
         data: List of record dictionaries (already filtered to keep only Pending/Duplicate)
-    
+
     Returns:
-        True if successful, False otherwise
+        True if successful.
+
+    Raises:
+        Exception: If the batch insert fails, so callers are never silently misled.
     """
+    db = get_database_client()
+
+    # Delete existing records for this user (removes "Done" records)
+    db.delete(table, {'username': username})
+
+    if not data:
+        logger.info(f"No records to reinsert into {table} for {username} (all Done records removed)")
+        return True
+
+    # Prepare all records: set username, clean numeric types
+    prepared = []
+    for record in data:
+        record = dict(record)  # Avoid mutating the caller's list
+        record['username'] = username
+        # Remove auto-generated fields that Supabase will re-assign on insert
+        record.pop('id', None)
+        record.pop('created_at', None)
+        record = convert_numeric_types(record)
+        prepared.append(record)
+
+    # OPTIMIZED: Batch insert all remaining records in one Supabase call.
+    # batch_upsert raises on failure — we let that propagate so the caller
+    # knows the cleanup step failed instead of silently swallowing the error.
     try:
-        db = get_database_client()
-        
-        # Delete existing records for this user (removes "Done" records)
-        db.delete(table, {'username': username})
-        
-        if not data:
-            logger.info(f"No records to reinsert into {table} for {username} (all Done records removed)")
-            return True
-        
-        # Prepare all records: set username, clean numeric types
-        prepared = []
-        for record in data:
-            record = dict(record)  # Avoid mutating the caller's list
-            record['username'] = username
-            # Remove auto-generated fields that Supabase will re-assign on insert
-            record.pop('id', None)
-            record.pop('created_at', None)
-            record = convert_numeric_types(record)
-            prepared.append(record)
-        
-        # OPTIMIZED: Batch insert all remaining records in one Supabase call
-        # This is 10-50x faster than per-record inserts and avoids Cloud Run timeout
         count = db.batch_upsert(table, prepared, batch_size=500)
         logger.info(f"✅ Reinserted {count} records into {table} for {username} (Done records removed)")
         return True
-    
     except Exception as e:
         logger.error(f"Error updating {table} for {username}: {e}")
-        return False
+        raise  # Re-raise: callers must not silently proceed after a failed cleanup

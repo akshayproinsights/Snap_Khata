@@ -68,10 +68,12 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
     }
   }
 
-  // Sort by latest activity (updatedAt) falling back to upload/transaction dates
+  // Sort by actual bill upload date first, falling back to updatedAt/transaction dates.
+  // We intentionally avoid leading with updatedAt because balance-reconciliation patches
+  // update that field on every /ledgers fetch, causing unrelated parties to jump to the top.
   unifiedList.sort((a, b) {
-    final dateA = a.updatedAt ?? a.latestUploadDate ?? a.lastTransactionDate ?? DateTime(0);
-    final dateB = b.updatedAt ?? b.latestUploadDate ?? b.lastTransactionDate ?? DateTime(0);
+    final dateA = a.latestUploadDate ?? a.updatedAt ?? a.lastTransactionDate ?? DateTime(0);
+    final dateB = b.latestUploadDate ?? b.updatedAt ?? b.lastTransactionDate ?? DateTime(0);
     return dateB.compareTo(dateA);
   });
 

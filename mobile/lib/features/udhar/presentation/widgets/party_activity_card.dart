@@ -93,9 +93,9 @@ class PartyActivityCard extends StatelessWidget {
                               const SizedBox(width: 8),
                             ],
                             _buildTypeBadge(context),
-                            if (party.updatedAt != null || party.latestUploadDate != null || party.lastTransactionDate != null) ...[
+                            if (party.latestUploadDate != null || party.updatedAt != null || party.lastTransactionDate != null) ...[
                               const SizedBox(width: 8),
-                              _buildTimestamp(context, party.updatedAt ?? party.latestUploadDate ?? party.lastTransactionDate!),
+                              _buildTimestamp(context, party.latestUploadDate ?? party.updatedAt ?? party.lastTransactionDate!),
                             ],
                           ],
                         ),

@@ -19,6 +19,8 @@ import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
+import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
+
 
 
 
@@ -470,6 +472,40 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       // This eliminates the blank screen caused by groups being cleared
       // while this page is still in the widget tree.
       setState(() => _isNavigatingAway = true);
+
+      // ⚡ Optimistic ledger update — inject the new/updated party card into
+      // local state RIGHT NOW so the home screen is already populated when
+      // the user lands there, without waiting for the backend sync to finish.
+      final liveState2 = ref.read(reviewProvider);
+      final liveGroup2 = liveState2.groups.firstWhere(
+        (g) => g.receiptNumber == widget.group.receiptNumber,
+        orElse: () => widget.group,
+      );
+      final optimisticHeader = liveGroup2.header;
+      if (optimisticHeader != null) {
+        final grandTotal = _activeTotalAmount(liveGroup2);
+        final receivedFromInput =
+            double.tryParse(_paidAmountController.text) ?? _receivedAmount;
+        final optimisticBalance =
+            (grandTotal - receivedFromInput).clamp(0.0, double.infinity);
+        final optimisticName =
+            (optimisticHeader.customerName?.trim().isNotEmpty == true)
+                ? optimisticHeader.customerName!.trim()
+                : 'Counter';
+
+        ref.read(udharProvider.notifier).addOrUpdateLedgerOptimistic(
+          customerName: optimisticName,
+          totalBilled: grandTotal,
+          balanceDue: optimisticBalance,
+          receiptNumber: liveGroup2.receiptNumber,
+          mobileNumber: optimisticHeader.mobileNumber?.trim().isNotEmpty == true
+              ? optimisticHeader.mobileNumber
+              : _mobileController.text.trim().isNotEmpty
+                  ? _mobileController.text.trim()
+                  : null,
+        );
+      }
+
       AppToast.showSuccess(context, 'Syncing your receipts in background…',
           title: 'Saved ✔');
       context.go('/');

@@ -12,6 +12,7 @@ import 'package:mobile/features/udhar/presentation/widgets/swipeable_party_card.
 import 'package:mobile/features/dashboard/presentation/widgets/bill_type_selection_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/widgets/review_center_sheet.dart';
 import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/features/review/presentation/providers/review_provider.dart';
 
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile/core/utils/currency_formatter.dart';
@@ -54,6 +55,21 @@ class HomeDashboardPage extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedParties = ref.watch(selectedPartiesProvider);
     final isSelectionMode = selectedParties.isNotEmpty;
+    // Watch sync state so the banner appears/disappears reactively
+    final reviewState = ref.watch(reviewProvider);
+
+    // Fix 5: auto-refresh the instant sync completes (isSyncing: true → false).
+    // Fires all three fetches in parallel so the home screen reflects real server
+    // data as soon as possible — without the user having to do anything.
+    ref.listen<ReviewState>(reviewProvider, (prev, next) {
+      if (prev?.isSyncing == true && !next.isSyncing && next.error == null) {
+        Future.wait([
+          ref.read(udharProvider.notifier).fetchLedgersSilent(),
+          ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent(),
+          ref.read(dashboardTotalsProvider.notifier).refreshSilent(),
+        ]);
+      }
+    });
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
@@ -157,6 +173,14 @@ class HomeDashboardPage extends ConsumerWidget {
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
+                // ── Sync-in-progress banner — slides in when isSyncing, collapses when done ──
+                SliverToBoxAdapter(
+                  child: _SyncingBanner(
+                    isSyncing: reviewState.isSyncing,
+                    progress: reviewState.syncProgress,
+                  ),
+                ),
+
                 // ── Header with Greeting & Actions ──
                 SliverToBoxAdapter(
                   child: Padding(
@@ -1038,6 +1062,167 @@ class _LoadMoreFooter extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Syncing Banner
+// Slides in at the very top of the home screen while a background sync runs.
+// Uses AnimatedSize so the rest of the layout shifts gracefully without jumps.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SyncingBanner extends StatefulWidget {
+  const _SyncingBanner({required this.isSyncing, this.progress});
+
+  final bool isSyncing;
+  final SyncProgress? progress;
+
+  @override
+  State<_SyncingBanner> createState() => _SyncingBannerState();
+}
+
+class _SyncingBannerState extends State<_SyncingBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulse;
+
+  // Human-friendly label for each backend stage
+  static String _stageLabel(String stage) {
+    switch (stage) {
+      case 'reading':
+        return 'Reading your receipts…';
+      case 'correcting':
+        return 'Applying corrections…';
+      case 'saving_invoices':
+        return 'Saving invoices…';
+      case 'building_verified':
+        return 'Building verified ledger…';
+      case 'saving_verified':
+        return 'Saving to ledger…';
+      case 'cleanup':
+        return 'Cleaning up…';
+      case 'complete':
+        return 'All done! ✓';
+      case 'working':
+        return 'Processing…';
+      default:
+        return 'Syncing receipts…';
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: 0.65, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      // Collapses to zero height when not syncing — no empty gap left behind
+      child: widget.isSyncing ? _buildBanner(context) : const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildBanner(BuildContext context) {
+    final progress = widget.progress;
+    final pct = (progress?.percentage ?? 0).clamp(0, 100);
+    final stage = progress?.stage ?? '';
+    final label = _stageLabel(stage);
+
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primary.withValues(alpha: 0.12),
+                AppTheme.primary.withValues(alpha: 0.05),
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.primary.withValues(alpha: 0.22),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Rotating sync icon
+                  RotationTransition(
+                    turns: _pulseCtrl,
+                    child: const Icon(
+                      LucideIcons.refreshCw,
+                      size: 14,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: context.isDark
+                            ? Colors.white.withValues(alpha: 0.9)
+                            : AppTheme.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                  if (pct > 0)
+                    Text(
+                      '$pct%',
+                      style: TextStyle(
+                        color: AppTheme.primary.withValues(alpha: 0.8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Thin animated progress bar — indeterminate when pct = 0
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: pct > 0 ? pct / 100.0 : null,
+                  minHeight: 3,
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.10),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppTheme.primary.withValues(alpha: _pulse.value),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
     );
   }
 }

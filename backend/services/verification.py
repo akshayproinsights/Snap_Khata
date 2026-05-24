@@ -1080,7 +1080,61 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         verification_reverse_map = {v: k for k, v in verification_map.items()}
         # Ensure we map 'Receipt Link' -> 'receipt_link' for verification tables
         verification_reverse_map['Receipt Link'] = 'receipt_link'
-        
+
+        # ── SCHEMA ALLOWLISTS ─────────────────────────────────────────────────────────
+        # These are the ONLY columns that exist in each table.
+        # Adding a column allowlist here is the single source of truth that prevents
+        # PGRST204 "column not found" errors caused by the code dumping extra fields
+        # (e.g. 'description' from invoices into verification_dates, 'date' into
+        # verification_amounts) that Supabase rejects at write time.
+        #
+        # HOW TO MAINTAIN: If you add a column to either Supabase table via migration,
+        # add the snake_case column name to the matching set below.
+        # ─────────────────────────────────────────────────────────────────────────────
+        VERIFICATION_DATES_COLS: set = {
+            # Core identifiers
+            'username', 'receipt_number', 'row_id', 'header_id', 'image_hash',
+            # Receipt data
+            'date', 'r2_file_path', 'receipt_link', 'upload_date',
+            # Verification state
+            'verification_status', 'audit_findings',
+            # Payment tracking (added via migration 054)
+            'payment_mode', 'received_amount', 'balance_due', 'total_bill_amount',
+            'customer_details', 'type', 'gst_mode', 'taxable_row_ids',
+            # Customer info (added via migration 025)
+            'customer_name', 'mobile_number', 'car_number',
+            # Bounding box data
+            'receipt_number_bbox', 'date_bbox', 'receipt_bbox',
+            'combined_bbox', 'date_and_receipt_combined_bbox',
+            # AI model tracking
+            'model_used', 'model_accuracy', 'input_tokens', 'output_tokens',
+            'total_tokens', 'cost_inr',
+            # Fallback tracking
+            'fallback_attempted', 'fallback_reason', 'processing_errors',
+        }
+
+        VERIFICATION_AMOUNTS_COLS: set = {
+            # Core identifiers
+            'username', 'receipt_number', 'row_id', 'header_id', 'image_hash',
+            # Line item data (NOTE: no 'date' column — belongs to verification_dates)
+            'description', 'amount', 'quantity', 'rate', 'amount_mismatch',
+            'r2_file_path', 'receipt_link', 'upload_date',
+            # Verification state
+            'verification_status', 'audit_findings',
+            # Payment tracking (added via migration 054)
+            'payment_mode', 'received_amount', 'balance_due', 'total_bill_amount',
+            'customer_details', 'type',
+            # Bounding box data
+            'line_item_row_bbox', 'amount_bbox', 'receipt_bbox',
+            'date_and_receipt_combined_bbox', 'receipt_number_bbox',
+            'description_bbox', 'quantity_bbox', 'rate_bbox',
+            # AI model tracking
+            'model_used', 'model_accuracy', 'input_tokens', 'output_tokens',
+            'total_tokens', 'cost_inr',
+            # Fallback tracking
+            'fallback_attempted', 'fallback_reason', 'processing_errors',
+        }
+
         # Clean verification_dates
         if 'Verification Status' in df_date.columns:
             # Keep Pending and Duplicate Receipt Number records
@@ -1112,10 +1166,33 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             df_date_clean_snake = df_date_clean_snake.replace([float('inf'), float('-inf')], None)
             df_date_clean_snake = df_date_clean_snake.where(pd.notna(df_date_clean_snake), None)
             
-            clean_date_records = df_date_clean_snake.to_dict('records')
-            
-            # Update verification_dates
-            update_verification_records(username, 'verification_dates', clean_date_records)
+            raw_date_records = df_date_clean_snake.to_dict('records')
+
+            # CRITICAL: Strip any columns not in the verification_dates schema.
+            # This prevents PGRST204 errors when invoice fields (e.g. 'description')
+            # bleed into the verification_dates payload via the reverse column map.
+            clean_date_records = [
+                {k: v for k, v in rec.items() if k in VERIFICATION_DATES_COLS}
+                for rec in raw_date_records
+            ]
+            extra_date_cols = (
+                set(raw_date_records[0].keys()) - VERIFICATION_DATES_COLS
+                if raw_date_records else set()
+            )
+            if extra_date_cols:
+                logger.warning(
+                    f"⚠️ Stripped {len(extra_date_cols)} unexpected column(s) from "
+                    f"verification_dates payload: {sorted(extra_date_cols)}. "
+                    f"If these are new DB columns, add them to VERIFICATION_DATES_COLS."
+                )
+
+            # Update verification_dates — raises on failure so we don't silently succeed
+            success = update_verification_records(username, 'verification_dates', clean_date_records)
+            if not success:
+                raise RuntimeError(
+                    f"Failed to update verification_dates for {username}. "
+                    "Sync & Finish aborted to prevent data inconsistency."
+                )
             logger.info(f"verification_dates cleaned: {len(clean_date_records)} records remain")
 
         # Clean verification_amounts
@@ -1141,10 +1218,33 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
             df_amount_clean_snake = df_amount_clean_snake.replace([float('inf'), float('-inf')], None)
             df_amount_clean_snake = df_amount_clean_snake.where(pd.notna(df_amount_clean_snake), None)
             
-            clean_amount_records = df_amount_clean_snake.to_dict('records')
-            
-            # Update verification_amounts
-            update_verification_records(username, 'verification_amounts', clean_amount_records)
+            raw_amount_records = df_amount_clean_snake.to_dict('records')
+
+            # CRITICAL: Strip any columns not in the verification_amounts schema.
+            # This prevents PGRST204 errors when invoice header fields (e.g. 'date')
+            # bleed into the verification_amounts payload via the reverse column map.
+            clean_amount_records = [
+                {k: v for k, v in rec.items() if k in VERIFICATION_AMOUNTS_COLS}
+                for rec in raw_amount_records
+            ]
+            extra_amount_cols = (
+                set(raw_amount_records[0].keys()) - VERIFICATION_AMOUNTS_COLS
+                if raw_amount_records else set()
+            )
+            if extra_amount_cols:
+                logger.warning(
+                    f"⚠️ Stripped {len(extra_amount_cols)} unexpected column(s) from "
+                    f"verification_amounts payload: {sorted(extra_amount_cols)}. "
+                    f"If these are new DB columns, add them to VERIFICATION_AMOUNTS_COLS."
+                )
+
+            # Update verification_amounts — raises on failure so we don't silently succeed
+            success = update_verification_records(username, 'verification_amounts', clean_amount_records)
+            if not success:
+                raise RuntimeError(
+                    f"Failed to update verification_amounts for {username}. "
+                    "Sync & Finish aborted to prevent data inconsistency."
+                )
             logger.info(f"verification_amounts cleaned: {len(clean_amount_records)} records remain")
 
         results["success"] = True

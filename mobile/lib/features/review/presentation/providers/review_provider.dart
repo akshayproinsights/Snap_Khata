@@ -362,13 +362,19 @@ class ReviewNotifier extends Notifier<ReviewState> {
   /// which makes the home screen flash blank/grey until the network call returns.
   /// Instead we call the *silent* fetch methods which update data IN-PLACE without
   /// ever clearing the existing cache — zero blank frames guaranteed.
+  ///
+  /// Fix 2: all three fetches run in parallel via Future.wait — no sequential
+  /// blocking. Previously fetchReviewData() was awaited first, delaying the
+  /// ledger refresh by ~500ms–2s on slower connections.
   Future<void> _refreshAfterSync() async {
-    await fetchReviewData();
-    // refreshSilent keeps existing card values visible while fetching — no loading flash
-    unawaited(ref.read(dashboardTotalsProvider.notifier).refreshSilent());
-    // Silent refresh — keeps existing ledger cache visible while fetching fresh data
-    unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
-    unawaited(ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent());
+    await Future.wait([
+      fetchReviewData(),
+      // refreshSilent keeps existing card values visible while fetching — no loading flash
+      ref.read(dashboardTotalsProvider.notifier).refreshSilent(),
+      // Silent refresh — keeps existing ledger cache visible while fetching fresh data
+      ref.read(udharProvider.notifier).fetchLedgersSilent(),
+      ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent(),
+    ]);
     ref.invalidate(recentActivitiesProvider);
   }
 
