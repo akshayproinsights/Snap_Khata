@@ -45,7 +45,8 @@ class _ManualItem {
       };
 }
 
-class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
+class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
+    with SingleTickerProviderStateMixin {
   final _partySearchController = TextEditingController();
   final _flatAmountController = TextEditingController();
   final _notesController = TextEditingController();
@@ -65,9 +66,28 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
   // Line items list
   final List<_ManualItem> _items = [];
 
+  // Animated total tracking
+  late final AnimationController _totalBumpController;
+  late final Animation<double> _totalBumpAnimation;
+
   @override
   void initState() {
     super.initState();
+    _totalBumpController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _totalBumpAnimation = Tween<double>(begin: 1.0, end: 1.18).animate(
+      CurvedAnimation(
+        parent: _totalBumpController,
+        curve: Curves.easeOut,
+      ),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _totalBumpController.reverse();
+        }
+      });
+
     _partySearchController.addListener(() {
       if (_partySearchController.text.trim().isNotEmpty &&
           _partySearchFocusNode.hasFocus) {
@@ -91,11 +111,18 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
 
   @override
   void dispose() {
+    _totalBumpController.dispose();
     _partySearchController.dispose();
     _flatAmountController.dispose();
     _notesController.dispose();
     _partySearchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _bumpTotal() {
+    if (!_totalBumpController.isAnimating) {
+      _totalBumpController.forward(from: 0);
+    }
   }
 
   /// Prompts the user to enter a WhatsApp number when none is stored.
@@ -221,6 +248,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
       }
     });
     HapticFeedback.lightImpact();
+    _bumpTotal();
   }
 
   Future<void> _submit({bool shareOnWhatsApp = false}) async {
@@ -270,6 +298,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
           ref.read(vendorLedgerProvider.notifier).fetchLedgers();
         }
 
+        // Extract the ledger id returned by the backend so we can navigate
+        // straight into the party's Transaction History.
+        final int? ledgerId = response.data['ledger_id'] is int
+            ? response.data['ledger_id'] as int
+            : int.tryParse(response.data['ledger_id']?.toString() ?? '');
+
         if (mounted) {
           if (shareOnWhatsApp && _partyType == 'customer') {
             final shopProfile = ref.read(shopProvider);
@@ -305,9 +339,17 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
               phone: phone,
               message: message,
             );
+            // After WhatsApp sheet, open party detail if we have an id
+            if (mounted && ledgerId != null && _partyType == 'customer') {
+              _navigateToPartyDetail(ledgerId, partyName);
+            }
           } else {
             Navigator.of(context).pop(true);
             AppToast.showSuccess(context, 'Entry added successfully! 🎉');
+            // Immediately open the party's transaction history
+            if (mounted && ledgerId != null && _partyType == 'customer') {
+              _navigateToPartyDetail(ledgerId, partyName);
+            }
           }
         }
       }
@@ -322,6 +364,23 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
         });
       }
     }
+  }
+
+  /// Pushes the Party Detail page for [ledgerId] after a successful save.
+  /// Uses a stub CustomerLedger — the detail page fetches fresh data on init.
+  void _navigateToPartyDetail(int ledgerId, String partyName) {
+    if (!mounted) return;
+    // Try to find the real ledger from provider state (may already be updated)
+    final ledgers = ref.read(udharProvider).ledgers;
+    final match = ledgers.where((l) => l.id == ledgerId).toList();
+    final ledger = match.isNotEmpty
+        ? match.first
+        : CustomerLedger(
+            id: ledgerId,
+            customerName: partyName,
+            balanceDue: 0.0,
+          );
+    context.push('/party/$ledgerId', extra: ledger);
   }
 
   @override
@@ -853,14 +912,26 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
                           const Expanded(
                             flex: 2,
                             child: Text(
-                              'Price',
+                              'Rate',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 32),
+                          // Subtotal column header
+                          SizedBox(
+                            width: 68,
+                            child: Text(
+                              'Amount',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                         ],
                       ),
                     ),
@@ -871,157 +942,206 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
                       itemCount: _items.length,
                       itemBuilder: (ctx, idx) {
                         final item = _items[idx];
+                        final rowSubtotal = item.quantity * item.rate;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Name field
-                              Expanded(
-                                flex: 3,
-                                child: TextFormField(
-                                  initialValue: item.name,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Item...',
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 12,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: context.borderColor,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Name field
+                                  Expanded(
+                                    flex: 3,
+                                    child: TextFormField(
+                                      initialValue: item.name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: context.primaryColor,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  onChanged: (val) => item.name = val,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Qty stepper
-                              Expanded(
-                                flex: 2,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: context.borderColor,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            if (item.quantity > 1.0) {
-                                              item.quantity -= 1.0;
-                                            } else {
-                                              _items.removeAt(idx);
-                                            }
-                                          });
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Icon(
-                                            LucideIcons.minus,
-                                            size: 14,
+                                      decoration: InputDecoration(
+                                        hintText: 'Item...',
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 12,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: context.borderColor,
                                           ),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: context.primaryColor,
+                                          ),
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
                                       ),
-                                      Text(
-                                        item.quantity % 1 == 0
-                                            ? item.quantity.toInt().toString()
-                                            : item.quantity.toString(),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
+                                      onChanged: (val) => item.name = val,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  // Qty stepper
+                                  Expanded(
+                                    flex: 2,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: context.borderColor,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () {
+                                              HapticFeedback.lightImpact();
+                                              setState(() {
+                                                if (item.quantity > 1.0) {
+                                                  item.quantity -= 1.0;
+                                                } else {
+                                                  _items.removeAt(idx);
+                                                }
+                                              });
+                                              _bumpTotal();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: const Icon(
+                                                LucideIcons.minus,
+                                                size: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            item.quantity % 1 == 0
+                                                ? item.quantity.toInt().toString()
+                                                : item.quantity.toString(),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () {
+                                              HapticFeedback.lightImpact();
+                                              setState(() {
+                                                item.quantity += 1.0;
+                                              });
+                                              _bumpTotal();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: const Icon(
+                                                LucideIcons.plus,
+                                                size: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  // Rate input
+                                  Expanded(
+                                    flex: 2,
+                                    child: TextFormField(
+                                      initialValue: item.rate > 0
+                                          ? item.rate.toStringAsFixed(0)
+                                          : '',
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                      decoration: InputDecoration(
+                                        prefixText: '₹',
+                                        hintText: '0',
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 12,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: context.borderColor,
+                                          ),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderSide: BorderSide(
+                                            color: context.primaryColor,
+                                          ),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          item.rate = double.tryParse(val) ?? 0.0;
+                                        });
+                                        _bumpTotal();
+                                      },
+                                    ),
+                                  ),
+                                  // Row subtotal chip
+                                  SizedBox(
+                                    width: 68,
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 200),
+                                      transitionBuilder: (child, animation) =>
+                                          FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position: Tween<Offset>(
+                                            begin: const Offset(0, -0.3),
+                                            end: Offset.zero,
+                                          ).animate(animation),
+                                          child: child,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        key: ValueKey('sub_${idx}_${rowSubtotal.toInt()}'),
+                                        rowSubtotal > 0
+                                            ? '₹${rowSubtotal.toStringAsFixed(0)}'
+                                            : '—',
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
                                           fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: rowSubtotal > 0
+                                              ? context.primaryColor
+                                              : context.textSecondaryColor,
                                         ),
                                       ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            item.quantity += 1.0;
-                                          });
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(8.0),
-                                          child: Icon(
-                                            LucideIcons.plus,
-                                            size: 14,
-                                          ),
+                                    ),
+                                  ),
+                                  // Remove button
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _items.removeAt(idx);
+                                      });
+                                      _bumpTotal();
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Icon(
+                                        LucideIcons.xCircle,
+                                        color: context.errorColor.withValues(
+                                          alpha: 0.7,
                                         ),
+                                        size: 18,
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Price input
-                              Expanded(
-                                flex: 2,
-                                child: TextFormField(
-                                  initialValue: item.rate > 0
-                                      ? item.rate.toStringAsFixed(0)
-                                      : '',
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                  decoration: InputDecoration(
-                                    prefixText: '₹',
-                                    hintText: '0',
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 12,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: context.borderColor,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderSide: BorderSide(
-                                        color: context.primaryColor,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
-                                  onChanged: (val) {
-                                    item.rate = double.tryParse(val) ?? 0.0;
-                                    setState(() {});
-                                  },
-                                ),
-                              ),
-                              // Remove button
-                              IconButton(
-                                icon: Icon(
-                                  LucideIcons.xCircle,
-                                  color: context.errorColor.withValues(
-                                    alpha: 0.7,
-                                  ),
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _items.removeAt(idx);
-                                  });
-                                },
+                                ],
                               ),
                             ],
                           ),
@@ -1046,6 +1166,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
                             setState(() {
                               _items.clear();
                             });
+                            _bumpTotal();
                           },
                           child: Text(
                             'Clear Items',
@@ -1196,128 +1317,193 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
 
-                  // Total Summary Bar (Green/Red based on entry type)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: activeColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: activeColor.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // ── STICKY BOTTOM PANEL ──────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: context.backgroundColor,
+              border: Border(
+                top: BorderSide(
+                  color: context.borderColor.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Total row with animated amount
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // Item count badge
+                        if (_items.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: activeColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${_items.length} item${_items.length == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: activeColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        const Spacer(),
+                        // Label
                         Text(
-                          'TOTAL AMOUNT:',
+                          'TOTAL',
                           style: TextStyle(
-                            color: activeColor,
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            letterSpacing: 0.5,
+                            color: context.textSecondaryColor,
+                            letterSpacing: 1,
                           ),
                         ),
-                        Text(
-                          '₹${finalAmount.toStringAsFixed(0)}',
-                          style: TextStyle(
-                            color: activeColor,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 22,
+                        const SizedBox(width: 12),
+                        // Animated amount
+                        ScaleTransition(
+                          scale: _totalBumpAnimation,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, anim) =>
+                                SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.5),
+                                end: Offset.zero,
+                              ).animate(CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOut,
+                              )),
+                              child: FadeTransition(
+                                opacity: anim,
+                                child: child,
+                              ),
+                            ),
+                            child: Text(
+                              '₹${finalAmount.toStringAsFixed(0)}',
+                              key: ValueKey(finalAmount.toInt()),
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                color: activeColor,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Save and Save + WhatsApp Actions
-                  Row(
-                    children: [
-                      // Save Only
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _isLoading ? null : () => _submit(),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: activeColor, width: 2),
-                            foregroundColor: activeColor,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 10),
+                    // Action buttons
+                    Row(
+                      children: [
+                        // Save Only
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _isLoading ? null : () => _submit(),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: activeColor, width: 2),
+                              foregroundColor: activeColor,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
+                            child: _isLoading
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: activeColor,
+                                    ),
+                                  )
+                                : const Text(
+                                    'SAVE',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
                           ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text(
-                                  'SAVE',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Save + Send on WhatsApp
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            gradient: LinearGradient(
-                              colors: [
-                                activeColor,
-                                activeColor.withValues(alpha: 0.8),
+                        const SizedBox(width: 10),
+                        // Save + Send on WhatsApp
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              gradient: LinearGradient(
+                                colors: [
+                                  activeColor,
+                                  activeColor.withValues(alpha: 0.82),
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: activeColor.withValues(alpha: 0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
                               ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: activeColor.withValues(alpha: 0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                            child: ElevatedButton.icon(
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => _submit(shareOnWhatsApp: true),
+                              icon: const Icon(LucideIcons.send, size: 16),
+                              label: Text(
+                                _partyType == 'customer'
+                                    ? 'SAVE + WHATSAPP'
+                                    : 'SAVE',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
-                            ],
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: _isLoading
-                                ? null
-                                : () => _submit(shareOnWhatsApp: true),
-                            icon: const Icon(LucideIcons.send, size: 16),
-                            label: Text(
-                              _partyType == 'customer'
-                                  ? 'SAVE + WHATSAPP'
-                                  : 'SAVE',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                foregroundColor: Colors.white,
+                                shadowColor: Colors.transparent,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

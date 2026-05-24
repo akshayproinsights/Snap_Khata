@@ -50,7 +50,7 @@ async def get_catalogue(current_user: Dict[str, Any] = Depends(auth.get_current_
             db.client.table("user_item_catalogue")
             .select("*")
             .eq("username", username)
-            .order("use_count", descending=True)
+            .order("use_count", desc=True)
             .execute()
         )
         items = []

@@ -1476,6 +1476,10 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
   int _tipIndex = 0;
   bool _wasUploading = true; // track phase transition for haptic
 
+  /// Tracks the bar value from the previous build so TweenAnimationBuilder
+  /// animates FROM that value instead of resetting to 0 on every rebuild.
+  double _lastBarValue = 0.0;
+
   /// When processing animation started — used for time-based minimum step
   /// so the UI always makes progress even before the first poll arrives.
   DateTime? _processingStartTime;
@@ -1520,6 +1524,9 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
       final st = ref.read(uploadProvider);
       if (st.isProcessing && !st.isUploading) {
         _wasUploading = false; // skip the upload→processing transition
+        // Start from step 2 (not step 1 = 16%) so bar is never frozen at
+        // the very start when the overlay opens already in processing state.
+        _highWaterStep = 1;
         _startProcessingAnimation();
       }
     });
@@ -1527,7 +1534,12 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
 
   void _startProcessingAnimation() {
     _processingStartTime = DateTime.now();
-    _processingBarController.forward();
+    // Use repeat() so the ring animation never freezes regardless of phase.
+    // forward() was a one-shot that got fully consumed during the upload phase
+    // and would not restart for the processing phase.
+    _processingBarController
+      ..stop()
+      ..repeat();
   }
 
   /// Step index is driven purely by time so the 6 UI sub-steps advance
@@ -1597,6 +1609,13 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
 
     final barValue = isUploading ? uploadProgress : procStepProgress;
     final percent = (barValue * 100).toInt();
+
+    // Capture the previous bar value BEFORE updating _lastBarValue so the
+    // TweenAnimationBuilder animates from the last known position instead of
+    // resetting to 0.0 on every state rebuild (which caused the bar to flash
+    // back to the start on each poll update).
+    final beginBarValue = _lastBarValue;
+    _lastBarValue = barValue;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -1807,7 +1826,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0, end: barValue),
+                              tween: Tween(begin: beginBarValue, end: barValue),
                               duration: const Duration(milliseconds: 500),
                               curve: Curves.easeOut,
                               builder: (_, v, __) =>

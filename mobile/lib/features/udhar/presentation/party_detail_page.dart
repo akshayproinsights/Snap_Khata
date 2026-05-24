@@ -39,6 +39,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     'total_paid': 0,
     'balance_due': 0,
   };
+  // Tracks which manual-entry transactions have their items expanded.
+  final Map<int, bool> _expandedItems = {};
 
   @override
   void initState() {
@@ -2347,6 +2349,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ),
               ),
   
+            // ── Expandable Items Section (manual entries with item details) ──
+            if (isInvoice && tx.items.isNotEmpty)
+              _buildExpandableItems(tx),
+
             // Actions Row
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2369,6 +2375,29 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           color: context.textSecondaryColor.withValues(
                             alpha: 0.5,
                           ),
+                        ),
+                      ),
+                    )
+                  else if (tx.isManualEntry)
+                    // Show MANUAL badge when there's no bill number (manual entry)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: const Text(
+                        'MANUAL',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFD97706),
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
@@ -2434,6 +2463,204 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Collapsible item breakdown panel for manual-entry MANUAL_CREDIT transactions.
+  Widget _buildExpandableItems(LedgerTransaction tx) {
+    final isExpanded = _expandedItems[tx.id] ?? false;
+    final items = tx.items;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _expandedItems[tx.id] = !isExpanded;
+        });
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.primaryColor.withValues(alpha: 0.03),
+          border: Border(
+            top: BorderSide(color: context.borderColor, width: 0.5),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header / toggle row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.packageOpen,
+                    size: 13,
+                    color: context.primaryColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${items.length} item${items.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: context.primaryColor,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      LucideIcons.chevronDown,
+                      size: 14,
+                      color: context.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Expanded item rows
+            if (isExpanded)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    // Column header
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: Text(
+                            'ITEM',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            'QTY',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 0.8,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 56,
+                          child: Text(
+                            'RATE',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 0.8,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 64,
+                          child: Text(
+                            'AMOUNT',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 0.8,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Divider(
+                      height: 1,
+                      color: context.borderColor,
+                    ),
+                    const SizedBox(height: 6),
+                    ...items.map((item) {
+                      final name = item['item_name']?.toString() ?? '';
+                      final qty = double.tryParse(item['quantity']?.toString() ?? '1') ?? 1.0;
+                      final rate = double.tryParse(item['rate']?.toString() ?? '0') ?? 0.0;
+                      final amount = double.tryParse(item['amount']?.toString() ?? '0') ?? (qty * rate);
+                      final qtyStr = qty == qty.truncateToDouble()
+                          ? qty.toInt().toString()
+                          : qty.toStringAsFixed(1);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            SizedBox(
+                              width: 36,
+                              child: Text(
+                                '×$qtyStr',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textSecondaryColor,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            SizedBox(
+                              width: 56,
+                              child: Text(
+                                '₹${rate.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textSecondaryColor,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            SizedBox(
+                              width: 64,
+                              child: Text(
+                                '₹${amount.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textColor,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

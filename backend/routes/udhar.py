@@ -2066,13 +2066,30 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 raise HTTPException(status_code=500, detail=f"Failed to create ledger for {party_name_clean}")
                 
         # 2. Add Transaction
+        # Build extra_fields with item breakdown so PartyDetailPage can render
+        # the same Transaction History cards that the Sync & Finish flow produces.
+        item_details = []
+        if entry.items:
+            for it in entry.items:
+                item_details.append({
+                    'item_name': it.item_name,
+                    'quantity': it.quantity,
+                    'rate': it.rate,
+                    'amount': round(it.quantity * it.rate, 2),
+                })
+
         tx_insert = {
             'username': username,
             'ledger_id': ledger_id,
             'transaction_type': tx_type,
             'amount': amount_to_use,
             'notes': entry.notes,
-            'created_at': entry_date
+            'created_at': entry_date,
+            'extra_fields': {
+                'items': item_details,
+                'payment_mode': entry.payment_mode or 'Credit',
+                'is_manual_entry': True,
+            }
         }
         # Only customer transactions support payment_mode in DB schema
         if entry.party_type == 'customer':
@@ -2146,7 +2163,9 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             "status": "success",
             "message": "Manual entry recorded successfully",
             "new_balance": new_balance,
-            "ledger_id": ledger_id
+            "ledger_id": ledger_id,
+            "party_name": party_name_clean,
+            "party_type": entry.party_type,
         }
     except HTTPException:
         raise

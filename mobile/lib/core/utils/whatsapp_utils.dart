@@ -756,8 +756,8 @@ class WhatsAppUtils {
     final totalFmt = formatIndianCurrency(total);
     
     final buffer = StringBuffer();
-    buffer.writeln('Hi $cleanName,');
-    buffer.writeln('Here\'s your bill from *${shopName.trim()}* 🧾\n');
+    buffer.writeln('Hi *$cleanName*,');
+    buffer.writeln('Here\'s your receipt from *${shopName.trim()}* 🧾\n');
     
     if (items.isNotEmpty) {
       buffer.writeln('📦 *Items:*');
@@ -772,13 +772,13 @@ class WhatsAppUtils {
         final rateFmt = formatIndianCurrency(rate.toDouble());
         final amountFmt = formatIndianCurrency(amount.toDouble());
         
-        buffer.writeln('• $name × $qtyStr $unit @ $rateFmt — $amountFmt');
+        buffer.writeln('• *$name* × $qtyStr $unit @ $rateFmt — *$amountFmt*');
       }
       buffer.writeln();
     }
     
-    buffer.writeln('💰 *Total: $totalFmt*');
-    buffer.writeln('💳 Payment: $paymentMode');
+    buffer.writeln('*Total: $totalFmt*');
+    buffer.writeln('💳 Payment: *$paymentMode*');
     buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
     
     return buffer.toString();

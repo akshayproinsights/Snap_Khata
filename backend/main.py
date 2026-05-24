@@ -155,7 +155,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Startup Error Handling
 try:
     # Import routers
-    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes, udhar, vendor_ledgers, download, register, usage_routes, paginated_api, galla_routes, shop_profile
+    from routes import auth, upload, invoices, review, verified, config_api, inventory, inventory_mapping, vendor_mapping_routes, stock_routes, stock_mapping_upload_routes, dashboard_routes, purchase_order_routes, public_routes, udhar, vendor_ledgers, download, register, usage_routes, paginated_api, galla_routes, shop_profile, item_catalogue
 except Exception as e:
     import traceback
     print("CRITICAL STARTUP ERROR: Failed to import routers", flush=True)
@@ -185,6 +185,7 @@ app.include_router(public_routes.router, prefix="/api/public", tags=["Public"])
 app.include_router(download.router, prefix="/api", tags=["Download"])
 app.include_router(usage_routes.router, prefix="/api/usage", tags=["Usage Metrics"])
 app.include_router(shop_profile.router, prefix="/api", tags=["Shop Profile"])
+app.include_router(item_catalogue.router, prefix="/api/items/catalogue", tags=["Item Catalogue"])
 
 
 @app.get("/")

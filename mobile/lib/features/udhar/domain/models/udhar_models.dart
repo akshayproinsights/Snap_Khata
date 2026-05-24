@@ -90,6 +90,8 @@ class LedgerTransaction {
   final double? balanceDue;
   final String? paymentMode;
   final double? receivedAmount;
+  final List<Map<String, dynamic>> items; // item breakdown for manual entries
+  final bool isManualEntry;
 
   LedgerTransaction({
     required this.id,
@@ -105,6 +107,8 @@ class LedgerTransaction {
     this.balanceDue,
     this.paymentMode,
     this.receivedAmount,
+    this.items = const [],
+    this.isManualEntry = false,
   });
 
   // Getters for backwards compatibility
@@ -113,6 +117,21 @@ class LedgerTransaction {
   DateTime get date => createdAt;
 
   factory LedgerTransaction.fromJson(Map<String, dynamic> json) {
+    // Parse item breakdown stored in extra_fields by the manual-entry endpoint.
+    final extra = json['extra_fields'];
+    List<Map<String, dynamic>> parsedItems = [];
+    bool parsedIsManual = false;
+    if (extra is Map) {
+      final rawItems = extra['items'];
+      if (rawItems is List) {
+        parsedItems = rawItems
+            .whereType<Map>()
+            .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      parsedIsManual = extra['is_manual_entry'] == true;
+    }
+
     return LedgerTransaction(
       id: json['id'],
       ledgerId: json['ledger_id'],
@@ -131,6 +150,8 @@ class LedgerTransaction {
       receivedAmount: json['received_amount'] != null
           ? double.tryParse(json['received_amount'].toString())
           : null,
+      items: parsedItems,
+      isManualEntry: parsedIsManual,
     );
   }
 }
