@@ -2099,8 +2099,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
 
             # Track bill vs payment date separately for smarter sort & card display
             if is_increase:
-                update_data['latest_bill_date']   = entry_date
-                update_data['latest_bill_amount'] = amount_to_use
+                update_data['latest_bill_date'] = entry_date
             else:
                 update_data['last_payment_date'] = entry_date
                 
@@ -2119,8 +2118,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 insert_data['customer_phone'] = entry.mobile_number
 
             if is_increase:
-                insert_data['latest_bill_date']   = entry_date
-                insert_data['latest_bill_amount'] = amount_to_use
+                insert_data['latest_bill_date'] = entry_date
             else:
                 insert_data['last_payment_date'] = entry_date
 

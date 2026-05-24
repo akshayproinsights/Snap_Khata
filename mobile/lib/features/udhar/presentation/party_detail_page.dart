@@ -2247,8 +2247,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final isInvoice =
         tx.transactionType == 'INVOICE' ||
         tx.transactionType == 'MANUAL_CREDIT';
-    final canTap =
-        isInvoice && (tx.receiptNumber != null || tx.receiptLink != null);
+    final canNavigateToOrderDetails =
+        isInvoice && !tx.isManualEntry && (tx.receiptNumber != null || tx.receiptLink != null);
+    final hasReceiptPhoto =
+        tx.receiptLink != null &&
+        tx.receiptLink!.isNotEmpty &&
+        tx.receiptLink != 'null';
 
     final Color accentColor = isPayment
         ? context.successColor
@@ -2283,7 +2287,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         child: Column(
           children: [
             InkWell(
-              onTap: canTap ? () => _navigateToOrderDetails(tx) : null,
+              onTap: tx.isManualEntry
+                  ? (tx.items.isNotEmpty
+                      ? () {
+                          setState(() {
+                            final isExpanded = _expandedItems[tx.id] ?? false;
+                            _expandedItems[tx.id] = !isExpanded;
+                          });
+                        }
+                      : null)
+                  : (canNavigateToOrderDetails ? () => _navigateToOrderDetails(tx) : null),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -2468,7 +2481,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
               child: Row(
                 children: [
-                  if (tx.receiptNumber != null)
+                  if (tx.receiptNumber != null && !tx.isManualEntry)
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: Text(
@@ -2481,9 +2494,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ),
                         ),
                       ),
-                    )
-                  else if (tx.isManualEntry)
-                    // Show MANUAL badge when there's no bill number (manual entry)
+                    ),
+                  if (tx.isManualEntry)
+                    // Show MANUAL badge
                     Container(
                       margin: const EdgeInsets.only(left: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2506,7 +2519,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       ),
                     ),
                   const Spacer(),
-                  if (canTap)
+                  if (hasReceiptPhoto && !tx.isManualEntry)
                     TextButton.icon(
                       onPressed: () => _showReceiptPhotoDialog(tx),
                       icon: const Icon(LucideIcons.eye, size: 14),
