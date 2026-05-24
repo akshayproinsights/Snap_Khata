@@ -334,6 +334,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: _showShopDetailsSheet,
           ),
           _buildSettingsTile(
+            icon: LucideIcons.tag,
+            title: 'My Item Catalogue',
+            subtitle: 'Manage items and prices',
+            onTap: () {
+              context.push('/item-catalogue');
+            },
+          ),
+          _buildSettingsTile(
             icon: LucideIcons.moon,
             title: AppLocalizations.of(context)?.darkMode ?? 'Dark Mode',
             trailing: Switch(

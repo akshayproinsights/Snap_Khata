@@ -38,6 +38,7 @@ import 'package:mobile/features/inventory/presentation/vendor_ledger/vendor_ledg
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/features/dashboard/presentation/pages/home_dashboard_page.dart';
 import 'package:mobile/features/galla/presentation/galla_dashboard_page.dart';
+import 'package:mobile/features/udhar/presentation/pages/item_catalogue_page.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -471,6 +472,12 @@ class AppRouter {
         name: 'galla',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const GallaDashboardPage(),
+      ),
+      GoRoute(
+        path: '/item-catalogue',
+        name: 'item-catalogue',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ItemCataloguePage(),
       ),
     ],
   );

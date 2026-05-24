@@ -744,6 +744,46 @@ class WhatsAppUtils {
     await openWhatsAppChat(phone: phone, message: fallbackMessage);
   }
 
+  /// Formats manual entry details as a beautiful text bill and shares it.
+  static String buildManualBillMessage({
+    required String customerName,
+    required String shopName,
+    required List<Map<String, dynamic>> items,
+    required double total,
+    required String paymentMode,
+  }) {
+    final cleanName = _cleanDisplayName(customerName);
+    final totalFmt = formatIndianCurrency(total);
+    
+    final buffer = StringBuffer();
+    buffer.writeln('Hi $cleanName,');
+    buffer.writeln('Here\'s your bill from *${shopName.trim()}* 🧾\n');
+    
+    if (items.isNotEmpty) {
+      buffer.writeln('📦 *Items:*');
+      for (final item in items) {
+        final name = item['name'] ?? item['item_name'] ?? '';
+        final qty = item['quantity'] ?? 1.0;
+        final rate = item['rate'] ?? 0.0;
+        final amount = item['amount'] ?? (qty * rate);
+        
+        final qtyStr = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
+        final unit = item['unit'] ?? 'NOS';
+        final rateFmt = formatIndianCurrency(rate.toDouble());
+        final amountFmt = formatIndianCurrency(amount.toDouble());
+        
+        buffer.writeln('• $name × $qtyStr $unit @ $rateFmt — $amountFmt');
+      }
+      buffer.writeln();
+    }
+    
+    buffer.writeln('💰 *Total: $totalFmt*');
+    buffer.writeln('💳 Payment: $paymentMode');
+    buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
+    
+    return buffer.toString();
+  }
+
   /// Returns true only if the browser's Web Share API supports sharing files.
   /// Checks [navigator.canShare] with a dummy image file — if this returns
   /// false or throws (older Chrome, Firefox, iOS Safari < 15), we use the

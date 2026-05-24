@@ -1182,12 +1182,21 @@ async def delete_transaction(transaction_id: int, current_user: Dict = Depends(g
         logger.error(f"Error deleting transaction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class ManualLineItem(BaseModel):
+    item_name: str
+    quantity: float = 1.0
+    rate: float = 0.0
+    amount: float
+
 class ManualUdharEntry(BaseModel):
     party_type: str # 'customer' or 'vendor'
     party_name: str # Name of the customer or vendor
-    amount: float   # Must be > 0
+    amount: float   # Must be > 0 (or computed from items if items is provided)
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
+    payment_mode: Optional[str] = 'Credit'
+    date: Optional[str] = None
+    items: Optional[List[ManualLineItem]] = None
 
 async def sync_customer_ledgers_from_invoices(current_user: Dict):
     """
@@ -1958,7 +1967,12 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
     if not username:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
         
-    if entry.amount <= 0:
+    # Calculate amount from items if provided, otherwise use entry.amount
+    amount_to_use = entry.amount
+    if entry.items and len(entry.items) > 0:
+        amount_to_use = sum(item.quantity * item.rate for item in entry.items)
+
+    if amount_to_use <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
         
     if entry.party_type not in ['customer', 'vendor']:
@@ -1974,6 +1988,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
     db = get_database_client()
     db.set_user_context(username)
     now = datetime.utcnow().isoformat()
+    entry_date = entry.date or now
     
     try:
         tables = {
@@ -2023,24 +2038,26 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
         if ledger_data:
             ledger = ledger_data[0]
             current_balance = float(ledger.get('balance_due', 0))
-            new_balance = current_balance + entry.amount if is_increase else current_balance - entry.amount
+            new_balance = current_balance + amount_to_use if is_increase else current_balance - amount_to_use
             
             update_data = {
                 'balance_due': new_balance,
-                'updated_at': now
+                'updated_at': entry_date
             }
             # Only update last_payment_date if it's a payment (decrease in balance due)
             if not is_increase:
-                update_data['last_payment_date'] = now
+                update_data['last_payment_date'] = entry_date
                 
             db.client.table(cfg['ledger_table']).update(update_data).eq('id', ledger['id']).execute()
             ledger_id = ledger['id']
         else:
-            new_balance = entry.amount if is_increase else -entry.amount
+            new_balance = amount_to_use if is_increase else -amount_to_use
             new_ledger_resp = db.client.table(cfg['ledger_table']).insert({
                 'username': username,
                 cfg['name_field']: party_name_clean,
                 'balance_due': new_balance,
+                'created_at': entry_date,
+                'updated_at': entry_date
             }).execute()
             
             if new_ledger_resp.data:
@@ -2049,14 +2066,82 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 raise HTTPException(status_code=500, detail=f"Failed to create ledger for {party_name_clean}")
                 
         # 2. Add Transaction
-        db.client.table(cfg['tx_table']).insert({
+        tx_insert = {
             'username': username,
             'ledger_id': ledger_id,
             'transaction_type': tx_type,
-            'amount': entry.amount,
-            'notes': entry.notes
-        }).execute()
+            'amount': amount_to_use,
+            'notes': entry.notes,
+            'created_at': entry_date
+        }
+        # Only customer transactions support payment_mode in DB schema
+        if entry.party_type == 'customer':
+            tx_insert['payment_mode'] = entry.payment_mode or 'Credit'
+            
+        db.client.table(cfg['tx_table']).insert(tx_insert).execute()
         
+        # 3. Upsert items to catalogue (self-learning)
+        if entry.items and len(entry.items) > 0:
+            item_names = [it.item_name.strip() for it in entry.items if it.item_name.strip()]
+            if item_names:
+                cat_resp = db.client.table("user_item_catalogue") \
+                    .select("id, item_name, last_price, unit, use_count") \
+                    .eq("username", username) \
+                    .in_("item_name", item_names) \
+                    .execute()
+                cat_existing = {row["item_name"]: row for row in (cat_resp.data or [])}
+                
+                upserts = []
+                for it in entry.items:
+                    name = it.item_name.strip()
+                    if not name:
+                        continue
+                    if name in cat_existing:
+                        # Existing item: increment count, preserve catalogue price
+                        upserts.append({
+                            "username": username,
+                            "item_name": name,
+                            "last_price": float(cat_existing[name]["last_price"] or 0.0),
+                            "unit": cat_existing[name]["unit"] or "NOS",
+                            "use_count": (cat_existing[name]["use_count"] or 1) + 1,
+                            "last_used_at": entry_date
+                        })
+                    else:
+                        # New item: add to catalogue with current manual price
+                        upserts.append({
+                            "username": username,
+                            "item_name": name,
+                            "last_price": it.rate,
+                            "unit": "NOS",
+                            "use_count": 1,
+                            "last_used_at": entry_date
+                        })
+                if upserts:
+                    db.client.table("user_item_catalogue").upsert(upserts, on_conflict="username,item_name").execute()
+                    
+        # 4. Cash Integration with Galla
+        # Cash/Galla sync for cash manual entries
+        if entry.payment_mode == 'Cash':
+            galla_tx_type = None
+            galla_notes = ""
+            if entry.party_type == 'customer':
+                # Cash payment or Cash sale
+                galla_tx_type = "CASH_SALE"
+                galla_notes = f"Cash bill: {party_name_clean}"
+            elif entry.party_type == 'vendor':
+                # Paid supplier or bought from supplier in cash
+                galla_tx_type = "MONEY_OUT"
+                galla_notes = f"Cash purchase: {party_name_clean}"
+                
+            if galla_tx_type:
+                db.client.table("galla_transactions").insert({
+                    "username": username,
+                    "transaction_type": galla_tx_type,
+                    "amount": amount_to_use,
+                    "notes": f"{galla_notes} ({entry.notes or ''})".strip(),
+                    "created_at": entry_date
+                }).execute()
+
         return {
             "status": "success",
             "message": "Manual entry recorded successfully",

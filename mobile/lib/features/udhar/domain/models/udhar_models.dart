@@ -157,3 +157,36 @@ class OrderLineItem {
     );
   }
 }
+
+class CatalogueItem {
+  final int id;
+  final String itemName;
+  final double lastPrice;
+  final String unit;
+  final int useCount;
+  final DateTime? lastUsedAt;
+  final DateTime? createdAt;
+
+  CatalogueItem({
+    required this.id,
+    required this.itemName,
+    required this.lastPrice,
+    required this.unit,
+    required this.useCount,
+    this.lastUsedAt,
+    this.createdAt,
+  });
+
+  factory CatalogueItem.fromJson(Map<String, dynamic> json) {
+    return CatalogueItem(
+      id: json['id'],
+      itemName: json['item_name'] ?? '',
+      lastPrice: double.tryParse(json['last_price']?.toString() ?? '0') ?? 0.0,
+      unit: json['unit'] ?? 'NOS',
+      useCount: json['use_count'] ?? 1,
+      lastUsedAt: json['last_used_at'] != null ? DateTime.parse(json['last_used_at']) : null,
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+    );
+  }
+}
+
