@@ -95,7 +95,20 @@ class PartyActivityCard extends StatelessWidget {
                             _buildTypeBadge(context),
                             if (party.latestUploadDate != null || party.updatedAt != null || party.lastTransactionDate != null) ...[
                               const SizedBox(width: 8),
-                              _buildTimestamp(context, party.latestUploadDate ?? party.updatedAt ?? party.lastTransactionDate!),
+                              _buildTimestamp(context, () {
+                                // Use max of all dates, cap future-dated scanned bills to now
+                                // so the timestamp reflects true last activity — same logic as sort.
+                                final now = DateTime.now();
+                                final candidates = [
+                                  party.latestUploadDate,
+                                  party.updatedAt,
+                                  party.lastTransactionDate,
+                                ].whereType<DateTime>()
+                                    .map((d) => d.isAfter(now) ? now : d)
+                                    .toList();
+                                if (candidates.isEmpty) return now;
+                                return candidates.reduce((best, d) => d.isAfter(best) ? d : best);
+                              }()),
                             ],
                           ],
                         ),

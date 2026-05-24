@@ -1226,6 +1226,7 @@ class ManualUdharEntry(BaseModel):
     payment_mode: Optional[str] = 'Credit'
     date: Optional[str] = None
     items: Optional[List[ManualLineItem]] = None
+    mobile_number: Optional[str] = None
 
 async def sync_customer_ledgers_from_invoices(current_user: Dict):
     """
@@ -2088,23 +2089,42 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             
             update_data = {
                 'balance_due': new_balance,
-                'updated_at': entry_date
+                # Always use server `now` so this party sorts to the top of the
+                # Parties list immediately after any activity (not the user-selected
+                # entry date which can be in the past or future).
+                'updated_at': now,
             }
-            # Only update last_payment_date if it's a payment (decrease in balance due)
-            if not is_increase:
+            if entry.party_type == 'customer' and entry.mobile_number:
+                update_data['customer_phone'] = entry.mobile_number
+
+            # Track bill vs payment date separately for smarter sort & card display
+            if is_increase:
+                update_data['latest_bill_date']   = entry_date
+                update_data['latest_bill_amount'] = amount_to_use
+            else:
                 update_data['last_payment_date'] = entry_date
                 
             db.client.table(cfg['ledger_table']).update(update_data).eq('id', ledger['id']).execute()
             ledger_id = ledger['id']
         else:
             new_balance = amount_to_use if is_increase else -amount_to_use
-            new_ledger_resp = db.client.table(cfg['ledger_table']).insert({
+            insert_data = {
                 'username': username,
                 cfg['name_field']: party_name_clean,
                 'balance_due': new_balance,
                 'created_at': entry_date,
-                'updated_at': entry_date
-            }).execute()
+                'updated_at': now,  # server time for proper sort recency
+            }
+            if entry.party_type == 'customer' and entry.mobile_number:
+                insert_data['customer_phone'] = entry.mobile_number
+
+            if is_increase:
+                insert_data['latest_bill_date']   = entry_date
+                insert_data['latest_bill_amount'] = amount_to_use
+            else:
+                insert_data['last_payment_date'] = entry_date
+
+            new_ledger_resp = db.client.table(cfg['ledger_table']).insert(insert_data).execute()
             
             if new_ledger_resp.data:
                 ledger_id = new_ledger_resp.data[0]['id']
@@ -2127,6 +2147,16 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
         # Assign a sequential receipt number for every manual entry
         manual_receipt_number = get_next_manual_receipt_number(username, db)
 
+        # Stamp latest_bill_number on the ledger now that we have the receipt number.
+        # This powers the bill row on the party card ("#509502 · BILL TOTAL: ₹889").
+        if is_increase:
+            try:
+                db.client.table(cfg['ledger_table']).update({
+                    'latest_bill_number': str(manual_receipt_number),
+                }).eq('id', ledger_id).execute()
+            except Exception:
+                pass  # Non-critical; sort/display still work via latest_bill_date
+
         tx_insert = {
             'username': username,
             'ledger_id': ledger_id,
@@ -2141,6 +2171,9 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 'is_manual_entry': True,
             }
         }
+        if entry.party_type == 'customer' and entry.mobile_number:
+            tx_insert['extra_fields']['mobile_number'] = entry.mobile_number
+
         # Only customer transactions support payment_mode in DB schema
         if entry.party_type == 'customer':
             tx_insert['payment_mode'] = entry.payment_mode or 'Credit'

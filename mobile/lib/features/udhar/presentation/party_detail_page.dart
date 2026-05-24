@@ -1096,7 +1096,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ? _buildEmptyState()
                 : Builder(
                     builder: (context) {
-                      final visibleTxs = _transactions!.toList();
+                      // Sort newest-first so the most recent activity is always visible
+                      // without scrolling — matches Khatabook / Vyapar UX convention.
+                      final visibleTxs = _transactions!.toList()
+                        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
                       if (visibleTxs.isEmpty) return _buildEmptyState();
                       return ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
@@ -1409,16 +1412,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final partyStatementLink =
         'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
 
-    // Collect invoices that have either a receipt photo or a receipt number
-    final invoicesWithReceipts = (_transactions ?? [])
+    // Collect ALL credit transactions (invoices + manual entries) for the picker.
+    // Manual entries without a receipt image or number are now included so they
+    // can be sent as a formatted itemized bill message.
+    final invoicesForReminder = (_transactions ?? [])
         .where(
           (tx) =>
-              (tx.transactionType == 'INVOICE' ||
-                  tx.transactionType == 'MANUAL_CREDIT') &&
-              ((tx.receiptLink != null &&
-                      tx.receiptLink!.isNotEmpty &&
-                      tx.receiptLink != 'null') ||
-                  (tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty)),
+              tx.transactionType == 'INVOICE' ||
+              tx.transactionType == 'MANUAL_CREDIT',
         )
         .toList();
 
@@ -1431,25 +1432,40 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        bool useReceiptPhoto = true;
-        LedgerTransaction? selectedTx = invoicesWithReceipts.isNotEmpty
-            ? invoicesWithReceipts.first
+        // ── Determine initial selected transaction ─────────────────────────────
+        LedgerTransaction? selectedTx = invoicesForReminder.isNotEmpty
+            ? invoicesForReminder.first
             : null;
 
+        // shareMode: 'receiptPhoto' | 'manualBill' | 'accountStatement'
+        // Default intelligently: manual entries → 'manualBill',
+        //                        image receipts  → 'receiptPhoto',
+        //                        no transactions → 'accountStatement'
+        String defaultMode(LedgerTransaction? tx) {
+          if (tx == null) return 'accountStatement';
+          if (tx.isManualEntry) return 'manualBill';
+          final hasImage = tx.receiptLink != null &&
+              tx.receiptLink!.isNotEmpty &&
+              tx.receiptLink != 'null';
+          return hasImage ? 'receiptPhoto' : 'accountStatement';
+        }
+
+        String shareMode = defaultMode(selectedTx);
+
         // ── Background pre-fetch ──────────────────────────────────────────────
-        // Start downloading the receipt image immediately when the sheet opens
-        // (Receipt Photo is the default mode). By the time the user reads the
-        // preview and taps “SEND ON WHATSAPP” (~2–4 s), the download is done.
-        String? prefetchedUrl = selectedTx?.receiptLink;
+        // Start downloading the receipt image immediately when the sheet opens.
+        String? prefetchedUrl = (shareMode == 'receiptPhoto')
+            ? selectedTx?.receiptLink
+            : null;
         Future<Uint8List?> prefetchFuture =
             (prefetchedUrl != null && prefetchedUrl.isNotEmpty && prefetchedUrl != 'null')
                 ? WhatsAppUtils.prefetchImageBytes(prefetchedUrl)
                 : Future<Uint8List?>.value(null);
 
         // Restart the prefetch whenever the user switches receipt or mode.
-        void restartPrefetch(LedgerTransaction? tx, bool isReceiptPhoto) {
-          final url = isReceiptPhoto ? (tx?.receiptLink) : null;
-          if (url == prefetchedUrl) return; // same URL — no need to re-fetch
+        void restartPrefetch(LedgerTransaction? tx, String mode) {
+          final url = (mode == 'receiptPhoto') ? (tx?.receiptLink) : null;
+          if (url == prefetchedUrl) return;
           prefetchedUrl = url;
           prefetchFuture = (url != null && url.isNotEmpty && url != 'null')
               ? WhatsAppUtils.prefetchImageBytes(url)
@@ -1459,20 +1475,35 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
         return StatefulBuilder(
           builder: (ctx, setSheet) {
-            final message = WhatsAppUtils.buildPartyReminderMessage(
-              customerName: ledger.customerName.isNotEmpty
-                  ? ledger.customerName
-                  : 'Customer',
-              shopName: shopName,
-              totalBilled: _totalInvoiced,
-              totalPaid: _totalPaid,
-              balanceDue: _computedBalance,
-              statementLink: partyStatementLink,
-              upiId: upiId,
-              useReceiptPhoto: useReceiptPhoto,
-              receiptPhotoUrl: selectedTx?.receiptLink,
-              receiptNumber: selectedTx?.receiptNumber?.toString(),
-            );
+            // Build the correct preview message depending on shareMode
+            final String message;
+            if (shareMode == 'manualBill' && selectedTx != null) {
+              message = WhatsAppUtils.buildManualBillMessage(
+                customerName: ledger.customerName.isNotEmpty
+                    ? ledger.customerName
+                    : 'Customer',
+                shopName: shopName,
+                items: selectedTx!.items,
+                total: selectedTx!.amount,
+                paymentMode: selectedTx!.paymentMode ?? 'Credit',
+                balanceDue: _computedBalance,
+              );
+            } else {
+              message = WhatsAppUtils.buildPartyReminderMessage(
+                customerName: ledger.customerName.isNotEmpty
+                    ? ledger.customerName
+                    : 'Customer',
+                shopName: shopName,
+                totalBilled: _totalInvoiced,
+                totalPaid: _totalPaid,
+                balanceDue: _computedBalance,
+                statementLink: partyStatementLink,
+                upiId: upiId,
+                useReceiptPhoto: shareMode == 'receiptPhoto',
+                receiptPhotoUrl: selectedTx?.receiptLink,
+                receiptNumber: selectedTx?.receiptNumber?.toString(),
+              );
+            }
 
             return Container(
               height: MediaQuery.of(ctx).size.height * 0.85,
@@ -1600,8 +1631,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Send As toggle (only if invoices exist)
-                          if (invoicesWithReceipts.isNotEmpty) ...[
+                          // ── SEND AS section ─────────────────────────────────
+                          // Show picker only if there are any credit transactions.
+                          if (invoicesForReminder.isNotEmpty) ...[
                             Text(
                               'SEND AS',
                               style: TextStyle(
@@ -1612,44 +1644,71 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            SegmentedButton<bool>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: true,
-                                  label: Text(
-                                    'Receipt Photo',
-                                    style: TextStyle(fontSize: 12),
+                            // Build mode segments contextually:
+                            // • Manual entry with no image → only 'Manual Bill'
+                            // • Image receipt              → 'Receipt Photo' + 'Account Statement'
+                            // • Image receipt (manual)     → all three
+                            Builder(builder: (ctx) {
+                              final bool txIsManual =
+                                  selectedTx?.isManualEntry ?? false;
+                              final bool txHasImage = selectedTx?.receiptLink != null &&
+                                  selectedTx!.receiptLink!.isNotEmpty &&
+                                  selectedTx!.receiptLink != 'null';
+
+                              // Segments available for this transaction
+                              final segments = <ButtonSegment<String>>[
+                                if (txHasImage)
+                                  const ButtonSegment<String>(
+                                    value: 'receiptPhoto',
+                                    label: Text('Receipt Photo',
+                                        style: TextStyle(fontSize: 12)),
+                                    icon: Icon(LucideIcons.image, size: 15),
                                   ),
-                                  icon: Icon(LucideIcons.image, size: 15),
-                                ),
-                                ButtonSegment(
-                                  value: false,
-                                  label: Text(
-                                    'Account Statement',
-                                    style: TextStyle(fontSize: 12),
+                                if (txIsManual)
+                                  const ButtonSegment<String>(
+                                    value: 'manualBill',
+                                    label: Text('Manual Bill',
+                                        style: TextStyle(fontSize: 12)),
+                                    icon: Icon(LucideIcons.clipboardList,
+                                        size: 15),
                                   ),
-                                  icon: Icon(LucideIcons.fileText, size: 15),
-                                ),
-                              ],
-                              selected: {useReceiptPhoto},
-                              onSelectionChanged: (s) {
+                                if (!txIsManual || txHasImage)
+                                  const ButtonSegment<String>(
+                                    value: 'accountStatement',
+                                    label: Text('Account Statement',
+                                        style: TextStyle(fontSize: 12)),
+                                    icon: Icon(LucideIcons.fileText, size: 15),
+                                  ),
+                              ];
+
+                              // Ensure current shareMode is valid for this tx
+                              final validMode =
+                                  segments.any((s) => s.value == shareMode)
+                                      ? shareMode
+                                      : segments.first.value;
+
+                              return SegmentedButton<String>(
+                                segments: segments,
+                                selected: {validMode},
+                                onSelectionChanged: (s) {
                                   final newMode = s.first;
                                   restartPrefetch(selectedTx, newMode);
-                                  setSheet(() => useReceiptPhoto = newMode);
-                              },
-                              showSelectedIcon: false,
-                              style: SegmentedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 10,
+                                  setSheet(() => shareMode = newMode);
+                                },
+                                showSelectedIcon: false,
+                                style: SegmentedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 10,
+                                  ),
                                 ),
-                              ),
-                            ),
-                            // Receipt picker when multiple invoices exist
-                            if (invoicesWithReceipts.length > 1) ...[
+                              );
+                            }),
+                            // Receipt picker when multiple transactions exist
+                            if (invoicesForReminder.length > 1) ...[
                               const SizedBox(height: 14),
                               Text(
-                                'CHOOSE RECEIPT',
+                                'CHOOSE BILL',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w900,
@@ -1658,11 +1717,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              ...invoicesWithReceipts.map(
+                              ...invoicesForReminder.map(
                                 (tx) => InkWell(
                                   onTap: () {
-                                    restartPrefetch(tx, useReceiptPhoto);
-                                    setSheet(() => selectedTx = tx);
+                                    final newMode = defaultMode(tx);
+                                    restartPrefetch(tx, newMode);
+                                    setSheet(() {
+                                      selectedTx = tx;
+                                      shareMode = newMode;
+                                    });
                                   },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
@@ -1688,7 +1751,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     child: Row(
                                       children: [
                                         Icon(
-                                          LucideIcons.receipt,
+                                          tx.isManualEntry
+                                              ? LucideIcons.clipboardList
+                                              : LucideIcons.receipt,
                                           size: 16,
                                           color: selectedTx == tx
                                               ? context.primaryColor
@@ -1697,7 +1762,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         const SizedBox(width: 10),
                                         Expanded(
                                           child: Text(
-                                            'Bill #${tx.receiptNumber ?? "N/A"} · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}',
+                                            tx.isManualEntry
+                                                ? 'Manual · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}'
+                                                : 'Bill #${tx.receiptNumber ?? "N/A"} · ${DateFormat("dd MMM yyyy").format(tx.createdAt.toLocal())}',
                                             style: TextStyle(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
@@ -1707,6 +1774,30 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                             ),
                                           ),
                                         ),
+                                        if (tx.isManualEntry)
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 8),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF59E0B)
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: const Color(0xFFF59E0B)
+                                                    .withValues(alpha: 0.35),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'MANUAL',
+                                              style: TextStyle(
+                                                fontSize: 8,
+                                                fontWeight: FontWeight.w900,
+                                                color: Color(0xFFD97706),
+                                              ),
+                                            ),
+                                          ),
                                         if (selectedTx == tx)
                                           Icon(
                                             LucideIcons.checkCircle2,
@@ -1868,23 +1959,22 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               ),
                             ),
                             onPressed: () async {
-                              final phone =
-                                  phoneController.text.trim().isNotEmpty
+                              final phone = phoneController.text.trim().isNotEmpty
                                   ? phoneController.text.trim()
                                   : (ledger.customerPhone ?? '');
 
                               // Capture all values before popping — ctx becomes invalid after Navigator.pop
                               String capturedMessage = message;
-                              final capturedReceiptLink =
-                                  selectedTx?.receiptLink;
-                              final capturedReceiptNumber =
-                                  selectedTx?.receiptNumber;
-                              final capturedUseReceiptPhoto = useReceiptPhoto;
+                              final capturedReceiptLink = selectedTx?.receiptLink;
+                              final capturedReceiptNumber = selectedTx?.receiptNumber;
+                              final capturedShareMode = shareMode;
 
                               Navigator.pop(ctx);
 
-                              // Fetch specific receipt statement link if applicable
-                              if (!capturedUseReceiptPhoto &&
+                              // For Account Statement mode, try to fetch a
+                              // receipt-specific signed link (looks better than
+                              // the generic party statement).
+                              if (capturedShareMode == 'accountStatement' &&
                                   capturedReceiptNumber != null &&
                                   capturedReceiptNumber.isNotEmpty) {
                                 final shareUrl =
@@ -1913,12 +2003,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 }
                               }
 
-                              if (capturedUseReceiptPhoto &&
+                              // Receipt Photo mode — share the actual bill image
+                              if (capturedShareMode == 'receiptPhoto' &&
                                   capturedReceiptLink != null &&
                                   capturedReceiptLink.isNotEmpty &&
                                   capturedReceiptLink != 'null') {
-                                // Await the pre-warmed bytes (usually already
-                                // done by the time the user taps the button).
                                 final prefetchedBytes = await prefetchFuture;
                                 if (!context.mounted) return;
                                 await WhatsAppUtils.shareActualImageOnWhatsApp(
@@ -1931,6 +2020,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                   username: authState.user?.username,
                                 );
                               } else {
+                                // Manual Bill or Account Statement — text only
                                 if (phone.isNotEmpty) {
                                   await WhatsAppUtils.openWhatsAppChat(
                                     phone: phone,
@@ -2244,9 +2334,23 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                DateFormat(
-                                  'dd MMM yyyy',
-                                ).format(tx.createdAt.toLocal()),
+                                () {
+                                  final local = tx.createdAt.toLocal();
+                                  final now = DateTime.now();
+                                  final isToday = local.year == now.year &&
+                                      local.month == now.month &&
+                                      local.day == now.day;
+                                  final isYesterday = local.year == now.year &&
+                                      local.month == now.month &&
+                                      local.day == now.day - 1;
+                                  final datePart = isToday
+                                      ? 'Today'
+                                      : isYesterday
+                                          ? 'Yesterday'
+                                          : DateFormat('dd MMM yyyy').format(local);
+                                  final timePart = DateFormat('h:mm a').format(local);
+                                  return '$datePart • $timePart';
+                                }(),
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: context.textSecondaryColor,

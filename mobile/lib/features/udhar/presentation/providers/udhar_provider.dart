@@ -50,7 +50,7 @@ class UdharNotifier extends Notifier<UdharState> {
   /// Uses SharedPreferences to record that the migration has run, so subsequent
   /// app launches skip it entirely (zero overhead after the first run).
   Future<void> runFixManualEntryTypes() async {
-    const prefKey = 'manual_entry_types_fixed_v1';
+    const prefKey = 'manual_entry_types_fixed_v2';
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool(prefKey) == true) return; // Already done

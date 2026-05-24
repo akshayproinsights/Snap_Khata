@@ -14,6 +14,7 @@ import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dar
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/theme/context_extension.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
+import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -51,7 +52,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   final _partySearchController = TextEditingController();
   final _flatAmountController = TextEditingController();
   final _notesController = TextEditingController();
+  final _mobileController = TextEditingController();
   final FocusNode _partySearchFocusNode = FocusNode();
+  final FocusNode _mobileFocusNode = FocusNode();
 
   String _partyType = 'customer'; // 'customer' or 'vendor'
   String _entryType = 'gave'; // 'got' or 'gave' — defaults to 'gave' (sale mode)
@@ -103,10 +106,22 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     });
 
     _partySearchFocusNode.addListener(() {
-      setState(() {
-        _showSuggestions = _partySearchFocusNode.hasFocus &&
-            _partySearchController.text.trim().isNotEmpty;
-      });
+      if (!_partySearchFocusNode.hasFocus) {
+        // Delay hiding suggestions so that a tap on a suggestion item
+        // is registered BEFORE the list disappears (focus fires before onTap).
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            setState(() {
+              _showSuggestions = false;
+            });
+          }
+        });
+      } else {
+        setState(() {
+          _showSuggestions =
+              _partySearchController.text.trim().isNotEmpty;
+        });
+      }
     });
   }
 
@@ -117,6 +132,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _flatAmountController.dispose();
     _notesController.dispose();
     _partySearchFocusNode.dispose();
+    _mobileController.dispose();
+    _mobileFocusNode.dispose();
     super.dispose();
   }
 
@@ -286,6 +303,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       return;
     }
 
+    final mobile = _mobileController.text.trim();
+    if (_partyType == 'customer' && mobile.isNotEmpty && mobile.length != 10) {
+      AppToast.showError(context, 'Please enter a valid 10-digit mobile number');
+      return;
+    }
+
     final double finalAmount = _items.isEmpty
         ? (double.tryParse(_flatAmountController.text.trim()) ?? 0.0)
         : _computedTotal;
@@ -309,6 +332,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
           'party_id': _selectedCustomer!.id,
         if (_partyType == 'vendor' && _selectedVendor != null)
           'party_id': _selectedVendor!.id,
+        if (_partyType == 'customer' && _mobileController.text.trim().isNotEmpty)
+          'mobile_number': _mobileController.text.trim(),
         'amount': finalAmount,
         'entry_type': _entryType,
         'payment_mode': _entryType == 'got' ? 'Cash' : _paymentMode,
@@ -360,7 +385,13 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
             );
 
-            String phone = _selectedCustomer?.customerPhone ?? '';
+            String phone = _mobileController.text.trim();
+            if (phone.isEmpty) {
+              phone = _selectedCustomer?.customerPhone ?? '';
+            }
+            if (phone.isNotEmpty && !phone.startsWith('+91') && phone.length == 10) {
+              phone = '+91$phone';
+            }
 
             // If no phone saved, prompt the user to enter one before sharing
             if (phone.isEmpty && mounted) {
@@ -421,6 +452,148 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             balanceDue: 0.0,
           );
     context.push('/party/$ledgerId', extra: ledger);
+  }
+
+  Widget _buildMobileNumberField(BuildContext context) {
+    final phoneVal = _mobileController.text;
+    final isValid = phoneVal.length == 10;
+    final isEmpty = phoneVal.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(LucideIcons.smartphone, size: 14, color: context.primaryColor),
+            const SizedBox(width: 6),
+            Text(
+              'MOBILE NUMBER',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: context.primaryColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // +91 prefix chip
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+              decoration: BoxDecoration(
+                color: context.primaryColor.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+                border: Border(
+                  top: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  left: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  bottom: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                ),
+              ),
+              child: Text(
+                '+91',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: context.primaryColor,
+                ),
+              ),
+            ),
+            // Number input
+            Expanded(
+              child: TextField(
+                controller: _mobileController,
+                focusNode: _mobileFocusNode,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 1.2),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  hintText: '98765 43210',
+                  hintStyle: TextStyle(
+                    color: context.textSecondaryColor.withValues(alpha: 0.4),
+                    fontWeight: FontWeight.normal,
+                    letterSpacing: 0,
+                  ),
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    borderSide: BorderSide(
+                      color: context.primaryColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    borderSide: BorderSide(color: context.primaryColor, width: 2),
+                  ),
+                  fillColor: context.primaryColor.withValues(alpha: 0.03),
+                  filled: true,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
+                        onPressed: () async {
+                          final phone = await ContactUtils.pickContactPhone();
+                          if (phone != null && mounted) {
+                            setState(() {
+                              _mobileController.text = phone;
+                            });
+                          }
+                        },
+                      ),
+                      if (!isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+                            size: 18,
+                            color: isValid ? context.successColor : context.warningColor,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+                onTapOutside: (_) {
+                  _mobileFocusNode.unfocus();
+                },
+                textInputAction: TextInputAction.done,
+              ),
+            ),
+          ],
+        ),
+        if (!isEmpty && !isValid)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'Enter 10-digit mobile number',
+              style: TextStyle(fontSize: 11, color: context.warningColor),
+            ),
+          ),
+      ],
+    );
   }
 
   /// Builds the unified transaction mode selector row for customer entries.
@@ -642,6 +815,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 _selectedCustomer = null;
                                 _selectedVendor = null;
                                 _partySearchController.clear();
+                                _mobileController.clear();
                               });
                             },
                             child: Container(
@@ -685,6 +859,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 _selectedCustomer = null;
                                 _selectedVendor = null;
                                 _partySearchController.clear();
+                                _mobileController.clear();
                               });
                             },
                             child: Container(
@@ -758,6 +933,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                       _partySearchController.clear();
                                       _selectedCustomer = null;
                                       _selectedVendor = null;
+                                      _mobileController.clear();
                                     });
                                   },
                                 )
@@ -820,16 +996,21 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   ),
                                 ),
                                 onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  // Cancel the delayed hide so no double-setState
                                   setState(() {
                                     _partySearchController.text = name;
                                     if (_partyType == 'customer') {
                                       _selectedCustomer = p as CustomerLedger;
+                                      final phone = _selectedCustomer?.customerPhone ?? '';
+                                      _mobileController.text =
+                                          phone.replaceAll('+91', '').trim();
                                     } else {
                                       _selectedVendor = p as VendorLedger;
                                     }
                                     _showSuggestions = false;
-                                    _partySearchFocusNode.unfocus();
                                   });
+                                  _partySearchFocusNode.unfocus();
                                 },
                               );
                             },
@@ -837,6 +1018,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         ),
                     ],
                   ),
+                  if (_partyType == 'customer') ...[
+                    const SizedBox(height: 20),
+                    _buildMobileNumberField(context),
+                  ],
                   const SizedBox(height: 20),
 
                   // Item catalogue chips (Customer only)

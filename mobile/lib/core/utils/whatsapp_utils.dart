@@ -745,20 +745,24 @@ class WhatsAppUtils {
   }
 
   /// Formats manual entry details as a beautiful text bill and shares it.
+  ///
+  /// Pass [balanceDue] (the running party balance) to append an outstanding
+  /// balance line. If [items] is empty, falls back to a clean bill-amount line.
   static String buildManualBillMessage({
     required String customerName,
     required String shopName,
     required List<Map<String, dynamic>> items,
     required double total,
     required String paymentMode,
+    double? balanceDue,
   }) {
     final cleanName = _cleanDisplayName(customerName);
     final totalFmt = formatIndianCurrency(total);
-    
+
     final buffer = StringBuffer();
     buffer.writeln('Hi *$cleanName*,');
-    buffer.writeln('Here\'s your receipt from *${shopName.trim()}* 🧾\n');
-    
+    buffer.writeln('Here\'s your bill from *${shopName.trim()}* 🧾\n');
+
     if (items.isNotEmpty) {
       buffer.writeln('📦 *Items:*');
       for (final item in items) {
@@ -766,21 +770,30 @@ class WhatsAppUtils {
         final qty = item['quantity'] ?? 1.0;
         final rate = item['rate'] ?? 0.0;
         final amount = item['amount'] ?? (qty * rate);
-        
+
         final qtyStr = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
         final unit = item['unit'] ?? 'NOS';
         final rateFmt = formatIndianCurrency(rate.toDouble());
         final amountFmt = formatIndianCurrency(amount.toDouble());
-        
+
         buffer.writeln('• *$name* × $qtyStr $unit @ $rateFmt — *$amountFmt*');
       }
       buffer.writeln();
+      buffer.writeln('*Total: $totalFmt*');
+    } else {
+      // No item breakdown — just show the total cleanly
+      buffer.writeln('📋 *Bill Amount: $totalFmt*');
     }
-    
-    buffer.writeln('*Total: $totalFmt*');
+
     buffer.writeln('💳 Payment: *$paymentMode*');
+
+    // Append running balance due only when there's an outstanding amount
+    if (balanceDue != null && balanceDue > 0.01) {
+      buffer.writeln('\n⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*');
+    }
+
     buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
-    
+
     return buffer.toString();
   }
 

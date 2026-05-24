@@ -68,13 +68,29 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
     }
   }
 
-  // Sort by actual bill upload date first, falling back to updatedAt/transaction dates.
-  // We intentionally avoid leading with updatedAt because balance-reconciliation patches
-  // update that field on every /ledgers fetch, causing unrelated parties to jump to the top.
+  // Sort by most-recent activity: take the best (latest) of all date signals
+  // available on each party, then cap any future-dated entries to `now` so
+  // a wrongly-dated scanned bill never pushes a freshly-created party to the bottom.
+  final now = DateTime.now();
   unifiedList.sort((a, b) {
-    final dateA = a.latestUploadDate ?? a.updatedAt ?? a.lastTransactionDate ?? DateTime(0);
-    final dateB = b.latestUploadDate ?? b.updatedAt ?? b.lastTransactionDate ?? DateTime(0);
-    return dateB.compareTo(dateA);
+    DateTime effectiveDate(UnifiedParty p) {
+      final candidates = [
+        p.latestUploadDate,
+        p.updatedAt,
+        p.lastTransactionDate,
+      ]
+          .whereType<DateTime>()
+          .map((d) => d.isAfter(now) ? now : d) // cap future dates
+          .toList();
+
+      if (candidates.isEmpty) return DateTime(0);
+      return candidates.reduce((best, d) => d.isAfter(best) ? d : best);
+    }
+
+    final cmp = effectiveDate(b).compareTo(effectiveDate(a));
+    if (cmp != 0) return cmp;
+    // Tiebreaker: higher ID generally means newer — preserves insertion order
+    return b.id.compareTo(a.id);
   });
 
   return unifiedList;
