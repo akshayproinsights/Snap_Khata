@@ -20,6 +20,34 @@ SYNC_DEBOUNCE_SECONDS = 30 # Only auto-sync every 30 seconds per user
 
 router = APIRouter()
 
+def get_next_manual_receipt_number(username: str, db) -> str:
+    """
+    Returns the next sequential receipt number for manual entries.
+    Manual entries use their own counter starting from 1, independent of
+    scanned-bill receipt numbers. Looks at receipt_numbers that are pure
+    integers stored in ledger_transactions for this user.
+    """
+    try:
+        resp = db.client.table('ledger_transactions') \
+            .select('receipt_number') \
+            .eq('username', username) \
+            .not_.is_('receipt_number', 'null') \
+            .execute()
+        max_num = 0
+        for row in (resp.data or []):
+            rn = row.get('receipt_number')
+            if rn:
+                try:
+                    num = int(str(rn))
+                    if num > max_num:
+                        max_num = num
+                except (ValueError, TypeError):
+                    pass  # skip non-integer receipt numbers (e.g. scanned bill alphanumeric)
+        return str(max_num + 1)
+    except Exception as e:
+        logger.warning(f"Could not compute next manual receipt number: {e}")
+        return '1'
+
 def parse_date_to_iso(date_str: Any) -> str:
     """Helper to convert various date formats to a sortable ISO string."""
     if not date_str:
@@ -1191,6 +1219,7 @@ class ManualLineItem(BaseModel):
 class ManualUdharEntry(BaseModel):
     party_type: str # 'customer' or 'vendor'
     party_name: str # Name of the customer or vendor
+    party_id: Optional[int] = None  # If provided, bypass name-lookup and use ledger ID directly
     amount: float   # Must be > 0 (or computed from items if items is provided)
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
@@ -2028,11 +2057,28 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 tx_type = 'PAYMENT'
                 
         # 1. Upsert Ledger
-        ledger_resp = db.client.table(cfg['ledger_table']) \
-            .select('*') \
-            .eq('username', username) \
-            .eq(cfg['name_field'], party_name_clean) \
-            .execute()
+        # Prefer direct ID lookup (party_id sent by Flutter when user selected from dropdown).
+        # Falls back to name-based search to handle legacy callers or new parties.
+        if entry.party_id:
+            ledger_resp = db.client.table(cfg['ledger_table']) \
+                .select('*') \
+                .eq('username', username) \
+                .eq('id', entry.party_id) \
+                .execute()
+            if not ledger_resp.data:
+                # party_id was stale or wrong — fall back to name
+                logger.warning(f"party_id={entry.party_id} not found for {username}, falling back to name lookup")
+                ledger_resp = db.client.table(cfg['ledger_table']) \
+                    .select('*') \
+                    .eq('username', username) \
+                    .eq(cfg['name_field'], party_name_clean) \
+                    .execute()
+        else:
+            ledger_resp = db.client.table(cfg['ledger_table']) \
+                .select('*') \
+                .eq('username', username) \
+                .eq(cfg['name_field'], party_name_clean) \
+                .execute()
             
         ledger_data = ledger_resp.data
         if ledger_data:
@@ -2078,6 +2124,9 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                     'amount': round(it.quantity * it.rate, 2),
                 })
 
+        # Assign a sequential receipt number for every manual entry
+        manual_receipt_number = get_next_manual_receipt_number(username, db)
+
         tx_insert = {
             'username': username,
             'ledger_id': ledger_id,
@@ -2085,6 +2134,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             'amount': amount_to_use,
             'notes': entry.notes,
             'created_at': entry_date,
+            'receipt_number': manual_receipt_number,
             'extra_fields': {
                 'items': item_details,
                 'payment_mode': entry.payment_mode or 'Credit',
@@ -2166,11 +2216,98 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             "ledger_id": ledger_id,
             "party_name": party_name_clean,
             "party_type": entry.party_type,
+            "receipt_number": manual_receipt_number,
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error creating manual entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fix-manual-entry-types")
+async def fix_manual_entry_types(current_user: Dict = Depends(get_current_user)):
+    """
+    One-time retroactive fix for manual entries recorded as PAYMENT instead of MANUAL_CREDIT.
+
+    Before the entry-type default bug was fixed, ALL manual entries defaulted to entry_type='got'
+    which maps to transaction_type='PAYMENT'. Credit and UPI mode sales were incorrectly stored
+    as payments (reducing balance instead of increasing it).
+
+    Fix logic:
+      - PAYMENT + is_manual_entry=True + payment_mode IN ('Credit', 'UPI') → convert to MANUAL_CREDIT
+      - Cash is left as-is (ambiguous: could be legitimate 'Payment Received in cash')
+
+    After patching transactions, reconcile_all_customer_ledger_balances is called to correct
+    all affected ledger balance_due values.
+    """
+    username = current_user.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    db = get_database_client()
+    db.set_user_context(username)
+
+    try:
+        # Fetch all PAYMENT transactions that are manual entries
+        resp = db.client.table("ledger_transactions") \
+            .select("id, payment_mode, extra_fields, ledger_id") \
+            .eq("username", username) \
+            .eq("transaction_type", "PAYMENT") \
+            .execute()
+
+        rows = resp.data or []
+        to_fix = []
+
+        for row in rows:
+            extra = row.get("extra_fields") or {}
+            if not (isinstance(extra, dict) and extra.get("is_manual_entry")):
+                continue  # Not a manual entry — skip
+
+            payment_mode = (
+                row.get("payment_mode")
+                or extra.get("payment_mode")
+                or ""
+            ).strip()
+
+            # Cash is ambiguous (might be a genuine 'Payment Received in cash') — leave it
+            if payment_mode.lower() in ("credit", "upi"):
+                to_fix.append(row["id"])
+
+        if not to_fix:
+            return {
+                "status": "success",
+                "message": "No entries required fixing — everything looks correct.",
+                "fixed_count": 0,
+            }
+
+        # Patch in batches of 50 to stay within Supabase in_ limits
+        fixed_count = 0
+        batch_size = 50
+        for i in range(0, len(to_fix), batch_size):
+            batch = to_fix[i : i + batch_size]
+            db.client.table("ledger_transactions") \
+                .update({"transaction_type": "MANUAL_CREDIT"}) \
+                .in_("id", batch) \
+                .eq("username", username) \
+                .execute()
+            fixed_count += len(batch)
+
+        logger.info(f"fix_manual_entry_types: converted {fixed_count} PAYMENT→MANUAL_CREDIT for {username}")
+
+        # Reconcile balances so ledger balance_due reflects the corrected history
+        await reconcile_all_customer_ledger_balances(current_user)
+
+        return {
+            "status": "success",
+            "message": f"Fixed {fixed_count} entry type(s). Ledger balances have been recalculated.",
+            "fixed_count": fixed_count,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in fix_manual_entry_types: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class TogglePaidStatusRequest(BaseModel):

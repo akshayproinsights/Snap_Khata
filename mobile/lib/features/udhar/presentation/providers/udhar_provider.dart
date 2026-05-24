@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/verified/presentation/providers/verified_provider.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class UdharState {
   final bool isLoading;
@@ -36,8 +37,28 @@ class UdharNotifier extends Notifier<UdharState> {
     // Kick off the initial fetch. If there's already cached data (state has
     // ledgers from a previous build), isLoading stays false so the list
     // stays visible while refreshing in the background.
-    Future.microtask(() => fetchLedgers());
+    Future.microtask(() async {
+      // One-time retroactive fix for entries saved with the wrong type.
+      // Runs silently in the background on first launch after the fix is deployed.
+      await runFixManualEntryTypes();
+      await fetchLedgers();
+    });
     return UdharState(isLoading: true);
+  }
+
+  /// Calls the backend /fix-manual-entry-types endpoint exactly once per device.
+  /// Uses SharedPreferences to record that the migration has run, so subsequent
+  /// app launches skip it entirely (zero overhead after the first run).
+  Future<void> runFixManualEntryTypes() async {
+    const prefKey = 'manual_entry_types_fixed_v1';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(prefKey) == true) return; // Already done
+      await _dio.post('/api/udhar/fix-manual-entry-types');
+      await prefs.setBool(prefKey, true);
+    } catch (_) {
+      // Silently ignore — will retry next launch
+    }
   }
 
   Future<void> fetchLedgers() async {

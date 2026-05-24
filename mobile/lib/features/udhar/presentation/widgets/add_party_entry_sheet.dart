@@ -7,6 +7,7 @@ import 'package:mobile/features/dashboard/presentation/providers/dashboard_provi
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 import 'package:mobile/features/inventory/presentation/providers/vendor_ledger_provider.dart';
 import 'package:mobile/features/udhar/presentation/providers/item_catalogue_provider.dart';
+import 'package:mobile/features/udhar/presentation/pages/item_catalogue_page.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
@@ -53,8 +54,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   final FocusNode _partySearchFocusNode = FocusNode();
 
   String _partyType = 'customer'; // 'customer' or 'vendor'
-  String _entryType = 'got'; // 'got' or 'gave'
-  String _paymentMode = 'Credit'; // 'Credit', 'Cash', 'UPI'
+  String _entryType = 'gave'; // 'got' or 'gave' — defaults to 'gave' (sale mode)
+  String _paymentMode = 'Credit'; // 'Credit', 'Cash', 'UPI' — only used when entry_type=='gave'
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
 
@@ -251,6 +252,33 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _bumpTotal();
   }
 
+  /// Merges items returned from the catalogue cart picker into the line items.
+  /// If the same item already exists, its quantity is incremented.
+  void _mergeCatalogueCart(List<CatalogueCartItem> cartItems) {
+    setState(() {
+      for (final ci in cartItems) {
+        final existingIndex =
+            _items.indexWhere((it) => it.name == ci.name);
+        if (existingIndex >= 0) {
+          _items[existingIndex].quantity += ci.qty.toDouble();
+        } else {
+          _items.add(_ManualItem(
+            name: ci.name,
+            rate: ci.rate,
+            unit: ci.unit,
+            quantity: ci.qty.toDouble(),
+          ));
+        }
+      }
+    });
+    HapticFeedback.mediumImpact();
+    _bumpTotal();
+    AppToast.showSuccess(
+      context,
+      '${cartItems.length} item${cartItems.length == 1 ? '' : 's'} added ✅',
+    );
+  }
+
   Future<void> _submit({bool shareOnWhatsApp = false}) async {
     final partyName = _partySearchController.text.trim();
     if (partyName.isEmpty) {
@@ -275,9 +303,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       final payload = {
         'party_type': _partyType,
         'party_name': partyName,
+        // Also send party_id if a known party was selected — backend uses ID
+        // for direct lookup, avoiding any name-mismatch bugs.
+        if (_partyType == 'customer' && _selectedCustomer != null)
+          'party_id': _selectedCustomer!.id,
+        if (_partyType == 'vendor' && _selectedVendor != null)
+          'party_id': _selectedVendor!.id,
         'amount': finalAmount,
         'entry_type': _entryType,
-        'payment_mode': _paymentMode,
+        'payment_mode': _entryType == 'got' ? 'Cash' : _paymentMode,
         'date': _selectedDate.toUtc().toIsoformat(),
         'notes': _notesController.text.trim(),
         'items': _items.map((it) => it.toJson()).toList(),
@@ -289,6 +323,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
           );
 
       if (response.data['status'] == 'success') {
+        // Extract receipt number assigned by backend
+        final String? receiptNum = response.data['receipt_number']?.toString();
+
         // Trigger data refresh in background
         unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
         ref.read(itemCatalogueProvider.notifier).fetchCatalogue();
@@ -320,7 +357,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       })
                   .toList(),
               total: finalAmount,
-              paymentMode: _paymentMode,
+              paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
             );
 
             String phone = _selectedCustomer?.customerPhone ?? '';
@@ -345,7 +382,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             }
           } else {
             Navigator.of(context).pop(true);
-            AppToast.showSuccess(context, 'Entry added successfully! 🎉');
+            final successMsg = receiptNum != null
+                ? 'Entry saved! Bill #$receiptNum 🎉'
+                : 'Entry added successfully! 🎉';
+            AppToast.showSuccess(context, successMsg);
             // Immediately open the party's transaction history
             if (mounted && ledgerId != null && _partyType == 'customer') {
               _navigateToPartyDetail(ledgerId, partyName);
@@ -383,10 +423,118 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     context.push('/party/$ledgerId', extra: ledger);
   }
 
+  /// Builds the unified transaction mode selector row for customer entries.
+  /// Layout: [Credit Sale] [Cash Sale] [UPI Sale] [Payment Received]
+  Widget _buildTransactionModeRow(BuildContext context) {
+    // Each entry: (label, paymentMode or null, entryType, icon, color)
+    final modes = [
+      (
+        label: 'Credit',
+        sub: 'Sale',
+        mode: 'Credit',
+        type: 'gave',
+        icon: LucideIcons.creditCard,
+        color: context.primaryColor,
+      ),
+      (
+        label: 'Cash',
+        sub: 'Sale',
+        mode: 'Cash',
+        type: 'gave',
+        icon: LucideIcons.banknote,
+        color: const Color(0xFF16A34A),
+      ),
+      (
+        label: 'UPI',
+        sub: 'Sale',
+        mode: 'UPI',
+        type: 'gave',
+        icon: LucideIcons.smartphone,
+        color: const Color(0xFF7C3AED),
+      ),
+      (
+        label: 'Payment',
+        sub: 'Received',
+        mode: 'Cash',
+        type: 'got',
+        icon: LucideIcons.arrowDownLeft,
+        color: context.successColor,
+      ),
+    ];
+
+    return Row(
+      children: modes.map((m) {
+        final isSelected = _entryType == m.type &&
+            (m.type == 'got' || _paymentMode == m.mode);
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  _entryType = m.type;
+                  if (m.type == 'gave') _paymentMode = m.mode;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? m.color.withValues(alpha: 0.10)
+                      : context.surfaceColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected
+                        ? m.color
+                        : context.borderColor.withValues(alpha: 0.6),
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      m.icon,
+                      size: 18,
+                      color: isSelected ? m.color : context.textSecondaryColor,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      m.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: isSelected ? m.color : context.textColor,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    Text(
+                      m.sub,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? m.color.withValues(alpha: 0.7)
+                            : context.textSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isGot = _entryType == 'got';
-    final Color activeColor = isGot ? context.successColor : context.errorColor;
+    final Color activeColor = isGot ? context.successColor : context.primaryColor;
 
     final customerState = ref.watch(udharProvider);
     final vendorState = ref.watch(vendorLedgerProvider);
@@ -705,8 +853,14 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                           ),
                         ),
                         TextButton.icon(
-                          onPressed: () {
-                            context.push('/item-catalogue');
+                          onPressed: () async {
+                            final result = await context
+                                .push<List<CatalogueCartItem>>(
+                              '/item-catalogue?mode=select',
+                            );
+                            if (result != null && result.isNotEmpty) {
+                              _mergeCatalogueCart(result);
+                            }
                           },
                           icon: const Icon(LucideIcons.tag, size: 14),
                           label: const Text('My Items'),
@@ -1178,131 +1332,93 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   ],
                   const SizedBox(height: 20),
 
-                  // Date Picker & Payment Mode Selector Row
-                  Row(
-                    children: [
-                      // Date Picker Button
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _selectDate,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.surfaceColor,
-                              border: Border.all(color: context.borderColor, width: 0.5),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  LucideIcons.calendar,
-                                  size: 16,
-                                  color: context.primaryColor,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _formatDate(_selectedDate),
-                                    style: TextStyle(
-                                      color: context.textColor,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                  // Date Picker Row (full width — payment mode now handled by mode selector above)
+                  GestureDetector(
+                    onTap: _selectDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
                       ),
-                      const SizedBox(width: 12),
-                      // Payment Mode Pills (Cash, UPI, Credit)
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor,
-                            border: Border.all(color: context.borderColor, width: 0.5),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: ['Credit', 'Cash', 'UPI'].map((mode) {
-                              final isSelected = _paymentMode == mode;
-                              return Expanded(
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _paymentMode = mode;
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? context.primaryColor
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        mode,
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white
-                                              : context.textSecondaryColor,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor,
+                        border: Border.all(color: context.borderColor, width: 0.5),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    ],
+                      child: Row(
+                        children: [
+                          Icon(
+                            LucideIcons.calendar,
+                            size: 16,
+                            color: context.primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDate(_selectedDate),
+                            style: TextStyle(
+                              color: context.textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Entry Type (Got / Gave) Toggle
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _EntryTypeButton(
-                          label: 'YOU GOT',
-                          isSelected: _entryType == 'got',
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setState(() => _entryType = 'got');
-                          },
-                          activeColor: context.successColor,
-                          icon: LucideIcons.arrowDownLeft,
+                   // ── Transaction Mode Selector ──────────────────────────────
+                  // Single unified row: Credit Sale | Cash Sale | UPI Sale | Payment Received
+                  // The first 3 set entry_type='gave' (we sold goods / gave credit).
+                  // "Payment Received" sets entry_type='got' (customer paid us).
+                  if (_partyType == 'customer') ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'TRANSACTION TYPE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: context.textSecondaryColor,
+                          letterSpacing: 1.2,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _EntryTypeButton(
-                          label: 'YOU GAVE',
-                          isSelected: _entryType == 'gave',
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setState(() => _entryType = 'gave');
-                          },
-                          activeColor: context.errorColor,
-                          icon: LucideIcons.arrowUpRight,
+                    ),
+                    _buildTransactionModeRow(context),
+                    const SizedBox(height: 16),
+                  ] else ...[
+                    // For vendors: keep simple YOU GOT / YOU GAVE
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _EntryTypeButton(
+                            label: 'YOU GOT',
+                            isSelected: _entryType == 'got',
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _entryType = 'got');
+                            },
+                            activeColor: context.successColor,
+                            icon: LucideIcons.arrowDownLeft,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _EntryTypeButton(
+                            label: 'YOU GAVE',
+                            isSelected: _entryType == 'gave',
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() => _entryType = 'gave');
+                            },
+                            activeColor: context.errorColor,
+                            icon: LucideIcons.arrowUpRight,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Notes (Optional)
                   TextFormField(

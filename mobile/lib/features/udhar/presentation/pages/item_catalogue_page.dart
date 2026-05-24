@@ -7,8 +7,38 @@ import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/item_catalogue_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 
+// ── Cart result model — returned to caller in selection mode ──────────────────
+class CatalogueCartItem {
+  final String name;
+  final double rate;
+  final String unit;
+  final int qty;
+
+  const CatalogueCartItem({
+    required this.name,
+    required this.rate,
+    required this.unit,
+    required this.qty,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'rate': rate,
+        'unit': unit,
+        'qty': qty,
+      };
+}
+
 class ItemCataloguePage extends ConsumerStatefulWidget {
-  const ItemCataloguePage({super.key});
+  /// When [selectionMode] is true the page acts as a cart picker.
+  /// Items get qty steppers. Tapping "Done" pops with the cart.
+  /// When false (default) it's the standard add/edit/delete catalogue manager.
+  final bool selectionMode;
+
+  const ItemCataloguePage({
+    super.key,
+    this.selectionMode = false,
+  });
 
   @override
   ConsumerState<ItemCataloguePage> createState() => _ItemCataloguePageState();
@@ -20,6 +50,68 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
   String _searchQuery = '';
   bool _isSyncing = false;
   late AnimationController _fabAnimController;
+
+  // ── Cart state (selection mode only) ─────────────────────────────────────
+  /// Maps catalogue item id → quantity in cart (always ≥ 1 when present)
+  final Map<int, int> _cartQty = {};
+
+  int get _totalCartItems => _cartQty.values.fold(0, (sum, q) => sum + q);
+
+  double _cartTotal(List<CatalogueItem> allItems) {
+    double total = 0;
+    for (final item in allItems) {
+      final qty = _cartQty[item.id] ?? 0;
+      if (qty > 0) total += item.lastPrice * qty;
+    }
+    return total;
+  }
+
+  void _incrementCart(CatalogueItem item) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _cartQty[item.id] = (_cartQty[item.id] ?? 0) + 1;
+    });
+  }
+
+  void _decrementCart(CatalogueItem item) {
+    final current = _cartQty[item.id] ?? 0;
+    if (current <= 1) {
+      // min = 1 once added; to remove use the ✕ button
+      return;
+    }
+    HapticFeedback.lightImpact();
+    setState(() {
+      _cartQty[item.id] = current - 1;
+    });
+  }
+
+  void _removeFromCart(int itemId) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _cartQty.remove(itemId);
+    });
+  }
+
+  /// Pops the page and returns the selected items to the caller.
+  void _confirmCart(List<CatalogueItem> allItems) {
+    if (_cartQty.isEmpty) {
+      AppToast.showError(context, 'Add at least one item');
+      return;
+    }
+    final result = <CatalogueCartItem>[];
+    for (final item in allItems) {
+      final qty = _cartQty[item.id] ?? 0;
+      if (qty > 0) {
+        result.add(CatalogueCartItem(
+          name: item.itemName,
+          rate: item.lastPrice,
+          unit: item.unit,
+          qty: qty,
+        ));
+      }
+    }
+    Navigator.pop(context, result);
+  }
 
   @override
   void initState() {
@@ -463,23 +555,53 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
           ],
         ),
         actions: [
-          // Sync button
-          IconButton(
-            icon: _isSyncing
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor:
-                          AlwaysStoppedAnimation(context.textSecondaryColor),
-                    ),
-                  )
-                : Icon(LucideIcons.refreshCw,
-                    color: context.textSecondaryColor, size: 20),
-            tooltip: 'Sync from bills',
-            onPressed: _isSyncing ? null : _handleSync,
-          ),
+          // Cart badge (selection mode only)
+          if (widget.selectionMode && _totalCartItems > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: context.primaryColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.shoppingCart, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_totalCartItems',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Sync button (management mode only)
+          if (!widget.selectionMode)
+            IconButton(
+              icon: _isSyncing
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                            AlwaysStoppedAnimation(context.textSecondaryColor),
+                      ),
+                    )
+                  : Icon(LucideIcons.refreshCw,
+                      color: context.textSecondaryColor, size: 20),
+              tooltip: 'Sync from bills',
+              onPressed: _isSyncing ? null : _handleSync,
+            ),
           const SizedBox(width: 4),
         ],
       ),
@@ -650,6 +772,16 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                 itemCount: filteredItems.length,
                 itemBuilder: (context, index) {
                   final item = filteredItems[index];
+                  if (widget.selectionMode) {
+                    return _CartItemCard(
+                      item: item,
+                      qty: _cartQty[item.id] ?? 0,
+                      onAdd: () => _incrementCart(item),
+                      onIncrement: () => _incrementCart(item),
+                      onDecrement: () => _decrementCart(item),
+                      onRemove: () => _removeFromCart(item.id),
+                    );
+                  }
                   return _ItemCard(
                     item: item,
                     onEdit: () => _showQuickAddSheet(item: item),
@@ -662,31 +794,33 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
         ],
       ),
 
-      // ── Sticky bottom CTA: Done – back to bill entry ──────────────────────
+      // ── Sticky bottom CTA ─────────────────────────────────────────────────
       bottomNavigationBar: hasItems
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(LucideIcons.checkCircle, size: 18),
-                    label: Text(
-                      'Done — Use These Items',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.primaryColor,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                child: widget.selectionMode
+                    ? _buildSelectionBottomBar(state.items)
+                    : SizedBox(
+                        height: 54,
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(LucideIcons.checkCircle, size: 18),
+                          label: const Text(
+                            'Done — Use These Items',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.primaryColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             )
           : null,
@@ -815,7 +949,270 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
     );
   }
 
+  // ── Selection mode bottom bar ──────────────────────────────────────────
+  Widget _buildSelectionBottomBar(List<CatalogueItem> allItems) {
+    final count = _totalCartItems;
+    final total = _cartTotal(allItems);
+    final hasCart = count > 0;
 
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      height: 62,
+      child: ElevatedButton(
+        onPressed: hasCart ? () => _confirmCart(allItems) : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              hasCart ? context.primaryColor : context.borderColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              hasCart ? LucideIcons.shoppingCart : LucideIcons.shoppingBag,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            if (hasCart) ...[
+              Text(
+                'Use $count item${count == 1 ? '' : 's'}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '₹${total.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ] else
+              const Text(
+                'Tap items to add to cart',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Cart Item Card (selection mode) ───────────────────────────────────────
+class _CartItemCard extends StatelessWidget {
+  const _CartItemCard({
+    required this.item,
+    required this.qty,
+    required this.onAdd,
+    required this.onIncrement,
+    required this.onDecrement,
+    required this.onRemove,
+  });
+
+  final CatalogueItem item;
+  final int qty;
+  final VoidCallback onAdd;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+  final VoidCallback onRemove;
+
+  bool get _inCart => qty > 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _inCart
+            ? context.primaryColor.withValues(alpha: 0.06)
+            : context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _inCart
+              ? context.primaryColor.withValues(alpha: 0.4)
+              : context.borderColor,
+          width: _inCart ? 1.5 : 0.5,
+        ),
+        boxShadow: context.premiumShadow,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            // Left: item info
+            Expanded(
+              child: GestureDetector(
+                onTap: _inCart ? null : onAdd,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (_inCart) ...[
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: context.primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            item.itemName,
+                            style: TextStyle(
+                              color: context.textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '₹${item.lastPrice.toStringAsFixed(0)} per ${item.unit}',
+                      style: TextStyle(
+                        color: context.primaryColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Right: stepper or Add button
+            if (!_inCart)
+              GestureDetector(
+                onTap: onAdd,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: context.primaryColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.plus, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Add',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  // Stepper container
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: context.primaryColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Decrement (min = 1, so this is disabled-looking at 1)
+                        GestureDetector(
+                          onTap: onDecrement,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
+                            child: Icon(
+                              LucideIcons.minus,
+                              size: 14,
+                              color: qty <= 1
+                                  ? context.textSecondaryColor
+                                      .withValues(alpha: 0.4)
+                                  : context.primaryColor,
+                            ),
+                          ),
+                        ),
+                        // Qty
+                        Text(
+                          '$qty',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            color: context.primaryColor,
+                          ),
+                        ),
+                        // Increment
+                        GestureDetector(
+                          onTap: onIncrement,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
+                            child: Icon(
+                              LucideIcons.plus,
+                              size: 14,
+                              color: context.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Remove button
+                  GestureDetector(
+                    onTap: onRemove,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color:
+                            context.errorColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        LucideIcons.x,
+                        size: 14,
+                        color: context.errorColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Extracted Item Card ───────────────────────────────────────────────────────

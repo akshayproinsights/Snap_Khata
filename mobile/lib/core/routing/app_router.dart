@@ -477,7 +477,10 @@ class AppRouter {
         path: '/item-catalogue',
         name: 'item-catalogue',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ItemCataloguePage(),
+        builder: (context, state) {
+          final isSelection = state.uri.queryParameters['mode'] == 'select';
+          return ItemCataloguePage(selectionMode: isSelection);
+        },
       ),
     ],
   );
