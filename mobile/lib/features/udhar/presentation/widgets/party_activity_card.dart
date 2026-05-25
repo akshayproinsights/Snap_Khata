@@ -267,10 +267,15 @@ class PartyActivityCard extends StatelessWidget {
     if (isToday) dayPart = 'Today';
     if (isYesterday) dayPart = 'Yesterday';
     
-    final timePart = DateFormat('h:mm a').format(istDate);
+    // Check if date-only (midnight UTC) to avoid showing default 5:30 AM
+    final isDateOnly = date.toUtc().hour == 0 &&
+        date.toUtc().minute == 0 &&
+        date.toUtc().second == 0;
+
+    final String displayStr = isDateOnly ? dayPart : '$dayPart • ${DateFormat('h:mm a').format(istDate)}';
 
     return Text(
-      '$dayPart • $timePart',
+      displayStr,
       style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,

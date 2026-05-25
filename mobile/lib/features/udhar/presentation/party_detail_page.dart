@@ -2346,7 +2346,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 color: context.textSecondaryColor,
                               ),
                               const SizedBox(width: 4),
-                              Text(
+                               Text(
                                 () {
                                   final local = tx.createdAt.toLocal();
                                   final now = DateTime.now();
@@ -2361,6 +2361,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                       : isYesterday
                                           ? 'Yesterday'
                                           : DateFormat('dd MMM yyyy').format(local);
+                                  
+                                  // Check if date-only (midnight UTC) to avoid showing default 5:30 AM/12:00 AM
+                                  final isDateOnly = tx.createdAt.toUtc().hour == 0 &&
+                                      tx.createdAt.toUtc().minute == 0 &&
+                                      tx.createdAt.toUtc().second == 0;
+                                  
+                                  if (isDateOnly) {
+                                    return datePart;
+                                  }
+                                  
                                   final timePart = DateFormat('h:mm a').format(local);
                                   return '$datePart • $timePart';
                                 }(),

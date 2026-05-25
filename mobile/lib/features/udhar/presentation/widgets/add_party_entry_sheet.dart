@@ -1406,175 +1406,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   ],
                   const SizedBox(height: 20),
 
-                  // ── Transaction Mode Selector ──────────────────────────────
-                  // For customers: SegmentedButton matching the review page pattern.
-                  // Row 1 — sale types (Credit | Cash | UPI)
-                  // Row 2 — Payment Received (full width)
-                  if (_partyType == 'customer') ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'TRANSACTION TYPE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: context.textSecondaryColor,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                    // Row 1: sale-type segments
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(value: 'Credit', label: Text('Credit')),
-                              ButtonSegment(value: 'Cash', label: Text('Cash')),
-                              ButtonSegment(value: 'UPI', label: Text('UPI')),
-                            ],
-                            selected: _entryType == 'gave'
-                                ? {_paymentMode}
-                                : {'__none__'},
-                            emptySelectionAllowed: true,
-                            onSelectionChanged: (newSelection) {
-                              HapticFeedback.lightImpact();
-                              setState(() {
-                                _entryType = 'gave';
-                                _paymentMode = newSelection.first;
-                              });
-                            },
-                            style: ButtonStyle(
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Row 2: Payment Received — full width
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'got',
-                                label: Text('Payment Received'),
-                                icon: Icon(LucideIcons.arrowDownLeft, size: 14),
-                              ),
-                            ],
-                            selected: _entryType == 'got' ? {'got'} : {},
-                            emptySelectionAllowed: true,
-                            onSelectionChanged: (newSelection) {
-                              HapticFeedback.lightImpact();
-                              setState(() {
-                                _entryType = newSelection.isEmpty ? 'gave' : 'got';
-                                if (_entryType == 'got') _paymentMode = 'Cash';
-                              });
-                            },
-                            style: ButtonStyle(
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                              backgroundColor: WidgetStateProperty.resolveWith<Color?>(
-                                (states) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return context.successColor.withValues(alpha: 0.12);
-                                  }
-                                  return null;
-                                },
-                              ),
-                              foregroundColor: WidgetStateProperty.resolveWith<Color?>(
-                                (states) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return context.successColor;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              side: WidgetStateProperty.resolveWith<BorderSide?>(
-                                (states) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return BorderSide(color: context.successColor);
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // ── Amount Paid (Credit only) ── mirrors review page ──────
-                    if (_entryType == 'gave' && _paymentMode == 'Credit') ...[
-                      Builder(builder: (context) {
-                        final total = _items.isEmpty
-                            ? (double.tryParse(_flatAmountController.text.trim()) ?? 0.0)
-                            : _computedTotal;
-                        final paid = double.tryParse(_paidAmountController.text.trim()) ?? 0.0;
-                        final balance = (total - paid).clamp(0.0, double.infinity);
-                        return Row(
-                          children: [
-                            // Total display
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Total Bill',
-                                      style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '₹${total.toStringAsFixed(0)}',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Amount paid input
-                            SizedBox(
-                              width: 110,
-                              child: TextField(
-                                controller: _paidAmountController,
-                                keyboardType: TextInputType.number,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                                onChanged: (_) => setState(() {}),
-                                decoration: InputDecoration(
-                                  labelText: 'Paid Now',
-                                  labelStyle: TextStyle(fontSize: 10, color: context.textSecondaryColor),
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Balance
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('Balance Due',
-                                    style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '₹${balance.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    color: balance > 0 ? context.errorColor : context.successColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      }),
-                      const SizedBox(height: 16),
-                    ],
-                  ] else ...[
-                    // For vendors: keep simple YOU GOT / YOU GAVE
+                  // For vendors: keep simple YOU GOT / YOU GAVE in body
+                  if (_partyType == 'vendor') ...[
                     Row(
                       children: [
                         Expanded(
@@ -1646,82 +1479,356 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             child: SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Total row with animated amount
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Item count badge
-                        if (_items.isNotEmpty) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                    // ── Customer-only: Transaction type + totals in bottom panel ──
+                    if (_partyType == 'customer') ...[
+                      // Row 1: Total Bill | Paid Now | Balance Due
+                      Builder(builder: (ctx) {
+                        final total = _items.isEmpty
+                            ? (double.tryParse(_flatAmountController.text.trim()) ?? 0.0)
+                            : _computedTotal;
+                        final balanceVal = _entryType == 'gave' && _paymentMode == 'Credit'
+                            ? (total - (double.tryParse(_paidAmountController.text.trim()) ?? 0.0)).clamp(0.0, double.infinity)
+                            : (_entryType == 'got' ? 0.0 : 0.0);
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Total Bill
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Bill',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: context.textSecondaryColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                ScaleTransition(
+                                  scale: _totalBumpAnimation,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 250),
+                                    child: Text(
+                                      '₹${total.toStringAsFixed(0)}',
+                                      key: ValueKey(total.toInt()),
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: activeColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            decoration: BoxDecoration(
-                              color: activeColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '${_items.length} item${_items.length == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: activeColor,
+                            const SizedBox(width: 8),
+                            // Pencil icon to edit total (only when no items)
+                            if (_items.isEmpty)
+                              Icon(
+                                LucideIcons.pencil,
+                                size: 13,
+                                color: context.textSecondaryColor,
+                              ),
+                            const Spacer(),
+                            // Paid Now field (only for Credit sale)
+                            if (_entryType == 'gave' && _paymentMode == 'Credit') ...[
+                              SizedBox(
+                                width: 100,
+                                child: TextField(
+                                  controller: _paidAmountController,
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: InputDecoration(
+                                    labelText: 'Amount Paid',
+                                    labelStyle: TextStyle(
+                                      fontSize: 9,
+                                      color: context.textSecondaryColor,
+                                    ),
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 8,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(color: context.borderColor),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(color: context.primaryColor),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Balance Due
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Bal.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: context.textSecondaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    '₹${balanceVal.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      color: balanceVal > 0
+                                          ? context.errorColor
+                                          : context.successColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              // Item count badge for non-credit modes
+                              if (_items.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: activeColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_items.length} item${_items.length == 1 ? '' : 's'}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: activeColor,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ],
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                      // Row 2: Cash | Credit | UPI  +  Payment Received
+                      Row(
+                        children: [
+                          // Cash button
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                setState(() {
+                                  _entryType = 'gave';
+                                  _paymentMode = 'Cash';
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                      ? context.primaryColor
+                                      : context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                        ? context.primaryColor
+                                        : context.borderColor,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Cash',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                        ? Colors.white
+                                        : context.textColor,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
+                          // Credit button
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                setState(() {
+                                  _entryType = 'gave';
+                                  _paymentMode = 'Credit';
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                      ? context.primaryColor
+                                      : context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                        ? context.primaryColor
+                                        : context.borderColor,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Credit',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                        ? Colors.white
+                                        : context.textColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Payment Received button
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                setState(() {
+                                  _entryType = _entryType == 'got' ? 'gave' : 'got';
+                                  if (_entryType == 'got') _paymentMode = 'Cash';
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: _entryType == 'got'
+                                      ? context.successColor
+                                      : context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: _entryType == 'got'
+                                        ? context.successColor
+                                        : context.borderColor,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.pencil,
+                                      size: 12,
+                                      color: _entryType == 'got'
+                                          ? Colors.white
+                                          : context.textSecondaryColor,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Payment',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: _entryType == 'got'
+                                            ? Colors.white
+                                            : context.textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
-                        const Spacer(),
-                        // Label
-                        Text(
-                          'TOTAL',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: context.textSecondaryColor,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Animated amount
-                        ScaleTransition(
-                          scale: _totalBumpAnimation,
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, anim) =>
-                                SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.5),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                parent: anim,
-                                curve: Curves.easeOut,
-                              )),
-                              child: FadeTransition(
-                                opacity: anim,
-                                child: child,
+                      ),
+                      const SizedBox(height: 8),
+                    ] else ...[
+                      // Vendor: just show total row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (_items.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: activeColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${_items.length} item${_items.length == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: activeColor,
+                                ),
                               ),
                             ),
-                            child: Text(
-                              '₹${finalAmount.toStringAsFixed(0)}',
-                              key: ValueKey(finalAmount.toInt()),
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: activeColor,
-                                letterSpacing: -0.5,
+                            const SizedBox(width: 8),
+                          ],
+                          const Spacer(),
+                          Text(
+                            'TOTAL',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ScaleTransition(
+                            scale: _totalBumpAnimation,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              transitionBuilder: (child, anim) =>
+                                  SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.5),
+                                  end: Offset.zero,
+                                ).animate(CurvedAnimation(
+                                  parent: anim,
+                                  curve: Curves.easeOut,
+                                )),
+                                child: FadeTransition(
+                                  opacity: anim,
+                                  child: child,
+                                ),
+                              ),
+                              child: Text(
+                                '₹${finalAmount.toStringAsFixed(0)}',
+                                key: ValueKey(finalAmount.toInt()),
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  color: activeColor,
+                                  letterSpacing: -0.5,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     // Action buttons
                     Row(
                       children: [
