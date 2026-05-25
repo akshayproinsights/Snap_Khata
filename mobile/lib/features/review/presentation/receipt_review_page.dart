@@ -21,13 +21,12 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart';
 
-
-
-
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
+
   /// All groups from the pending list, used to navigate to the next receipt.
   final List<InvoiceReviewGroup> allGroups;
+
   /// Index of [group] inside [allGroups]. -1 when not launched from the list.
   final int currentIndex;
 
@@ -46,7 +45,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   // ── Payment Summary state ──────────────────────────────────────────
   GstMode _gstMode = GstMode.none;
 
-  final TextEditingController _creditDetailsController = TextEditingController();
+  final TextEditingController _creditDetailsController =
+      TextEditingController();
 
   // ── Mobile Number ──────────────────────────────────────────────────
   final TextEditingController _mobileController = TextEditingController();
@@ -124,7 +124,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         _manualTotalAmount = savedTotalAmount;
         _isTotalManuallyEdited = true;
       });
-    } else if (widget.group.header?.totalBillAmount != null && widget.group.header!.totalBillAmount! > 0 && mounted) {
+    } else if (widget.group.header?.totalBillAmount != null &&
+        widget.group.header!.totalBillAmount! > 0 &&
+        mounted) {
       setState(() {
         _manualTotalAmount = widget.group.header!.totalBillAmount;
         _isTotalManuallyEdited = true;
@@ -152,7 +154,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         _receivedAmount = initialReceived;
         _paidAmountController.text = initialReceived.toStringAsFixed(0);
         final total = _activeTotalAmount(widget.group);
-        _paymentMode = (total - initialReceived).abs() < 0.01 ? 'Cash' : 'Credit';
+        _paymentMode = (total - initialReceived).abs() < 0.01
+            ? 'Cash'
+            : 'Credit';
       });
     }
 
@@ -178,7 +182,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   Future<void> _saveReceivedAmount(double amount) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('received_amount_${widget.group.receiptNumber}', amount);
+    await prefs.setDouble(
+      'received_amount_${widget.group.receiptNumber}',
+      amount,
+    );
   }
 
   Future<void> _saveTotalAmount(double amount) async {
@@ -194,7 +201,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   // ── GST computed helpers ─────────────────────────────────
   double _partsSubtotal(InvoiceReviewGroup group) {
-    double amountFor(ReviewRecord i) => _localAmountOverrides[i.rowId] ?? i.amount;
+    double amountFor(ReviewRecord i) =>
+        _localAmountOverrides[i.rowId] ?? i.amount;
     final typed = group.lineItems.where((i) {
       final type = i.type?.toUpperCase() ?? '';
       return type.isNotEmpty;
@@ -215,7 +223,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   double _laborSubtotal(InvoiceReviewGroup group) => group.lineItems
       .where((i) {
         final type = i.type?.toUpperCase() ?? '';
-        return type.contains('LABOUR') || type.contains('LABOR') || type.contains('SERVICE');
+        return type.contains('LABOUR') ||
+            type.contains('LABOR') ||
+            type.contains('SERVICE');
       })
       .fold(0.0, (s, i) => s + (_localAmountOverrides[i.rowId] ?? i.amount));
 
@@ -227,7 +237,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
   double _totalAfterGst(InvoiceReviewGroup group) {
     final totalSubtotal = _partsSubtotal(group) + _laborSubtotal(group);
-    if (_gstMode == GstMode.excluded) return totalSubtotal + _gstAmount(totalSubtotal);
+    if (_gstMode == GstMode.excluded) {
+      return totalSubtotal + _gstAmount(totalSubtotal);
+    }
     return totalSubtotal;
   }
 
@@ -272,8 +284,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   void _showEditTotalDialog(double currentCalculatedTotal) {
-    final controller = TextEditingController(text: (_manualTotalAmount ?? currentCalculatedTotal).round().toString());
-    
+    final controller = TextEditingController(
+      text: (_manualTotalAmount ?? currentCalculatedTotal).round().toString(),
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -294,7 +308,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 prefixText: '₹ ',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               autofocus: true,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
@@ -315,7 +331,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             onPressed: () {
               final newTotal = double.tryParse(controller.text);
               if (newTotal != null) {
-                final wasPaid = (currentCalculatedTotal - _receivedAmount).abs() < 0.01;
+                final wasPaid =
+                    (currentCalculatedTotal - _receivedAmount).abs() < 0.01;
                 setState(() {
                   _manualTotalAmount = newTotal;
                   _isTotalManuallyEdited = true;
@@ -336,9 +353,6 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-
-
-
   Future<void> _saveCurrentState({String? updatePhoneNumber}) async {
     final notifier = ref.read(reviewProvider.notifier);
     final liveState = ref.read(reviewProvider);
@@ -350,25 +364,31 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     if (header != null) {
       final grandTotal = _activeTotalAmount(group);
-      final receivedFromInput = double.tryParse(_paidAmountController.text) ?? _receivedAmount;
-      final balanceDue = (grandTotal - receivedFromInput).clamp(0.0, double.infinity);
+      final receivedFromInput =
+          double.tryParse(_paidAmountController.text) ?? _receivedAmount;
+      final balanceDue = (grandTotal - receivedFromInput).clamp(
+        0.0,
+        double.infinity,
+      );
       final paymentMode = _paymentMode;
-      
+
       var customerName = header.customerName?.trim() ?? '';
       if (customerName.isEmpty) {
         customerName = 'Counter';
       }
 
       var newRecord = header.copyWith(
-          verificationStatus: 'Done',
-          paymentMode: paymentMode,
-          amount: grandTotal,
-          receivedAmount: receivedFromInput,
-          balanceDue: balanceDue,
-          totalBillAmount: grandTotal,
-          customerDetails: _paymentMode == 'Credit' ? _creditDetailsController.text : null,
-          gstMode: _gstMode.name,
-          customerName: customerName,
+        verificationStatus: 'Done',
+        paymentMode: paymentMode,
+        amount: grandTotal,
+        receivedAmount: receivedFromInput,
+        balanceDue: balanceDue,
+        totalBillAmount: grandTotal,
+        customerDetails: _paymentMode == 'Credit'
+            ? _creditDetailsController.text
+            : null,
+        gstMode: _gstMode.name,
+        customerName: customerName,
       );
 
       if (updatePhoneNumber != null && updatePhoneNumber.isNotEmpty) {
@@ -386,15 +406,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final recordsToUpdate = <ReviewRecord>[];
     for (var item in group.lineItems) {
       final overrideAmount = _localAmountOverrides[item.rowId];
-      final recordToSave = overrideAmount != null 
+      final recordToSave = overrideAmount != null
           ? item.copyWith(amount: overrideAmount, verificationStatus: 'Done')
           : item.copyWith(verificationStatus: 'Done');
-      
+
       if (item.verificationStatus != 'Done' || overrideAmount != null) {
         recordsToUpdate.add(recordToSave);
       }
     }
-    
+
     if (recordsToUpdate.isNotEmpty) {
       await notifier.updateAmountRecordsBulk(recordsToUpdate);
     }
@@ -409,13 +429,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     // Only block for genuinely broken data — amount mismatches are NOT an error.
     if (liveGroup.hasError) {
       final List<String> errorMessages = [];
-      if (liveGroup.header?.verificationStatus.toLowerCase() == 'duplicate receipt number') {
+      if (liveGroup.header?.verificationStatus.toLowerCase() ==
+          'duplicate receipt number') {
         errorMessages.add('\u2022 Duplicate receipt number detected');
       }
       if (liveGroup.header?.date.trim().isEmpty == true) {
         errorMessages.add('\u2022 Receipt date is missing');
       }
-      if (errorMessages.isEmpty) errorMessages.add('\u2022 Some fields have errors');
+      if (errorMessages.isEmpty) {
+        errorMessages.add('\u2022 Some fields have errors');
+      }
 
       final proceed = await showDialog<bool>(
         context: context,
@@ -424,7 +447,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             children: [
               Icon(LucideIcons.alertTriangle, color: context.errorColor),
               const SizedBox(width: 8),
-              const Text('Check Before Saving', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Check Before Saving',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           content: Column(
@@ -439,19 +465,31 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 decoration: BoxDecoration(
                   color: context.errorColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: context.errorColor.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: context.errorColor.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Text(
                   errorMessages.join('\n'),
-                  style: TextStyle(color: context.errorColor, fontWeight: FontWeight.w600, height: 1.5, fontSize: 13),
+                  style: TextStyle(
+                    color: context.errorColor,
+                    fontWeight: FontWeight.w600,
+                    height: 1.5,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => context.pop(false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => context.pop(false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: context.errorColor),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.errorColor,
+              ),
               onPressed: () => context.pop(true),
               child: const Text('Save Anyway'),
             ),
@@ -464,8 +502,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     await _saveCurrentState();
     if (!mounted) return;
 
-    final isLast = widget.currentIndex == -1 ||
-                   widget.currentIndex == _localAllGroups.length - 1;
+    final isLast =
+        widget.currentIndex == -1 ||
+        widget.currentIndex == _localAllGroups.length - 1;
 
     if (isLast) {
       // ⚡ Option B: Navigate home FIRST, then sync in background.
@@ -486,28 +525,36 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         final grandTotal = _activeTotalAmount(liveGroup2);
         final receivedFromInput =
             double.tryParse(_paidAmountController.text) ?? _receivedAmount;
-        final optimisticBalance =
-            (grandTotal - receivedFromInput).clamp(0.0, double.infinity);
+        final optimisticBalance = (grandTotal - receivedFromInput).clamp(
+          0.0,
+          double.infinity,
+        );
         final optimisticName =
             (optimisticHeader.customerName?.trim().isNotEmpty == true)
-                ? optimisticHeader.customerName!.trim()
-                : 'Counter';
+            ? optimisticHeader.customerName!.trim()
+            : 'Counter';
 
-        ref.read(udharProvider.notifier).addOrUpdateLedgerOptimistic(
-          customerName: optimisticName,
-          totalBilled: grandTotal,
-          balanceDue: optimisticBalance,
-          receiptNumber: liveGroup2.receiptNumber,
-          mobileNumber: optimisticHeader.mobileNumber?.trim().isNotEmpty == true
-              ? optimisticHeader.mobileNumber
-              : _mobileController.text.trim().isNotEmpty
+        ref
+            .read(udharProvider.notifier)
+            .addOrUpdateLedgerOptimistic(
+              customerName: optimisticName,
+              totalBilled: grandTotal,
+              balanceDue: optimisticBalance,
+              receiptNumber: liveGroup2.receiptNumber,
+              mobileNumber:
+                  optimisticHeader.mobileNumber?.trim().isNotEmpty == true
+                  ? optimisticHeader.mobileNumber
+                  : _mobileController.text.trim().isNotEmpty
                   ? _mobileController.text.trim()
                   : null,
-        );
+            );
       }
 
-      AppToast.showSuccess(context, 'Syncing your receipts in background…',
-          title: 'Saved ✔');
+      AppToast.showSuccess(
+        context,
+        'Syncing your receipts in background…',
+        title: 'Saved ✔',
+      );
       context.go('/');
       // Sync after navigation — the home screen shows a banner if needed
       ref.read(reviewProvider.notifier).syncAndFinish();
@@ -519,7 +566,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   Future<void> _goToNextReceipt() async {
     await _saveCurrentState();
     if (!mounted) return;
-    
+
     final nextIndex = widget.currentIndex + 1;
     if (nextIndex >= _localAllGroups.length) return;
     final nextGroup = _localAllGroups[nextIndex];
@@ -576,8 +623,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     // When groups are cleared after sync, _isNavigatingAway is already true so
     // we never reach here with an empty groups list.
     final group = state.groups.firstWhere(
-        (g) => g.receiptNumber == widget.group.receiptNumber,
-        orElse: () => widget.group);
+      (g) => g.receiptNumber == widget.group.receiptNumber,
+      orElse: () => widget.group,
+    );
 
     final header = group.header;
     final invoiceColumns = ref.watch(tableColumnsProvider('invoice_all'));
@@ -586,27 +634,35 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     sortedLineItems.sort((a, b) {
       if (a.hasError && !b.hasError) return -1;
       if (!a.hasError && b.hasError) return 1;
-      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1) ? a.lineItemBbox![1] : double.infinity;
-      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1) ? b.lineItemBbox![1] : double.infinity;
-      
-      if (yA != double.infinity && yB != double.infinity && (yA - yB).abs() > 0.001) {
+      final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1)
+          ? a.lineItemBbox![1]
+          : double.infinity;
+      final yB = (b.lineItemBbox != null && b.lineItemBbox!.length > 1)
+          ? b.lineItemBbox![1]
+          : double.infinity;
+
+      if (yA != double.infinity &&
+          yB != double.infinity &&
+          (yA - yB).abs() > 0.001) {
         return yA.compareTo(yB);
       }
       return a.sortIndex.compareTo(b.sortIndex);
     });
 
     final laborItems = sortedLineItems.where((i) {
-        final type = i.type?.toUpperCase() ?? '';
-        return type.contains('LABOR') || type.contains('LABOUR') || type.contains('SERVICE');
+      final type = i.type?.toUpperCase() ?? '';
+      return type.contains('LABOR') ||
+          type.contains('LABOUR') ||
+          type.contains('SERVICE');
     }).toList();
 
     final partsItems = sortedLineItems.where((i) {
-        final type = i.type?.toUpperCase() ?? '';
-        return type.contains('PART') || (type.isEmpty && !laborItems.contains(i));
+      final type = i.type?.toUpperCase() ?? '';
+      return type.contains('PART') || (type.isEmpty && !laborItems.contains(i));
     }).toList();
 
     final otherItems = sortedLineItems.where((i) {
-        return !partsItems.contains(i) && !laborItems.contains(i);
+      return !partsItems.contains(i) && !laborItems.contains(i);
     }).toList();
 
     final hasAnyError = group.hasError;
@@ -634,7 +690,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   builder: (context) => AlertDialog(
                     title: const Text('Delete Receipt'),
                     content: const Text(
-                        'Are you sure you want to delete this receipt? This action cannot be undone.'),
+                      'Are you sure you want to delete this receipt? This action cannot be undone.',
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => context.pop(false),
@@ -642,7 +699,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       ),
                       FilledButton(
                         style: FilledButton.styleFrom(
-                            backgroundColor: context.errorColor),
+                          backgroundColor: context.errorColor,
+                        ),
                         onPressed: () => context.pop(true),
                         child: const Text('Delete'),
                       ),
@@ -657,7 +715,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   if (context.mounted) {
                     _handleBack();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Receipt deleted successfully')),
+                      const SnackBar(
+                        content: Text('Receipt deleted successfully'),
+                      ),
                     );
                   }
                 }
@@ -672,8 +732,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 padding: EdgeInsets.zero,
                 children: [
                   // ── Customer Name banner — always at the very top ──────────────
-                  if (header != null)
-                    _buildTopCustomerBanner(header),
+                  if (header != null) _buildTopCustomerBanner(header),
                   if (header != null && header.receiptLink.isNotEmpty)
                     GestureDetector(
                       onTap: () => _showFullImage(header.receiptLink),
@@ -695,7 +754,10 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                               bottom: 8,
                               right: 8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.black.withValues(alpha: 0.7),
                                   borderRadius: BorderRadius.circular(20),
@@ -703,9 +765,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(LucideIcons.maximize, color: Colors.white, size: 14),
+                                    Icon(
+                                      LucideIcons.maximize,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
                                     SizedBox(width: 6),
-                                    Text('Tap to expand', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      'Tap to expand',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -720,13 +793,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (header != null)
-                          _buildHeaderCard(header, invoiceColumns, isAutomobile),
+                          _buildHeaderCard(
+                            header,
+                            invoiceColumns,
+                            isAutomobile,
+                          ),
                         const SizedBox(height: 16),
-                        Text('Line Items',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: context.textSecondaryColor)),
+                        Text(
+                          'Line Items',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: context.textSecondaryColor,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         if (sortedLineItems.isEmpty)
                           const Padding(
@@ -735,22 +815,42 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           ),
                         if (isAutomobile) ...[
                           if (partsItems.isNotEmpty) ...[
-                            _buildCategoryHeader('Spare Parts', LucideIcons.package2, context.primaryColor),
-                            ...partsItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            _buildCategoryHeader(
+                              'Spare Parts',
+                              LucideIcons.package2,
+                              context.primaryColor,
+                            ),
+                            ...partsItems.map(
+                              (item) => _buildLineItemCard(item, isAutomobile),
+                            ),
                             const SizedBox(height: 12),
                           ],
                           if (laborItems.isNotEmpty) ...[
-                            _buildCategoryHeader('Servicing & Labor', LucideIcons.wrench, context.warningColor),
-                            ...laborItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            _buildCategoryHeader(
+                              'Servicing & Labor',
+                              LucideIcons.wrench,
+                              context.warningColor,
+                            ),
+                            ...laborItems.map(
+                              (item) => _buildLineItemCard(item, isAutomobile),
+                            ),
                             const SizedBox(height: 12),
                           ],
                           if (otherItems.isNotEmpty) ...[
-                            _buildCategoryHeader('Other Items', LucideIcons.box, context.textSecondaryColor),
-                            ...otherItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                            _buildCategoryHeader(
+                              'Other Items',
+                              LucideIcons.box,
+                              context.textSecondaryColor,
+                            ),
+                            ...otherItems.map(
+                              (item) => _buildLineItemCard(item, isAutomobile),
+                            ),
                             const SizedBox(height: 12),
                           ],
                         ] else ...[
-                          ...sortedLineItems.map((item) => _buildLineItemCard(item, isAutomobile)),
+                          ...sortedLineItems.map(
+                            (item) => _buildLineItemCard(item, isAutomobile),
+                          ),
                           const SizedBox(height: 12),
                         ],
                         PaymentSummaryCard(
@@ -758,9 +858,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           gstMode: _gstMode,
                           partsSubtotal: _partsSubtotal(group),
                           laborSubtotal: _laborSubtotal(group),
-                          gstAmount: _gstAmount(_partsSubtotal(group) + _laborSubtotal(group)),
+                          gstAmount: _gstAmount(
+                            _partsSubtotal(group) + _laborSubtotal(group),
+                          ),
                           grandTotal: _activeTotalAmount(group),
-                          originalTotal: group.header?.amount ?? (_partsSubtotal(group) + _laborSubtotal(group)),
+                          originalTotal:
+                              group.header?.amount ??
+                              (_partsSubtotal(group) + _laborSubtotal(group)),
                           onGstModeChanged: _saveGstMode,
                         ),
                         const SizedBox(height: 24),
@@ -782,10 +886,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final total = _activeTotalAmount(group);
     final paidAmount = double.tryParse(_paidAmountController.text) ?? 0.0;
     final balance = (total - paidAmount).clamp(0.0, double.infinity);
-    final hasNext = widget.currentIndex != -1 && widget.currentIndex < _localAllGroups.length - 1;
+    final hasNext =
+        widget.currentIndex != -1 &&
+        widget.currentIndex < _localAllGroups.length - 1;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
       decoration: BoxDecoration(
         color: context.surfaceColor,
         border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
@@ -809,14 +920,29 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total Bill', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                      Text(
+                        'Total Bill',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text('₹${total.toStringAsFixed(0)}',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                          Text(
+                            '₹${total.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                           const SizedBox(width: 4),
-                          Icon(LucideIcons.pencil, size: 12, color: context.primaryColor.withValues(alpha: 0.6)),
+                          Icon(
+                            LucideIcons.pencil,
+                            size: 12,
+                            color: context.primaryColor.withValues(alpha: 0.6),
+                          ),
                         ],
                       ),
                     ],
@@ -830,20 +956,30 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   controller: _paidAmountController,
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
                   onChanged: (val) {
                     final paid = double.tryParse(val) ?? 0.0;
                     setState(() {
                       _receivedAmount = paid;
-                      _paymentMode = (total - paid).abs() < 0.01 ? 'Cash' : 'Credit';
+                      _paymentMode = (total - paid).abs() < 0.01
+                          ? 'Cash'
+                          : 'Credit';
                     });
                   },
                   decoration: InputDecoration(
                     labelText: 'Amount Paid',
-                    labelStyle: TextStyle(fontSize: 10, color: context.textSecondaryColor),
+                    labelStyle: TextStyle(
+                      fontSize: 10,
+                      color: context.textSecondaryColor,
+                    ),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -852,14 +988,24 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Balance Due', style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                  Text(
+                    'Balance Due',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('₹${balance.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: balance > 0 ? context.errorColor : context.successColor,
-                      )),
+                  Text(
+                    '₹${balance.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: balance > 0
+                          ? context.errorColor
+                          : context.successColor,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -900,16 +1046,29 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                     onPressed: state.isSyncing ? null : _markAllDone,
                     style: FilledButton.styleFrom(
                       backgroundColor: context.primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     icon: state.isSyncing
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
                         : const Icon(LucideIcons.checkCircle, size: 20),
                     label: Text(
                       state.isSyncing
                           ? 'Saving...'
                           : (hasNext ? 'Save & Next Bill' : 'Save & Finish'),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ),
@@ -921,10 +1080,16 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF25D366).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                  ),
                 ),
                 child: IconButton(
-                  icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 24, color: Color(0xFF25D366)),
+                  icon: const FaIcon(
+                    FontAwesomeIcons.whatsapp,
+                    size: 24,
+                    color: Color(0xFF25D366),
+                  ),
                   onPressed: state.isSyncing ? null : _handleWhatsAppShare,
                 ),
               ),
@@ -953,7 +1118,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
     final freshHeader = freshGroup.header;
 
-    String phoneNumber = freshHeader?.extraFields['mobile_number']?.toString().trim() ?? '';
+    String phoneNumber =
+        freshHeader?.extraFields['mobile_number']?.toString().trim() ?? '';
     double totalAmount = _activeTotalAmount(freshGroup);
     if (totalAmount == 0.0 && freshGroup.header != null) {
       totalAmount = freshGroup.header!.amount;
@@ -964,29 +1130,47 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final double balanceDue = totalAmount - _receivedAmount;
 
     // 📲 Lazy share link: fetch only now (not eagerly in initState)
-    final String? shareUrl = await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-      receiptNumber: freshGroup.receiptNumber,
-      username: username,
-    );
+    final String? shareUrl =
+        await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+          receiptNumber: freshGroup.receiptNumber,
+          username: username,
+        );
 
     if (shareUrl == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not generate receipt link.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not generate receipt link.')),
+        );
       }
       return;
     }
 
-    final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
+    final shopName = shopProfile.name.isNotEmpty
+        ? shopProfile.name
+        : 'Our Shop';
     final paymentMode = balanceDue > 0 ? 'Credit' : 'Cash';
     OrderPaymentStatus status = paymentMode == 'Cash'
         ? OrderPaymentStatus.fullyPaid
-        : (_receivedAmount > 0 ? OrderPaymentStatus.partiallyPaid : OrderPaymentStatus.unpaid);
+        : (_receivedAmount > 0
+              ? OrderPaymentStatus.partiallyPaid
+              : OrderPaymentStatus.unpaid);
 
     final Map<String, String> resolvedExtraFields = {};
     if (freshHeader?.extraFields != null) {
-      final Set<String> ignored = {'total_bill_amount', 'amount', 'receipt_number', 'date', 'customer_name', 'mobile_number', 'receipt_link', 'gst_mode'};
+      final Set<String> ignored = {
+        'total_bill_amount',
+        'amount',
+        'receipt_number',
+        'date',
+        'customer_name',
+        'mobile_number',
+        'receipt_link',
+        'gst_mode',
+      };
       freshHeader!.extraFields.forEach((key, value) {
-        if (value != null && value.toString().isNotEmpty && !ignored.contains(key.toString().toLowerCase())) {
+        if (value != null &&
+            value.toString().isNotEmpty &&
+            !ignored.contains(key.toString().toLowerCase())) {
           resolvedExtraFields[key.toString()] = value.toString();
         }
       });
@@ -994,7 +1178,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final caption = WhatsAppUtils.getWhatsAppCaption(
       status: status,
-      customerName: freshHeader?.customerName?.isNotEmpty == true ? freshHeader!.customerName! : 'Customer',
+      customerName: freshHeader?.customerName?.isNotEmpty == true
+          ? freshHeader!.customerName!
+          : 'Customer',
       businessName: shopName,
       orderNumber: freshGroup.receiptNumber,
       totalAmount: totalAmount,
@@ -1038,7 +1224,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 8),
-          Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
           const SizedBox(width: 8),
           Expanded(child: Divider(color: color.withValues(alpha: 0.2))),
         ],
@@ -1046,7 +1240,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     );
   }
 
-  Widget _buildHeaderCard(ReviewRecord header, List<dynamic> columns, bool isAutomobile) {
+  Widget _buildHeaderCard(
+    ReviewRecord header,
+    List<dynamic> columns,
+    bool isAutomobile,
+  ) {
     final fields = <Widget>[];
     for (var col in columns) {
       // Safe-cast: skip malformed column entries to prevent TypeError → blank screen
@@ -1067,7 +1265,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16), 
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: context.borderColor),
       ),
       child: Padding(
@@ -1082,11 +1280,14 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('DATE',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: context.textSecondaryColor)),
+                      Text(
+                        'DATE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       TextFormField(
                         key: ValueKey('date_${header.date}'),
@@ -1098,22 +1299,38 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             final parts = header.date.split('-');
                             if (parts.length == 3) {
                               if (parts[0].length == 4) {
-                                initialDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+                                initialDate = DateTime(
+                                  int.parse(parts[0]),
+                                  int.parse(parts[1]),
+                                  int.parse(parts[2]),
+                                );
                               } else {
-                                initialDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+                                initialDate = DateTime(
+                                  int.parse(parts[2]),
+                                  int.parse(parts[1]),
+                                  int.parse(parts[0]),
+                                );
                               }
                             } else if (header.date.contains('/')) {
-                               final parts2 = header.date.split('/');
-                               if (parts2.length == 3) {
-                                 if (parts2[0].length == 4) {
-                                   initialDate = DateTime(int.parse(parts2[0]), int.parse(parts2[1]), int.parse(parts2[2]));
-                                 } else {
-                                   initialDate = DateTime(int.parse(parts2[2]), int.parse(parts2[1]), int.parse(parts2[0]));
-                                 }
-                               }
+                              final parts2 = header.date.split('/');
+                              if (parts2.length == 3) {
+                                if (parts2[0].length == 4) {
+                                  initialDate = DateTime(
+                                    int.parse(parts2[0]),
+                                    int.parse(parts2[1]),
+                                    int.parse(parts2[2]),
+                                  );
+                                } else {
+                                  initialDate = DateTime(
+                                    int.parse(parts2[2]),
+                                    int.parse(parts2[1]),
+                                    int.parse(parts2[0]),
+                                  );
+                                }
+                              }
                             }
                           } catch (_) {}
-                          
+
                           final DateTime? picked = await showDatePicker(
                             context: context,
                             initialDate: initialDate,
@@ -1122,35 +1339,51 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                             builder: (context, child) {
                               return Theme(
                                 data: Theme.of(context).copyWith(
-                                  colorScheme: context.isDark ? ColorScheme.dark(
-                                    primary: context.primaryColor,
-                                  ) : ColorScheme.light(
-                                    primary: context.primaryColor,
-                                  ),
+                                  colorScheme: context.isDark
+                                      ? ColorScheme.dark(
+                                          primary: context.primaryColor,
+                                        )
+                                      : ColorScheme.light(
+                                          primary: context.primaryColor,
+                                        ),
                                 ),
                                 child: child!,
                               );
                             },
                           );
                           if (picked != null) {
-                            final formattedDate = "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
+                            final formattedDate =
+                                "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
                             final notifier = ref.read(reviewProvider.notifier);
-                            notifier.updateDateRecord(header.copyWith(date: formattedDate));
+                            notifier.updateDateRecord(
+                              header.copyWith(date: formattedDate),
+                            );
                           }
                         },
                         decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(
-                                  color: header.hasDateDoubt
-                                      ? context.warningColor
-                                      : context.borderColor)),
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: header.hasDateDoubt
+                                  ? context.warningColor
+                                  : context.borderColor,
+                            ),
+                          ),
                           focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: context.primaryColor,
+                              width: 2,
+                            ),
+                          ),
                           fillColor: header.hasDateDoubt
                               ? context.warningColor.withValues(alpha: 0.06)
                               : context.surfaceColor,
@@ -1159,11 +1392,22 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           suffixIcon: header.hasDateDoubt
                               ? Tooltip(
                                   message: 'Low confidence — please verify',
-                                  child: Icon(Icons.warning_amber_rounded,
-                                      size: 16, color: context.warningColor))
-                              : Icon(LucideIcons.calendarDays, size: 16, color: context.textSecondaryColor),
+                                  child: Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 16,
+                                    color: context.warningColor,
+                                  ),
+                                )
+                              : Icon(
+                                  LucideIcons.calendarDays,
+                                  size: 16,
+                                  color: context.textSecondaryColor,
+                                ),
                         ),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -1173,28 +1417,42 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('RECEIPT #',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: context.textSecondaryColor)),
+                      Text(
+                        'RECEIPT #',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       DebouncedReviewField(
                         initialValue: header.receiptNumber,
                         keyboardType: TextInputType.text,
                         decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(
-                                  color: header.hasReceiptDoubt
-                                      ? context.warningColor
-                                      : context.borderColor)),
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: header.hasReceiptDoubt
+                                  ? context.warningColor
+                                  : context.borderColor,
+                            ),
+                          ),
                           focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: context.primaryColor, width: 2)),
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: context.primaryColor,
+                              width: 2,
+                            ),
+                          ),
                           fillColor: header.hasReceiptDoubt
                               ? context.warningColor.withValues(alpha: 0.06)
                               : context.surfaceColor,
@@ -1203,15 +1461,24 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                           suffixIcon: header.hasReceiptDoubt
                               ? Tooltip(
                                   message: 'Low confidence — please verify',
-                                  child: Icon(Icons.warning_amber_rounded,
-                                      size: 16, color: context.warningColor))
+                                  child: Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 16,
+                                    color: context.warningColor,
+                                  ),
+                                )
                               : null,
                         ),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                         onSaved: (val) {
                           if (val.trim().isNotEmpty) {
                             final notifier = ref.read(reviewProvider.notifier);
-                            notifier.updateDateRecord(header.copyWith(receiptNumber: val.trim()));
+                            notifier.updateDateRecord(
+                              header.copyWith(receiptNumber: val.trim()),
+                            );
                           }
                         },
                       ),
@@ -1220,10 +1487,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 ),
               ],
             ),
-            if (fields.isNotEmpty) ...[
-              const Divider(height: 24),
-              ...fields,
-            ],
+            if (fields.isNotEmpty) ...[const Divider(height: 24), ...fields],
           ],
         ),
       ),
@@ -1267,14 +1531,19 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
             },
             onCustomerSelected: (party) {
               // Sync mobile field when a party with a phone is selected
-              if (party.customerPhone != null && party.customerPhone!.isNotEmpty) {
-                _mobileController.text = party.customerPhone!.replaceAll('+91', '').trim();
+              if (party.customerPhone != null &&
+                  party.customerPhone!.isNotEmpty) {
+                _mobileController.text = party.customerPhone!
+                    .replaceAll('+91', '')
+                    .trim();
               }
               final notifier = ref.read(reviewProvider.notifier);
-              notifier.updateDateRecord(header.copyWith(
-                customerName: party.customerName,
-                mobileNumber: party.customerPhone,
-              ));
+              notifier.updateDateRecord(
+                header.copyWith(
+                  customerName: party.customerName,
+                  mobileNumber: party.customerPhone,
+                ),
+              );
             },
           ),
           const SizedBox(height: 12),
@@ -1297,10 +1566,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
     final notifier = ref.read(reviewProvider.notifier);
     final newExtra = Map<String, dynamic>.from(header.extraFields)
       ..['mobile_number'] = val;
-    notifier.updateDateRecord(header.copyWith(
-      mobileNumber: val,
-      extraFields: newExtra,
-    ));
+    notifier.updateDateRecord(
+      header.copyWith(mobileNumber: val, extraFields: newExtra),
+    );
   }
 
   Widget _buildMobileNumberField(ReviewRecord header) {
@@ -1340,9 +1608,15 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   bottomLeft: Radius.circular(12),
                 ),
                 border: Border(
-                  top: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
-                  left: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
-                  bottom: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  top: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  left: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  bottom: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
                 ),
               ),
               child: Text(
@@ -1364,10 +1638,17 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 1.2),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  letterSpacing: 1.2,
+                ),
                 decoration: InputDecoration(
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 13,
+                  ),
                   hintText: '98765 43210',
                   hintStyle: TextStyle(
                     color: context.textSecondaryColor.withValues(alpha: 0.4),
@@ -1394,32 +1675,43 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       topRight: Radius.circular(12),
                       bottomRight: Radius.circular(12),
                     ),
-                    borderSide: BorderSide(color: context.primaryColor, width: 2),
+                    borderSide: BorderSide(
+                      color: context.primaryColor,
+                      width: 2,
+                    ),
                   ),
                   fillColor: context.primaryColor.withValues(alpha: 0.03),
                   filled: true,
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
-                        onPressed: () async {
-                          final phone = await ContactUtils.pickContactPhone();
-                          if (phone != null && mounted) {
-                            setState(() {
-                              _mobileController.text = phone;
-                            });
-                            _saveMobileNumberFromController();
-                          }
-                        },
-                      ),
+                      if (ContactUtils.isSupported)
+                        IconButton(
+                          icon: Icon(
+                            LucideIcons.contact,
+                            color: context.primaryColor,
+                          ),
+                          onPressed: () async {
+                            final phone = await ContactUtils.pickContactPhone();
+                            if (phone != null && mounted) {
+                              setState(() {
+                                _mobileController.text = phone;
+                              });
+                              _saveMobileNumberFromController();
+                            }
+                          },
+                        ),
                       if (!isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Icon(
-                            isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+                            isValid
+                                ? LucideIcons.checkCircle2
+                                : LucideIcons.alertCircle,
                             size: 18,
-                            color: isValid ? context.successColor : context.warningColor,
+                            color: isValid
+                                ? context.successColor
+                                : context.warningColor,
                           ),
                         ),
                     ],
@@ -1452,8 +1744,20 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(label, style: TextStyle(fontSize: 12, color: context.textSecondaryColor))),
-          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
     );
@@ -1469,11 +1773,11 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
         setState(() {
           final oldTotal = _activeTotalAmount(widget.group);
           final wasPaid = (oldTotal - _receivedAmount).abs() < 0.01;
-          
+
           _localAmountOverrides[rowId] = amount;
           _isTotalManuallyEdited = false;
           _manualTotalAmount = null;
-          
+
           if (wasPaid) {
             final newTotal = _activeTotalAmount(widget.group);
             _receivedAmount = newTotal;
@@ -1493,12 +1797,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 // _LineItemInlineEditor — handles live qty × rate → price with last-edit-wins
 // ─────────────────────────────────────────────────────────────────────────────
 
-
 class _LineItemInlineEditor extends StatefulWidget {
   final ReviewRecord item;
   final bool isAutomobile;
+
   /// Called on every keystroke with the new computed amount for live grand total.
   final void Function(String rowId, double amount) onAmountChanged;
+
   /// Called on focus-out to persist the updated record to the provider.
   final void Function(ReviewRecord updatedItem) onSaved;
 
@@ -1526,8 +1831,10 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
   final _priceFocus = FocusNode();
 
   bool get _anyFocused =>
-      _descFocus.hasFocus || _qtyFocus.hasFocus ||
-      _rateFocus.hasFocus || _priceFocus.hasFocus;
+      _descFocus.hasFocus ||
+      _qtyFocus.hasFocus ||
+      _rateFocus.hasFocus ||
+      _priceFocus.hasFocus;
 
   static String _fmt(double? v) {
     if (v == null) return '';
@@ -1544,10 +1851,18 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
     _rateCtrl = TextEditingController(text: _fmt(item.rate));
     _priceCtrl = TextEditingController(text: _fmt(item.amount));
 
-    _descFocus.addListener(() { if (!_descFocus.hasFocus) _save(); });
-    _qtyFocus.addListener(() { if (!_qtyFocus.hasFocus) _save(); });
-    _rateFocus.addListener(() { if (!_rateFocus.hasFocus) _save(); });
-    _priceFocus.addListener(() { if (!_priceFocus.hasFocus) _save(); });
+    _descFocus.addListener(() {
+      if (!_descFocus.hasFocus) _save();
+    });
+    _qtyFocus.addListener(() {
+      if (!_qtyFocus.hasFocus) _save();
+    });
+    _rateFocus.addListener(() {
+      if (!_rateFocus.hasFocus) _save();
+    });
+    _priceFocus.addListener(() {
+      if (!_priceFocus.hasFocus) _save();
+    });
   }
 
   @override
@@ -1568,10 +1883,14 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
   @override
   void dispose() {
     _save();
-    _descCtrl.dispose(); _qtyCtrl.dispose();
-    _rateCtrl.dispose(); _priceCtrl.dispose();
-    _descFocus.dispose(); _qtyFocus.dispose();
-    _rateFocus.dispose(); _priceFocus.dispose();
+    _descCtrl.dispose();
+    _qtyCtrl.dispose();
+    _rateCtrl.dispose();
+    _priceCtrl.dispose();
+    _descFocus.dispose();
+    _qtyFocus.dispose();
+    _rateFocus.dispose();
+    _priceFocus.dispose();
     super.dispose();
   }
 
@@ -1591,14 +1910,16 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
     final qty = double.tryParse(_qtyCtrl.text);
     final rate = double.tryParse(_rateCtrl.text);
     double price = double.tryParse(_priceCtrl.text) ?? widget.item.amount;
-    
+
     // Always use qty * rate if both exist
     if (qty != null && rate != null) {
       price = qty * rate;
     }
-    
+
     final updated = widget.item.copyWith(
-      description: _descCtrl.text.trim().isEmpty ? widget.item.description : _descCtrl.text,
+      description: _descCtrl.text.trim().isEmpty
+          ? widget.item.description
+          : _descCtrl.text,
       quantity: qty,
       rate: rate,
       amount: price,
@@ -1639,9 +1960,16 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
-                      hintStyle: TextStyle(color: context.textSecondaryColor.withValues(alpha: 0.5)),
+                      hintStyle: TextStyle(
+                        color: context.textSecondaryColor.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                     maxLines: null,
                     textInputAction: TextInputAction.done,
                     onTapOutside: (_) => _descFocus.unfocus(),
@@ -1656,12 +1984,19 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                     focusNode: _priceFocus,
                     readOnly: true,
                     textAlign: TextAlign.right,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide(color: context.borderColor),
@@ -1674,9 +2009,17 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                       filled: true,
                       hintText: '0',
                       prefixText: '₹',
-                      prefixStyle: TextStyle(fontWeight: FontWeight.w700, color: context.textSecondaryColor, fontSize: 13),
+                      prefixStyle: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: context.textSecondaryColor,
+                        fontSize: 13,
+                      ),
                     ),
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: context.textSecondaryColor),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: context.textSecondaryColor,
+                    ),
                   ),
                 ),
               ],
@@ -1687,23 +2030,39 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
               children: [
                 // QTY chip
                 Container(
-                  padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
+                  padding: const EdgeInsets.only(
+                    left: 6,
+                    top: 2,
+                    bottom: 2,
+                    right: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: context.backgroundColor,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                    border: Border.all(
+                      color: context.borderColor.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Q:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                      Text(
+                        'Q:',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
                       const SizedBox(width: 2),
                       SizedBox(
                         width: 38,
                         child: TextField(
                           controller: _qtyCtrl,
                           focusNode: _qtyFocus,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           onChanged: (_) => _onQtyOrRateChanged(),
                           onTapOutside: (_) => _qtyFocus.unfocus(),
                           textInputAction: TextInputAction.done,
@@ -1713,7 +2072,10 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                             border: InputBorder.none,
                             hintText: '1',
                           ),
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -1722,23 +2084,39 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                 const SizedBox(width: 6),
                 // RATE chip
                 Container(
-                  padding: const EdgeInsets.only(left: 6, top: 2, bottom: 2, right: 4),
+                  padding: const EdgeInsets.only(
+                    left: 6,
+                    top: 2,
+                    bottom: 2,
+                    right: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: context.backgroundColor,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                    border: Border.all(
+                      color: context.borderColor.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('₹:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: context.textSecondaryColor)),
+                      Text(
+                        '₹:',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: context.textSecondaryColor,
+                        ),
+                      ),
                       const SizedBox(width: 2),
                       SizedBox(
                         width: 62,
                         child: TextField(
                           controller: _rateCtrl,
                           focusNode: _rateFocus,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           onChanged: (_) => _onQtyOrRateChanged(),
                           onTapOutside: (_) => _rateFocus.unfocus(),
                           textInputAction: TextInputAction.done,
@@ -1748,7 +2126,10 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                             border: InputBorder.none,
                             hintText: '-',
                           ),
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -1759,14 +2140,17 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
                 if (widget.isAutomobile) ...[
                   _PartLaborToggle(
                     isPart: true,
-                    selected: item.type?.toUpperCase().contains('PART') ?? false,
+                    selected:
+                        item.type?.toUpperCase().contains('PART') ?? false,
                     onTap: () => widget.onSaved(item.copyWith(type: 'PART')),
                   ),
                   const SizedBox(width: 6),
                   _PartLaborToggle(
                     isPart: false,
-                    selected: (item.type?.toUpperCase().contains('LABOR') ?? false) ||
-                        (item.type?.toUpperCase().contains('LABOUR') ?? false) ||
+                    selected:
+                        (item.type?.toUpperCase().contains('LABOR') ?? false) ||
+                        (item.type?.toUpperCase().contains('LABOUR') ??
+                            false) ||
                         (item.type?.toUpperCase().contains('SERVICE') ?? false),
                     onTap: () => widget.onSaved(item.copyWith(type: 'LABOR')),
                   ),
@@ -1779,8 +2163,6 @@ class _LineItemInlineEditorState extends State<_LineItemInlineEditor> {
     );
   }
 }
-
-
 
 class DebouncedReviewField extends StatefulWidget {
   final String initialValue;
@@ -1823,7 +2205,8 @@ class _DebouncedReviewFieldState extends State<DebouncedReviewField> {
   @override
   void didUpdateWidget(DebouncedReviewField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialValue != oldWidget.initialValue && widget.initialValue != _controller.text) {
+    if (widget.initialValue != oldWidget.initialValue &&
+        widget.initialValue != _controller.text) {
       _controller.text = widget.initialValue;
       _lastSavedValue = widget.initialValue;
     }
@@ -1898,7 +2281,9 @@ class _PartLaborToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = isPart ? '⚙ Part' : '🔧 Labor';
-    final selectedColor = isPart ? const Color(0xFF3B82F6) : const Color(0xFF6B7280);
+    final selectedColor = isPart
+        ? const Color(0xFF3B82F6)
+        : const Color(0xFF6B7280);
 
     return GestureDetector(
       onTap: onTap,
@@ -1906,9 +2291,14 @@ class _PartLaborToggle extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? selectedColor.withValues(alpha: 0.15) : Colors.transparent,
+          color: selected
+              ? selectedColor.withValues(alpha: 0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: selected ? selectedColor : context.borderColor, width: 1),
+          border: Border.all(
+            color: selected ? selectedColor : context.borderColor,
+            width: 1,
+          ),
         ),
         child: Text(
           label,

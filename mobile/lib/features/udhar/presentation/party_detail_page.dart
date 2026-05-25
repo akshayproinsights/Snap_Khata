@@ -115,7 +115,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         .fold(0.0, (sum, tx) => sum + tx.amount);
   }
 
-  void _showBillingOptionsSheet(BuildContext context, CustomerLedger currentLedger) {
+  void _showBillingOptionsSheet(
+    BuildContext context,
+    CustomerLedger currentLedger,
+  ) {
     HapticFeedback.lightImpact();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -218,9 +221,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 color: const Color(0xFF6366F1), // Indigo
                 onTap: () {
                   Navigator.pop(ctx);
-                  context.push('/upload', extra: {
-                    'customerName': currentLedger.customerName,
-                  });
+                  context.push(
+                    '/upload',
+                    extra: {'customerName': currentLedger.customerName},
+                  );
                 },
                 isDark: isDark,
               ),
@@ -236,7 +240,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   final result = await Navigator.push<List<CatalogueCartItem>>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const ItemCataloguePage(selectionMode: true),
+                      builder: (_) =>
+                          const ItemCataloguePage(selectionMode: true),
                     ),
                   );
                   if (result != null && result.isNotEmpty && context.mounted) {
@@ -269,9 +274,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     context: context,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
-                    builder: (context) => AddPartyEntrySheet(
-                      initialCustomer: currentLedger,
-                    ),
+                    builder: (context) =>
+                        AddPartyEntrySheet(initialCustomer: currentLedger),
                   );
                   if (completed == true) {
                     _loadTransactions();
@@ -300,10 +304,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       decoration: BoxDecoration(
         color: context.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withValues(alpha: 0.15),
-          width: 1,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
       ),
       child: InkWell(
         onTap: () {
@@ -321,11 +322,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 24,
-                ),
+                child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -582,10 +579,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  void _showEditNameDialog(
-    BuildContext context,
-    CustomerLedger currentLedger,
-  ) {
+  void _showEditNameDialog(BuildContext context, CustomerLedger currentLedger) {
     final nameController = TextEditingController(
       text: currentLedger.customerName,
     );
@@ -708,9 +702,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text(
-                                        'Failed to update name.',
-                                      ),
+                                      content: Text('Failed to update name.'),
                                     ),
                                   );
                                 }
@@ -834,17 +826,23 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       fillColor: context.textSecondaryColor.withValues(
                         alpha: 0.03,
                       ),
-                      suffixIcon: IconButton(
-                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
-                        onPressed: () async {
-                          final phone = await ContactUtils.pickContactPhone();
-                          if (phone != null && mounted) {
-                            setState(() {
-                              phoneController.text = phone;
-                            });
-                          }
-                        },
-                      ),
+                      suffixIcon: ContactUtils.isSupported
+                          ? IconButton(
+                              icon: Icon(
+                                LucideIcons.contact,
+                                color: context.primaryColor,
+                              ),
+                              onPressed: () async {
+                                final phone =
+                                    await ContactUtils.pickContactPhone();
+                                if (phone != null && mounted) {
+                                  setState(() {
+                                    phoneController.text = phone;
+                                  });
+                                }
+                              },
+                            )
+                          : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide(color: context.borderColor),
@@ -966,14 +964,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       //   4. invoiceAmount − totalPaid → authoritative balanceDue.
       final double ledgerInvoiceAmount = tx.amount;
       final double ledgerTotalPaid = (_transactions ?? [])
-          .where((t) =>
-              t.transactionType == 'PAYMENT' &&
-              t.receiptNumber == tx.receiptNumber)
+          .where(
+            (t) =>
+                t.transactionType == 'PAYMENT' &&
+                t.receiptNumber == tx.receiptNumber,
+          )
           .fold(0.0, (sum, t) => sum + t.amount);
-      final double ledgerBalanceDue =
-          (ledgerInvoiceAmount - ledgerTotalPaid).clamp(0.0, double.infinity);
-      final String ledgerPaymentMode =
-          ledgerBalanceDue <= 0 ? 'Cash' : (tx.paymentMode ?? 'Credit');
+      final double ledgerBalanceDue = (ledgerInvoiceAmount - ledgerTotalPaid)
+          .clamp(0.0, double.infinity);
+      final String ledgerPaymentMode = ledgerBalanceDue <= 0
+          ? 'Cash'
+          : (tx.paymentMode ?? 'Credit');
       // ─────────────────────────────────────────────────────────────────────────
 
       final group = InvoiceGroup(
@@ -1273,9 +1274,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         actions: [
           IconButton(
             onPressed: () {
-              context.push('/upload', extra: {
-                'customerName': currentLedger.customerName,
-              });
+              context.push(
+                '/upload',
+                extra: {'customerName': currentLedger.customerName},
+              );
             },
             icon: const Icon(LucideIcons.scanLine, color: Colors.white),
             tooltip: 'Scan New Bill',
@@ -1342,10 +1344,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       // card's "Bill Amount / Paid / Balance" clarity row. Showing them as
                       // a separate "Payment Received" card would be redundant.
                       // They are still present in _transactions for summary calculations.
-                      final visibleTxs = _transactions!
-                          .where((tx) => !tx.isAdvanceLinked)
-                          .toList()
-                        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                      final visibleTxs =
+                          _transactions!
+                              .where((tx) => !tx.isAdvanceLinked)
+                              .toList()
+                            ..sort(
+                              (a, b) => b.createdAt.compareTo(a.createdAt),
+                            );
                       if (visibleTxs.isEmpty) return _buildEmptyState();
                       return ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
@@ -1402,7 +1407,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 onPressed: _isLoading
                     ? null
                     : () => _showWhatsAppReminderSheet(
-                        context, ref, currentLedger),
+                        context,
+                        ref,
+                        currentLedger,
+                      ),
                 child: _isLoading
                     ? const SizedBox(
                         width: 18,
@@ -1419,7 +1427,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             Expanded(
               flex: 2,
               child: ElevatedButton.icon(
-                icon: const Icon(LucideIcons.receipt, size: 18, color: Colors.white),
+                icon: const Icon(
+                  LucideIcons.receipt,
+                  size: 18,
+                  color: Colors.white,
+                ),
                 label: const Text(
                   'NEW BILL',
                   style: TextStyle(
@@ -1437,7 +1449,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                onPressed: () => _showBillingOptionsSheet(context, currentLedger),
+                onPressed: () =>
+                    _showBillingOptionsSheet(context, currentLedger),
               ),
             ),
             const SizedBox(width: 8),
@@ -1686,7 +1699,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         String defaultMode(LedgerTransaction? tx) {
           if (tx == null) return 'accountStatement';
           if (tx.isManualEntry) return 'manualBill';
-          final hasImage = tx.receiptLink != null &&
+          final hasImage =
+              tx.receiptLink != null &&
               tx.receiptLink!.isNotEmpty &&
               tx.receiptLink != 'null';
           return hasImage ? 'receiptPhoto' : 'accountStatement';
@@ -1700,9 +1714,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ? selectedTx?.receiptLink
             : null;
         Future<Uint8List?> prefetchFuture =
-            (prefetchedUrl != null && prefetchedUrl.isNotEmpty && prefetchedUrl != 'null')
-                ? WhatsAppUtils.prefetchImageBytes(prefetchedUrl)
-                : Future<Uint8List?>.value(null);
+            (prefetchedUrl != null &&
+                prefetchedUrl.isNotEmpty &&
+                prefetchedUrl != 'null')
+            ? WhatsAppUtils.prefetchImageBytes(prefetchedUrl)
+            : Future<Uint8List?>.value(null);
 
         // Restart the prefetch whenever the user switches receipt or mode.
         void restartPrefetch(LedgerTransaction? tx, String mode) {
@@ -1893,62 +1909,76 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             // • Manual entry with no image → only 'Manual Bill'
                             // • Image receipt              → 'Receipt Photo' + 'Account Statement'
                             // • Image receipt (manual)     → all three
-                            Builder(builder: (ctx) {
-                              final bool txIsManual =
-                                  selectedTx?.isManualEntry ?? false;
-                              final bool txHasImage = selectedTx?.receiptLink != null &&
-                                  selectedTx!.receiptLink!.isNotEmpty &&
-                                  selectedTx!.receiptLink != 'null';
+                            Builder(
+                              builder: (ctx) {
+                                final bool txIsManual =
+                                    selectedTx?.isManualEntry ?? false;
+                                final bool txHasImage =
+                                    selectedTx?.receiptLink != null &&
+                                    selectedTx!.receiptLink!.isNotEmpty &&
+                                    selectedTx!.receiptLink != 'null';
 
-                              // Segments available for this transaction
-                              final segments = <ButtonSegment<String>>[
-                                if (txHasImage)
-                                  const ButtonSegment<String>(
-                                    value: 'receiptPhoto',
-                                    label: Text('Receipt Photo',
-                                        style: TextStyle(fontSize: 12)),
-                                    icon: Icon(LucideIcons.image, size: 15),
-                                  ),
-                                if (txIsManual)
-                                  const ButtonSegment<String>(
-                                    value: 'manualBill',
-                                    label: Text('Manual Bill',
-                                        style: TextStyle(fontSize: 12)),
-                                    icon: Icon(LucideIcons.clipboardList,
-                                        size: 15),
-                                  ),
-                                if (!txIsManual || txHasImage)
-                                  const ButtonSegment<String>(
-                                    value: 'accountStatement',
-                                    label: Text('Account Statement',
-                                        style: TextStyle(fontSize: 12)),
-                                    icon: Icon(LucideIcons.fileText, size: 15),
-                                  ),
-                              ];
+                                // Segments available for this transaction
+                                final segments = <ButtonSegment<String>>[
+                                  if (txHasImage)
+                                    const ButtonSegment<String>(
+                                      value: 'receiptPhoto',
+                                      label: Text(
+                                        'Receipt Photo',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      icon: Icon(LucideIcons.image, size: 15),
+                                    ),
+                                  if (txIsManual)
+                                    const ButtonSegment<String>(
+                                      value: 'manualBill',
+                                      label: Text(
+                                        'Manual Bill',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      icon: Icon(
+                                        LucideIcons.clipboardList,
+                                        size: 15,
+                                      ),
+                                    ),
+                                  if (!txIsManual || txHasImage)
+                                    const ButtonSegment<String>(
+                                      value: 'accountStatement',
+                                      label: Text(
+                                        'Account Statement',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      icon: Icon(
+                                        LucideIcons.fileText,
+                                        size: 15,
+                                      ),
+                                    ),
+                                ];
 
-                              // Ensure current shareMode is valid for this tx
-                              final validMode =
-                                  segments.any((s) => s.value == shareMode)
-                                      ? shareMode
-                                      : segments.first.value;
+                                // Ensure current shareMode is valid for this tx
+                                final validMode =
+                                    segments.any((s) => s.value == shareMode)
+                                    ? shareMode
+                                    : segments.first.value;
 
-                              return SegmentedButton<String>(
-                                segments: segments,
-                                selected: {validMode},
-                                onSelectionChanged: (s) {
-                                  final newMode = s.first;
-                                  restartPrefetch(selectedTx, newMode);
-                                  setSheet(() => shareMode = newMode);
-                                },
-                                showSelectedIcon: false,
-                                style: SegmentedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 10,
+                                return SegmentedButton<String>(
+                                  segments: segments,
+                                  selected: {validMode},
+                                  onSelectionChanged: (s) {
+                                    final newMode = s.first;
+                                    restartPrefetch(selectedTx, newMode);
+                                    setSheet(() => shareMode = newMode);
+                                  },
+                                  showSelectedIcon: false,
+                                  style: SegmentedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 10,
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
+                                );
+                              },
+                            ),
                             // Receipt picker when multiple transactions exist
                             if (invoicesForReminder.length > 1) ...[
                               const SizedBox(height: 14),
@@ -2021,17 +2051,23 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         ),
                                         if (tx.isManualEntry)
                                           Container(
-                                            margin: const EdgeInsets.only(right: 8),
+                                            margin: const EdgeInsets.only(
+                                              right: 8,
+                                            ),
                                             padding: const EdgeInsets.symmetric(
-                                                horizontal: 6, vertical: 2),
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFF59E0B)
-                                                  .withValues(alpha: 0.12),
+                                              color: const Color(
+                                                0xFFF59E0B,
+                                              ).withValues(alpha: 0.12),
                                               borderRadius:
                                                   BorderRadius.circular(4),
                                               border: Border.all(
-                                                color: const Color(0xFFF59E0B)
-                                                    .withValues(alpha: 0.35),
+                                                color: const Color(
+                                                  0xFFF59E0B,
+                                                ).withValues(alpha: 0.35),
                                               ),
                                             ),
                                             child: const Text(
@@ -2116,15 +2152,23 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 filled: true,
                                 fillColor: context.textSecondaryColor
                                     .withValues(alpha: 0.03),
-                                suffixIcon: IconButton(
-                                  icon: Icon(LucideIcons.contact, color: context.primaryColor),
-                                  onPressed: () async {
-                                    final phone = await ContactUtils.pickContactPhone();
-                                    if (phone != null) {
-                                      phoneController.text = phone;
-                                    }
-                                  },
-                                ),
+                                suffixIcon: ContactUtils.isSupported
+                                    ? IconButton(
+                                        icon: Icon(
+                                          LucideIcons.contact,
+                                          color: context.primaryColor,
+                                        ),
+
+                                        onPressed: () async {
+                                          final phone =
+                                              await ContactUtils.pickContactPhone();
+
+                                          if (phone != null) {
+                                            phoneController.text = phone;
+                                          }
+                                        },
+                                      )
+                                    : null,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -2204,14 +2248,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               ),
                             ),
                             onPressed: () async {
-                              final phone = phoneController.text.trim().isNotEmpty
+                              final phone =
+                                  phoneController.text.trim().isNotEmpty
                                   ? phoneController.text.trim()
                                   : (ledger.customerPhone ?? '');
 
                               // Capture all values before popping — ctx becomes invalid after Navigator.pop
                               String capturedMessage = message;
-                              final capturedReceiptLink = selectedTx?.receiptLink;
-                              final capturedReceiptNumber = selectedTx?.receiptNumber;
+                              final capturedReceiptLink =
+                                  selectedTx?.receiptLink;
+                              final capturedReceiptNumber =
+                                  selectedTx?.receiptNumber;
                               final capturedShareMode = shareMode;
 
                               Navigator.pop(ctx);
@@ -2244,7 +2291,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         useReceiptPhoto: false,
                                         receiptPhotoUrl: null,
                                         receiptNumber: capturedReceiptNumber,
-                                        whatsappCustomNote: shopProfile.whatsappCustomNote,
+                                        whatsappCustomNote:
+                                            shopProfile.whatsappCustomNote,
                                       );
                                 }
                               }
@@ -2394,8 +2442,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   // data arrives. Uses the shimmer package already present in pubspec.
   Widget _buildTransactionSkeleton() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0);
-    final highlightColor = isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5);
+    final baseColor = isDark
+        ? const Color(0xFF2A2A2A)
+        : const Color(0xFFE0E0E0);
+    final highlightColor = isDark
+        ? const Color(0xFF3A3A3A)
+        : const Color(0xFFF5F5F5);
 
     Widget ghostCard() {
       return Container(
@@ -2494,7 +2546,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         tx.transactionType == 'INVOICE' ||
         tx.transactionType == 'MANUAL_CREDIT';
     final canNavigateToOrderDetails =
-        isInvoice && !tx.isManualEntry && (tx.receiptNumber != null || tx.receiptLink != null);
+        isInvoice &&
+        !tx.isManualEntry &&
+        (tx.receiptNumber != null || tx.receiptLink != null);
     final hasReceiptPhoto =
         tx.receiptLink != null &&
         tx.receiptLink!.isNotEmpty &&
@@ -2535,14 +2589,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             InkWell(
               onTap: tx.isManualEntry
                   ? (tx.items.isNotEmpty
-                      ? () {
-                          setState(() {
-                            final isExpanded = _expandedItems[tx.id] ?? false;
-                            _expandedItems[tx.id] = !isExpanded;
-                          });
-                        }
-                      : null)
-                  : (canNavigateToOrderDetails ? () => _navigateToOrderDetails(tx) : null),
+                        ? () {
+                            setState(() {
+                              final isExpanded = _expandedItems[tx.id] ?? false;
+                              _expandedItems[tx.id] = !isExpanded;
+                            });
+                          }
+                        : null)
+                  : (canNavigateToOrderDetails
+                        ? () => _navigateToOrderDetails(tx)
+                        : null),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -2592,32 +2648,37 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 color: context.textSecondaryColor,
                               ),
                               const SizedBox(width: 4),
-                               Text(
+                              Text(
                                 () {
                                   final local = tx.createdAt.toLocal();
                                   final now = DateTime.now();
-                                  final isToday = local.year == now.year &&
+                                  final isToday =
+                                      local.year == now.year &&
                                       local.month == now.month &&
                                       local.day == now.day;
-                                  final isYesterday = local.year == now.year &&
+                                  final isYesterday =
+                                      local.year == now.year &&
                                       local.month == now.month &&
                                       local.day == now.day - 1;
                                   final datePart = isToday
                                       ? 'Today'
                                       : isYesterday
-                                          ? 'Yesterday'
-                                          : DateFormat('dd MMM yyyy').format(local);
-                                  
+                                      ? 'Yesterday'
+                                      : DateFormat('dd MMM yyyy').format(local);
+
                                   // Check if date-only (midnight UTC) to avoid showing default 5:30 AM/12:00 AM
-                                  final isDateOnly = tx.createdAt.toUtc().hour == 0 &&
+                                  final isDateOnly =
+                                      tx.createdAt.toUtc().hour == 0 &&
                                       tx.createdAt.toUtc().minute == 0 &&
                                       tx.createdAt.toUtc().second == 0;
-                                  
+
                                   if (isDateOnly) {
                                     return datePart;
                                   }
-                                  
-                                  final timePart = DateFormat('h:mm a').format(local);
+
+                                  final timePart = DateFormat(
+                                    'h:mm a',
+                                  ).format(local);
                                   return '$datePart • $timePart';
                                 }(),
                                 style: TextStyle(
@@ -2682,11 +2743,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 ),
               ),
             ),
-  
+
             // User Clarity Row: Bill, Paid, Balance
             if (isInvoice)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: context.textSecondaryColor.withValues(alpha: 0.03),
                   border: Border(
@@ -2721,10 +2785,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   ],
                 ),
               ),
-  
+
             // ── Expandable Items Section (manual entries with item details) ──
-            if (isInvoice && tx.items.isNotEmpty)
-              _buildExpandableItems(tx),
+            if (isInvoice && tx.items.isNotEmpty) _buildExpandableItems(tx),
 
             // Actions Row
             Container(
@@ -2755,12 +2818,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     // Show MANUAL badge
                     Container(
                       margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                          color: const Color(
+                            0xFFF59E0B,
+                          ).withValues(alpha: 0.35),
                           width: 0.8,
                         ),
                       ),
@@ -2961,16 +3029,21 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Divider(
-                      height: 1,
-                      color: context.borderColor,
-                    ),
+                    Divider(height: 1, color: context.borderColor),
                     const SizedBox(height: 6),
                     ...items.map((item) {
                       final name = item['item_name']?.toString() ?? '';
-                      final qty = double.tryParse(item['quantity']?.toString() ?? '1') ?? 1.0;
-                      final rate = double.tryParse(item['rate']?.toString() ?? '0') ?? 0.0;
-                      final amount = double.tryParse(item['amount']?.toString() ?? '0') ?? (qty * rate);
+                      final qty =
+                          double.tryParse(
+                            item['quantity']?.toString() ?? '1',
+                          ) ??
+                          1.0;
+                      final rate =
+                          double.tryParse(item['rate']?.toString() ?? '0') ??
+                          0.0;
+                      final amount =
+                          double.tryParse(item['amount']?.toString() ?? '0') ??
+                          (qty * rate);
                       final qtyStr = qty == qty.truncateToDouble()
                           ? qty.toInt().toString()
                           : qty.toStringAsFixed(1);

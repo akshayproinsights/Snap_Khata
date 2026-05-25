@@ -61,11 +61,11 @@ class _ManualItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'item_name': name,
-        'quantity': quantity,
-        'rate': rate,
-        'amount': quantity * rate,
-      };
+    'item_name': name,
+    'quantity': quantity,
+    'rate': rate,
+    'amount': quantity * rate,
+  };
 }
 
 class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
@@ -79,8 +79,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   final FocusNode _mobileFocusNode = FocusNode();
 
   String _partyType = 'customer'; // 'customer' or 'vendor'
-  String _entryType = 'gave'; // 'got' or 'gave' — defaults to 'gave' (sale mode)
-  String _paymentMode = 'Credit'; // 'Credit', 'Cash', 'UPI' — only used when entry_type=='gave'
+  String _entryType =
+      'gave'; // 'got' or 'gave' — defaults to 'gave' (sale mode)
+  String _paymentMode =
+      'Credit'; // 'Credit', 'Cash', 'UPI' — only used when entry_type=='gave'
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
 
@@ -119,27 +121,29 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       _partySearchController.text = widget.initialVendor!.vendorName;
     }
     if (widget.initialItems != null) {
-      _items.addAll(widget.initialItems!.map((ci) => _ManualItem(
+      _items.addAll(
+        widget.initialItems!.map(
+          (ci) => _ManualItem(
             name: ci.name,
             rate: ci.rate,
             unit: ci.unit,
             quantity: ci.qty.toDouble(),
-          )));
+          ),
+        ),
+      );
     }
     _totalBumpController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _totalBumpAnimation = Tween<double>(begin: 1.0, end: 1.18).animate(
-      CurvedAnimation(
-        parent: _totalBumpController,
-        curve: Curves.easeOut,
-      ),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _totalBumpController.reverse();
-        }
-      });
+    _totalBumpAnimation =
+        Tween<double>(begin: 1.0, end: 1.18).animate(
+          CurvedAnimation(parent: _totalBumpController, curve: Curves.easeOut),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            _totalBumpController.reverse();
+          }
+        });
 
     _partySearchController.addListener(() {
       if (_partySearchController.text.trim().isNotEmpty &&
@@ -167,8 +171,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
         });
       } else {
         setState(() {
-          _showSuggestions =
-              _partySearchController.text.trim().isNotEmpty;
+          _showSuggestions = _partySearchController.text.trim().isNotEmpty;
         });
       }
     });
@@ -215,8 +218,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     }
   }
 
-
-
   Future<void> _submit({bool shareOnWhatsApp = false}) async {
     final partyName = _partySearchController.text.trim();
     if (partyName.isEmpty) {
@@ -226,7 +227,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
 
     final mobile = _mobileController.text.trim();
     if (_partyType == 'customer' && mobile.isNotEmpty && mobile.length != 10) {
-      AppToast.showError(context, 'Please enter a valid 10-digit mobile number');
+      AppToast.showError(
+        context,
+        'Please enter a valid 10-digit mobile number',
+      );
       return;
     }
 
@@ -253,13 +257,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
           'party_id': _selectedCustomer!.id,
         if (_partyType == 'vendor' && _selectedVendor != null)
           'party_id': _selectedVendor!.id,
-        if (_partyType == 'customer' && _mobileController.text.trim().isNotEmpty)
+        if (_partyType == 'customer' &&
+            _mobileController.text.trim().isNotEmpty)
           'mobile_number': _mobileController.text.trim(),
         'amount': finalAmount,
         'entry_type': _entryType,
         'payment_mode': _entryType == 'got' ? 'Cash' : _paymentMode,
         if (_paymentMode == 'Credit' && _entryType == 'gave') ...{
-          'received_amount': double.tryParse(_paidAmountController.text.trim()) ?? 0.0,
+          'received_amount':
+              double.tryParse(_paidAmountController.text.trim()) ?? 0.0,
         },
         'date': _selectedDate.toUtc().toIsoformat(),
         'notes': _notesController.text.trim(),
@@ -267,9 +273,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       };
 
       final response = await ApiClient().dio.post(
-            '/api/udhar/manual-entry',
-            data: payload,
-          );
+        '/api/udhar/manual-entry',
+        data: payload,
+      );
 
       if (response.data['status'] == 'success') {
         // Extract receipt number assigned by backend
@@ -299,20 +305,25 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             final double receivedAmount = _entryType == 'got'
                 ? finalAmount
                 : (_paymentMode == 'Credit'
-                    ? (double.tryParse(_paidAmountController.text.trim()) ?? 0.0)
-                    : finalAmount);
+                      ? (double.tryParse(_paidAmountController.text.trim()) ??
+                            0.0)
+                      : finalAmount);
 
             final message = WhatsAppUtils.buildManualBillMessage(
               customerName: partyName,
-              shopName: shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Store',
+              shopName: shopProfile.name.isNotEmpty
+                  ? shopProfile.name
+                  : 'Our Store',
               items: _items
-                  .map((it) => {
-                        'name': it.name,
-                        'quantity': it.quantity,
-                        'rate': it.rate,
-                        'unit': it.unit,
-                        'amount': it.quantity * it.rate
-                      })
+                  .map(
+                    (it) => {
+                      'name': it.name,
+                      'quantity': it.quantity,
+                      'rate': it.rate,
+                      'unit': it.unit,
+                      'amount': it.quantity * it.rate,
+                    },
+                  )
                   .toList(),
               total: finalAmount,
               paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
@@ -328,7 +339,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             if (phone.isEmpty) {
               phone = _selectedCustomer?.customerPhone ?? '';
             }
-            if (phone.isNotEmpty && !phone.startsWith('+91') && phone.length == 10) {
+            if (phone.isNotEmpty &&
+                !phone.startsWith('+91') &&
+                phone.length == 10) {
               phone = '+91$phone';
             }
 
@@ -342,7 +355,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               message: message,
             );
             // After WhatsApp sheet, open party detail if we have an id AND did not start from detail page
-            if (mounted && ledgerId != null && _partyType == 'customer' && widget.initialCustomer == null) {
+            if (mounted &&
+                ledgerId != null &&
+                _partyType == 'customer' &&
+                widget.initialCustomer == null) {
               _navigateToPartyDetail(ledgerId, partyName);
             }
           } else {
@@ -352,7 +368,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                 : 'Entry added successfully! 🎉';
             AppToast.showSuccess(context, successMsg);
             // Immediately open the party's transaction history if not already inside it
-            if (mounted && ledgerId != null && _partyType == 'customer' && widget.initialCustomer == null) {
+            if (mounted &&
+                ledgerId != null &&
+                _partyType == 'customer' &&
+                widget.initialCustomer == null) {
               _navigateToPartyDetail(ledgerId, partyName);
             }
           }
@@ -411,9 +430,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   bottomLeft: Radius.circular(16),
                 ),
                 border: Border(
-                  top: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
-                  left: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
-                  bottom: BorderSide(color: context.primaryColor.withValues(alpha: 0.3)),
+                  top: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  left: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  bottom: BorderSide(
+                    color: context.primaryColor.withValues(alpha: 0.3),
+                  ),
                 ),
               ),
               child: Text(
@@ -435,10 +460,17 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 1.2),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  letterSpacing: 1.2,
+                ),
                 decoration: InputDecoration(
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 13,
+                  ),
                   hintText: '98765 43210',
                   hintStyle: TextStyle(
                     color: context.textSecondaryColor.withValues(alpha: 0.4),
@@ -465,31 +497,42 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       topRight: Radius.circular(16),
                       bottomRight: Radius.circular(16),
                     ),
-                    borderSide: BorderSide(color: context.primaryColor, width: 2),
+                    borderSide: BorderSide(
+                      color: context.primaryColor,
+                      width: 2,
+                    ),
                   ),
                   fillColor: context.primaryColor.withValues(alpha: 0.03),
                   filled: true,
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: Icon(LucideIcons.contact, color: context.primaryColor),
-                        onPressed: () async {
-                          final phone = await ContactUtils.pickContactPhone();
-                          if (phone != null && mounted) {
-                            setState(() {
-                              _mobileController.text = phone;
-                            });
-                          }
-                        },
-                      ),
+                      if (ContactUtils.isSupported)
+                        IconButton(
+                          icon: Icon(
+                            LucideIcons.contact,
+                            color: context.primaryColor,
+                          ),
+                          onPressed: () async {
+                            final phone = await ContactUtils.pickContactPhone();
+                            if (phone != null && mounted) {
+                              setState(() {
+                                _mobileController.text = phone;
+                              });
+                            }
+                          },
+                        ),
                       if (!isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Icon(
-                            isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+                            isValid
+                                ? LucideIcons.checkCircle2
+                                : LucideIcons.alertCircle,
                             size: 18,
-                            color: isValid ? context.successColor : context.warningColor,
+                            color: isValid
+                                ? context.successColor
+                                : context.warningColor,
                           ),
                         ),
                     ],
@@ -519,7 +562,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   @override
   Widget build(BuildContext context) {
     final bool isGot = _entryType == 'got';
-    final Color activeColor = isGot ? context.successColor : context.primaryColor;
+    final Color activeColor = isGot
+        ? context.successColor
+        : context.primaryColor;
     final bool isCustomer = _partyType == 'customer';
     const Color whatsappGreen = Color(0xFF25D366);
     final Color saveButtonColor = isCustomer ? whatsappGreen : activeColor;
@@ -612,7 +657,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (widget.initialCustomer != null || widget.initialVendor != null) ...[
+                  if (widget.initialCustomer != null ||
+                      widget.initialVendor != null) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -627,11 +673,23 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: context.primaryColor.withValues(alpha: 0.12),
+                            backgroundColor: context.primaryColor.withValues(
+                              alpha: 0.12,
+                            ),
                             child: Text(
                               _partyType == 'customer'
-                                  ? (_selectedCustomer?.customerName.isNotEmpty == true ? _selectedCustomer!.customerName[0].toUpperCase() : 'C')
-                                  : (_selectedVendor?.vendorName.isNotEmpty == true ? _selectedVendor!.vendorName[0].toUpperCase() : 'V'),
+                                  ? (_selectedCustomer
+                                                ?.customerName
+                                                .isNotEmpty ==
+                                            true
+                                        ? _selectedCustomer!.customerName[0]
+                                              .toUpperCase()
+                                        : 'C')
+                                  : (_selectedVendor?.vendorName.isNotEmpty ==
+                                            true
+                                        ? _selectedVendor!.vendorName[0]
+                                              .toUpperCase()
+                                        : 'V'),
                               style: TextStyle(
                                 color: context.primaryColor,
                                 fontWeight: FontWeight.w900,
@@ -658,13 +716,20 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: context.primaryColor.withValues(alpha: 0.12),
+                                        color: context.primaryColor.withValues(
+                                          alpha: 0.12,
+                                        ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        _partyType == 'customer' ? 'Customer' : 'Supplier',
+                                        _partyType == 'customer'
+                                            ? 'Customer'
+                                            : 'Supplier',
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w800,
@@ -672,7 +737,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                         ),
                                       ),
                                     ),
-                                    if (_partyType == 'customer' && _selectedCustomer!.customerPhone != null && _selectedCustomer!.customerPhone!.isNotEmpty) ...[
+                                    if (_partyType == 'customer' &&
+                                        _selectedCustomer!.customerPhone !=
+                                            null &&
+                                        _selectedCustomer!
+                                            .customerPhone!
+                                            .isNotEmpty) ...[
                                       const SizedBox(width: 8),
                                       Text(
                                         _selectedCustomer!.customerPhone!,
@@ -698,7 +768,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       decoration: BoxDecoration(
                         color: context.surfaceColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: context.borderColor, width: 0.5),
+                        border: Border.all(
+                          color: context.borderColor,
+                          width: 0.5,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -714,7 +787,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 });
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   color: _partyType == 'customer'
                                       ? context.primaryColor
@@ -758,7 +833,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 });
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   color: _partyType == 'vendor'
                                       ? context.primaryColor
@@ -811,13 +888,20 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 ? 'Search Customer'
                                 : 'Search Supplier',
                             hintText: 'Enter name or select...',
-                            prefixIcon: const Icon(LucideIcons.search, size: 20),
+                            prefixIcon: const Icon(
+                              LucideIcons.search,
+                              size: 20,
+                            ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: context.borderColor),
+                              borderSide: BorderSide(
+                                color: context.borderColor,
+                              ),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: context.primaryColor),
+                              borderSide: BorderSide(
+                                color: context.primaryColor,
+                              ),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             suffixIcon: _partySearchController.text.isNotEmpty
@@ -897,9 +981,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                       _partySearchController.text = name;
                                       if (_partyType == 'customer') {
                                         _selectedCustomer = p as CustomerLedger;
-                                        final phone = _selectedCustomer?.customerPhone ?? '';
-                                        _mobileController.text =
-                                            phone.replaceAll('+91', '').trim();
+                                        final phone =
+                                            _selectedCustomer?.customerPhone ??
+                                            '';
+                                        _mobileController.text = phone
+                                            .replaceAll('+91', '')
+                                            .trim();
                                       } else {
                                         _selectedVendor = p as VendorLedger;
                                       }
@@ -923,7 +1010,11 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         // Mobile number label on left
                         Row(
                           children: [
-                            Icon(LucideIcons.smartphone, size: 14, color: context.primaryColor),
+                            Icon(
+                              LucideIcons.smartphone,
+                              size: 14,
+                              color: context.primaryColor,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'MOBILE NUMBER',
@@ -941,12 +1032,19 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         GestureDetector(
                           onTap: _selectDate,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
-                              color: context.primaryColor.withValues(alpha: 0.08),
+                              color: context.primaryColor.withValues(
+                                alpha: 0.08,
+                              ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: context.primaryColor.withValues(alpha: 0.25),
+                                color: context.primaryColor.withValues(
+                                  alpha: 0.25,
+                                ),
                                 width: 1,
                               ),
                             ),
@@ -975,7 +1073,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     ),
                     const SizedBox(height: 8),
                     _buildMobileNumberFieldNoLabel(context),
-                  ] else ...[ 
+                  ] else ...[
                     // Vendor: show date pill standalone (no mobile field)
                     const SizedBox(height: 20),
                     Align(
@@ -983,12 +1081,17 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       child: GestureDetector(
                         onTap: _selectDate,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: context.primaryColor.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: context.primaryColor.withValues(alpha: 0.25),
+                              color: context.primaryColor.withValues(
+                                alpha: 0.25,
+                              ),
                               width: 1,
                             ),
                           ),
@@ -1016,7 +1119,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     ),
                   ],
 
-
                   // Items List Header & Flat Amount input
                   if (_items.isEmpty) ...[
                     // Show a simple amount field if no line items are added yet
@@ -1032,8 +1134,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       decoration: InputDecoration(
                         labelText: 'Transaction Amount (₹)',
                         hintText: '0.00',
-                        prefixIcon:
-                            const Icon(LucideIcons.indianRupee, size: 20),
+                        prefixIcon: const Icon(
+                          LucideIcons.indianRupee,
+                          size: 20,
+                        ),
                         enabledBorder: OutlineInputBorder(
                           borderSide: BorderSide(color: context.borderColor),
                           borderRadius: BorderRadius.circular(16),
@@ -1128,113 +1232,177 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   Expanded(
                                     flex: 3,
                                     child: Autocomplete<CatalogueItem>(
-                                      displayStringForOption: (option) => option.itemName,
-                                      initialValue: TextEditingValue(text: item.name),
-                                      optionsBuilder: (TextEditingValue textEditingValue) {
-                                        if (textEditingValue.text.isEmpty) {
-                                          return const Iterable<CatalogueItem>.empty();
-                                        }
-                                        return catalogueState.items.where((CatalogueItem option) {
-                                          return option.itemName
-                                              .toLowerCase()
-                                              .contains(textEditingValue.text.toLowerCase());
-                                        });
-                                      },
+                                      displayStringForOption: (option) =>
+                                          option.itemName,
+                                      initialValue: TextEditingValue(
+                                        text: item.name,
+                                      ),
+                                      optionsBuilder:
+                                          (TextEditingValue textEditingValue) {
+                                            if (textEditingValue.text.isEmpty) {
+                                              return const Iterable<
+                                                CatalogueItem
+                                              >.empty();
+                                            }
+                                            return catalogueState.items.where((
+                                              CatalogueItem option,
+                                            ) {
+                                              return option.itemName
+                                                  .toLowerCase()
+                                                  .contains(
+                                                    textEditingValue.text
+                                                        .toLowerCase(),
+                                                  );
+                                            });
+                                          },
                                       onSelected: (CatalogueItem selection) {
                                         setState(() {
                                           item.name = selection.itemName;
                                           item.rate = selection.lastPrice;
                                           item.unit = selection.unit;
-                                          item.rateController.text = selection.lastPrice.toStringAsFixed(0);
+                                          item.rateController.text = selection
+                                              .lastPrice
+                                              .toStringAsFixed(0);
                                         });
                                         _bumpTotal();
                                       },
-                                      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                                        // Keep item.name in sync if the user types manually
-                                        textController.addListener(() {
-                                          item.name = textController.text;
-                                        });
+                                      fieldViewBuilder:
+                                          (
+                                            context,
+                                            textController,
+                                            focusNode,
+                                            onFieldSubmitted,
+                                          ) {
+                                            // Keep item.name in sync if the user types manually
+                                            textController.addListener(() {
+                                              item.name = textController.text;
+                                            });
 
-                                        return TextFormField(
-                                          controller: textController,
-                                          focusNode: focusNode,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          decoration: InputDecoration(
-                                            hintText: 'Item...',
-                                            contentPadding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 12,
-                                            ),
-                                            enabledBorder: OutlineInputBorder(
-                                              borderSide: BorderSide(
-                                                color: context.borderColor,
+                                            return TextFormField(
+                                              controller: textController,
+                                              focusNode: focusNode,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            focusedBorder: OutlineInputBorder(
-                                              borderSide: BorderSide(
-                                                color: context.primaryColor,
+                                              decoration: InputDecoration(
+                                                hintText: 'Item...',
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 12,
+                                                    ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderSide: BorderSide(
+                                                        color:
+                                                            context.borderColor,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderSide: BorderSide(
+                                                        color: context
+                                                            .primaryColor,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            10,
+                                                          ),
+                                                    ),
                                               ),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                          ),
-                                          onFieldSubmitted: (val) {
-                                            onFieldSubmitted();
+                                              onFieldSubmitted: (val) {
+                                                onFieldSubmitted();
+                                              },
+                                            );
                                           },
-                                        );
-                                      },
                                       optionsViewBuilder: (context, onSelected, options) {
                                         return Align(
                                           alignment: Alignment.topLeft,
                                           child: Material(
                                             elevation: 8,
-                                            borderRadius: BorderRadius.circular(12),
-                                            shadowColor: Colors.black.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            shadowColor: Colors.black
+                                                .withValues(alpha: 0.15),
                                             color: context.surfaceColor,
                                             child: Container(
                                               width: 220,
-                                              constraints: const BoxConstraints(maxHeight: 200),
+                                              constraints: const BoxConstraints(
+                                                maxHeight: 200,
+                                              ),
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
-                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: context.borderColor
+                                                      .withValues(alpha: 0.5),
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
                                               child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                                 child: ListView.separated(
                                                   padding: EdgeInsets.zero,
                                                   shrinkWrap: true,
                                                   itemCount: options.length,
-                                                  separatorBuilder: (context, i) =>
-                                                      Divider(height: 1, color: context.borderColor.withValues(alpha: 0.5)),
+                                                  separatorBuilder:
+                                                      (context, i) => Divider(
+                                                        height: 1,
+                                                        color: context
+                                                            .borderColor
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            ),
+                                                      ),
                                                   itemBuilder: (BuildContext context, int index) {
-                                                    final CatalogueItem option = options.elementAt(index);
+                                                    final CatalogueItem option =
+                                                        options.elementAt(
+                                                          index,
+                                                        );
                                                     return InkWell(
-                                                      onTap: () => onSelected(option),
+                                                      onTap: () =>
+                                                          onSelected(option),
                                                       child: Padding(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 12,
+                                                              vertical: 10,
+                                                            ),
                                                         child: Row(
-                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
                                                           children: [
                                                             Expanded(
                                                               child: Text(
                                                                 option.itemName,
                                                                 style: const TextStyle(
-                                                                  fontWeight: FontWeight.bold,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
                                                                   fontSize: 13,
                                                                 ),
                                                                 maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
                                                               ),
                                                             ),
                                                             Text(
                                                               '₹${option.lastPrice.toStringAsFixed(0)}',
                                                               style: TextStyle(
                                                                 fontSize: 12,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: context.primaryColor,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: context
+                                                                    .primaryColor,
                                                               ),
                                                             ),
                                                           ],
@@ -1272,14 +1440,17 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                 if (item.quantity > 1.0) {
                                                   item.quantity -= 1.0;
                                                 } else {
-                                                  final removed = _items.removeAt(idx);
+                                                  final removed = _items
+                                                      .removeAt(idx);
                                                   removed.dispose();
                                                 }
                                               });
                                               _bumpTotal();
                                             },
                                             child: Container(
-                                              padding: const EdgeInsets.all(8.0),
+                                              padding: const EdgeInsets.all(
+                                                8.0,
+                                              ),
                                               child: const Icon(
                                                 LucideIcons.minus,
                                                 size: 14,
@@ -1288,7 +1459,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                           ),
                                           Text(
                                             item.quantity % 1 == 0
-                                                ? item.quantity.toInt().toString()
+                                                ? item.quantity
+                                                      .toInt()
+                                                      .toString()
                                                 : item.quantity.toString(),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
@@ -1304,7 +1477,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                               _bumpTotal();
                                             },
                                             child: Container(
-                                              padding: const EdgeInsets.all(8.0),
+                                              padding: const EdgeInsets.all(
+                                                8.0,
+                                              ),
                                               child: const Icon(
                                                 LucideIcons.plus,
                                                 size: 14,
@@ -1323,8 +1498,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                       controller: item.rateController,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
+                                            decimal: true,
+                                          ),
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w900,
@@ -1332,26 +1507,32 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                       decoration: InputDecoration(
                                         prefixText: '₹',
                                         hintText: '0',
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 12,
-                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 12,
+                                            ),
                                         enabledBorder: OutlineInputBorder(
                                           borderSide: BorderSide(
                                             color: context.borderColor,
                                           ),
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderSide: BorderSide(
                                             color: context.primaryColor,
                                           ),
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                       ),
                                       onChanged: (val) {
                                         setState(() {
-                                          item.rate = double.tryParse(val) ?? 0.0;
+                                          item.rate =
+                                              double.tryParse(val) ?? 0.0;
                                         });
                                         _bumpTotal();
                                       },
@@ -1361,20 +1542,24 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   SizedBox(
                                     width: 68,
                                     child: AnimatedSwitcher(
-                                      duration: const Duration(milliseconds: 200),
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
                                       transitionBuilder: (child, animation) =>
                                           FadeTransition(
-                                        opacity: animation,
-                                        child: SlideTransition(
-                                          position: Tween<Offset>(
-                                            begin: const Offset(0, -0.3),
-                                            end: Offset.zero,
-                                          ).animate(animation),
-                                          child: child,
-                                        ),
-                                      ),
+                                            opacity: animation,
+                                            child: SlideTransition(
+                                              position: Tween<Offset>(
+                                                begin: const Offset(0, -0.3),
+                                                end: Offset.zero,
+                                              ).animate(animation),
+                                              child: child,
+                                            ),
+                                          ),
                                       child: Text(
-                                        key: ValueKey('sub_${idx}_${rowSubtotal.toInt()}'),
+                                        key: ValueKey(
+                                          'sub_${idx}_${rowSubtotal.toInt()}',
+                                        ),
                                         rowSubtotal > 0
                                             ? '₹${rowSubtotal.toStringAsFixed(0)}'
                                             : '—',
@@ -1525,143 +1710,162 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     // ── Customer-only: Transaction type + totals in bottom panel ──
                     if (_partyType == 'customer') ...[
                       // Row 1: Total Bill | Paid Now | Balance Due
-                      Builder(builder: (ctx) {
-                        final total = _items.isEmpty
-                            ? (double.tryParse(_flatAmountController.text.trim()) ?? 0.0)
-                            : _computedTotal;
-                        final balanceVal = _entryType == 'gave' && _paymentMode == 'Credit'
-                            ? (total - (double.tryParse(_paidAmountController.text.trim()) ?? 0.0)).clamp(0.0, double.infinity)
-                            : (_entryType == 'got' ? 0.0 : 0.0);
+                      Builder(
+                        builder: (ctx) {
+                          final total = _items.isEmpty
+                              ? (double.tryParse(
+                                      _flatAmountController.text.trim(),
+                                    ) ??
+                                    0.0)
+                              : _computedTotal;
+                          final balanceVal =
+                              _entryType == 'gave' && _paymentMode == 'Credit'
+                              ? (total -
+                                        (double.tryParse(
+                                              _paidAmountController.text.trim(),
+                                            ) ??
+                                            0.0))
+                                    .clamp(0.0, double.infinity)
+                              : (_entryType == 'got' ? 0.0 : 0.0);
 
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Total Bill
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Total Bill',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: context.textSecondaryColor,
-                                  ),
-                                ),
-                                const SizedBox(height: 1),
-                                ScaleTransition(
-                                  scale: _totalBumpAnimation,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 250),
-                                    child: Text(
-                                      '₹${total.toStringAsFixed(0)}',
-                                      key: ValueKey(total.toInt()),
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w900,
-                                        color: activeColor,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 8),
-                            // Pencil icon to edit total (only when no items)
-                            if (_items.isEmpty)
-                              Icon(
-                                LucideIcons.pencil,
-                                size: 13,
-                                color: context.textSecondaryColor,
-                              ),
-                            const Spacer(),
-                            // Paid Now field (only for Credit sale)
-                            if (_entryType == 'gave' && _paymentMode == 'Credit') ...[
-                              SizedBox(
-                                width: 100,
-                                child: TextField(
-                                  controller: _paidAmountController,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
-                                  ),
-                                  onChanged: (_) => setState(() {}),
-                                  decoration: InputDecoration(
-                                    labelText: 'Amount Paid',
-                                    labelStyle: TextStyle(
-                                      fontSize: 9,
-                                      color: context.textSecondaryColor,
-                                    ),
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 8,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: context.borderColor),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: context.primaryColor),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Balance Due
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Total Bill
                               Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Bal.',
+                                    'Total Bill',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: context.textSecondaryColor,
                                     ),
                                   ),
                                   const SizedBox(height: 1),
-                                  Text(
-                                    '₹${balanceVal.toStringAsFixed(0)}',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w900,
-                                      color: balanceVal > 0
-                                          ? context.errorColor
-                                          : context.successColor,
+                                  ScaleTransition(
+                                    scale: _totalBumpAnimation,
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
+                                      child: Text(
+                                        '₹${total.toStringAsFixed(0)}',
+                                        key: ValueKey(total.toInt()),
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                          color: activeColor,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ] else ...[
-                              // Item count badge for non-credit modes
-                              if (_items.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: activeColor.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '${_items.length} item${_items.length == 1 ? '' : 's'}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: activeColor,
+                              const SizedBox(width: 8),
+                              // Pencil icon to edit total (only when no items)
+                              if (_items.isEmpty)
+                                Icon(
+                                  LucideIcons.pencil,
+                                  size: 13,
+                                  color: context.textSecondaryColor,
+                                ),
+                              const Spacer(),
+                              // Paid Now field (only for Credit sale)
+                              if (_entryType == 'gave' &&
+                                  _paymentMode == 'Credit') ...[
+                                SizedBox(
+                                  width: 100,
+                                  child: TextField(
+                                    controller: _paidAmountController,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                    ),
+                                    onChanged: (_) => setState(() {}),
+                                    decoration: InputDecoration(
+                                      labelText: 'Amount Paid',
+                                      labelStyle: TextStyle(
+                                        fontSize: 9,
+                                        color: context.textSecondaryColor,
+                                      ),
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 8,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: context.borderColor,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: context.primaryColor,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
+                                const SizedBox(width: 12),
+                                // Balance Due
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Bal.',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: context.textSecondaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      '₹${balanceVal.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: balanceVal > 0
+                                            ? context.errorColor
+                                            : context.successColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else ...[
+                                // Item count badge for non-credit modes
+                                if (_items.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: activeColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${_items.length} item${_items.length == 1 ? '' : 's'}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: activeColor,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ],
-                          ],
-                        );
-                      }),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 8),
                       // Row 2: Cash | Credit | UPI  +  Payment Received
                       Row(
@@ -1678,14 +1882,20 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 9,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                  color:
+                                      (_entryType == 'gave' &&
+                                          _paymentMode == 'Cash')
                                       ? context.primaryColor
                                       : context.surfaceColor,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                    color:
+                                        (_entryType == 'gave' &&
+                                            _paymentMode == 'Cash')
                                         ? context.primaryColor
                                         : context.borderColor,
                                   ),
@@ -1696,7 +1906,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: (_entryType == 'gave' && _paymentMode == 'Cash')
+                                    color:
+                                        (_entryType == 'gave' &&
+                                            _paymentMode == 'Cash')
                                         ? Colors.white
                                         : context.textColor,
                                   ),
@@ -1717,14 +1929,20 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 9,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                  color:
+                                      (_entryType == 'gave' &&
+                                          _paymentMode == 'Credit')
                                       ? context.primaryColor
                                       : context.surfaceColor,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                    color:
+                                        (_entryType == 'gave' &&
+                                            _paymentMode == 'Credit')
                                         ? context.primaryColor
                                         : context.borderColor,
                                   ),
@@ -1735,7 +1953,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: (_entryType == 'gave' && _paymentMode == 'Credit')
+                                    color:
+                                        (_entryType == 'gave' &&
+                                            _paymentMode == 'Credit')
                                         ? Colors.white
                                         : context.textColor,
                                   ),
@@ -1789,18 +2009,21 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               duration: const Duration(milliseconds: 250),
                               transitionBuilder: (child, anim) =>
                                   SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, 0.5),
-                                  end: Offset.zero,
-                                ).animate(CurvedAnimation(
-                                  parent: anim,
-                                  curve: Curves.easeOut,
-                                )),
-                                child: FadeTransition(
-                                  opacity: anim,
-                                  child: child,
-                                ),
-                              ),
+                                    position:
+                                        Tween<Offset>(
+                                          begin: const Offset(0, 0.5),
+                                          end: Offset.zero,
+                                        ).animate(
+                                          CurvedAnimation(
+                                            parent: anim,
+                                            curve: Curves.easeOut,
+                                          ),
+                                        ),
+                                    child: FadeTransition(
+                                      opacity: anim,
+                                      child: child,
+                                    ),
+                                  ),
                               child: Text(
                                 '₹${finalAmount.toStringAsFixed(0)}',
                                 key: ValueKey(finalAmount.toInt()),
@@ -1876,12 +2099,13 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   ? null
                                   : () => _submit(shareOnWhatsApp: true),
                               icon: isCustomer
-                                  ? const FaIcon(FontAwesomeIcons.whatsapp, size: 16)
+                                  ? const FaIcon(
+                                      FontAwesomeIcons.whatsapp,
+                                      size: 16,
+                                    )
                                   : const Icon(LucideIcons.check, size: 16),
                               label: Text(
-                                isCustomer
-                                    ? 'SAVE + WHATSAPP'
-                                    : 'SAVE',
+                                isCustomer ? 'SAVE + WHATSAPP' : 'SAVE',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w900,
@@ -1891,8 +2115,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 backgroundColor: Colors.transparent,
                                 foregroundColor: Colors.white,
                                 shadowColor: Colors.transparent,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -1939,7 +2164,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     return months[month - 1];
   }
@@ -1950,8 +2175,6 @@ extension _DateTimeIso on DateTime {
     return toIso8601String();
   }
 }
-
-
 
 class _EntryTypeButton extends StatelessWidget {
   final String label;
@@ -2003,7 +2226,7 @@ class _EntryTypeButton extends StatelessWidget {
                     color: activeColor.withValues(alpha: 0.15),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ]
               : null,
         ),

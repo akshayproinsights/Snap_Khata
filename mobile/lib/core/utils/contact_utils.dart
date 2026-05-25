@@ -19,4 +19,12 @@ class ContactUtils {
     }
     return contact_impl.pickContactPhoneNative();
   }
+
+  /// Whether the contact picker is supported on the current device and browser.
+  static bool get isSupported {
+    if (kIsWeb) {
+      return contact_impl.isSupportedWeb();
+    }
+    return contact_impl.isSupportedNative();
+  }
 }

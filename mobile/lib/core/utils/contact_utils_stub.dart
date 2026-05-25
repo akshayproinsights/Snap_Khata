@@ -34,3 +34,10 @@ Future<String?> pickContactPhoneNative() async {
   }
   return null;
 }
+
+/// Web contact picker support check (always false in native build context).
+bool isSupportedWeb() => false;
+
+/// Native contact picker support check (always true in native build context).
+bool isSupportedNative() => true;
+

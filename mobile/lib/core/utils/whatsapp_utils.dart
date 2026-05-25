@@ -70,6 +70,29 @@ class WhatsAppUtils {
     return '₹$result,$lastThree';
   }
 
+  /// Inserts a block of text (like a link or detail) right before the thank you/sign-off section.
+  /// If there's a custom note block, the text is inserted before the note block to keep the note as the final footer item.
+  static String insertBeforeSignoff(String caption, String textToInsert) {
+    const signoffMarker = 'Thank you! 🙏';
+    final signoffIndex = caption.lastIndexOf(signoffMarker);
+    if (signoffIndex > 0) {
+      final bodyPart = caption.substring(0, signoffIndex).trimRight();
+      final signoffPart = caption.substring(signoffIndex);
+
+      // Look for a custom note block prefix to insert the text before it
+      final noteIndex = bodyPart.lastIndexOf('👉');
+      if (noteIndex > 0 && bodyPart.substring(noteIndex).contains('Note:')) {
+        final beforeNote = bodyPart.substring(0, noteIndex).trimRight();
+        final notePart = bodyPart.substring(noteIndex);
+        return '$beforeNote\n\n$textToInsert\n\n$notePart\n\n$signoffPart';
+      }
+
+      return '$bodyPart\n\n$textToInsert\n\n$signoffPart';
+    }
+    return '$caption\n\n$textToInsert';
+  }
+
+
   static String getWhatsAppCaption({
     required OrderPaymentStatus status,
     required String customerName,
@@ -108,7 +131,8 @@ class WhatsAppUtils {
       case OrderPaymentStatus.unpaid:
         return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order from *${businessName.trim()}* is ready. 📝\n\n'
-            '⚠️ *Amount Due: $totalFmt*$extraTexts$noteSuffix\n\n'
+            '⚠️ *Amount Due: $totalFmt*$extraTexts'
+            '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.partiallyPaid:
@@ -116,13 +140,15 @@ class WhatsAppUtils {
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
-            '⏳ Pending Due: $pendingFmt$extraTexts$noteSuffix\n\n'
+            '⏳ Pending Due: $pendingFmt$extraTexts'
+            '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            '💳 Amount Paid: $totalFmt$extraTexts$noteSuffix\n\n'
+            '💳 Amount Paid: $totalFmt$extraTexts'
+            '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
     }
   }
@@ -293,8 +319,8 @@ class WhatsAppUtils {
                 imageUrl != 'null';
 
             final message = isSharingPhoto
-                ? '$caption\n\nThank you! 🙏\n— *${shopName.trim()}*'
-                : '$caption\n\nView details:\n$shareUrl\n\nThank you! 🙏\n— *${shopName.trim()}*';
+                ? caption
+                : insertBeforeSignoff(caption, 'View details:\n$shareUrl');
 
             if (isSharingPhoto) {
               await shareActualImageOnWhatsApp(
@@ -530,8 +556,9 @@ class WhatsAppUtils {
       final invoiceRef =
           receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
       return 'Hi $name,\n\n'
-          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*$invoiceRef$noteSuffix\n\n'
-          'Please settle this amount as soon as possible.\n\n'
+          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*$invoiceRef\n\n'
+          'Please settle this amount as soon as possible.'
+          '$noteSuffix\n\n'
           'Thank you! 🙏\n'
           '— *$shop*';
     }
@@ -729,18 +756,8 @@ class WhatsAppUtils {
       receiptPageUrl = imageUrl;
     }
 
-    // Place the receipt link BEFORE the sign-off for a professional look
-    // Split caption at the last "Thank you! 🙏" to insert the link before the sign-off
-    const signoffMarker = 'Thank you! 🙏';
-    final signoffIndex = caption.lastIndexOf(signoffMarker);
-    final String fallbackMessage;
-    if (signoffIndex > 0) {
-      final bodyPart = caption.substring(0, signoffIndex).trimRight();
-      final signoffPart = caption.substring(signoffIndex);
-      fallbackMessage = '$bodyPart\n\n🧾 View Receipt:\n$receiptPageUrl\n\n$signoffPart';
-    } else {
-      fallbackMessage = '$caption\n\n🧾 View Receipt:\n$receiptPageUrl';
-    }
+    // Place the receipt link BEFORE the sign-off/note for a professional look
+    final fallbackMessage = insertBeforeSignoff(caption, '🧾 View Receipt:\n$receiptPageUrl');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

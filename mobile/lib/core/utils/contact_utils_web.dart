@@ -67,3 +67,16 @@ Future<String?> pickContactPhoneWeb() async {
     return null;
   }
 }
+
+/// Check if navigator.contacts is supported on the web browser.
+bool isSupportedWeb() {
+  try {
+    return _jsNavigator.contacts != null;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Native contact picker support check (always false in web build context).
+bool isSupportedNative() => false;
+
