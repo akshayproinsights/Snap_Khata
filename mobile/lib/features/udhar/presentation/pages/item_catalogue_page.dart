@@ -49,6 +49,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
   String _searchQuery = '';
   bool _isSyncing = false;
   late AnimationController _fabAnimController;
+  int? _highlightedItemId;
 
   // ── Cart state (selection mode only) ─────────────────────────────────────
   final Map<int, int> _cartQty = {};
@@ -123,6 +124,21 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
     _searchController.dispose();
     _fabAnimController.dispose();
     super.dispose();
+  }
+
+  void _triggerHighlight(int targetId, String name) {
+    if (!mounted) return;
+    setState(() {
+      _searchController.text = name;
+      _highlightedItemId = targetId;
+    });
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _highlightedItemId = null;
+        });
+      }
+    });
   }
 
   // ── Quick Add/Edit Bottom Sheet ──────────────────────────────────────────
@@ -445,28 +461,42 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                           priceController.text.trim()) ??
                                       0.0;
 
-                                  final success = await ref
-                                      .read(
-                                          itemCatalogueProvider.notifier)
-                                      .addItem(name, price, selectedUnit);
+                                  bool success;
+                                  int targetId = -1;
+                                  if (item == null) {
+                                    success = await ref
+                                        .read(
+                                            itemCatalogueProvider.notifier)
+                                        .addItem(name, price, selectedUnit);
+                                    if (success) {
+                                      final items = ref
+                                          .read(itemCatalogueProvider)
+                                          .items;
+                                      final match = items.where((i) =>
+                                          i.itemName.toLowerCase() ==
+                                          name.toLowerCase());
+                                      if (match.isNotEmpty) {
+                                        targetId = match.first.id;
+                                      }
+                                    }
+                                  } else {
+                                    success = await ref
+                                        .read(
+                                            itemCatalogueProvider.notifier)
+                                        .updateItem(item.id, name, price, selectedUnit);
+                                    targetId = item.id;
+                                  }
 
                                   if (!ctx.mounted) return;
-                                  if (success) {
-                                    // Find the newly added/updated item and add to cart
-                                    final items = ref
-                                        .read(itemCatalogueProvider)
-                                        .items;
-                                    final match = items.where((i) =>
-                                        i.itemName.toLowerCase() ==
-                                        name.toLowerCase());
-                                    if (match.isNotEmpty) {
-                                      _addToCartWithQty(
-                                          match.first.id, qty);
-                                    }
+                                  if (success && targetId != -1) {
+                                    _addToCartWithQty(targetId, qty);
                                     Navigator.pop(ctx);
+                                    _triggerHighlight(targetId, name);
                                     AppToast.showSuccess(
                                         context,
-                                        '✅ "$name" added to bill (qty $qty)');
+                                        item == null
+                                            ? '✅ "$name" added to bill (qty $qty)'
+                                            : '✅ "$name" updated & added to bill (qty $qty)');
                                   } else {
                                     AppToast.showError(
                                         context, 'Failed to save item');
@@ -509,23 +539,37 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                       0.0;
 
                                   bool success;
+                                  int targetId = -1;
                                   if (item == null) {
                                     success = await ref
                                         .read(
                                             itemCatalogueProvider.notifier)
                                         .addItem(
                                             name, price, selectedUnit);
+                                    if (success) {
+                                      final items = ref
+                                          .read(itemCatalogueProvider)
+                                          .items;
+                                      final match = items.where((i) =>
+                                          i.itemName.toLowerCase() ==
+                                          name.toLowerCase());
+                                      if (match.isNotEmpty) {
+                                        targetId = match.first.id;
+                                      }
+                                    }
                                   } else {
                                     success = await ref
                                         .read(
                                             itemCatalogueProvider.notifier)
                                         .updateItem(item.id, name, price,
                                             selectedUnit);
+                                    targetId = item.id;
                                   }
 
                                   if (!ctx.mounted) return;
                                   Navigator.pop(ctx);
-                                  if (success) {
+                                  if (success && targetId != -1) {
+                                    _triggerHighlight(targetId, name);
                                     AppToast.showSuccess(
                                       context,
                                       item == null
@@ -719,12 +763,14 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                       onIncrement: () => _incrementCart(item.id),
                       onDecrement: () => _decrementCart(item.id),
                       onEdit: () => _showQuickAddSheet(item: item),
+                      highlighted: _highlightedItemId == item.id,
                     );
                   }
                   return _ManageItemCard(
                     item: item,
                     onEdit: () => _showQuickAddSheet(item: item),
                     onDelete: () => _deleteItem(item),
+                    highlighted: _highlightedItemId == item.id,
                   );
                 },
               );
@@ -1134,6 +1180,7 @@ class _SelectionItemCard extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.onEdit,
+    this.highlighted = false,
   });
 
   final CatalogueItem item;
@@ -1142,27 +1189,41 @@ class _SelectionItemCard extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final VoidCallback onEdit;
+  final bool highlighted;
 
   bool get _inCart => qty > 0;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: _inCart
-            ? context.primaryColor.withValues(alpha: 0.06)
-            : context.surfaceColor,
+        color: highlighted
+            ? context.successColor.withValues(alpha: 0.08)
+            : (_inCart
+                ? context.primaryColor.withValues(alpha: 0.06)
+                : context.surfaceColor),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _inCart
-              ? context.primaryColor.withValues(alpha: 0.45)
-              : context.borderColor,
-          width: _inCart ? 1.5 : 0.5,
+          color: highlighted
+              ? context.successColor
+              : (_inCart
+                  ? context.primaryColor.withValues(alpha: 0.45)
+                  : context.borderColor),
+          width: highlighted ? 2.0 : (_inCart ? 1.5 : 0.5),
         ),
-        boxShadow: _inCart ? context.premiumShadow : context.premiumShadow,
+        boxShadow: highlighted
+            ? [
+                BoxShadow(
+                  color: context.successColor.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : context.premiumShadow,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1211,6 +1272,33 @@ class _SelectionItemCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (highlighted) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: context.successColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.check,
+                                  size: 10, color: Colors.white),
+                              SizedBox(width: 2),
+                              Text(
+                                'Saved',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -1347,23 +1435,41 @@ class _ManageItemCard extends StatelessWidget {
     required this.item,
     required this.onEdit,
     required this.onDelete,
+    this.highlighted = false,
   });
 
   final CatalogueItem item;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onEdit,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: context.surfaceColor,
+          color: highlighted
+              ? context.successColor.withValues(alpha: 0.08)
+              : context.surfaceColor,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: context.borderColor, width: 0.5),
-          boxShadow: context.premiumShadow,
+          border: Border.all(
+            color: highlighted ? context.successColor : context.borderColor,
+            width: highlighted ? 2.0 : 0.5,
+          ),
+          boxShadow: highlighted
+              ? [
+                  BoxShadow(
+                    color: context.successColor.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : context.premiumShadow,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1374,13 +1480,48 @@ class _ManageItemCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.itemName,
-                      style: TextStyle(
-                        color: context.textColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.itemName,
+                            style: TextStyle(
+                              color: context.textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (highlighted) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: context.successColor,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(LucideIcons.check,
+                                    size: 10, color: Colors.white),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Saved',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Row(

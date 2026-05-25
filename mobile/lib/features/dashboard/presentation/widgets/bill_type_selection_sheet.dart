@@ -81,7 +81,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           
           // Body Section
           const Text(
-            'What do you want to do?',
+            'How would you like to bill?',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
@@ -90,7 +90,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Scan a photo or quickly pick items from your list.',
+            'Scan your paper bill for automatic item extraction, or record it manually.',
             style: TextStyle(
               color: Colors.grey,
               fontSize: 15,
@@ -105,9 +105,36 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ── Quick Bill (item catalogue) — most prominent option ──
-                  _buildQuickBillCard(context, isDark),
-                  const SizedBox(height: 12),
+                  // ── PRIMARY SCAN CARDS (MVP) ──
+                  _buildPrimaryScanCard(
+                    context: context,
+                    type: BillScanType.customer,
+                    title: 'Scan Customer Bill',
+                    subtitle: 'Auto-extract sales, items & customer balance',
+                    badgeText: 'Money In',
+                    badgeColor: context.successColor,
+                    icon: LucideIcons.user,
+                    gradientColors: [
+                      context.successColor.withValues(alpha: isDark ? 0.12 : 0.05),
+                      context.successColor.withValues(alpha: isDark ? 0.04 : 0.01),
+                    ],
+                    isDark: isDark,
+                  ),
+                  _buildPrimaryScanCard(
+                    context: context,
+                    type: BillScanType.supplier,
+                    title: 'Scan Supplier Bill',
+                    subtitle: 'Auto-extract purchases & supplier details',
+                    badgeText: 'Money Out',
+                    badgeColor: context.errorColor,
+                    icon: LucideIcons.truck,
+                    gradientColors: [
+                      context.errorColor.withValues(alpha: isDark ? 0.12 : 0.05),
+                      context.errorColor.withValues(alpha: isDark ? 0.04 : 0.01),
+                    ],
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
 
                   // ── Divider with label ──
                   Row(
@@ -116,7 +143,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
-                          'OR SCAN A PHOTO',
+                          'OR ENTER MANUALLY',
                           style: TextStyle(
                             color: context.textSecondaryColor,
                             fontSize: 10,
@@ -128,45 +155,26 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       Expanded(child: Divider(color: context.borderColor)),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
+                  // ── SECONDARY MANUAL CARDS ──
                   Row(
                     children: [
-                      Expanded(
-                        child: _buildCompactScanCard(
-                          context: context,
-                          type: BillScanType.customer,
-                          label: 'Customer Bill',
-                          badge: 'Money In',
-                          badgeColor: context.successColor,
-                          icon: LucideIcons.user,
-                          isSelected: selectedType == BillScanType.customer,
-                          isDark: isDark,
-                        ),
+                      _buildSecondaryManualCard(
+                        context: context,
+                        title: 'Quick Bill',
+                        subtitle: 'Pick items from list',
+                        icon: LucideIcons.shoppingCart,
+                        onTap: () => _handleAction(BillScanType.quickBill),
+                        isDark: isDark,
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildCompactScanCard(
-                          context: context,
-                          type: BillScanType.supplier,
-                          label: 'Supplier Bill',
-                          badge: 'Money Out',
-                          badgeColor: context.errorColor,
-                          icon: LucideIcons.truck,
-                          isSelected: selectedType == BillScanType.supplier,
-                          isDark: isDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Compact Manual Entry
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: TextButton.icon(
-                        onPressed: () async {
+                      _buildSecondaryManualCard(
+                        context: context,
+                        title: 'Manual Entry',
+                        subtitle: 'Record without items',
+                        icon: LucideIcons.edit3,
+                        onTap: () async {
                           Navigator.pop(context);
                           await showModalBottomSheet(
                             context: context,
@@ -175,31 +183,11 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                             builder: (context) => const AddPartyEntrySheet(),
                           );
                         },
-                        icon: Icon(
-                          LucideIcons.edit3,
-                          size: 16,
-                          color: context.textSecondaryColor,
-                        ),
-                        label: Text(
-                          'Record manual entry',
-                          style: TextStyle(
-                            color: context.textSecondaryColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        isDark: isDark,
                       ),
-                    ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -215,12 +203,20 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     if (type == BillScanType.quickBill) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
-      await Navigator.push(
+      final result = await Navigator.push<List<CatalogueCartItem>>(
         context,
         MaterialPageRoute(
           builder: (_) => const ItemCataloguePage(selectionMode: true),
         ),
       );
+      if (result != null && result.isNotEmpty && mounted) {
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => AddPartyEntrySheet(initialItems: result),
+        );
+      }
       return;
     }
 
@@ -247,39 +243,48 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     }
   }
 
-  /// Large, gradient hero card for Quick Bill — the most discoverable entry point.
-  Widget _buildQuickBillCard(BuildContext context, bool isDark) {
-    final isSelected = selectedType == BillScanType.quickBill;
+  /// Large, premium stacked hero card for scanning bills
+  Widget _buildPrimaryScanCard({
+    required BuildContext context,
+    required BillScanType type,
+    required String title,
+    required String subtitle,
+    required String badgeText,
+    required Color badgeColor,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required bool isDark,
+  }) {
+    final isSelected = selectedType == type;
+
     return GestureDetector(
-      onTap: () => _handleAction(BillScanType.quickBill),
+      onTap: () => _handleAction(type),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isSelected
                 ? [
-                    context.primaryColor,
-                    context.primaryColor.withValues(alpha: 0.8),
+                    badgeColor,
+                    badgeColor.withValues(alpha: 0.8),
                   ]
-                : [
-                    context.primaryColor.withValues(alpha: isDark ? 0.18 : 0.07),
-                    context.primaryColor.withValues(alpha: isDark ? 0.08 : 0.03),
-                  ],
+                : gradientColors,
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? context.primaryColor
-                : context.primaryColor.withValues(alpha: 0.35),
+                ? badgeColor
+                : badgeColor.withValues(alpha: 0.25),
             width: isSelected ? 2 : 1.5,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: context.primaryColor.withValues(alpha: 0.35),
+                    color: badgeColor.withValues(alpha: 0.3),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -293,12 +298,12 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               decoration: BoxDecoration(
                 color: isSelected
                     ? Colors.white.withValues(alpha: 0.2)
-                    : context.primaryColor.withValues(alpha: 0.12),
+                    : badgeColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
-                LucideIcons.shoppingCart,
-                color: isSelected ? Colors.white : context.primaryColor,
+                icon,
+                color: isSelected ? Colors.white : badgeColor,
                 size: 26,
               ),
             ),
@@ -307,20 +312,42 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Quick Bill',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: isSelected ? Colors.white : context.textColor,
-                      letterSpacing: -0.5,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: isSelected ? Colors.white : context.textColor,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.25)
+                              : badgeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badgeText,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected ? Colors.white : badgeColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Pick items from your list · no photo needed',
+                    subtitle,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: isSelected
                           ? Colors.white.withValues(alpha: 0.85)
@@ -331,10 +358,10 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               ),
             ),
             Icon(
-              LucideIcons.arrowRight,
+              LucideIcons.scan,
               color: isSelected
                   ? Colors.white
-                  : context.primaryColor,
+                  : badgeColor,
               size: 20,
             ),
           ],
@@ -343,77 +370,68 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     );
   }
 
-  /// Compact side-by-side scan card for Customer / Supplier.
-  Widget _buildCompactScanCard({
+  /// Compact side-by-side card for manual options
+  Widget _buildSecondaryManualCard({
     required BuildContext context,
-    required BillScanType type,
-    required String label,
-    required String badge,
-    required Color badgeColor,
+    required String title,
+    required String subtitle,
     required IconData icon,
-    required bool isSelected,
+    required VoidCallback onTap,
     required bool isDark,
   }) {
-    return GestureDetector(
-      onTap: () => _handleAction(type),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? badgeColor.withValues(alpha: isDark ? 0.15 : 0.06)
-              : context.surfaceColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? badgeColor : context.borderColor,
-            width: isSelected ? 2 : 1.5,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: context.borderColor,
+              width: 1.5,
+            ),
+            boxShadow: context.premiumShadow,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: (isSelected ? badgeColor : context.textSecondaryColor)
-                        .withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: isSelected ? badgeColor : context.textSecondaryColor,
-                    size: 18,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: context.textSecondaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const Spacer(),
-                if (isSelected)
-                  Icon(LucideIcons.checkCircle2, color: badgeColor, size: 18),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: context.textColor,
+                child: Icon(
+                  icon,
+                  color: context.textSecondaryColor,
+                  size: 18,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              badge,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: badgeColor,
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: context.textColor,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-
 }

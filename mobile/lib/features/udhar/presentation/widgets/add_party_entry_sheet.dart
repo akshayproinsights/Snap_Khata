@@ -20,7 +20,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AddPartyEntrySheet extends ConsumerStatefulWidget {
-  const AddPartyEntrySheet({super.key});
+  final List<CatalogueCartItem>? initialItems;
+  const AddPartyEntrySheet({super.key, this.initialItems});
 
   @override
   ConsumerState<AddPartyEntrySheet> createState() => _AddPartyEntrySheetState();
@@ -78,6 +79,14 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   @override
   void initState() {
     super.initState();
+    if (widget.initialItems != null) {
+      _items.addAll(widget.initialItems!.map((ci) => _ManualItem(
+            name: ci.name,
+            rate: ci.rate,
+            unit: ci.unit,
+            quantity: ci.qty.toDouble(),
+          )));
+    }
     _totalBumpController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
