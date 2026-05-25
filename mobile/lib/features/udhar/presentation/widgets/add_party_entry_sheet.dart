@@ -1728,57 +1728,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          // Payment Received button
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                setState(() {
-                                  _entryType = _entryType == 'got' ? 'gave' : 'got';
-                                  if (_entryType == 'got') _paymentMode = 'Cash';
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 9),
-                                decoration: BoxDecoration(
-                                  color: _entryType == 'got'
-                                      ? context.successColor
-                                      : context.surfaceColor,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: _entryType == 'got'
-                                        ? context.successColor
-                                        : context.borderColor,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      LucideIcons.pencil,
-                                      size: 12,
-                                      color: _entryType == 'got'
-                                          ? Colors.white
-                                          : context.textSecondaryColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Payment',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: _entryType == 'got'
-                                            ? Colors.white
-                                            : context.textColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 8),

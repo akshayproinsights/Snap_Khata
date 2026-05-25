@@ -2133,12 +2133,14 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             'customer': {
                 'ledger_table': 'customer_ledgers',
                 'tx_table': 'ledger_transactions',
-                'name_field': 'customer_name'
+                'name_field': 'customer_name',
+                'receipt_field': 'receipt_number'
             },
             'vendor': {
                 'ledger_table': 'vendor_ledgers',
                 'tx_table': 'vendor_ledger_transactions',
-                'name_field': 'vendor_name'
+                'name_field': 'vendor_name',
+                'receipt_field': 'invoice_number'
             }
         }
         
@@ -2189,10 +2191,13 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 .eq(cfg['name_field'], party_name_clean) \
                 .execute()
             
-        # For Credit sales with a partial/full advance payment, the net balance
-        # impact = amount_to_use (INVOICE) - received_amount (PAYMENT advance)
+        # For Cash sales/purchases, the net increase is 0 (fully paid upfront).
+        # For Credit sales/purchases with a partial/full advance payment, the net balance
+        # impact = amount_to_use (INVOICE) - received_amount (PAYMENT advance).
         received_amount = float(entry.received_amount or 0)
-        if entry.payment_mode == 'Credit' and is_increase and received_amount > 0:
+        if entry.payment_mode == 'Cash' and is_increase:
+            net_increase = 0.0
+        elif entry.payment_mode == 'Credit' and is_increase and received_amount > 0:
             # Clamp so we never set balance below zero from a single entry
             net_increase = max(0.0, amount_to_use - received_amount)
         else:
@@ -2279,7 +2284,8 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             'amount': amount_to_use,
             'notes': entry.notes,
             'created_at': entry_date,
-            'receipt_number': manual_receipt_number,
+            cfg['receipt_field']: manual_receipt_number,
+            'is_paid': entry.payment_mode == 'Cash',
             'extra_fields': {
                 'items': item_details,
                 'payment_mode': entry.payment_mode or 'Credit',
@@ -2295,7 +2301,28 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             
         db.client.table(cfg['tx_table']).insert(tx_insert).execute()
 
-        # 2b. If a Credit sale had an advance payment, record it as a PAYMENT tx too
+        # 2b. If a Cash sale/purchase, record the payment transaction too
+        if entry.payment_mode == 'Cash' and is_increase:
+            payment_tx = {
+                'username': username,
+                'ledger_id': ledger_id,
+                'transaction_type': 'PAYMENT',
+                'amount': amount_to_use,
+                'notes': f'Cash paid for bill #{manual_receipt_number}' if entry.party_type == 'vendor' else f'Cash payment for bill #{manual_receipt_number}',
+                'created_at': entry_date,
+                cfg['receipt_field']: manual_receipt_number,
+                'is_paid': True,
+                'extra_fields': {
+                    'payment_mode': 'Cash',
+                    'is_manual_entry': True,
+                    'linked_bill': manual_receipt_number,
+                }
+            }
+            if entry.party_type == 'customer':
+                payment_tx['payment_mode'] = 'Cash'
+            db.client.table(cfg['tx_table']).insert(payment_tx).execute()
+
+        # 2c. If a Credit sale had an advance payment, record it as a PAYMENT tx too
         if entry.payment_mode == 'Credit' and is_increase and received_amount > 0:
             payment_tx = {
                 'username': username,
@@ -2304,7 +2331,8 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 'amount': received_amount,
                 'notes': f'Advance payment on bill #{manual_receipt_number}',
                 'created_at': entry_date,
-                'receipt_number': manual_receipt_number,
+                cfg['receipt_field']: manual_receipt_number,
+                'is_paid': True,
                 'extra_fields': {
                     'payment_mode': 'Cash',
                     'is_manual_entry': True,
