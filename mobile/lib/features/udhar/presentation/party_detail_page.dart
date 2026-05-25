@@ -19,6 +19,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
+import 'widgets/add_party_entry_sheet.dart';
+import 'pages/item_catalogue_page.dart';
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -111,6 +113,260 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     return _transactions!
         .where((tx) => tx.transactionType == 'PAYMENT')
         .fold(0.0, (sum, tx) => sum + tx.amount);
+  }
+
+  void _showBillingOptionsSheet(BuildContext context, CustomerLedger currentLedger) {
+    HapticFeedback.lightImpact();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: context.backgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: context.borderColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(LucideIcons.x, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: context.surfaceColor,
+                      side: BorderSide(color: context.borderColor),
+                    ),
+                  ),
+                  const Text(
+                    'NEW BILL',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Spacer to balance the X button
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Title Section
+              Text(
+                'How would you like to bill?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: context.textColor,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.textSecondaryColor,
+                    fontFamily: 'Outfit',
+                  ),
+                  children: [
+                    const TextSpan(text: 'Choose a billing method for '),
+                    TextSpan(
+                      text: currentLedger.customerName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: context.textColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Option 1: Scan Bill (AI Camera)
+              _buildBillingOptionCard(
+                context: context,
+                title: 'Scan Bill (AI Camera)',
+                description: 'Snap paper bill to extract items instantly',
+                icon: LucideIcons.scanLine,
+                color: const Color(0xFF6366F1), // Indigo
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/upload', extra: {
+                    'customerName': currentLedger.customerName,
+                  });
+                },
+                isDark: isDark,
+              ),
+
+              // Option 2: Quick Bill (Catalogue)
+              _buildBillingOptionCard(
+                context: context,
+                title: 'Quick Bill (Catalogue)',
+                description: 'Choose items from your catalogue list',
+                icon: LucideIcons.shoppingCart,
+                color: const Color(0xFF10B981), // Emerald Green
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final result = await Navigator.push<List<CatalogueCartItem>>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ItemCataloguePage(selectionMode: true),
+                    ),
+                  );
+                  if (result != null && result.isNotEmpty && context.mounted) {
+                    final completed = await showModalBottomSheet<bool>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => AddPartyEntrySheet(
+                        initialItems: result,
+                        initialCustomer: currentLedger,
+                      ),
+                    );
+                    if (completed == true) {
+                      _loadTransactions();
+                    }
+                  }
+                },
+                isDark: isDark,
+              ),
+
+              // Option 3: Manual Bill (Type Details)
+              _buildBillingOptionCard(
+                context: context,
+                title: 'Manual Entry (Type)',
+                description: 'Enter total amount or custom items directly',
+                icon: LucideIcons.edit3,
+                color: const Color(0xFFF59E0B), // Amber
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final completed = await showModalBottomSheet<bool>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => AddPartyEntrySheet(
+                      initialCustomer: currentLedger,
+                    ),
+                  );
+                  if (completed == true) {
+                    _loadTransactions();
+                  }
+                },
+                isDark: isDark,
+              ),
+              SizedBox(height: MediaQuery.of(ctx).padding.bottom + 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBillingOptionCard({
+    required BuildContext context,
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: context.textColor,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textSecondaryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                LucideIcons.chevronRight,
+                color: context.textSecondaryColor.withValues(alpha: 0.5),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showAddPaymentDialog(BuildContext context) {
@@ -1181,9 +1437,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             Expanded(
               flex: 2,
               child: ElevatedButton.icon(
-                icon: const Icon(LucideIcons.scanLine, size: 18, color: Colors.white),
+                icon: const Icon(LucideIcons.receipt, size: 18, color: Colors.white),
                 label: const Text(
-                  'SCAN BILL',
+                  'NEW BILL',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -1192,18 +1448,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1), // Indigo color for scanning
+                  backgroundColor: const Color(0xFF6366F1), // Indigo color
                   minimumSize: const Size(0, 52),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                onPressed: () {
-                  context.push('/upload', extra: {
-                    'customerName': currentLedger.customerName,
-                  });
-                },
+                onPressed: () => _showBillingOptionsSheet(context, currentLedger),
               ),
             ),
             const SizedBox(width: 8),

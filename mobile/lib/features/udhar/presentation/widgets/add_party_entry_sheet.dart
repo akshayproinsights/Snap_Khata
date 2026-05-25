@@ -22,7 +22,17 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class AddPartyEntrySheet extends ConsumerStatefulWidget {
   final List<CatalogueCartItem>? initialItems;
-  const AddPartyEntrySheet({super.key, this.initialItems});
+  final CustomerLedger? initialCustomer;
+  final VendorLedger? initialVendor;
+  final String? initialPartyType;
+
+  const AddPartyEntrySheet({
+    super.key,
+    this.initialItems,
+    this.initialCustomer,
+    this.initialVendor,
+    this.initialPartyType,
+  });
 
   @override
   ConsumerState<AddPartyEntrySheet> createState() => _AddPartyEntrySheetState();
@@ -33,13 +43,22 @@ class _ManualItem {
   double quantity;
   double rate;
   String unit;
+  late final TextEditingController rateController;
 
   _ManualItem({
     required this.name,
     this.quantity = 1.0,
     this.rate = 0.0,
     this.unit = 'NOS',
-  });
+  }) {
+    rateController = TextEditingController(
+      text: rate > 0 ? rate.toStringAsFixed(0) : '',
+    );
+  }
+
+  void dispose() {
+    rateController.dispose();
+  }
 
   Map<String, dynamic> toJson() => {
         'item_name': name,
@@ -80,6 +99,25 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   @override
   void initState() {
     super.initState();
+    if (widget.initialPartyType != null) {
+      _partyType = widget.initialPartyType!;
+    }
+    if (widget.initialCustomer != null) {
+      _partyType = 'customer';
+      _selectedCustomer = widget.initialCustomer;
+      _partySearchController.text = widget.initialCustomer!.customerName;
+      if (widget.initialCustomer!.customerPhone != null &&
+          widget.initialCustomer!.customerPhone!.isNotEmpty) {
+        _mobileController.text = widget.initialCustomer!.customerPhone!
+            .replaceAll('+91', '')
+            .trim();
+      }
+    }
+    if (widget.initialVendor != null) {
+      _partyType = 'vendor';
+      _selectedVendor = widget.initialVendor;
+      _partySearchController.text = widget.initialVendor!.vendorName;
+    }
     if (widget.initialItems != null) {
       _items.addAll(widget.initialItems!.map((ci) => _ManualItem(
             name: ci.name,
@@ -138,6 +176,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
 
   @override
   void dispose() {
+    for (final item in _items) {
+      item.dispose();
+    }
     _totalBumpController.dispose();
     _partySearchController.dispose();
     _flatAmountController.dispose();
@@ -174,50 +215,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     }
   }
 
-  void _addCatalogueItem(CatalogueItem item) {
-    setState(() {
-      final existingIndex = _items.indexWhere((it) => it.name == item.itemName);
-      if (existingIndex >= 0) {
-        _items[existingIndex].quantity += 1.0;
-      } else {
-        _items.add(_ManualItem(
-          name: item.itemName,
-          rate: item.lastPrice,
-          unit: item.unit,
-          quantity: 1.0,
-        ));
-      }
-    });
-    HapticFeedback.lightImpact();
-    _bumpTotal();
-  }
 
-  /// Merges items returned from the catalogue cart picker into the line items.
-  /// If the same item already exists, its quantity is incremented.
-  void _mergeCatalogueCart(List<CatalogueCartItem> cartItems) {
-    setState(() {
-      for (final ci in cartItems) {
-        final existingIndex =
-            _items.indexWhere((it) => it.name == ci.name);
-        if (existingIndex >= 0) {
-          _items[existingIndex].quantity += ci.qty.toDouble();
-        } else {
-          _items.add(_ManualItem(
-            name: ci.name,
-            rate: ci.rate,
-            unit: ci.unit,
-            quantity: ci.qty.toDouble(),
-          ));
-        }
-      }
-    });
-    HapticFeedback.mediumImpact();
-    _bumpTotal();
-    AppToast.showSuccess(
-      context,
-      '${cartItems.length} item${cartItems.length == 1 ? '' : 's'} added ✅',
-    );
-  }
 
   Future<void> _submit({bool shareOnWhatsApp = false}) async {
     final partyName = _partySearchController.text.trim();
@@ -342,8 +340,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               phone: phone,
               message: message,
             );
-            // After WhatsApp sheet, open party detail if we have an id
-            if (mounted && ledgerId != null && _partyType == 'customer') {
+            // After WhatsApp sheet, open party detail if we have an id AND did not start from detail page
+            if (mounted && ledgerId != null && _partyType == 'customer' && widget.initialCustomer == null) {
               _navigateToPartyDetail(ledgerId, partyName);
             }
           } else {
@@ -352,8 +350,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                 ? 'Entry saved! Bill #$receiptNum 🎉'
                 : 'Entry added successfully! 🎉';
             AppToast.showSuccess(context, successMsg);
-            // Immediately open the party's transaction history
-            if (mounted && ledgerId != null && _partyType == 'customer') {
+            // Immediately open the party's transaction history if not already inside it
+            if (mounted && ledgerId != null && _partyType == 'customer' && widget.initialCustomer == null) {
               _navigateToPartyDetail(ledgerId, partyName);
             }
           }
@@ -613,227 +611,308 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Party Type Toggle
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.borderColor, width: 0.5),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _partyType = 'customer';
-                                _selectedCustomer = null;
-                                _selectedVendor = null;
-                                _partySearchController.clear();
-                                _mobileController.clear();
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _partyType == 'customer'
-                                    ? context.primaryColor
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    LucideIcons.user,
-                                    size: 16,
-                                    color: _partyType == 'customer'
-                                        ? Colors.white
-                                        : context.textSecondaryColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Customer',
-                                    style: TextStyle(
-                                      color: _partyType == 'customer'
-                                          ? Colors.white
-                                          : context.textColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _partyType = 'vendor';
-                                _selectedCustomer = null;
-                                _selectedVendor = null;
-                                _partySearchController.clear();
-                                _mobileController.clear();
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _partyType == 'vendor'
-                                    ? context.primaryColor
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    LucideIcons.truck,
-                                    size: 16,
-                                    color: _partyType == 'vendor'
-                                        ? Colors.white
-                                        : context.textSecondaryColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Supplier',
-                                    style: TextStyle(
-                                      color: _partyType == 'vendor'
-                                          ? Colors.white
-                                          : context.textColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Party Search & Dropdown Stack
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: _partySearchController,
-                        focusNode: _partySearchFocusNode,
-                        style: TextStyle(
-                          color: context.textColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: _partyType == 'customer'
-                              ? 'Search Customer'
-                              : 'Search Supplier',
-                          hintText: 'Enter name or select...',
-                          prefixIcon: const Icon(LucideIcons.search, size: 20),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: context.borderColor),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: context.primaryColor),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          suffixIcon: _partySearchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(LucideIcons.x, size: 16),
-                                  onPressed: () {
-                                    setState(() {
-                                      _partySearchController.clear();
-                                      _selectedCustomer = null;
-                                      _selectedVendor = null;
-                                      _mobileController.clear();
-                                    });
-                                  },
-                                )
-                              : null,
+                  if (widget.initialCustomer != null || widget.initialVendor != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: context.primaryColor.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: context.primaryColor.withValues(alpha: 0.15),
+                          width: 1.5,
                         ),
                       ),
-
-                      // Suggestions overlay panel
-                      if (_showSuggestions && partySuggestions.isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(top: 8),
-                          constraints: const BoxConstraints(maxHeight: 180),
-                          decoration: BoxDecoration(
-                            color: context.surfaceColor,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: context.borderColor,
-                              width: 0.5,
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: context.primaryColor.withValues(alpha: 0.12),
+                            child: Text(
+                              _partyType == 'customer'
+                                  ? (_selectedCustomer?.customerName.isNotEmpty == true ? _selectedCustomer!.customerName[0].toUpperCase() : 'C')
+                                  : (_selectedVendor?.vendorName.isNotEmpty == true ? _selectedVendor!.vendorName[0].toUpperCase() : 'V'),
+                              style: TextStyle(
+                                color: context.primaryColor,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
                             ),
-                            boxShadow: context.premiumShadow,
                           ),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: partySuggestions.length,
-                            itemBuilder: (ctx, idx) {
-                              final p = partySuggestions[idx];
-                              final String name = _partyType == 'customer'
-                                  ? (p as CustomerLedger).customerName
-                                  : (p as VendorLedger).vendorName;
-                              final double balance = p.balanceDue;
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _partyType == 'customer'
+                                      ? _selectedCustomer!.customerName
+                                      : _selectedVendor!.vendorName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 17,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: context.primaryColor.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        _partyType == 'customer' ? 'Customer' : 'Supplier',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: context.primaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_partyType == 'customer' && _selectedCustomer!.customerPhone != null && _selectedCustomer!.customerPhone!.isNotEmpty) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _selectedCustomer!.customerPhone!,
+                                        style: TextStyle(
+                                          color: context.textSecondaryColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // Party Type Toggle
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: context.borderColor, width: 0.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _partyType = 'customer';
+                                  _selectedCustomer = null;
+                                  _selectedVendor = null;
+                                  _partySearchController.clear();
+                                  _mobileController.clear();
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: _partyType == 'customer'
+                                      ? context.primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.user,
+                                      size: 16,
+                                      color: _partyType == 'customer'
+                                          ? Colors.white
+                                          : context.textSecondaryColor,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Customer',
+                                      style: TextStyle(
+                                        color: _partyType == 'customer'
+                                            ? Colors.white
+                                            : context.textColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _partyType = 'vendor';
+                                  _selectedCustomer = null;
+                                  _selectedVendor = null;
+                                  _partySearchController.clear();
+                                  _mobileController.clear();
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: _partyType == 'vendor'
+                                      ? context.primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.truck,
+                                      size: 16,
+                                      color: _partyType == 'vendor'
+                                          ? Colors.white
+                                          : context.textSecondaryColor,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Supplier',
+                                      style: TextStyle(
+                                        color: _partyType == 'vendor'
+                                            ? Colors.white
+                                            : context.textColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: context.primaryColor
-                                      .withValues(alpha: 0.1),
-                                  child: Text(
-                                    name.isNotEmpty
-                                        ? name[0].toUpperCase()
-                                        : '',
+                    // Party Search & Dropdown Stack
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _partySearchController,
+                          focusNode: _partySearchFocusNode,
+                          style: TextStyle(
+                            color: context.textColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: _partyType == 'customer'
+                                ? 'Search Customer'
+                                : 'Search Supplier',
+                            hintText: 'Enter name or select...',
+                            prefixIcon: const Icon(LucideIcons.search, size: 20),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: context.borderColor),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: context.primaryColor),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            suffixIcon: _partySearchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(LucideIcons.x, size: 16),
+                                    onPressed: () {
+                                      setState(() {
+                                        _partySearchController.clear();
+                                        _selectedCustomer = null;
+                                        _selectedVendor = null;
+                                        _mobileController.clear();
+                                      });
+                                    },
+                                  )
+                                : null,
+                          ),
+                        ),
+
+                        // Suggestions overlay panel
+                        if (_showSuggestions && partySuggestions.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            decoration: BoxDecoration(
+                              color: context.surfaceColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: context.borderColor,
+                                width: 0.5,
+                              ),
+                              boxShadow: context.premiumShadow,
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: partySuggestions.length,
+                              itemBuilder: (ctx, idx) {
+                                final p = partySuggestions[idx];
+                                final String name = _partyType == 'customer'
+                                    ? (p as CustomerLedger).customerName
+                                    : (p as VendorLedger).vendorName;
+                                final double balance = p.balanceDue;
+
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: context.primaryColor
+                                        .withValues(alpha: 0.1),
+                                    child: Text(
+                                      name.isNotEmpty
+                                          ? name[0].toUpperCase()
+                                          : '',
+                                      style: TextStyle(
+                                        color: context.primaryColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    name,
                                     style: TextStyle(
-                                      color: context.primaryColor,
-                                      fontSize: 12,
+                                      color: context.textColor,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                ),
-                                title: Text(
-                                  name,
-                                  style: TextStyle(
-                                    color: context.textColor,
-                                    fontWeight: FontWeight.bold,
+                                  subtitle: Text(
+                                    'Balance: ₹${balance.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      color: context.textSecondaryColor,
+                                      fontSize: 12,
+                                    ),
                                   ),
-                                ),
-                                subtitle: Text(
-                                  'Balance: ₹${balance.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    color: context.textSecondaryColor,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  // Cancel the delayed hide so no double-setState
-                                  setState(() {
-                                    _partySearchController.text = name;
-                                    if (_partyType == 'customer') {
-                                      _selectedCustomer = p as CustomerLedger;
-                                      final phone = _selectedCustomer?.customerPhone ?? '';
-                                      _mobileController.text =
-                                          phone.replaceAll('+91', '').trim();
-                                    } else {
-                                      _selectedVendor = p as VendorLedger;
-                                    }
-                                    _showSuggestions = false;
-                                  });
-                                  _partySearchFocusNode.unfocus();
-                                },
-                              );
-                            },
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    // Cancel the delayed hide so no double-setState
+                                    setState(() {
+                                      _partySearchController.text = name;
+                                      if (_partyType == 'customer') {
+                                        _selectedCustomer = p as CustomerLedger;
+                                        final phone = _selectedCustomer?.customerPhone ?? '';
+                                        _mobileController.text =
+                                            phone.replaceAll('+91', '').trim();
+                                      } else {
+                                        _selectedVendor = p as VendorLedger;
+                                      }
+                                      _showSuggestions = false;
+                                    });
+                                    _partySearchFocusNode.unfocus();
+                                  },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                   if (_partyType == 'customer') ...[
                     const SizedBox(height: 20),
                     // Mobile Number + Date chip in one row label
@@ -935,166 +1014,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ),
                     ),
                   ],
-                  const SizedBox(height: 20),
 
-                  // Item catalogue chips (Customer only)
-                  if (_partyType == 'customer') ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '📦 Quick Items',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: context.textColor,
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () async {
-                            final result = await context
-                                .push<List<CatalogueCartItem>>(
-                              '/item-catalogue?mode=select',
-                            );
-                            if (result != null && result.isNotEmpty) {
-                              _mergeCatalogueCart(result);
-                            }
-                          },
-                          icon: const Icon(LucideIcons.tag, size: 14),
-                          label: const Text('My Items'),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (catalogueState.isLoading && catalogueState.items.isEmpty)
-                      SizedBox(
-                        height: 40,
-                        child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: context.primaryColor,
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (catalogueState.items.isEmpty)
-                      GestureDetector(
-                        onTap: () => context.push('/item-catalogue'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: context.primaryColor.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: context.primaryColor.withValues(alpha: 0.2),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: context.primaryColor.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  LucideIcons.packageOpen,
-                                  size: 16,
-                                  color: context.primaryColor,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'No items yet — add your products!',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.textColor,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Tap to set up your price catalogue',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: context.textSecondaryColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                LucideIcons.chevronRight,
-                                size: 16,
-                                color: context.primaryColor,
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        height: 40,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: catalogueState.items.length > 10
-                              ? 10
-                              : catalogueState.items.length,
-                          itemBuilder: (ctx, idx) {
-                            final item = catalogueState.items[idx];
-                            // Show a star if this item's price was manually set
-                            // (useCount is low relative to other items or was directly added)
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: ActionChip(
-                                avatar: Icon(
-                                  LucideIcons.plus,
-                                  size: 12,
-                                  color: context.primaryColor,
-                                ),
-                                label: Text(
-                                  '${item.itemName}  ₹${item.lastPrice.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: context.textColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                backgroundColor: context.surfaceColor,
-                                side: BorderSide(
-                                  color: context.primaryColor.withValues(alpha: 0.3),
-                                  width: 0.8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 0,
-                                ),
-                                onPressed: () => _addCatalogueItem(item),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                  ],
 
                   // Items List Header & Flat Amount input
                   if (_items.isEmpty) ...[
@@ -1203,35 +1123,130 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // Name field
+                                  // Name field with autocomplete
                                   Expanded(
                                     flex: 3,
-                                    child: TextFormField(
-                                      initialValue: item.name,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Item...',
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 12,
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: context.borderColor,
+                                    child: Autocomplete<CatalogueItem>(
+                                      displayStringForOption: (option) => option.itemName,
+                                      initialValue: TextEditingValue(text: item.name),
+                                      optionsBuilder: (TextEditingValue textEditingValue) {
+                                        if (textEditingValue.text.isEmpty) {
+                                          return const Iterable<CatalogueItem>.empty();
+                                        }
+                                        return catalogueState.items.where((CatalogueItem option) {
+                                          return option.itemName
+                                              .toLowerCase()
+                                              .contains(textEditingValue.text.toLowerCase());
+                                        });
+                                      },
+                                      onSelected: (CatalogueItem selection) {
+                                        setState(() {
+                                          item.name = selection.itemName;
+                                          item.rate = selection.lastPrice;
+                                          item.unit = selection.unit;
+                                          item.rateController.text = selection.lastPrice.toStringAsFixed(0);
+                                        });
+                                        _bumpTotal();
+                                      },
+                                      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                                        // Keep item.name in sync if the user types manually
+                                        textController.addListener(() {
+                                          item.name = textController.text;
+                                        });
+
+                                        return TextFormField(
+                                          controller: textController,
+                                          focusNode: focusNode,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
                                           ),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: context.primaryColor,
+                                          decoration: InputDecoration(
+                                            hintText: 'Item...',
+                                            contentPadding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 12,
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderSide: BorderSide(
+                                                color: context.borderColor,
+                                              ),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderSide: BorderSide(
+                                                color: context.primaryColor,
+                                              ),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
                                           ),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                      onChanged: (val) => item.name = val,
+                                          onFieldSubmitted: (val) {
+                                            onFieldSubmitted();
+                                          },
+                                        );
+                                      },
+                                      optionsViewBuilder: (context, onSelected, options) {
+                                        return Align(
+                                          alignment: Alignment.topLeft,
+                                          child: Material(
+                                            elevation: 8,
+                                            borderRadius: BorderRadius.circular(12),
+                                            shadowColor: Colors.black.withValues(alpha: 0.15),
+                                            color: context.surfaceColor,
+                                            child: Container(
+                                              width: 220,
+                                              constraints: const BoxConstraints(maxHeight: 200),
+                                              decoration: BoxDecoration(
+                                                border: Border.all(color: context.borderColor.withValues(alpha: 0.5)),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: ListView.separated(
+                                                  padding: EdgeInsets.zero,
+                                                  shrinkWrap: true,
+                                                  itemCount: options.length,
+                                                  separatorBuilder: (context, i) =>
+                                                      Divider(height: 1, color: context.borderColor.withValues(alpha: 0.5)),
+                                                  itemBuilder: (BuildContext context, int index) {
+                                                    final CatalogueItem option = options.elementAt(index);
+                                                    return InkWell(
+                                                      onTap: () => onSelected(option),
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                        child: Row(
+                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                option.itemName,
+                                                                style: const TextStyle(
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: 13,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                              '₹${option.lastPrice.toStringAsFixed(0)}',
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: context.primaryColor,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                   const SizedBox(width: 6),
@@ -1256,7 +1271,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                 if (item.quantity > 1.0) {
                                                   item.quantity -= 1.0;
                                                 } else {
-                                                  _items.removeAt(idx);
+                                                  final removed = _items.removeAt(idx);
+                                                  removed.dispose();
                                                 }
                                               });
                                               _bumpTotal();
@@ -1303,9 +1319,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   Expanded(
                                     flex: 2,
                                     child: TextFormField(
-                                      initialValue: item.rate > 0
-                                          ? item.rate.toStringAsFixed(0)
-                                          : '',
+                                      controller: item.rateController,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                         decimal: true,

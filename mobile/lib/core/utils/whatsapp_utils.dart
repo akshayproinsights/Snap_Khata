@@ -789,13 +789,10 @@ class WhatsAppUtils {
     if (receivedAmount != null) {
       final double paid = receivedAmount;
       final double pending = total - paid;
-      buffer.writeln('💳 Payment Mode: *$paymentMode*');
       buffer.writeln('✅ Amount Paid: ${formatIndianCurrency(paid)}');
       if (pending > 0.01) {
         buffer.writeln('⏳ Remaining Bill Balance: ${formatIndianCurrency(pending)}');
       }
-    } else {
-      buffer.writeln('💳 Payment: *$paymentMode*');
     }
 
     // Append running balance due only when there's an outstanding amount
