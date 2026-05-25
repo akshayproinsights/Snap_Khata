@@ -18,6 +18,7 @@ import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class AddPartyEntrySheet extends ConsumerStatefulWidget {
   final List<CatalogueCartItem>? initialItems;
@@ -275,6 +276,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       if (response.data['status'] == 'success') {
         // Extract receipt number assigned by backend
         final String? receiptNum = response.data['receipt_number']?.toString();
+        final double? newBalance = response.data['new_balance'] != null
+            ? double.tryParse(response.data['new_balance'].toString())
+            : null;
 
         // Trigger data refresh in background
         unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
@@ -294,6 +298,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
         if (mounted) {
           if (shareOnWhatsApp && _partyType == 'customer') {
             final shopProfile = ref.read(shopProvider);
+            final double receivedAmount = _entryType == 'got'
+                ? finalAmount
+                : (_paymentMode == 'Credit'
+                    ? (double.tryParse(_paidAmountController.text.trim()) ?? 0.0)
+                    : finalAmount);
+
             final message = WhatsAppUtils.buildManualBillMessage(
               customerName: partyName,
               shopName: shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Store',
@@ -308,6 +318,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   .toList(),
               total: finalAmount,
               paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
+              receivedAmount: receivedAmount,
+              balanceDue: newBalance,
             );
 
             // Resolve phone: prefer what's typed in the field, then fall
@@ -509,6 +521,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   Widget build(BuildContext context) {
     final bool isGot = _entryType == 'got';
     final Color activeColor = isGot ? context.successColor : context.primaryColor;
+    final bool isCustomer = _partyType == 'customer';
+    const Color whatsappGreen = Color(0xFF25D366);
+    final Color saveButtonColor = isCustomer ? whatsappGreen : activeColor;
 
     final customerState = ref.watch(udharProvider);
     final vendorState = ref.watch(vendorLedgerProvider);
@@ -1880,13 +1895,13 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               borderRadius: BorderRadius.circular(14),
                               gradient: LinearGradient(
                                 colors: [
-                                  activeColor,
-                                  activeColor.withValues(alpha: 0.82),
+                                  saveButtonColor,
+                                  saveButtonColor.withValues(alpha: 0.82),
                                 ],
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: activeColor.withValues(alpha: 0.3),
+                                  color: saveButtonColor.withValues(alpha: 0.3),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
@@ -1896,9 +1911,11 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               onPressed: _isLoading
                                   ? null
                                   : () => _submit(shareOnWhatsApp: true),
-                              icon: const Icon(LucideIcons.send, size: 16),
+                              icon: isCustomer
+                                  ? const FaIcon(FontAwesomeIcons.whatsapp, size: 16)
+                                  : const Icon(LucideIcons.check, size: 16),
                               label: Text(
-                                _partyType == 'customer'
+                                isCustomer
                                     ? 'SAVE + WHATSAPP'
                                     : 'SAVE',
                                 style: const TextStyle(

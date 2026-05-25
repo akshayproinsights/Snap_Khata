@@ -1494,6 +1494,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 items: selectedTx!.items,
                 total: selectedTx!.amount,
                 paymentMode: selectedTx!.paymentMode ?? 'Credit',
+                receivedAmount: selectedTx!.receivedAmount,
                 balanceDue: _computedBalance,
               );
             } else {

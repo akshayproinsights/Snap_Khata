@@ -754,6 +754,7 @@ class WhatsAppUtils {
     required List<Map<String, dynamic>> items,
     required double total,
     required String paymentMode,
+    double? receivedAmount,
     double? balanceDue,
   }) {
     final cleanName = _cleanDisplayName(customerName);
@@ -779,17 +780,27 @@ class WhatsAppUtils {
         buffer.writeln('• *$name* × $qtyStr $unit @ $rateFmt — *$amountFmt*');
       }
       buffer.writeln();
-      buffer.writeln('*Total: $totalFmt*');
+      buffer.writeln('*Total Bill: $totalFmt*');
     } else {
       // No item breakdown — just show the total cleanly
       buffer.writeln('📋 *Bill Amount: $totalFmt*');
     }
 
-    buffer.writeln('💳 Payment: *$paymentMode*');
+    if (receivedAmount != null) {
+      final double paid = receivedAmount;
+      final double pending = total - paid;
+      buffer.writeln('💳 Payment Mode: *$paymentMode*');
+      buffer.writeln('✅ Amount Paid: ${formatIndianCurrency(paid)}');
+      if (pending > 0.01) {
+        buffer.writeln('⏳ Remaining Bill Balance: ${formatIndianCurrency(pending)}');
+      }
+    } else {
+      buffer.writeln('💳 Payment: *$paymentMode*');
+    }
 
     // Append running balance due only when there's an outstanding amount
     if (balanceDue != null && balanceDue > 0.01) {
-      buffer.writeln('\n⚠️ *Balance Due: ${formatIndianCurrency(balanceDue)}*');
+      buffer.writeln('\n⚠️ *Total Balance Due: ${formatIndianCurrency(balanceDue)}*');
     }
 
     buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
