@@ -692,7 +692,7 @@ class HomeDashboardPage extends ConsumerWidget {
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              builder: (context) => const BillTypeSelectionSheet(),
+              builder: (_) => BillTypeSelectionSheet(parentContext: context),
             );
           },
           borderRadius: BorderRadius.circular(28),

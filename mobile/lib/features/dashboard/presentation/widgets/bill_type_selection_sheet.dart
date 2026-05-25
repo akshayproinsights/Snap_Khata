@@ -12,7 +12,8 @@ import 'package:flutter/services.dart';
 enum BillScanType { customer, supplier, quickBill }
 
 class BillTypeSelectionSheet extends ConsumerStatefulWidget {
-  const BillTypeSelectionSheet({super.key});
+  final BuildContext parentContext;
+  const BillTypeSelectionSheet({super.key, required this.parentContext});
 
   @override
   ConsumerState<BillTypeSelectionSheet> createState() => _BillTypeSelectionSheetState();
@@ -88,15 +89,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Scan your paper bill for automatic item extraction, or record it manually.',
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Selectable Cards
           Flexible(
@@ -110,7 +103,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     context: context,
                     type: BillScanType.customer,
                     title: 'Scan Customer Bill',
-                    subtitle: 'Auto-extract sales, items & customer balance',
                     badgeText: 'Money In',
                     badgeColor: context.successColor,
                     icon: LucideIcons.user,
@@ -124,7 +116,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                     context: context,
                     type: BillScanType.supplier,
                     title: 'Scan Supplier Bill',
-                    subtitle: 'Auto-extract purchases & supplier details',
                     badgeText: 'Money Out',
                     badgeColor: context.errorColor,
                     icon: LucideIcons.truck,
@@ -163,7 +154,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       _buildSecondaryManualCard(
                         context: context,
                         title: 'Quick Bill',
-                        subtitle: 'Pick items from list',
                         icon: LucideIcons.shoppingCart,
                         onTap: () => _handleAction(BillScanType.quickBill),
                         isDark: isDark,
@@ -172,7 +162,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       _buildSecondaryManualCard(
                         context: context,
                         title: 'Manual Entry',
-                        subtitle: 'Record without items',
                         icon: LucideIcons.edit3,
                         onTap: () async {
                           Navigator.pop(context);
@@ -204,14 +193,14 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
       final result = await Navigator.push<List<CatalogueCartItem>>(
-        context,
+        widget.parentContext,
         MaterialPageRoute(
           builder: (_) => const ItemCataloguePage(selectionMode: true),
         ),
       );
-      if (result != null && result.isNotEmpty && mounted) {
+      if (result != null && result.isNotEmpty && widget.parentContext.mounted) {
         await showModalBottomSheet(
-          context: context,
+          context: widget.parentContext,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (context) => AddPartyEntrySheet(initialItems: result),
@@ -223,9 +212,9 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     // Give a small delay for the selection animation to be visible
     await Future.delayed(const Duration(milliseconds: 150));
     
-    if (!mounted) return;
+    if (!mounted || !widget.parentContext.mounted) return;
 
-    final router = GoRouter.of(context);
+    final router = GoRouter.of(widget.parentContext);
     
     // Close the bottom sheet first
     Navigator.pop(context);
@@ -236,10 +225,11 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
         : await router.pushNamed('inventory-upload');
     
     // If the user successfully completed a scan/save, result should be true
-    if (result == true && mounted) {
-      // Trigger global refresh via providers
-      ref.invalidate(recentActivitiesProvider);
-      ref.invalidate(dashboardTotalsProvider);
+    if (result == true && widget.parentContext.mounted) {
+      // Trigger global refresh via providers using parentContext's provider container
+      final container = ProviderScope.containerOf(widget.parentContext);
+      container.invalidate(recentActivitiesProvider);
+      container.invalidate(dashboardTotalsProvider);
     }
   }
 
@@ -248,7 +238,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     required BuildContext context,
     required BillScanType type,
     required String title,
-    required String subtitle,
     required String badgeText,
     required Color badgeColor,
     required IconData icon,
@@ -309,49 +298,33 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: isSelected ? Colors.white : context.textColor,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.white.withValues(alpha: 0.25)
-                              : badgeColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          badgeText,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: isSelected ? Colors.white : badgeColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
                   Text(
-                    subtitle,
+                    title,
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: isSelected ? Colors.white : context.textColor,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.white.withValues(alpha: 0.85)
-                          : context.textSecondaryColor,
+                          ? Colors.white.withValues(alpha: 0.25)
+                          : badgeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? Colors.white : badgeColor,
+                      ),
                     ),
                   ),
                 ],
@@ -374,7 +347,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
   Widget _buildSecondaryManualCard({
     required BuildContext context,
     required String title,
-    required String subtitle,
     required IconData icon,
     required VoidCallback onTap,
     required bool isDark,
@@ -415,17 +387,6 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: context.textColor,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: context.textSecondaryColor,
                 ),
               ),
             ],
