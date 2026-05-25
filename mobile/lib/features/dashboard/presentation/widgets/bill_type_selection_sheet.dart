@@ -6,8 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/features/activities/presentation/providers/activity_provider.dart';
 import 'package:mobile/features/udhar/presentation/widgets/add_party_entry_sheet.dart';
 import 'package:mobile/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile/features/udhar/presentation/pages/item_catalogue_page.dart';
+import 'package:flutter/services.dart';
 
-enum BillScanType { customer, supplier }
+enum BillScanType { customer, supplier, quickBill }
 
 class BillTypeSelectionSheet extends ConsumerStatefulWidget {
   const BillTypeSelectionSheet({super.key});
@@ -79,7 +81,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           
           // Body Section
           const Text(
-            'Who is this bill for?',
+            'What do you want to do?',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
@@ -88,7 +90,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Choose Customer or Supplier to start scanning.',
+            'Scan a photo or quickly pick items from your list.',
             style: TextStyle(
               color: Colors.grey,
               fontSize: 15,
@@ -103,28 +105,62 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildTypeCard(
-                    type: BillScanType.customer,
-                    title: 'Customer',
-                    subtitle: '↓ Money In',
-                    subtitleColor: context.successColor,
-                    icon: LucideIcons.user,
-                    isSelected: selectedType == BillScanType.customer,
-                    selectedColor: context.successColor,
-                    isDark: isDark,
+                  // ── Quick Bill (item catalogue) — most prominent option ──
+                  _buildQuickBillCard(context, isDark),
+                  const SizedBox(height: 12),
+
+                  // ── Divider with label ──
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: context.borderColor)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR SCAN A PHOTO',
+                          style: TextStyle(
+                            color: context.textSecondaryColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: context.borderColor)),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildTypeCard(
-                    type: BillScanType.supplier,
-                    title: 'Supplier',
-                    subtitle: '↑ Money Out',
-                    subtitleColor: context.errorColor,
-                    icon: LucideIcons.truck,
-                    isSelected: selectedType == BillScanType.supplier,
-                    selectedColor: context.errorColor,
-                    isDark: isDark,
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCompactScanCard(
+                          context: context,
+                          type: BillScanType.customer,
+                          label: 'Customer Bill',
+                          badge: 'Money In',
+                          badgeColor: context.successColor,
+                          icon: LucideIcons.user,
+                          isSelected: selectedType == BillScanType.customer,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildCompactScanCard(
+                          context: context,
+                          type: BillScanType.supplier,
+                          label: 'Supplier Bill',
+                          badge: 'Money Out',
+                          badgeColor: context.errorColor,
+                          icon: LucideIcons.truck,
+                          isSelected: selectedType == BillScanType.supplier,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
                   // Compact Manual Entry
                   Center(
                     child: Padding(
@@ -175,7 +211,19 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
 
   Future<void> _handleAction(BillScanType type) async {
     setState(() => selectedType = type);
-    
+
+    if (type == BillScanType.quickBill) {
+      HapticFeedback.mediumImpact();
+      Navigator.pop(context);
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ItemCataloguePage(selectionMode: true),
+        ),
+      );
+      return;
+    }
+
     // Give a small delay for the selection animation to be visible
     await Future.delayed(const Duration(milliseconds: 150));
     
@@ -199,46 +247,59 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
     }
   }
 
-  Widget _buildTypeCard({
-    required BillScanType type,
-    required String title,
-    required String subtitle,
-    required Color subtitleColor,
-    required IconData icon,
-    required bool isSelected,
-    required Color selectedColor,
-    required bool isDark,
-  }) {
+  /// Large, gradient hero card for Quick Bill — the most discoverable entry point.
+  Widget _buildQuickBillCard(BuildContext context, bool isDark) {
+    final isSelected = selectedType == BillScanType.quickBill;
     return GestureDetector(
-      onTap: () => _handleAction(type),
+      onTap: () => _handleAction(BillScanType.quickBill),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected
-              ? selectedColor.withValues(alpha: isDark ? 0.15 : 0.05)
-              : context.surfaceColor,
+          gradient: LinearGradient(
+            colors: isSelected
+                ? [
+                    context.primaryColor,
+                    context.primaryColor.withValues(alpha: 0.8),
+                  ]
+                : [
+                    context.primaryColor.withValues(alpha: isDark ? 0.18 : 0.07),
+                    context.primaryColor.withValues(alpha: isDark ? 0.08 : 0.03),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? selectedColor
-                : context.borderColor,
+                ? context.primaryColor
+                : context.primaryColor.withValues(alpha: 0.35),
             width: isSelected ? 2 : 1.5,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: context.primaryColor.withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: (isSelected ? selectedColor : context.textSecondaryColor)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : context.primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
-                icon,
-                color: isSelected ? selectedColor : context.textSecondaryColor,
-                size: 24,
+                LucideIcons.shoppingCart,
+                color: isSelected ? Colors.white : context.primaryColor,
+                size: 26,
               ),
             ),
             const SizedBox(width: 16),
@@ -247,30 +308,112 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    'Quick Bill',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: context.textColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: isSelected ? Colors.white : context.textColor,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    subtitle,
+                    'Pick items from your list · no photo needed',
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: subtitleColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.85)
+                          : context.textSecondaryColor,
                     ),
                   ),
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(LucideIcons.checkCircle2, color: selectedColor, size: 24),
+            Icon(
+              LucideIcons.arrowRight,
+              color: isSelected
+                  ? Colors.white
+                  : context.primaryColor,
+              size: 20,
+            ),
           ],
         ),
       ),
     );
   }
+
+  /// Compact side-by-side scan card for Customer / Supplier.
+  Widget _buildCompactScanCard({
+    required BuildContext context,
+    required BillScanType type,
+    required String label,
+    required String badge,
+    required Color badgeColor,
+    required IconData icon,
+    required bool isSelected,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      onTap: () => _handleAction(type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? badgeColor.withValues(alpha: isDark ? 0.15 : 0.06)
+              : context.surfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? badgeColor : context.borderColor,
+            width: isSelected ? 2 : 1.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isSelected ? badgeColor : context.textSecondaryColor)
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? badgeColor : context.textSecondaryColor,
+                    size: 18,
+                  ),
+                ),
+                const Spacer(),
+                if (isSelected)
+                  Icon(LucideIcons.checkCircle2, color: badgeColor, size: 18),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: context.textColor,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              badge,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: badgeColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 }

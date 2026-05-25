@@ -314,6 +314,15 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         # Sort by latest_upload_date descending (latest activity/upload first)
         ledgers.sort(key=lambda x: x.get('latest_upload_date') or '', reverse=True)
 
+        # Ensure all numeric currency fields in the response are integers (INR Zero Decimal Rule)
+        for ld in ledgers:
+            for key in ('balance_due', 'latest_bill_amount'):
+                if ld.get(key) is not None:
+                    try:
+                        ld[key] = int(round(float(ld[key])))
+                    except (ValueError, TypeError):
+                        pass
+
         return {
             "status": "success",
             "data": ledgers
@@ -510,6 +519,70 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
                 enriched_transactions.append(enriched_tx)
             else:
                 enriched_transactions.append(tx)
+
+        # ── MANUAL_CREDIT advance-payment enrichment ──────────────────────────────
+        # For Credit sales recorded via "Record Manual Entry" with an Amount Paid,
+        # the backend creates a linked PAYMENT row whose extra_fields.linked_bill
+        # equals the MANUAL_CREDIT receipt number.
+        #
+        # We embed that advance amount directly on the MANUAL_CREDIT transaction
+        # (received_amount / balance_due) so the bill card shows the correct paid/
+        # balance figures.  The linked PAYMENT rows are marked is_advance_linked=True
+        # so Flutter hides them as separate "Payment Received" cards — they are
+        # already represented inside the bill card's clarity row.
+        #
+        # NOTE: Only PAYMENT rows whose extra_fields.linked_bill is set are affected.
+        # Standalone payments recorded via the "PAYMENT" button never have this field,
+        # so they continue to appear as separate cards (correct behaviour).
+        # NOTE: Old manual entries saved before this fix have no linked_bill field —
+        # those rows are unaffected and display the old way.
+
+        # Build a map: receipt_number → total advance paid by PAYMENT rows linked to it
+        manual_advance_paid: dict = {}  # receipt_number -> float
+        manual_advance_tx_indices: dict = {}  # receipt_number -> [index in enriched_transactions]
+
+        for idx, tx in enumerate(enriched_transactions):
+            if tx.get('transaction_type') != 'PAYMENT':
+                continue
+            extra = tx.get('extra_fields') or {}
+            if not isinstance(extra, dict):
+                continue
+            linked_bill = extra.get('linked_bill')
+            if not linked_bill:
+                continue
+            amt = float(tx.get('amount') or 0)
+            linked_bill_str = str(linked_bill)
+            manual_advance_paid[linked_bill_str] = manual_advance_paid.get(linked_bill_str, 0.0) + amt
+            if linked_bill_str not in manual_advance_tx_indices:
+                manual_advance_tx_indices[linked_bill_str] = []
+            manual_advance_tx_indices[linked_bill_str].append(idx)
+
+        # Mark linked PAYMENT rows as advance-linked (Flutter will hide them)
+        for receipt_num, indices in manual_advance_tx_indices.items():
+            for idx in indices:
+                enriched_transactions[idx] = dict(enriched_transactions[idx])
+                enriched_transactions[idx]['is_advance_linked'] = True
+
+        # Embed received_amount / balance_due on each MANUAL_CREDIT tx that has a linked advance
+        for idx, tx in enumerate(enriched_transactions):
+            if tx.get('transaction_type') != 'MANUAL_CREDIT':
+                continue
+            receipt_num = tx.get('receipt_number')
+            if not receipt_num:
+                continue
+            receipt_num_str = str(receipt_num)
+            advance = manual_advance_paid.get(receipt_num_str, 0.0)
+            if advance <= 0:
+                continue  # No advance payment linked — leave as-is
+            bill_amount = float(tx.get('amount') or 0)
+            effective_received = min(advance, bill_amount)
+            effective_balance = max(0.0, bill_amount - effective_received)
+            enriched_tx = dict(tx)
+            enriched_tx['received_amount'] = effective_received
+            enriched_tx['balance_due'] = effective_balance
+            enriched_tx['is_paid'] = (effective_balance <= 0)
+            enriched_transactions[idx] = enriched_tx
+        # ── End MANUAL_CREDIT advance-payment enrichment ──────────────────────────
                 
         # Re-sort because injected dummy payments will be out of order
         # Now uses a unified sort key (Transaction Date > System Date)
@@ -549,10 +622,19 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
             elif ttype == 'PAYMENT':
                 final_paid += amt
         
-        ledger['balance_due'] = max(0, final_billed - final_paid)
+        ledger['balance_due'] = int(round(max(0, final_billed - final_paid)))
         # Add extra info for the UI header
-        ledger['total_billed'] = final_billed
-        ledger['total_paid'] = final_paid
+        ledger['total_billed'] = int(round(final_billed))
+        ledger['total_paid'] = int(round(final_paid))
+
+        # Ensure all numeric currency fields in the response are integers (INR Zero Decimal Rule)
+        for tx in enriched_transactions:
+            for key in ('amount', 'received_amount', 'balance_due', 'invoice_balance_due'):
+                if tx.get(key) is not None:
+                    try:
+                        tx[key] = int(round(float(tx[key])))
+                    except (ValueError, TypeError):
+                        pass
 
         return {
             "status": "success",
@@ -778,6 +860,22 @@ async def get_all_customer_transactions(limit: int = 50, current_user: Dict = De
         # This ensures: newest actual transactions (by bill date) appear first,
         # with system creation/upload time as a tie-breaker for same-day entries.
         unified_txs.sort(key=get_transaction_sort_key, reverse=True)
+
+        # Ensure all numeric currency fields in the response are integers (INR Zero Decimal Rule)
+        for tx in unified_txs:
+            for key in ('amount', 'received_amount', 'balance_due', 'invoice_balance_due'):
+                if tx.get(key) is not None:
+                    try:
+                        tx[key] = int(round(float(tx[key])))
+                    except (ValueError, TypeError):
+                        pass
+            if 'customer_ledgers' in tx and isinstance(tx['customer_ledgers'], dict):
+                cl = tx['customer_ledgers']
+                if cl.get('balance_due') is not None:
+                    try:
+                        cl['balance_due'] = int(round(float(cl['balance_due'])))
+                    except (ValueError, TypeError):
+                        pass
 
         return {
             "status": "success",

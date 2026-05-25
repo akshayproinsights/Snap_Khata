@@ -1098,7 +1098,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     builder: (context) {
                       // Sort newest-first so the most recent activity is always visible
                       // without scrolling — matches Khatabook / Vyapar UX convention.
-                      final visibleTxs = _transactions!.toList()
+                      //
+                      // Advance PAYMENT rows (is_advance_linked=true) are excluded from
+                      // the visible list because they are already shown inline on the bill
+                      // card's "Bill Amount / Paid / Balance" clarity row. Showing them as
+                      // a separate "Payment Received" card would be redundant.
+                      // They are still present in _transactions for summary calculations.
+                      final visibleTxs = _transactions!
+                          .where((tx) => !tx.isAdvanceLinked)
+                          .toList()
                         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
                       if (visibleTxs.isEmpty) return _buildEmptyState();
                       return ListView.separated(

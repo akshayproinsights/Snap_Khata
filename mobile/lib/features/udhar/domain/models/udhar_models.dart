@@ -92,6 +92,9 @@ class LedgerTransaction {
   final double? receivedAmount;
   final List<Map<String, dynamic>> items; // item breakdown for manual entries
   final bool isManualEntry;
+  // True when this PAYMENT row is an advance linked to a MANUAL_CREDIT bill.
+  // Flutter hides these from the card list — the amount is shown inline on the bill card.
+  final bool isAdvanceLinked;
 
   LedgerTransaction({
     required this.id,
@@ -109,6 +112,7 @@ class LedgerTransaction {
     this.receivedAmount,
     this.items = const [],
     this.isManualEntry = false,
+    this.isAdvanceLinked = false,
   });
 
   // Getters for backwards compatibility
@@ -152,6 +156,7 @@ class LedgerTransaction {
           : null,
       items: parsedItems,
       isManualEntry: parsedIsManual,
+      isAdvanceLinked: json['is_advance_linked'] == true,
     );
   }
 }
