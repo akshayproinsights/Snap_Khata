@@ -673,14 +673,11 @@ class _InventoryInvoiceReviewPageState
       return providerItemById[bundleItem.id] ?? bundleItem;
     }).toList();
 
-    final sortedItems = List<InventoryItem>.from(currentItems);
-    sortedItems.sort((a, b) {
-      final aMis = a.amountMismatch.abs() > 1.0;
-      final bMis = b.amountMismatch.abs() > 1.0;
-      if (aMis && !bMis) return -1;
-      if (!aMis && bMis) return 1;
-      return a.id.compareTo(b.id);
-    });
+    // Sort by ID to preserve the original receipt serial order.
+    // Mismatch items are highlighted visually in their original position,
+    // so SMBs can easily cross-check against the physical receipt.
+    final sortedItems = List<InventoryItem>.from(currentItems)
+      ..sort((a, b) => a.id.compareTo(b.id));
 
     final hasPerItemDiscount = sortedItems.any(
       (i) => (i.discAmount ?? 0.0) > 0.01 || (i.discPercent ?? 0.0) > 0.01,

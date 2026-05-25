@@ -53,6 +53,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   final _flatAmountController = TextEditingController();
   final _notesController = TextEditingController();
   final _mobileController = TextEditingController();
+  final _paidAmountController = TextEditingController();
   final FocusNode _partySearchFocusNode = FocusNode();
   final FocusNode _mobileFocusNode = FocusNode();
 
@@ -133,6 +134,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _notesController.dispose();
     _partySearchFocusNode.dispose();
     _mobileController.dispose();
+    _paidAmountController.dispose();
     _mobileFocusNode.dispose();
     super.dispose();
   }
@@ -141,95 +143,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     if (!_totalBumpController.isAnimating) {
       _totalBumpController.forward(from: 0);
     }
-  }
-
-  /// Prompts the user to enter a WhatsApp number when none is stored.
-  Future<String?> _promptPhoneNumber(BuildContext ctx) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: ctx,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: ctx.surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: ctx.borderColor, width: 0.5),
-        ),
-        title: Row(
-          children: [
-            const Text('📱 ', style: TextStyle(fontSize: 22)),
-            Text(
-              'WhatsApp Number',
-              style: TextStyle(
-                color: ctx.textColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Enter the customer\'s mobile number to send the bill on WhatsApp.',
-              style: TextStyle(
-                color: ctx.textSecondaryColor,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.phone,
-              style: TextStyle(color: ctx.textColor, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                hintText: '9876543210',
-                prefixText: '+91 ',
-                prefixStyle: TextStyle(
-                  color: ctx.primaryColor,
-                  fontWeight: FontWeight.bold,
-                ),
-                hintStyle: TextStyle(color: ctx.textSecondaryColor),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: ctx.borderColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: ctx.primaryColor, width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, null),
-            child: Text(
-              'Skip',
-              style: TextStyle(color: ctx.textSecondaryColor),
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              final number = controller.text.trim();
-              Navigator.pop(dialogCtx, number.isEmpty ? null : number);
-            },
-            icon: const Icon(LucideIcons.send, size: 14),
-            label: const Text('Send'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF25D366),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   double get _computedTotal {
@@ -337,6 +250,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
         'amount': finalAmount,
         'entry_type': _entryType,
         'payment_mode': _entryType == 'got' ? 'Cash' : _paymentMode,
+        if (_paymentMode == 'Credit' && _entryType == 'gave') ...{
+          'received_amount': double.tryParse(_paidAmountController.text.trim()) ?? 0.0,
+        },
         'date': _selectedDate.toUtc().toIsoformat(),
         'notes': _notesController.text.trim(),
         'items': _items.map((it) => it.toJson()).toList(),
@@ -385,6 +301,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
             );
 
+            // Resolve phone: prefer what's typed in the field, then fall
+            // back to the customer's stored number.  shareReceipt() will
+            // show a single prompt if still empty — no double-dialog.
             String phone = _mobileController.text.trim();
             if (phone.isEmpty) {
               phone = _selectedCustomer?.customerPhone ?? '';
@@ -393,15 +312,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               phone = '+91$phone';
             }
 
-            // If no phone saved, prompt the user to enter one before sharing
-            if (phone.isEmpty && mounted) {
-              phone = await _promptPhoneNumber(context) ?? '';
-            }
-
             if (!mounted) return;
             // Close manual entry sheet
             Navigator.of(context).pop(true);
-            // Show WhatsApp share sheet
+            // Show WhatsApp share sheet (handles missing phone with one prompt)
             await WhatsAppUtils.shareReceipt(
               context,
               phone: phone,
@@ -454,7 +368,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     context.push('/party/$ledgerId', extra: ledger);
   }
 
-  Widget _buildMobileNumberField(BuildContext context) {
+  /// Builds the mobile number input row (without the label — label is
+  /// rendered inline with the date chip above it).
+  Widget _buildMobileNumberFieldNoLabel(BuildContext context) {
     final phoneVal = _mobileController.text;
     final isValid = phoneVal.length == 10;
     final isEmpty = phoneVal.isEmpty;
@@ -462,22 +378,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(LucideIcons.smartphone, size: 14, color: context.primaryColor),
-            const SizedBox(width: 6),
-            Text(
-              'MOBILE NUMBER',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-                color: context.primaryColor,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -593,114 +493,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             ),
           ),
       ],
-    );
-  }
-
-  /// Builds the unified transaction mode selector row for customer entries.
-  /// Layout: [Credit Sale] [Cash Sale] [UPI Sale] [Payment Received]
-  Widget _buildTransactionModeRow(BuildContext context) {
-    // Each entry: (label, paymentMode or null, entryType, icon, color)
-    final modes = [
-      (
-        label: 'Credit',
-        sub: 'Sale',
-        mode: 'Credit',
-        type: 'gave',
-        icon: LucideIcons.creditCard,
-        color: context.primaryColor,
-      ),
-      (
-        label: 'Cash',
-        sub: 'Sale',
-        mode: 'Cash',
-        type: 'gave',
-        icon: LucideIcons.banknote,
-        color: const Color(0xFF16A34A),
-      ),
-      (
-        label: 'UPI',
-        sub: 'Sale',
-        mode: 'UPI',
-        type: 'gave',
-        icon: LucideIcons.smartphone,
-        color: const Color(0xFF7C3AED),
-      ),
-      (
-        label: 'Payment',
-        sub: 'Received',
-        mode: 'Cash',
-        type: 'got',
-        icon: LucideIcons.arrowDownLeft,
-        color: context.successColor,
-      ),
-    ];
-
-    return Row(
-      children: modes.map((m) {
-        final isSelected = _entryType == m.type &&
-            (m.type == 'got' || _paymentMode == m.mode);
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() {
-                  _entryType = m.type;
-                  if (m.type == 'gave') _paymentMode = m.mode;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? m.color.withValues(alpha: 0.10)
-                      : context.surfaceColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected
-                        ? m.color
-                        : context.borderColor.withValues(alpha: 0.6),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      m.icon,
-                      size: 18,
-                      color: isSelected ? m.color : context.textSecondaryColor,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      m.label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: isSelected ? m.color : context.textColor,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    Text(
-                      m.sub,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected
-                            ? m.color.withValues(alpha: 0.7)
-                            : context.textSecondaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -1020,7 +812,104 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   ),
                   if (_partyType == 'customer') ...[
                     const SizedBox(height: 20),
-                    _buildMobileNumberField(context),
+                    // Mobile Number + Date chip in one row label
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Mobile number label on left
+                        Row(
+                          children: [
+                            Icon(LucideIcons.smartphone, size: 14, color: context.primaryColor),
+                            const SizedBox(width: 6),
+                            Text(
+                              'MOBILE NUMBER',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                                color: context.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        // Date pill on right — tappable
+                        GestureDetector(
+                          onTap: _selectDate,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: context.primaryColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: context.primaryColor.withValues(alpha: 0.25),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.calendar,
+                                  size: 12,
+                                  color: context.primaryColor,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _formatDate(_selectedDate),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildMobileNumberFieldNoLabel(context),
+                  ] else ...[ 
+                    // Vendor: show date pill standalone (no mobile field)
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: _selectDate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: context.primaryColor.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: context.primaryColor.withValues(alpha: 0.25),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.calendar,
+                                size: 12,
+                                color: context.primaryColor,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _formatDate(_selectedDate),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 20),
 
@@ -1517,45 +1406,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                   ],
                   const SizedBox(height: 20),
 
-                  // Date Picker Row (full width — payment mode now handled by mode selector above)
-                  GestureDetector(
-                    onTap: _selectDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor,
-                        border: Border.all(color: context.borderColor, width: 0.5),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            LucideIcons.calendar,
-                            size: 16,
-                            color: context.primaryColor,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDate(_selectedDate),
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                   // ── Transaction Mode Selector ──────────────────────────────
-                  // Single unified row: Credit Sale | Cash Sale | UPI Sale | Payment Received
-                  // The first 3 set entry_type='gave' (we sold goods / gave credit).
-                  // "Payment Received" sets entry_type='got' (customer paid us).
+                  // ── Transaction Mode Selector ──────────────────────────────
+                  // For customers: SegmentedButton matching the review page pattern.
+                  // Row 1 — sale types (Credit | Cash | UPI)
+                  // Row 2 — Payment Received (full width)
                   if (_partyType == 'customer') ...[
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
@@ -1569,8 +1423,156 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         ),
                       ),
                     ),
-                    _buildTransactionModeRow(context),
+                    // Row 1: sale-type segments
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(value: 'Credit', label: Text('Credit')),
+                              ButtonSegment(value: 'Cash', label: Text('Cash')),
+                              ButtonSegment(value: 'UPI', label: Text('UPI')),
+                            ],
+                            selected: _entryType == 'gave'
+                                ? {_paymentMode}
+                                : {'__none__'},
+                            emptySelectionAllowed: true,
+                            onSelectionChanged: (newSelection) {
+                              HapticFeedback.lightImpact();
+                              setState(() {
+                                _entryType = 'gave';
+                                _paymentMode = newSelection.first;
+                              });
+                            },
+                            style: ButtonStyle(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Row 2: Payment Received — full width
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'got',
+                                label: Text('Payment Received'),
+                                icon: Icon(LucideIcons.arrowDownLeft, size: 14),
+                              ),
+                            ],
+                            selected: _entryType == 'got' ? {'got'} : {},
+                            emptySelectionAllowed: true,
+                            onSelectionChanged: (newSelection) {
+                              HapticFeedback.lightImpact();
+                              setState(() {
+                                _entryType = newSelection.isEmpty ? 'gave' : 'got';
+                                if (_entryType == 'got') _paymentMode = 'Cash';
+                              });
+                            },
+                            style: ButtonStyle(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                                (states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return context.successColor.withValues(alpha: 0.12);
+                                  }
+                                  return null;
+                                },
+                              ),
+                              foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                                (states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return context.successColor;
+                                  }
+                                  return null;
+                                },
+                              ),
+                              side: WidgetStateProperty.resolveWith<BorderSide?>(
+                                (states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return BorderSide(color: context.successColor);
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
+                    // ── Amount Paid (Credit only) ── mirrors review page ──────
+                    if (_entryType == 'gave' && _paymentMode == 'Credit') ...[
+                      Builder(builder: (context) {
+                        final total = _items.isEmpty
+                            ? (double.tryParse(_flatAmountController.text.trim()) ?? 0.0)
+                            : _computedTotal;
+                        final paid = double.tryParse(_paidAmountController.text.trim()) ?? 0.0;
+                        final balance = (total - paid).clamp(0.0, double.infinity);
+                        return Row(
+                          children: [
+                            // Total display
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Total Bill',
+                                      style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '₹${total.toStringAsFixed(0)}',
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Amount paid input
+                            SizedBox(
+                              width: 110,
+                              child: TextField(
+                                controller: _paidAmountController,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                                onChanged: (_) => setState(() {}),
+                                decoration: InputDecoration(
+                                  labelText: 'Paid Now',
+                                  labelStyle: TextStyle(fontSize: 10, color: context.textSecondaryColor),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Balance
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('Balance Due',
+                                    style: TextStyle(fontSize: 11, color: context.textSecondaryColor)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₹${balance.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: balance > 0 ? context.errorColor : context.successColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                    ],
                   ] else ...[
                     // For vendors: keep simple YOU GOT / YOU GAVE
                     Row(

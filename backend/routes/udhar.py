@@ -238,10 +238,12 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
             rn = tx.get('receipt_number')
             if ttype in ('INVOICE', 'MANUAL_CREDIT'):
                 expected[lid] += amt
-                # If this INVOICE has a received_amount in verified_invoices
-                # but no corresponding PAYMENT transaction yet, deduct it now
-                # so the list balance matches what the detail view computes.
-                if rn and rn not in receipts_with_payment_tx:
+                # Only INVOICE transactions exist in verified_invoices.
+                # MANUAL_CREDIT entries are manual — they are NOT in verified_invoices,
+                # so we must never apply the vi_received enrichment to them.
+                # Doing so defaults payment_mode to 'Cash' and incorrectly subtracts
+                # the full amount, making the balance appear smaller than it really is.
+                if ttype == 'INVOICE' and rn and rn not in receipts_with_payment_tx:
                     already_received = vi_received.get(rn, 0.0)
                     pmode = vi_modes.get(rn, 'Cash')
                     if pmode.strip().lower() != 'credit' and already_received == 0:
@@ -295,12 +297,19 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                     ld['latest_bill_amount'] = latest_tx.get('amount')
                     ld['latest_bill_date'] = latest_tx.get('created_at')
 
-            # Calculate latest upload date for sorting and display
-            # We prefer upload_date from verified_invoices, fallback to created_at
+            # Calculate latest upload date for sorting and display.
+            # Priority order:
+            #   1. upload_date from verified_invoices (scanned bills)
+            #   2. created_at from ledger_transactions (transaction system time)
+            #   3. updated_at on the ledger itself — this is set to server `now` by
+            #      create_manual_entry, so including it ensures manual entries always
+            #      float to the top of the list even when the user-selected entry date
+            #      is in the past.
             ledger_upload_dates = [vi_uploads.get(tx['receipt_number']) for tx in ledger_txs if tx.get('receipt_number') in vi_uploads]
             ledger_fallback_dates = [tx['created_at'] for tx in ledger_txs]
-            all_possible_dates = [d for d in (ledger_upload_dates + ledger_fallback_dates) if d]
-            ld['latest_upload_date'] = max(all_possible_dates) if all_possible_dates else ld.get('updated_at') or ld.get('created_at')
+            ledger_meta_dates = [ld.get('updated_at'), ld.get('created_at')]
+            all_possible_dates = [d for d in (ledger_upload_dates + ledger_fallback_dates + ledger_meta_dates) if d]
+            ld['latest_upload_date'] = max(all_possible_dates) if all_possible_dates else ''
 
         # Sort by latest_upload_date descending (latest activity/upload first)
         ledgers.sort(key=lambda x: x.get('latest_upload_date') or '', reverse=True)
@@ -1224,6 +1233,7 @@ class ManualUdharEntry(BaseModel):
     entry_type: str # 'got' (You Got) or 'gave' (You Gave)
     notes: Optional[str] = None
     payment_mode: Optional[str] = 'Credit'
+    received_amount: Optional[float] = None  # Amount paid upfront on a Credit sale (partial/full advance)
     date: Optional[str] = None
     items: Optional[List[ManualLineItem]] = None
     mobile_number: Optional[str] = None
@@ -2081,11 +2091,20 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 .eq(cfg['name_field'], party_name_clean) \
                 .execute()
             
+        # For Credit sales with a partial/full advance payment, the net balance
+        # impact = amount_to_use (INVOICE) - received_amount (PAYMENT advance)
+        received_amount = float(entry.received_amount or 0)
+        if entry.payment_mode == 'Credit' and is_increase and received_amount > 0:
+            # Clamp so we never set balance below zero from a single entry
+            net_increase = max(0.0, amount_to_use - received_amount)
+        else:
+            net_increase = amount_to_use
+
         ledger_data = ledger_resp.data
         if ledger_data:
             ledger = ledger_data[0]
             current_balance = float(ledger.get('balance_due', 0))
-            new_balance = current_balance + amount_to_use if is_increase else current_balance - amount_to_use
+            new_balance = current_balance + net_increase if is_increase else current_balance - amount_to_use
             
             update_data = {
                 'balance_due': new_balance,
@@ -2106,7 +2125,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             db.client.table(cfg['ledger_table']).update(update_data).eq('id', ledger['id']).execute()
             ledger_id = ledger['id']
         else:
-            new_balance = amount_to_use if is_increase else -amount_to_use
+            new_balance = net_increase if is_increase else -amount_to_use
             insert_data = {
                 'username': username,
                 cfg['name_field']: party_name_clean,
@@ -2177,7 +2196,27 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
             tx_insert['payment_mode'] = entry.payment_mode or 'Credit'
             
         db.client.table(cfg['tx_table']).insert(tx_insert).execute()
-        
+
+        # 2b. If a Credit sale had an advance payment, record it as a PAYMENT tx too
+        if entry.payment_mode == 'Credit' and is_increase and received_amount > 0:
+            payment_tx = {
+                'username': username,
+                'ledger_id': ledger_id,
+                'transaction_type': 'PAYMENT',
+                'amount': received_amount,
+                'notes': f'Advance payment on bill #{manual_receipt_number}',
+                'created_at': entry_date,
+                'receipt_number': manual_receipt_number,
+                'extra_fields': {
+                    'payment_mode': 'Cash',
+                    'is_manual_entry': True,
+                    'linked_bill': manual_receipt_number,
+                }
+            }
+            if entry.party_type == 'customer':
+                payment_tx['payment_mode'] = 'Cash'
+            db.client.table(cfg['tx_table']).insert(payment_tx).execute()
+
         # 3. Upsert items to catalogue (self-learning)
         if entry.items and len(entry.items) > 0:
             item_names = [it.item_name.strip() for it in entry.items if it.item_name.strip()]

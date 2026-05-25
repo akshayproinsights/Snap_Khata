@@ -855,13 +855,15 @@
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                    taxableItems.forEach((item, idx) => {
+                    taxableItems.forEach((item) => {
                         const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
+                        // Use original receipt serial number (position in unfiltered items array)
+                        const srNo = items.indexOf(item) + 1;
                         itemsHtml += `
                         <tr>
-                            <td class="center">${idx + 1}</td>
+                            <td class="center">${srNo}</td>
                             <td>${item.name || 'Spare Part'}</td>
                             <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
@@ -872,13 +874,15 @@
 
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                    nonTaxableItems.forEach((item, idx) => {
+                    nonTaxableItems.forEach((item) => {
                         const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
+                        // Use original receipt serial number (position in unfiltered items array)
+                        const srNo = items.indexOf(item) + 1;
                         itemsHtml += `
                         <tr>
-                            <td class="center">${taxableItems.length + idx + 1}</td>
+                            <td class="center">${srNo}</td>
                             <td>${item.name || 'Servicing'}</td>
                             <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
@@ -1085,7 +1089,7 @@
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                    taxableItems.forEach((item, idx) => {
+                    taxableItems.forEach((item) => {
                         const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
@@ -1093,10 +1097,12 @@
                         const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
                         const gstAmountForItem = baseAmt * 0.18;
                         const totalForItem = baseAmt + gstAmountForItem;
+                        // Use original receipt serial number (position in unfiltered items array)
+                        const srNo = items.indexOf(item) + 1;
 
                         itemsHtml += `
                         <tr>
-                            <td class="center">${idx + 1}</td>
+                            <td class="center">${srNo}</td>
                             <td>${item.name || 'Spare Part'}</td>
                             <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(baseRate)}</td>
@@ -1108,7 +1114,7 @@
 
                 if (nonTaxableItems.length > 0) {
                     itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                    nonTaxableItems.forEach((item, idx) => {
+                    nonTaxableItems.forEach((item) => {
                         const qty = Number(item.qty || 1);
                         const rate = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
@@ -1116,10 +1122,12 @@
                         const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
                         const gstAmountForItem = baseAmt * 0.18;
                         const totalForItem = baseAmt + gstAmountForItem;
-                        
+                        // Use original receipt serial number (position in unfiltered items array)
+                        const srNo = items.indexOf(item) + 1;
+
                         itemsHtml += `
                         <tr>
-                            <td class="center">${taxableItems.length + idx + 1}</td>
+                            <td class="center">${srNo}</td>
                             <td>${item.name || 'Servicing'}</td>
                             <td class="center">${fmtQty(qty)}</td>
                             <td class="right">${fmtMoney(baseRate)}</td>

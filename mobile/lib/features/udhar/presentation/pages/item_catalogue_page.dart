@@ -31,7 +31,6 @@ class CatalogueCartItem {
 
 class ItemCataloguePage extends ConsumerStatefulWidget {
   /// When [selectionMode] is true the page acts as a cart picker.
-  /// Items get qty steppers. Tapping "Done" pops with the cart.
   /// When false (default) it's the standard add/edit/delete catalogue manager.
   final bool selectionMode;
 
@@ -52,7 +51,6 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
   late AnimationController _fabAnimController;
 
   // ── Cart state (selection mode only) ─────────────────────────────────────
-  /// Maps catalogue item id → quantity in cart (always ≥ 1 when present)
   final Map<int, int> _cartQty = {};
 
   int get _totalCartItems => _cartQty.values.fold(0, (sum, q) => sum + q);
@@ -66,30 +64,25 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
     return total;
   }
 
-  void _incrementCart(CatalogueItem item) {
+  void _incrementCart(int itemId) {
+    HapticFeedback.lightImpact();
+    setState(() => _cartQty[itemId] = (_cartQty[itemId] ?? 0) + 1);
+  }
+
+  void _decrementCart(int itemId) {
     HapticFeedback.lightImpact();
     setState(() {
-      _cartQty[item.id] = (_cartQty[item.id] ?? 0) + 1;
+      final current = _cartQty[itemId] ?? 0;
+      if (current <= 1) {
+        _cartQty.remove(itemId);
+      } else {
+        _cartQty[itemId] = current - 1;
+      }
     });
   }
 
-  void _decrementCart(CatalogueItem item) {
-    final current = _cartQty[item.id] ?? 0;
-    if (current <= 1) {
-      // min = 1 once added; to remove use the ✕ button
-      return;
-    }
-    HapticFeedback.lightImpact();
-    setState(() {
-      _cartQty[item.id] = current - 1;
-    });
-  }
-
-  void _removeFromCart(int itemId) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _cartQty.remove(itemId);
-    });
+  void _addToCartWithQty(int itemId, int qty) {
+    setState(() => _cartQty[itemId] = qty);
   }
 
   /// Pops the page and returns the selected items to the caller.
@@ -121,9 +114,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
       duration: const Duration(milliseconds: 300),
     )..forward();
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.trim();
-      });
+      setState(() => _searchQuery = _searchController.text.trim());
     });
   }
 
@@ -134,13 +125,18 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
     super.dispose();
   }
 
-  // ── Quick Add Bottom Sheet ──────────────────────────────────────────────────
-  void _showQuickAddSheet({CatalogueItem? item}) {
+  // ── Quick Add/Edit Bottom Sheet ──────────────────────────────────────────
+  void _showQuickAddSheet({
+    CatalogueItem? item,
+    bool autoAddToCart = false,
+    int initialQty = 1,
+  }) {
     final nameController = TextEditingController(text: item?.itemName ?? '');
     final priceController = TextEditingController(
       text: item != null ? item.lastPrice.toStringAsFixed(0) : '',
     );
     String selectedUnit = item?.unit ?? 'NOS';
+    int qty = initialQty;
     final nameFocus = FocusNode();
 
     showModalBottomSheet(
@@ -161,8 +157,8 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                       const BorderRadius.vertical(top: Radius.circular(28)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 24,
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 30,
                       offset: const Offset(0, -4),
                     ),
                   ],
@@ -170,7 +166,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Handle
+                    // Handle bar
                     Padding(
                       padding: const EdgeInsets.only(top: 12, bottom: 4),
                       child: Container(
@@ -190,8 +186,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color:
-                                  context.primaryColor.withValues(alpha: 0.12),
+                              color: context.primaryColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
@@ -204,7 +199,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            item == null ? 'Add New Item' : 'Edit Item',
+                            item == null ? 'New Custom Item' : 'Edit Item',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -214,7 +209,8 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                           ),
                           const Spacer(),
                           IconButton(
-                            icon: Icon(LucideIcons.x, color: context.textSecondaryColor),
+                            icon: Icon(LucideIcons.x,
+                                color: context.textSecondaryColor),
                             onPressed: () => Navigator.pop(ctx),
                           ),
                         ],
@@ -240,15 +236,12 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                             decoration: InputDecoration(
                               labelText: 'Item Name',
                               hintText: 'e.g. Sugar, Rice, Engine Oil…',
-                              labelStyle:
-                                  TextStyle(color: context.textSecondaryColor),
+                              labelStyle: TextStyle(
+                                  color: context.textSecondaryColor),
                               hintStyle:
                                   TextStyle(color: context.textSecondaryColor),
-                              prefixIcon: Icon(
-                                LucideIcons.tag,
-                                size: 18,
-                                color: context.primaryColor,
-                              ),
+                              prefixIcon: Icon(LucideIcons.tag,
+                                  size: 18, color: context.primaryColor),
                               filled: true,
                               fillColor: context.surfaceColor,
                               enabledBorder: OutlineInputBorder(
@@ -257,175 +250,318 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderSide:
-                                    BorderSide(color: context.primaryColor, width: 1.5),
+                                borderSide: BorderSide(
+                                    color: context.primaryColor, width: 1.5),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Price
-                          TextField(
-                            controller: priceController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d*\.?\d{0,2}'),
+                          // Price + Unit row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: priceController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                        RegExp(r'^\d*\.?\d{0,2}')),
+                                  ],
+                                  style: TextStyle(
+                                    color: context.textColor,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Price (₹)',
+                                    hintText: '0',
+                                    labelStyle: TextStyle(
+                                        color: context.textSecondaryColor),
+                                    hintStyle: TextStyle(
+                                        color: context.textSecondaryColor),
+                                    prefixIcon: Icon(LucideIcons.indianRupee,
+                                        size: 18,
+                                        color: context.primaryColor),
+                                    filled: true,
+                                    fillColor: context.surfaceColor,
+                                    enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                          color: context.borderColor),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                          color: context.primaryColor,
+                                          width: 1.5),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              // Unit picker
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: context.surfaceColor,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: context.borderColor),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: selectedUnit,
+                                    dropdownColor: context.surfaceColor,
+                                    style: TextStyle(
+                                      color: context.textColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    items: [
+                                      'NOS',
+                                      'KG',
+                                      'LITRE',
+                                      'BOX',
+                                      'PACKET',
+                                      'BAG'
+                                    ]
+                                        .map((u) => DropdownMenuItem(
+                                              value: u,
+                                              child: Text(u),
+                                            ))
+                                        .toList(),
+                                    onChanged: (u) {
+                                      if (u != null) {
+                                        setSheetState(
+                                            () => selectedUnit = u);
+                                      }
+                                    },
+                                  ),
+                                ),
                               ),
                             ],
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Your Price (₹)',
-                              hintText: '0',
-                              labelStyle:
-                                  TextStyle(color: context.textSecondaryColor),
-                              hintStyle:
-                                  TextStyle(color: context.textSecondaryColor),
-                              prefixIcon: Icon(
-                                LucideIcons.indianRupee,
-                                size: 18,
-                                color: context.primaryColor,
-                              ),
-                              filled: true,
-                              fillColor: context.surfaceColor,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide:
-                                    BorderSide(color: context.borderColor),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide:
-                                    BorderSide(color: context.primaryColor, width: 1.5),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
                           ),
-                          const SizedBox(height: 16),
-                          // Unit chips
-                          Text(
-                            'Unit',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: context.textSecondaryColor,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children:
-                                ['NOS', 'KG', 'LITRE', 'BOX', 'PACKET', 'BAG']
-                                    .map((u) {
-                              final isSelected = selectedUnit == u;
-                              return GestureDetector(
-                                onTap: () =>
-                                    setSheetState(() => selectedUnit = u),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
+
+                          // Qty stepper (in selection mode or when autoAddToCart)
+                          if (widget.selectionMode || autoAddToCart) ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Text(
+                                  'Quantity',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.textSecondaryColor,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? context.primaryColor
-                                        : context.surfaceColor,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? context.primaryColor
-                                          : context.borderColor,
+                                ),
+                                const Spacer(),
+                                // Decrement
+                                GestureDetector(
+                                  onTap: () {
+                                    if (qty > 1) {
+                                      HapticFeedback.lightImpact();
+                                      setSheetState(() => qty--);
+                                    }
+                                  },
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: qty <= 1
+                                          ? context.borderColor
+                                              .withValues(alpha: 0.4)
+                                          : context.primaryColor
+                                              .withValues(alpha: 0.12),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
+                                    child: Icon(LucideIcons.minus,
+                                        size: 18,
+                                        color: qty <= 1
+                                            ? context.textSecondaryColor
+                                                .withValues(alpha: 0.4)
+                                            : context.primaryColor),
                                   ),
+                                ),
+                                Container(
+                                  width: 52,
+                                  alignment: Alignment.center,
                                   child: Text(
-                                    u,
+                                    '$qty',
                                     style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : context.textColor,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      fontSize: 13,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      color: context.textColor,
                                     ),
                                   ),
                                 ),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 24),
-                          // Save button — full width, bold
-                          SizedBox(
-                            width: double.infinity,
-                            height: 54,
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                final name = nameController.text.trim();
-                                if (name.isEmpty) {
-                                  AppToast.showError(
-                                      ctx, 'Please enter an item name');
-                                  return;
-                                }
-                                final price =
-                                    double.tryParse(priceController.text.trim()) ??
-                                        0.0;
-
-                                bool success;
-                                if (item == null) {
-                                  success = await ref
-                                      .read(itemCatalogueProvider.notifier)
-                                      .addItem(name, price, selectedUnit);
-                                } else {
-                                  success = await ref
-                                      .read(itemCatalogueProvider.notifier)
-                                      .updateItem(
-                                          item.id, name, price, selectedUnit);
-                                }
-
-                                if (!ctx.mounted) return;
-                                Navigator.pop(ctx);
-                                if (success) {
-                                  AppToast.showSuccess(
-                                    context,
-                                    item == null
-                                        ? '✅ "$name" added to catalogue'
-                                        : '✅ Item updated',
-                                  );
-                                } else {
-                                  AppToast.showError(context, 'Failed to save item');
-                                }
-                              },
-                              icon: Icon(
-                                item == null
-                                    ? LucideIcons.plus
-                                    : LucideIcons.check,
-                                size: 18,
-                              ),
-                              label: Text(
-                                item == null ? 'Add to My Items' : 'Save Changes',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                // Increment
+                                GestureDetector(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    setSheetState(() => qty++);
+                                  },
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: context.primaryColor
+                                          .withValues(alpha: 0.12),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(LucideIcons.plus,
+                                        size: 18,
+                                        color: context.primaryColor),
+                                  ),
                                 ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: context.primaryColor,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                              ],
+                            ),
+                          ],
+
+                          const SizedBox(height: 20),
+
+                          // ── Action Buttons ──────────────────────────────
+                          if (widget.selectionMode) ...[
+                            // PRIMARY: Save & Add to Bill
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final name =
+                                      nameController.text.trim();
+                                  if (name.isEmpty) {
+                                    AppToast.showError(
+                                        ctx, 'Enter item name');
+                                    return;
+                                  }
+                                  final price = double.tryParse(
+                                          priceController.text.trim()) ??
+                                      0.0;
+
+                                  final success = await ref
+                                      .read(
+                                          itemCatalogueProvider.notifier)
+                                      .addItem(name, price, selectedUnit);
+
+                                  if (!ctx.mounted) return;
+                                  if (success) {
+                                    // Find the newly added/updated item and add to cart
+                                    final items = ref
+                                        .read(itemCatalogueProvider)
+                                        .items;
+                                    final match = items.where((i) =>
+                                        i.itemName.toLowerCase() ==
+                                        name.toLowerCase());
+                                    if (match.isNotEmpty) {
+                                      _addToCartWithQty(
+                                          match.first.id, qty);
+                                    }
+                                    Navigator.pop(ctx);
+                                    AppToast.showSuccess(
+                                        context,
+                                        '✅ "$name" added to bill (qty $qty)');
+                                  } else {
+                                    AppToast.showError(
+                                        context, 'Failed to save item');
+                                  }
+                                },
+                                icon: const Icon(LucideIcons.shoppingCart,
+                                    size: 18),
+                                label: const Text(
+                                  'Save & Add to Bill',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: context.primaryColor,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ] else ...[
+                            // Management mode: just save
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final name =
+                                      nameController.text.trim();
+                                  if (name.isEmpty) {
+                                    AppToast.showError(
+                                        ctx, 'Enter item name');
+                                    return;
+                                  }
+                                  final price = double.tryParse(
+                                          priceController.text.trim()) ??
+                                      0.0;
+
+                                  bool success;
+                                  if (item == null) {
+                                    success = await ref
+                                        .read(
+                                            itemCatalogueProvider.notifier)
+                                        .addItem(
+                                            name, price, selectedUnit);
+                                  } else {
+                                    success = await ref
+                                        .read(
+                                            itemCatalogueProvider.notifier)
+                                        .updateItem(item.id, name, price,
+                                            selectedUnit);
+                                  }
+
+                                  if (!ctx.mounted) return;
+                                  Navigator.pop(ctx);
+                                  if (success) {
+                                    AppToast.showSuccess(
+                                      context,
+                                      item == null
+                                          ? '✅ "$name" added'
+                                          : '✅ Item updated',
+                                    );
+                                  } else {
+                                    AppToast.showError(
+                                        context, 'Failed to save item');
+                                  }
+                                },
+                                icon: Icon(
+                                  item == null
+                                      ? LucideIcons.plus
+                                      : LucideIcons.check,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  item == null
+                                      ? 'Add to My Items'
+                                      : 'Save Changes',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: context.primaryColor,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -506,6 +642,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
       if (!mounted) return;
       if (success) {
         AppToast.showSuccess(context, 'Item removed');
+        _cartQty.remove(item.id);
       } else {
         AppToast.showError(context, 'Failed to remove item');
       }
@@ -518,235 +655,30 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
 
     final filteredItems = state.items.where((item) {
       if (_searchQuery.isEmpty) return true;
-      return item.itemName.toLowerCase().contains(_searchQuery.toLowerCase());
+      return item.itemName
+          .toLowerCase()
+          .contains(_searchQuery.toLowerCase());
     }).toList();
 
     final hasItems = state.items.isNotEmpty;
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: context.backgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: context.textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'My Item Catalogue',
-              style: TextStyle(
-                color: context.textColor,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: -0.5,
-              ),
-            ),
-            if (hasItems)
-              Text(
-                '${state.items.length} items · tap any to edit',
-                style: TextStyle(
-                  color: context.textSecondaryColor,
-                  fontSize: 11,
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          // Cart badge (selection mode only)
-          if (widget.selectionMode && _totalCartItems > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: context.primaryColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.shoppingCart, size: 14, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$_totalCartItems',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          // Sync button (management mode only)
-          if (!widget.selectionMode)
-            IconButton(
-              icon: _isSyncing
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation(context.textSecondaryColor),
-                      ),
-                    )
-                  : Icon(LucideIcons.refreshCw,
-                      color: context.textSecondaryColor, size: 20),
-              tooltip: 'Sync from bills',
-              onPressed: _isSyncing ? null : _handleSync,
-            ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      appBar: _buildAppBar(context, state, hasItems),
       body: Column(
         children: [
-          // ── Top action strip ─────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
-              children: [
-                // Search field
-                Expanded(
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: context.surfaceColor,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: context.borderColor, width: 0.5),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      style: TextStyle(color: context.textColor, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Search items…',
-                        hintStyle: TextStyle(
-                          color: context.textSecondaryColor,
-                          fontSize: 14,
-                        ),
-                        prefixIcon: Icon(LucideIcons.search,
-                            color: context.textSecondaryColor, size: 16),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(LucideIcons.x, size: 14),
-                                onPressed: () => _searchController.clear(),
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // ── ADD ITEM BUTTON ─────────────────────────────────────
-                GestureDetector(
-                  onTap: () => _showQuickAddSheet(),
-                  child: Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          context.primaryColor,
-                          context.primaryColor.withValues(alpha: 0.8),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: context.primaryColor.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(LucideIcons.plus, color: Colors.white, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          'Add Item',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // ── Search + Add button strip ─────────────────────────────────
+          _buildTopStrip(context),
 
-          // ── Item count bar ───────────────────────────────────────────────
-          if (hasItems)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color:
-                          context.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${state.items.length} items',
-                      style: TextStyle(
-                        color: context.primaryColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(LucideIcons.arrowDownUp,
-                      size: 12, color: context.textSecondaryColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Sorted by most used',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondaryColor),
-                  ),
-                  const Spacer(),
-                  if (_searchQuery.isNotEmpty && filteredItems.length != state.items.length)
-                    Text(
-                      '${filteredItems.length} found',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-          // ── List / Empty state ────────────────────────────────────────────
+          // ── Main content ─────────────────────────────────────────────
           Expanded(
             child: Builder(builder: (ctx) {
               if (state.isLoading && state.items.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
+                return Center(
+                    child: CircularProgressIndicator(
+                        color: context.primaryColor));
               }
-
-              if (state.items.isEmpty) {
-                return _buildEmptyState();
-              }
-
+              if (state.items.isEmpty) return _buildEmptyState();
               if (filteredItems.isEmpty) {
                 return Center(
                   child: Column(
@@ -759,7 +691,15 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                       const SizedBox(height: 12),
                       Text(
                         'No items match "$_searchQuery"',
-                        style: TextStyle(color: context.textSecondaryColor),
+                        style:
+                            TextStyle(color: context.textSecondaryColor),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: () => _showQuickAddSheet(),
+                        icon: const Icon(LucideIcons.plus, size: 16),
+                        label: Text(
+                            'Add "${_searchController.text.trim()}"'),
                       ),
                     ],
                   ),
@@ -767,22 +707,21 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
               }
 
               return ListView.builder(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                 itemCount: filteredItems.length,
                 itemBuilder: (context, index) {
                   final item = filteredItems[index];
                   if (widget.selectionMode) {
-                    return _CartItemCard(
+                    return _SelectionItemCard(
                       item: item,
                       qty: _cartQty[item.id] ?? 0,
-                      onAdd: () => _incrementCart(item),
-                      onIncrement: () => _incrementCart(item),
-                      onDecrement: () => _decrementCart(item),
-                      onRemove: () => _removeFromCart(item.id),
+                      onAdd: () => _incrementCart(item.id),
+                      onIncrement: () => _incrementCart(item.id),
+                      onDecrement: () => _decrementCart(item.id),
+                      onEdit: () => _showQuickAddSheet(item: item),
                     );
                   }
-                  return _ItemCard(
+                  return _ManageItemCard(
                     item: item,
                     onEdit: () => _showQuickAddSheet(item: item),
                     onDelete: () => _deleteItem(item),
@@ -794,41 +733,37 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
         ],
       ),
 
-      // ── Sticky bottom CTA ─────────────────────────────────────────────────
-      bottomNavigationBar: hasItems
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: widget.selectionMode
-                    ? _buildSelectionBottomBar(state.items)
-                    : SizedBox(
-                        height: 54,
-                        child: ElevatedButton.icon(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(LucideIcons.checkCircle, size: 18),
-                          label: const Text(
-                            'Done — Use These Items',
+      // ── Bottom CTA ────────────────────────────────────────────────────
+      bottomNavigationBar: widget.selectionMode
+          ? _buildSelectionBottomBar(state.items)
+          : hasItems
+              ? SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: SizedBox(
+                      height: 54,
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(LucideIcons.checkCircle, size: 18),
+                        label: const Text('Done',
                             style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.primaryColor,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                       ),
-              ),
-            )
-          : null,
+                    ),
+                  ),
+                )
+              : null,
 
-      // ── FAB (visible when scrolled, as backup) ────────────────────────────
-      floatingActionButton: hasItems
-          ? null
-          : ScaleTransition(
+      floatingActionButton: !hasItems
+          ? ScaleTransition(
               scale: CurvedAnimation(
                 parent: _fabAnimController,
                 curve: Curves.elasticOut,
@@ -838,15 +773,185 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                 backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
                 icon: const Icon(LucideIcons.plus),
-                label: const Text(
-                  'Add First Item',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                label: const Text('Add First Item',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            ),
+            )
+          : null,
     );
   }
 
+  // ── App bar ────────────────────────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context, ItemCatalogueState state, bool hasItems) {
+    final cartCount = _totalCartItems;
+    return AppBar(
+      backgroundColor: context.backgroundColor,
+      elevation: 0,
+      leading: IconButton(
+        icon: Icon(LucideIcons.arrowLeft, color: context.textColor),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.selectionMode ? 'Select Items' : 'My Items',
+            style: TextStyle(
+              color: context.textColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              letterSpacing: -0.5,
+            ),
+          ),
+          if (hasItems)
+            Text(
+              widget.selectionMode
+                  ? '${state.items.length} items · tap to add to bill'
+                  : '${state.items.length} items · tap to edit',
+              style: TextStyle(
+                color: context.textSecondaryColor,
+                fontSize: 11,
+              ),
+            ),
+        ],
+      ),
+      actions: [
+        if (widget.selectionMode && cartCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: context.primaryColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.shoppingCart,
+                        size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$cartCount',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (!widget.selectionMode)
+          IconButton(
+            icon: _isSyncing
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(
+                          context.textSecondaryColor),
+                    ),
+                  )
+                : Icon(LucideIcons.refreshCw,
+                    color: context.textSecondaryColor, size: 20),
+            tooltip: 'Sync from bills',
+            onPressed: _isSyncing ? null : _handleSync,
+          ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  // ── Top strip: search + add button ─────────────────────────────────────────
+  Widget _buildTopStrip(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: context.surfaceColor,
+                borderRadius: BorderRadius.circular(14),
+                border:
+                    Border.all(color: context.borderColor, width: 0.5),
+              ),
+              child: TextField(
+                controller: _searchController,
+                style: TextStyle(color: context.textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search items…',
+                  hintStyle: TextStyle(
+                    color: context.textSecondaryColor,
+                    fontSize: 14,
+                  ),
+                  prefixIcon: Icon(LucideIcons.search,
+                      color: context.textSecondaryColor, size: 16),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(LucideIcons.x, size: 14),
+                          onPressed: () => _searchController.clear(),
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => _showQuickAddSheet(),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    context.primaryColor,
+                    context.primaryColor.withValues(alpha: 0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        context.primaryColor.withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Row(
+                children: [
+                  Icon(LucideIcons.plus, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Add Item',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Empty state ─────────────────────────────────────────────────────────────
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -867,15 +972,14 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                 ),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                LucideIcons.shoppingBag,
-                size: 52,
-                color: context.primaryColor,
-              ),
+              child: Icon(LucideIcons.shoppingBag,
+                  size: 52, color: context.primaryColor),
             ),
             const SizedBox(height: 24),
             Text(
-              'Set Your Products & Prices',
+              widget.selectionMode
+                  ? 'No Items Yet'
+                  : 'Set Your Products & Prices',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
@@ -886,7 +990,9 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
             ),
             const SizedBox(height: 10),
             Text(
-              'Add your items once.\nThey\'ll auto-fill every time you make a bill.',
+              widget.selectionMode
+                  ? 'Add your first item below to include it in this bill.'
+                  : 'Add your items once.\nThey\'ll auto-fill every time you make a bill.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -895,17 +1001,15 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
               ),
             ),
             const SizedBox(height: 32),
-            // Primary: Add manually
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
                 onPressed: () => _showQuickAddSheet(),
                 icon: const Icon(LucideIcons.plus, size: 18),
-                label: const Text(
-                  'Add My First Item',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                label: const Text('Add First Item',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: context.primaryColor,
                   foregroundColor: Colors.white,
@@ -916,7 +1020,6 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
               ),
             ),
             const SizedBox(height: 12),
-            // Secondary: Sync from bills
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -949,82 +1052,88 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
     );
   }
 
-  // ── Selection mode bottom bar ──────────────────────────────────────────
+  // ── Selection mode bottom bar ───────────────────────────────────────────────
   Widget _buildSelectionBottomBar(List<CatalogueItem> allItems) {
     final count = _totalCartItems;
     final total = _cartTotal(allItems);
     final hasCart = count > 0;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      height: 62,
-      child: ElevatedButton(
-        onPressed: hasCart ? () => _confirmCart(allItems) : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-              hasCart ? context.primaryColor : context.borderColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              hasCart ? LucideIcons.shoppingCart : LucideIcons.shoppingBag,
-              size: 18,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          height: 62,
+          child: ElevatedButton(
+            onPressed: hasCart ? () => _confirmCart(allItems) : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  hasCart ? context.primaryColor : context.borderColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
-            const SizedBox(width: 10),
-            if (hasCart) ...[
-              Text(
-                'Use $count item${count == 1 ? '' : 's'}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  hasCart
+                      ? LucideIcons.arrowRight
+                      : LucideIcons.shoppingBag,
+                  size: 18,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '₹${total.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 10),
+                if (hasCart) ...[
+                  Text(
+                    'Proceed to Billing',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ),
-            ] else
-              const Text(
-                'Tap items to add to cart',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-          ],
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$count item${count == 1 ? '' : 's'} · ₹${total.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ] else
+                  const Text(
+                    'Tap items to add to bill',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Cart Item Card (selection mode) ───────────────────────────────────────
-class _CartItemCard extends StatelessWidget {
-  const _CartItemCard({
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Selection Mode Item Card ──────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+class _SelectionItemCard extends StatelessWidget {
+  const _SelectionItemCard({
     required this.item,
     required this.qty,
     required this.onAdd,
     required this.onIncrement,
     required this.onDecrement,
-    required this.onRemove,
+    required this.onEdit,
   });
 
   final CatalogueItem item;
@@ -1032,7 +1141,7 @@ class _CartItemCard extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
-  final VoidCallback onRemove;
+  final VoidCallback onEdit;
 
   bool get _inCart => qty > 0;
 
@@ -1046,86 +1155,107 @@ class _CartItemCard extends StatelessWidget {
         color: _inCart
             ? context.primaryColor.withValues(alpha: 0.06)
             : context.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: _inCart
-              ? context.primaryColor.withValues(alpha: 0.4)
+              ? context.primaryColor.withValues(alpha: 0.45)
               : context.borderColor,
           width: _inCart ? 1.5 : 0.5,
         ),
-        boxShadow: context.premiumShadow,
+        boxShadow: _inCart ? context.premiumShadow : context.premiumShadow,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            // Left: item info
+            // ── Left: status dot + name + price ────────────────────────
             Expanded(
-              child: GestureDetector(
-                onTap: _inCart ? null : onAdd,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (_inCart) ...[
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: context.primaryColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Flexible(
-                          child: Text(
-                            item.itemName,
-                            style: TextStyle(
-                              color: context.textColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (_inCart) ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: context.primaryColor,
+                            shape: BoxShape.circle,
                           ),
                         ),
+                        const SizedBox(width: 6),
                       ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '₹${item.lastPrice.toStringAsFixed(0)} per ${item.unit}',
-                      style: TextStyle(
-                        color: context.primaryColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      Flexible(
+                        child: Text(
+                          item.itemName,
+                          style: TextStyle(
+                            color: context.textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      // Edit pencil
+                      GestureDetector(
+                        onTap: onEdit,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Icon(
+                            LucideIcons.pencil,
+                            size: 13,
+                            color: context.textSecondaryColor
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '₹${item.lastPrice.toStringAsFixed(0)} per ${item.unit}',
+                    style: TextStyle(
+                      color: context.primaryColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 12),
-            // Right: stepper or Add button
+
+            // ── Right: Add button OR inline qty stepper ─────────────────
             if (!_inCart)
               GestureDetector(
                 onTap: onAdd,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 10),
                   decoration: BoxDecoration(
                     color: context.primaryColor,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: context.primaryColor.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      )
+                    ],
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.plus, color: Colors.white, size: 14),
+                      Icon(LucideIcons.plus, color: Colors.white, size: 15),
                       SizedBox(width: 4),
                       Text(
                         'Add',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: 14,
                         ),
                       ),
                     ],
@@ -1133,80 +1263,74 @@ class _CartItemCard extends StatelessWidget {
                 ),
               )
             else
-              Row(
-                children: [
-                  // Stepper container
-                  Container(
-                    decoration: BoxDecoration(
-                      color: context.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: context.primaryColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Decrement (min = 1, so this is disabled-looking at 1)
-                        GestureDetector(
-                          onTap: onDecrement,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
-                            child: Icon(
-                              LucideIcons.minus,
-                              size: 14,
-                              color: qty <= 1
-                                  ? context.textSecondaryColor
-                                      .withValues(alpha: 0.4)
-                                  : context.primaryColor,
-                            ),
+              // Inline stepper
+              Container(
+                decoration: BoxDecoration(
+                  color: context.primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: context.primaryColor.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Decrement / Remove
+                    GestureDetector(
+                      onTap: onDecrement,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: qty == 1
+                              ? context.errorColor.withValues(alpha: 0.1)
+                              : Colors.transparent,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(13),
+                            bottomLeft: Radius.circular(13),
                           ),
                         ),
-                        // Qty
-                        Text(
+                        child: Icon(
+                          qty == 1 ? LucideIcons.trash2 : LucideIcons.minus,
+                          size: 14,
+                          color: qty == 1
+                              ? context.errorColor
+                              : context.primaryColor,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: Center(
+                        child: Text(
                           '$qty',
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
-                            fontSize: 14,
+                            fontSize: 15,
                             color: context.primaryColor,
                           ),
                         ),
-                        // Increment
-                        GestureDetector(
-                          onTap: onIncrement,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
-                            child: Icon(
-                              LucideIcons.plus,
-                              size: 14,
-                              color: context.primaryColor,
-                            ),
+                      ),
+                    ),
+                    // Increment
+                    GestureDetector(
+                      onTap: onIncrement,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color:
+                              context.primaryColor.withValues(alpha: 0.12),
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(13),
+                            bottomRight: Radius.circular(13),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Remove button
-                  GestureDetector(
-                    onTap: onRemove,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color:
-                            context.errorColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        LucideIcons.x,
-                        size: 14,
-                        color: context.errorColor,
+                        child: Icon(LucideIcons.plus,
+                            size: 14, color: context.primaryColor),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
           ],
         ),
@@ -1215,9 +1339,11 @@ class _CartItemCard extends StatelessWidget {
   }
 }
 
-// ── Extracted Item Card ───────────────────────────────────────────────────────
-class _ItemCard extends StatelessWidget {
-  const _ItemCard({
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Management Mode Item Card ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+class _ManageItemCard extends StatelessWidget {
+  const _ManageItemCard({
     required this.item,
     required this.onEdit,
     required this.onDelete,
@@ -1235,7 +1361,7 @@ class _ItemCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: context.surfaceColor,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: context.borderColor, width: 0.5),
           boxShadow: context.premiumShadow,
         ),
@@ -1243,7 +1369,7 @@ class _ItemCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              // Left: item info
+              // ── Left: name + usage ────────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1276,7 +1402,7 @@ class _ItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Right: price + unit + menu
+              // ── Right: price + edit hint + menu ────────────────────────
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -1291,19 +1417,14 @@ class _ItemCard extends StatelessWidget {
                   Text(
                     'per ${item.unit}',
                     style: TextStyle(
-                      color: context.textSecondaryColor,
-                      fontSize: 10,
-                    ),
+                        color: context.textSecondaryColor, fontSize: 10),
                   ),
                 ],
               ),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
-                icon: Icon(
-                  LucideIcons.moreVertical,
-                  color: context.textSecondaryColor,
-                  size: 18,
-                ),
+                icon: Icon(LucideIcons.moreVertical,
+                    color: context.textSecondaryColor, size: 18),
                 onSelected: (val) {
                   if (val == 'edit') onEdit();
                   if (val == 'delete') onDelete();

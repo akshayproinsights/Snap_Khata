@@ -200,6 +200,7 @@ async def update_catalogue_item(
                 db.client.table("user_item_catalogue")
                 .update(update_data)
                 .eq("id", item_id)
+                .eq("username", username)  # defence-in-depth: enforce ownership at query level
                 .execute()
             )
             if not resp.data:
@@ -249,7 +250,7 @@ async def delete_catalogue_item(
         if not check_resp.data:
             raise HTTPException(status_code=404, detail="Item not found in your catalogue")
             
-        db.client.table("user_item_catalogue").delete().eq("id", item_id).execute()
+        db.client.table("user_item_catalogue").delete().eq("id", item_id).eq("username", username).execute()  # defence-in-depth: enforce ownership at query level
         return {"success": True, "message": "Item deleted from catalogue"}
     except HTTPException:
         raise
