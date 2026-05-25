@@ -35,12 +35,14 @@ class ShopNotifier extends Notifier<ShopProfile> {
     final cachedPhone = prefs.getString('shop_phone') ?? '';
     final cachedGst = prefs.getString('shop_gst') ?? '';
     final cachedUpi = prefs.getString('shop_upi_id') ?? '';
+    final cachedWhatsAppNote = prefs.getString('whatsapp_custom_note') ?? '';
     
     developer.log('Cached shop name: "$cachedName"', name: 'ShopProvider');
     developer.log('Cached shop address: "$cachedAddress"', name: 'ShopProvider');
     developer.log('Cached shop phone: "$cachedPhone"', name: 'ShopProvider');
     developer.log('Cached shop GST: "$cachedGst"', name: 'ShopProvider');
     developer.log('Cached shop UPI: "$cachedUpi"', name: 'ShopProvider');
+    developer.log('Cached WhatsApp Note: "$cachedWhatsAppNote"', name: 'ShopProvider');
     
     state = ShopProfile(
       name: cachedName,
@@ -48,6 +50,7 @@ class ShopNotifier extends Notifier<ShopProfile> {
       phone: cachedPhone,
       gst: cachedGst,
       upiId: cachedUpi,
+      whatsappCustomNote: cachedWhatsAppNote,
     );
     developer.log('ShopNotifier.loadFromPrefs() completed', name: 'ShopProvider');
   }
@@ -68,6 +71,7 @@ class ShopNotifier extends Notifier<ShopProfile> {
           phone: (data['shop_phone'] as String?) ?? '',
           gst: (data['shop_gst'] as String?) ?? '',
           upiId: (data['shop_upi_id'] as String?) ?? '',
+          whatsappCustomNote: (data['whatsapp_custom_note'] as String?) ?? '',
         );
 
         developer.log('Parsed shop name from backend: "${newProfile.name}"', name: 'ShopProvider');
@@ -86,6 +90,7 @@ class ShopNotifier extends Notifier<ShopProfile> {
           await prefs.setString('shop_phone', newProfile.phone);
           await prefs.setString('shop_gst', newProfile.gst);
           await prefs.setString('shop_upi_id', newProfile.upiId);
+          await prefs.setString('whatsapp_custom_note', newProfile.whatsappCustomNote);
           developer.log('Updated SharedPreferences cache with new shop data', name: 'ShopProvider');
         } else {
           developer.log('Skipping backend sync because backend returned empty but local profile has data.', name: 'ShopProvider');
@@ -111,6 +116,7 @@ class ShopNotifier extends Notifier<ShopProfile> {
     await prefs.setString('shop_phone', profile.phone);
     await prefs.setString('shop_gst', profile.gst);
     await prefs.setString('shop_upi_id', profile.upiId);
+    await prefs.setString('whatsapp_custom_note', profile.whatsappCustomNote);
 
     // Save to backend
     try {
@@ -120,6 +126,7 @@ class ShopNotifier extends Notifier<ShopProfile> {
         'shop_phone': profile.phone,
         'shop_gst': profile.gst,
         'shop_upi_id': profile.upiId,
+        'whatsapp_custom_note': profile.whatsappCustomNote,
       });
       developer.log('Shop profile saved to backend successfully', name: 'ShopProvider');
     } catch (e) {

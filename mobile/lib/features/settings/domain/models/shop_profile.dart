@@ -4,6 +4,7 @@ class ShopProfile {
   final String phone;
   final String gst;
   final String upiId;
+  final String whatsappCustomNote;
 
   ShopProfile({
     this.name = '',
@@ -11,6 +12,7 @@ class ShopProfile {
     this.phone = '',
     this.gst = '',
     this.upiId = '',
+    this.whatsappCustomNote = '',
   });
 
   ShopProfile copyWith({
@@ -19,6 +21,7 @@ class ShopProfile {
     String? phone,
     String? gst,
     String? upiId,
+    String? whatsappCustomNote,
   }) {
     return ShopProfile(
       name: name ?? this.name,
@@ -26,6 +29,7 @@ class ShopProfile {
       phone: phone ?? this.phone,
       gst: gst ?? this.gst,
       upiId: upiId ?? this.upiId,
+      whatsappCustomNote: whatsappCustomNote ?? this.whatsappCustomNote,
     );
   }
 }

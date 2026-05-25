@@ -1001,6 +1001,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       paidAmount: _receivedAmount,
       pendingAmount: balanceDue,
       extraFields: resolvedExtraFields,
+      whatsappCustomNote: shopProfile.whatsappCustomNote,
     );
 
     if (!mounted) return;

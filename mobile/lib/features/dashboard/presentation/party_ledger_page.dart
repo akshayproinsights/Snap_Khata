@@ -452,6 +452,7 @@ class _InvoiceGroupTile extends ConsumerWidget {
                       totalAmount: group.totalAmount,
                       paidAmount: group.paymentMode == 'Credit' ? (group.receivedAmount ?? 0.0) : group.totalAmount,
                       pendingAmount: group.balanceDue,
+                      whatsappCustomNote: ref.read(shopProvider).whatsappCustomNote,
                     );
                     if (!context.mounted) return;
                     await WhatsAppUtils.shareReceiptWithOptions(

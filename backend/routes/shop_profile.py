@@ -17,6 +17,7 @@ class ShopProfileResponse(BaseModel):
     shop_phone: Optional[str] = ""
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
+    whatsapp_custom_note: Optional[str] = ""
 
 
 class ShopProfileRequest(BaseModel):
@@ -25,6 +26,7 @@ class ShopProfileRequest(BaseModel):
     shop_phone: Optional[str] = ""
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
+    whatsapp_custom_note: Optional[str] = ""
 
 
 @router.get("/shop-profile", response_model=ShopProfileResponse)
@@ -42,7 +44,7 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
         db = get_database_client()
         resp = (
             db.client.table("user_profiles")
-            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id")
+            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, whatsapp_custom_note")
             .eq("username", username)
             .limit(1)
             .execute()
@@ -55,6 +57,7 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
                 shop_phone=row.get("shop_phone") or "",
                 shop_gst=row.get("shop_gst") or "",
                 shop_upi_id=row.get("shop_upi_id") or "",
+                whatsapp_custom_note=row.get("whatsapp_custom_note") or "",
             )
         # No row yet — return empty defaults
         return ShopProfileResponse()
@@ -86,6 +89,7 @@ async def update_shop_profile(
                 "shop_phone": body.shop_phone or "",
                 "shop_gst": body.shop_gst or "",
                 "shop_upi_id": body.shop_upi_id or "",
+                "whatsapp_custom_note": body.whatsapp_custom_note or "",
             },
             on_conflict="username",
         ).execute()
@@ -97,6 +101,7 @@ async def update_shop_profile(
             shop_phone=body.shop_phone or "",
             shop_gst=body.shop_gst or "",
             shop_upi_id=body.shop_upi_id or "",
+            whatsapp_custom_note=body.whatsapp_custom_note or "",
         )
     except Exception as e:
         logger.error(f"Error updating shop profile for {username}: {e}")

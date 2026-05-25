@@ -1,0 +1,257 @@
+{
+    "industry": "general",
+    "display_name": "Shri Datta Loundry & Dry Cleaners",
+    "vendor_gemini": {
+        "system_instruction": "OCR extractor for Indian B2B vendor/purchase invoices. Extract ONLY what you see. No calculations. No hallucination. Missing numbers=0, missing strings='N/A'.\n\nTAX TYPE: Detect from columns: CGST%+SGST%→\"CGST_SGST\", IGST%→\"IGST\", GST%/Tax%→\"COMBINED_GST\", none→\"NONE\".\n\nHEADER: invoice_number, invoice_date(DD/MM/YYYY), vendor_name(SELLER/SUPPLIER at top — NEVER buyer/Bill-To), vendor_gstin(15-char or null), place_of_supply(state or null).\nVENDOR NAME: Largest/boldest text in top 15%. Look under From/Supplier/Seller/M/s. Never use Bill-To/Customer/Ship-To. Remove labels. Keep exact spelling.\n\nLINE ITEMS per row: description(exact as printed), hsn_code, part_number, batch, unit(NOS/KG/LTR/SET/PR/EA/BOX/PKT/BTL/TAB/AMP/MTR/SQF else NOS), quantity(numeric only, default 1), rate(pre-tax pre-discount), disc_percent(only if % visible else 0), disc_amount(only if ₹ amount visible else 0), cgst_percent, sgst_percent, igst_percent, combined_gst_percent, printed_total_amount(line total or 0), printed_total_col_header(exact column label or 'N/A').\nGLOBAL TAX RULE: If GST rate only in footer summary, apply to ALL rows.\n\nHEADER ADJUSTMENTS (footer items outside line table): adjustment_type(HEADER_DISCOUNT/ROUND_OFF/SCHEME/OTHER), amount, description.\n\nOUTPUT: Raw JSON only. No markdown.\n{\"invoice_type\":\"\",\"invoice_number\":\"\",\"invoice_date\":\"\",\"vendor_name\":\"\",\"vendor_gstin\":null,\"place_of_supply\":null,\"tax_type\":\"\",\"items\":[{\"description\":\"\",\"hsn_code\":\"\",\"part_number\":\"\",\"batch\":\"\",\"unit\":\"\",\"quantity\":0,\"rate\":0,\"disc_percent\":0,\"disc_amount\":0,\"cgst_percent\":0,\"sgst_percent\":0,\"igst_percent\":0,\"combined_gst_percent\":0,\"printed_total_amount\":0,\"printed_total_col_header\":\"\"}],\"header_adjustments\":[{\"adjustment_type\":\"\",\"amount\":0,\"description\":\"\"}]}"
+    },
+    "gemini": {
+        "system_instruction": "OCR extractor for handwritten/printed Indian sales bills. Output raw JSON only.\n\nRULES:\n- Quantities: blank=1, allow decimals. Currency: numeric only ('500/-'→500).\n- Language: If customer name is in Marathi (Devanagari script), transliterate/translate to English and output as 'English Name (Marathi Name)'. If already in English, keep as is. All other text (descriptions, etc.) keep exactly as written.\n- Marathi/Devanagari numerals (०१२३४५६७८९): always convert to English digits (0123456789) in ALL numeric fields (mobile, receipt number, amounts, quantities).\n- Receipt number: standalone number near top.\n- Date: any format → convert to 'dd-MMM-yyyy'. Year must be 2026 or beyond.\n- Customer name: person/shop name, remove salutations (Shri/Mr/Sir). Apply Marathi→English rule above.\n- Mobile: 10-digit number if present, else \"\". Convert Marathi digits to English.\n- Total bill amount: grand total at bottom, else 0.\n- Items: every row. Amount ≈ Quantity × Rate.\n\nOUTPUT:\n{\"header\":{\"receipt_number\":\"\",\"date\":\"\",\"customer_name\":\"\",\"mobile_number\":\"\",\"total_bill_amount\":0},\"items\":[{\"description\":\"\",\"quantity\":1,\"rate\":0,\"amount\":0}]}"
+    },
+    "columns": {
+        "invoice_all": [
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "visible": true,
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "customer_name",
+                "label": "Customer",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "mobile_number",
+                "label": "Mobile",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "visible": true,
+                "editable": true
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Link",
+                "type": "link",
+                "visible": true,
+                "editable": false
+            }
+        ],
+        "verify_dates": [
+            {
+                "db_column": "verification_status",
+                "label": "Status",
+                "type": "select",
+                "options": [
+                    "Pending",
+                    "Done"
+                ],
+                "editable": true
+            },
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "editable": true
+            },
+            {
+                "db_column": "audit_findings",
+                "label": "Issues",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "View",
+                "type": "link",
+                "editable": false
+            }
+        ],
+        "verify_amounts": [
+            {
+                "db_column": "verification_status",
+                "label": "Status",
+                "type": "select",
+                "options": [
+                    "Pending",
+                    "Done"
+                ],
+                "editable": true
+            },
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount_mismatch",
+                "label": "Mismatch",
+                "type": "number",
+                "editable": false
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Receipt",
+                "type": "link",
+                "editable": false
+            }
+        ],
+        "verified": [
+            {
+                "db_column": "receipt_number",
+                "label": "Receipt #",
+                "type": "string",
+                "editable": false
+            },
+            {
+                "db_column": "date",
+                "label": "Date",
+                "type": "date",
+                "editable": true
+            },
+            {
+                "db_column": "customer_name",
+                "label": "Customer",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "description",
+                "label": "Item",
+                "type": "string",
+                "editable": true
+            },
+            {
+                "db_column": "quantity",
+                "label": "Qty",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "rate",
+                "label": "Rate",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "amount",
+                "label": "Amount",
+                "type": "number",
+                "editable": true
+            },
+            {
+                "db_column": "receipt_link",
+                "label": "Link",
+                "type": "link",
+                "editable": false
+            }
+        ]
+    },
+    "dashboard_visuals": {
+        "revenue_metrics": {
+            "enabled": true,
+            "data_source": "verified_invoices",
+            "date_column": "date",
+            "amount_column": "amount",
+            "type_column": "type",
+            "receipt_column": "receipt_number",
+            "filters": {
+                "default_days": 30
+            },
+            "search_filters": [
+                {
+                    "key": "customer_name",
+                    "db_column": "customer_name",
+                    "label": "Customer Name",
+                    "placeholder": "Search customer..."
+                },
+                {
+                    "key": "part_number",
+                    "db_column": "description",
+                    "label": "Item",
+                    "placeholder": "Search item..."
+                }
+            ]
+        },
+        "stock_metrics": {
+            "enabled": true,
+            "data_source": "inventory_items",
+            "date_column": "invoice_date",
+            "amount_column": "net_bill",
+            "stock_column": "qty",
+            "receipt_column": "invoice_number",
+            "filters": {
+                "default_days": 30
+            }
+        }
+    },
+    "username": "datta",
+    "r2_bucket": "snapkhata-prod"
+}

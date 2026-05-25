@@ -318,6 +318,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               paymentMode: _entryType == 'got' ? 'Cash' : _paymentMode,
               receivedAmount: receivedAmount,
               balanceDue: newBalance,
+              whatsappCustomNote: shopProfile.whatsappCustomNote,
             );
 
             // Resolve phone: prefer what's typed in the field, then fall

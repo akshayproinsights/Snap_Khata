@@ -93,6 +93,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
       totalAmount: totalAmount,
       paidAmount: receivedAmount,
       pendingAmount: balanceDue,
+      whatsappCustomNote: shopProfile.whatsappCustomNote,
     );
 
     final phoneNumber = header.mobileNumber?.trim() ?? '';

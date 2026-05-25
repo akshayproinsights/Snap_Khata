@@ -651,6 +651,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                         totalAmount: totalAmount,
                         paidAmount: _receivedAmount,
                         pendingAmount: balanceDue,
+                        whatsappCustomNote: shopProfile.whatsappCustomNote,
                       );
 
                       if (!context.mounted) return;
@@ -1195,6 +1196,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                     totalAmount: totalAmount,
                                     paidAmount: _receivedAmount,
                                     pendingAmount: balanceDue,
+                                    whatsappCustomNote: shopProfile.whatsappCustomNote,
                                   );
 
                                   if (mounted) {

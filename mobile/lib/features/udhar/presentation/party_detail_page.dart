@@ -213,8 +213,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               // Option 1: Scan Bill (AI Camera)
               _buildBillingOptionCard(
                 context: context,
-                title: 'Scan Bill (AI Camera)',
-                description: 'Snap paper bill to extract items instantly',
+                title: 'Scan Bill',
                 icon: LucideIcons.scanLine,
                 color: const Color(0xFF6366F1), // Indigo
                 onTap: () {
@@ -229,8 +228,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               // Option 2: Quick Bill (Catalogue)
               _buildBillingOptionCard(
                 context: context,
-                title: 'Quick Bill (Catalogue)',
-                description: 'Choose items from your catalogue list',
+                title: 'Quick Bill',
                 icon: LucideIcons.shoppingCart,
                 color: const Color(0xFF10B981), // Emerald Green
                 onTap: () async {
@@ -262,8 +260,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               // Option 3: Manual Bill (Type Details)
               _buildBillingOptionCard(
                 context: context,
-                title: 'Manual Entry (Type)',
-                description: 'Enter total amount or custom items directly',
+                title: 'Manual Entry',
                 icon: LucideIcons.edit3,
                 color: const Color(0xFFF59E0B), // Amber
                 onTap: () async {
@@ -293,7 +290,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   Widget _buildBillingOptionCard({
     required BuildContext context,
     required String title,
-    required String description,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
@@ -333,28 +329,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: context.textColor,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: context.textColor,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
               Icon(
@@ -1748,6 +1730,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 paymentMode: selectedTx!.paymentMode ?? 'Credit',
                 receivedAmount: selectedTx!.receivedAmount,
                 balanceDue: _computedBalance,
+                whatsappCustomNote: shopProfile.whatsappCustomNote,
               );
             } else {
               message = WhatsAppUtils.buildPartyReminderMessage(
@@ -1763,6 +1746,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 useReceiptPhoto: shareMode == 'receiptPhoto',
                 receiptPhotoUrl: selectedTx?.receiptLink,
                 receiptNumber: selectedTx?.receiptNumber?.toString(),
+                whatsappCustomNote: shopProfile.whatsappCustomNote,
               );
             }
 
@@ -2260,6 +2244,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         useReceiptPhoto: false,
                                         receiptPhotoUrl: null,
                                         receiptNumber: capturedReceiptNumber,
+                                        whatsappCustomNote: shopProfile.whatsappCustomNote,
                                       );
                                 }
                               }

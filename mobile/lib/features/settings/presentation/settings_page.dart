@@ -28,6 +28,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopPhone = '';
   String _shopGst = '';
   String _shopUpiId = '';
+  String _whatsappCustomNote = '';
   final bool _isLoadingProfile = false;
 
   @override
@@ -51,6 +52,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _shopPhone = profile.phone;
       _shopGst = profile.gst;
       _shopUpiId = profile.upiId;
+      _whatsappCustomNote = profile.whatsappCustomNote;
     });
     
     // Trigger a sync in the background
@@ -65,6 +67,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       phone: _shopPhone,
       gst: _shopGst,
       upiId: _shopUpiId,
+      whatsappCustomNote: _whatsappCustomNote,
     );
     await ref.read(shopProvider.notifier).updateProfile(newProfile);
   }
@@ -76,98 +79,189 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String tempPhone = _shopPhone;
     String tempGst = _shopGst;
     String tempUpiId = _shopUpiId;
+    String tempWhatsAppNote = _whatsappCustomNote;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: context.backgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Shop Details',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'This info appears on your invoices & syncs across devices',
-                style: TextStyle(
-                    color: context.textSecondaryColor,
-                    fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              MobileTextField(
-                initialValue: tempName,
-                placeholder: 'Shop Name',
-                onSave: (val) => tempName = val,
-              ),
-              const SizedBox(height: 12),
-              MobileTextField(
-                initialValue: tempAddress,
-                placeholder: 'Complete Address',
-                onSave: (val) => tempAddress = val,
-              ),
-              const SizedBox(height: 12),
-              MobileTextField(
-                initialValue: tempPhone,
-                placeholder: 'Phone Number',
-                onSave: (val) => tempPhone = val,
-              ),
-              const SizedBox(height: 12),
-              MobileTextField(
-                initialValue: tempGst,
-                placeholder: 'GSTIN (Optional)',
-                onSave: (val) => tempGst = val,
-              ),
-              const SizedBox(height: 12),
-              MobileTextField(
-                initialValue: tempUpiId,
-                placeholder: 'UPI ID (Optional)',
-                onSave: (val) => tempUpiId = val,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    setState(() {
-                      _shopName = tempName;
-                      _shopAddress = tempAddress;
-                      _shopPhone = tempPhone;
-                      _shopGst = tempGst;
-                      _shopUpiId = tempUpiId;
-                    });
-                    await _saveShopDetails();
-                    if (!context.mounted) return;
-                    Navigator.pop(context);
-                    if (mounted) {
-                      AppToast.showSuccess(
-                          context, 'Shop details saved & synced');
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: context.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Save & Sync',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: BoxDecoration(
+              color: context.backgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Shop Details',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  'This info appears on your invoices & syncs across devices',
+                  style: TextStyle(
+                      color: context.textSecondaryColor,
+                      fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MobileTextField(
+                          initialValue: tempName,
+                          placeholder: 'Shop Name',
+                          onSave: (val) {
+                            setSheetState(() => tempName = val);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        MobileTextField(
+                          initialValue: tempAddress,
+                          placeholder: 'Complete Address',
+                          onSave: (val) => tempAddress = val,
+                        ),
+                        const SizedBox(height: 12),
+                        MobileTextField(
+                          initialValue: tempPhone,
+                          placeholder: 'Phone Number',
+                          onSave: (val) => tempPhone = val,
+                        ),
+                        const SizedBox(height: 12),
+                        MobileTextField(
+                          initialValue: tempGst,
+                          placeholder: 'GSTIN (Optional)',
+                          onSave: (val) => tempGst = val,
+                        ),
+                        const SizedBox(height: 12),
+                        MobileTextField(
+                          initialValue: tempUpiId,
+                          placeholder: 'UPI ID (Optional)',
+                          onSave: (val) => tempUpiId = val,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'WhatsApp Bill/Reminder Note',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: context.textColor,
+                              letterSpacing: 0.5),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          initialValue: tempWhatsAppNote,
+                          maxLines: 2,
+                          style: TextStyle(color: context.textColor),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. Please collect clothes after 4 days.',
+                            hintStyle: TextStyle(color: context.textSecondaryColor.withValues(alpha: 0.5)),
+                            filled: true,
+                            fillColor: context.isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                          onChanged: (val) {
+                            setSheetState(() {
+                              tempWhatsAppNote = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'PREVIEW',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: context.textSecondaryColor,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: context.isDark ? const Color(0xFF054735) : const Color(0xFFDCF8C6),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(16),
+                              bottomLeft: Radius.circular(16),
+                              bottomRight: Radius.circular(16),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            'Hi Customer,\n'
+                            'Your order from *${tempName.isNotEmpty ? tempName.trim() : 'Our Shop'}* is ready. 📝\n\n'
+                            '⚠️ *Amount Due: ₹450*'
+                            '${tempWhatsAppNote.trim().isNotEmpty ? '\n\n👉 *Note:* ${tempWhatsAppNote.trim()}' : ''}\n\n'
+                            'Thank you! 🙏\n'
+                            '— *${tempName.isNotEmpty ? tempName.trim() : 'Our Shop'}*',
+                            style: TextStyle(
+                              color: context.isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF0D0D0D),
+                              fontSize: 12,
+                              height: 1.55,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      setState(() {
+                        _shopName = tempName;
+                        _shopAddress = tempAddress;
+                        _shopPhone = tempPhone;
+                        _shopGst = tempGst;
+                        _shopUpiId = tempUpiId;
+                        _whatsappCustomNote = tempWhatsAppNote;
+                      });
+                      await _saveShopDetails();
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      if (mounted) {
+                        AppToast.showSuccess(
+                            context, 'Shop details saved & synced');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: context.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: const Text('Save & Sync',
+                        style:
+                            TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

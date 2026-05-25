@@ -80,6 +80,7 @@ class WhatsAppUtils {
     double? pendingAmount,
     String? upiDeepLink,
     Map<String, String>? extraFields,
+    String? whatsappCustomNote,
   }) {
     final totalFmt = formatIndianCurrency(totalAmount);
     final paidFmt = paidAmount != null ? formatIndianCurrency(paidAmount) : '';
@@ -99,11 +100,15 @@ class WhatsAppUtils {
       }
     }
 
+    final noteSuffix = (whatsappCustomNote != null && whatsappCustomNote.trim().isNotEmpty)
+        ? '\n\n👉 *Note:* ${whatsappCustomNote.trim()}'
+        : '';
+
     switch (status) {
       case OrderPaymentStatus.unpaid:
         return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order from *${businessName.trim()}* is ready. 📝\n\n'
-            '⚠️ *Amount Due: $totalFmt*$extraTexts\n\n'
+            '⚠️ *Amount Due: $totalFmt*$extraTexts$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.partiallyPaid:
@@ -111,13 +116,13 @@ class WhatsAppUtils {
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
             '🛒 Total Bill: $totalFmt\n'
             '✅ Amount Paid: $paidFmt\n'
-            '⏳ Pending Due: $pendingFmt$extraTexts\n\n'
+            '⏳ Pending Due: $pendingFmt$extraTexts$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.fullyPaid:
         return 'Hi ${_cleanDisplayName(customerName)},\n'
             'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            '💳 Amount Paid: $totalFmt$extraTexts\n\n'
+            '💳 Amount Paid: $totalFmt$extraTexts$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
     }
   }
@@ -509,9 +514,14 @@ class WhatsAppUtils {
     bool useReceiptPhoto = false,
     String? receiptPhotoUrl,
     String? receiptNumber,
+    String? whatsappCustomNote,
   }) {
     final name = _cleanDisplayName(customerName);
     final shop = shopName.trim();
+
+    final noteSuffix = (whatsappCustomNote != null && whatsappCustomNote.trim().isNotEmpty)
+        ? '\n\n👉 *Note:* ${whatsappCustomNote.trim()}'
+        : '';
 
     if (useReceiptPhoto &&
         receiptPhotoUrl != null &&
@@ -520,7 +530,7 @@ class WhatsAppUtils {
       final invoiceRef =
           receiptNumber != null ? ' (Bill #$receiptNumber)' : '';
       return 'Hi $name,\n\n'
-          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*$invoiceRef\n\n'
+          '⚠️ *Amount Due: ${formatIndianCurrency(balanceDue)}*$invoiceRef$noteSuffix\n\n'
           'Please settle this amount as soon as possible.\n\n'
           'Thank you! 🙏\n'
           '— *$shop*';
@@ -548,7 +558,7 @@ class WhatsAppUtils {
       msg += '\n💳 Pay via UPI: $upiId';
     }
 
-    msg += '\n\nThank you! 🙏\n'
+    msg += '$noteSuffix\n\nThank you! 🙏\n'
         '— *$shop*';
     return msg;
   }
@@ -756,6 +766,7 @@ class WhatsAppUtils {
     required String paymentMode,
     double? receivedAmount,
     double? balanceDue,
+    String? whatsappCustomNote,
   }) {
     final cleanName = _cleanDisplayName(customerName);
     final totalFmt = formatIndianCurrency(total);
@@ -798,6 +809,10 @@ class WhatsAppUtils {
     // Append running balance due only when there's an outstanding amount
     if (balanceDue != null && balanceDue > 0.01) {
       buffer.writeln('\n⚠️ *Total Balance Due: ${formatIndianCurrency(balanceDue)}*');
+    }
+
+    if (whatsappCustomNote != null && whatsappCustomNote.trim().isNotEmpty) {
+      buffer.writeln('\n👉 *Note:* ${whatsappCustomNote.trim()}');
     }
 
     buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
