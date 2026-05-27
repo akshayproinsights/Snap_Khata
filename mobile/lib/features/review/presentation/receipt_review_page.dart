@@ -1331,10 +1331,13 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
       (g) => g.receiptNumber == widget.group.receiptNumber,
       orElse: () => widget.group,
     );
-    final shopProfile = ref.read(shopProvider);
 
     FocusScope.of(context).unfocus();
     await _saveCurrentState();
+
+    // Ensure shop name is loaded before composing the message.
+    await ref.read(shopProvider.notifier).ensureValidShopName();
+    final shopProfile = ref.read(shopProvider);
 
     final freshState = ref.read(reviewProvider);
     final freshGroup = freshState.groups.firstWhere(

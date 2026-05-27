@@ -1495,13 +1495,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  void _showWhatsAppReminderSheet(
+  Future<void> _showWhatsAppReminderSheet(
     BuildContext context,
     WidgetRef ref,
     CustomerLedger ledger,
-  ) {
+  ) async {
     HapticFeedback.lightImpact();
 
+    // Ensure shop name is loaded before composing the message.
+    await ref.read(shopProvider.notifier).ensureValidShopName();
     final shopProfile = ref.read(shopProvider);
     final authState = ref.read(authProvider);
     final shopName = shopProfile.name.isNotEmpty
@@ -1529,6 +1531,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       text: ledger.customerPhone ?? '',
     );
 
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2835,7 +2838,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ),
                         ),
                         SizedBox(
-                          width: 36,
+                          width: 60,
                           child: Text(
                             'QTY',
                             style: TextStyle(
@@ -2894,6 +2897,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       final qtyStr = qty == qty.truncateToDouble()
                           ? qty.toInt().toString()
                           : qty.toStringAsFixed(1);
+                      final rawUnit = (item['unit']?.toString() ?? '').trim().toUpperCase();
+                      final unit = (rawUnit == 'NOS' || rawUnit.isEmpty) ? '' : rawUnit;
+                      final showQty = qty != 1.0 || unit.isNotEmpty;
+                      final qtyText = showQty
+                          ? (unit.isNotEmpty ? '×$qtyStr $unit' : '×$qtyStr')
+                          : '';
+
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Row(
@@ -2912,9 +2922,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               ),
                             ),
                             SizedBox(
-                              width: 36,
+                              width: 60,
                               child: Text(
-                                '×$qtyStr',
+                                qtyText,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,

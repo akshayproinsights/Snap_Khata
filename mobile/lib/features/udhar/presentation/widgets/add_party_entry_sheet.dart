@@ -14,6 +14,7 @@ import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/theme/context_extension.dart';
+import 'package:mobile/core/widgets/editable_qty_stepper.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
@@ -58,7 +59,7 @@ class _ManualItem {
     required this.name,
     this.quantity = 1.0,
     this.rate = 0.0,
-    this.unit = 'NOS',
+    this.unit = '',
     this.isNew = false,
   }) {
     rateController = TextEditingController(
@@ -77,6 +78,7 @@ class _ManualItem {
     'quantity': quantity,
     'rate': rate,
     'amount': quantity * rate,
+    'unit': unit,
   };
 }
 
@@ -96,6 +98,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   String _paymentMode =
       'Credit'; // 'Credit', 'Cash', 'UPI' — only used when entry_type=='gave'
   DateTime _selectedDate = DateTime.now();
+  DateTime? _deliveryDate;
   bool _isLoading = false;
 
   // Selected party details
@@ -529,17 +532,21 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       final name = (it['name'] as String? ?? '').trim();
       if (name.isEmpty) continue;
       final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
-      final unit = (it['unit'] as String? ?? 'NOS').toUpperCase();
+      String unit = (it['unit'] as String? ?? '').toUpperCase();
+      if (unit == 'NOS') {
+        unit = '';
+      }
 
       // Try to match returned name against catalogue for price autofill
       final catalogueMatch = _matchCatalogueItem(name, catalogue);
       if (catalogueMatch != null) {
+        final catUnit = catalogueMatch.unit == 'NOS' ? '' : catalogueMatch.unit;
         results.add(
           _ManualItem(
             name: catalogueMatch.itemName,
             quantity: qty,
             rate: catalogueMatch.lastPrice,
-            unit: unit == 'NOS' ? catalogueMatch.unit : unit,
+            unit: unit.isEmpty ? catUnit : unit,
             isNew: false,
           )..rateController.text = catalogueMatch.lastPrice > 0
               ? catalogueMatch.lastPrice.toStringAsFixed(0)
@@ -589,7 +596,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       'ltr': 'LTR', 'litre': 'LTR', 'litres': 'LTR', 'liter': 'LTR',
       'liters': 'LTR', 'l': 'LTR',
       'ml': 'ML', 'milliliter': 'ML', 'millilitre': 'ML',
-      'pcs': 'NOS', 'piece': 'NOS', 'pieces': 'NOS', 'nos': 'NOS',
+      'pcs': '', 'piece': '', 'pieces': '', 'nos': '',
       'packet': 'PKT', 'packets': 'PKT', 'pkt': 'PKT',
       'box': 'BOX', 'boxes': 'BOX',
       'dozen': 'DOZ', 'doz': 'DOZ',
@@ -610,7 +617,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       if (tokens.isEmpty) continue;
 
       double qty = 1.0;
-      String unit = 'NOS';
+      String unit = '';
       final nameTokens = <String>[];
 
       int i = 0;
@@ -650,12 +657,13 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       final catalogueMatch = _matchCatalogueItem(rawName, catalogue);
 
       if (catalogueMatch != null) {
+        final catUnit = catalogueMatch.unit == 'NOS' ? '' : catalogueMatch.unit;
         results.add(
           _ManualItem(
             name: catalogueMatch.itemName,
             quantity: qty,
             rate: catalogueMatch.lastPrice,
-            unit: unit == 'NOS' ? catalogueMatch.unit : unit,
+            unit: unit.isEmpty ? catUnit : unit,
             isNew: false,
           )..rateController.text = catalogueMatch.lastPrice > 0
               ? catalogueMatch.lastPrice.toStringAsFixed(0)
@@ -814,6 +822,21 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     }
   }
 
+  Future<void> _selectDeliveryDate() async {
+    final defaultDate = DateTime.now().add(const Duration(days: 4));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _deliveryDate ?? defaultDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _deliveryDate = picked;
+      });
+    }
+  }
+
   Future<void> _submit({bool shareOnWhatsApp = false}) async {
     final partyName = _partySearchController.text.trim();
     if (partyName.isEmpty) {
@@ -897,7 +920,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
 
         if (mounted) {
           if (shareOnWhatsApp && _partyType == 'customer') {
-            final shopProfile = ref.read(shopProvider);
+              // Ensure shop name is loaded before composing the message.
+              await ref.read(shopProvider.notifier).ensureValidShopName();
+              final shopProfile = ref.read(shopProvider);
             final double receivedAmount = _entryType == 'got'
                 ? finalAmount
                 : (_paymentMode == 'Credit'
@@ -926,6 +951,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
               receivedAmount: receivedAmount,
               balanceDue: newBalance,
               whatsappCustomNote: shopProfile.whatsappCustomNote,
+              orderDate: shopProfile.shopType == 'laundry' ? _selectedDate : null,
+              deliveryDate: shopProfile.shopType == 'laundry' ? _deliveryDate : null,
             );
 
             // Resolve phone: prefer what's typed in the field, then fall
@@ -1792,6 +1819,80 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     ),
                     const SizedBox(height: 8),
                     _buildMobileNumberFieldNoLabel(context),
+                    // ── Delivery Date row (Laundry shops only) ─────────────
+                    Builder(builder: (ctx) {
+                      final shopProfile = ref.watch(shopProvider);
+                      if (shopProfile.shopType != 'laundry') {
+                        return const SizedBox.shrink();
+                      }
+                      final deliveryLabel = _deliveryDate == null
+                          ? 'Pick Delivery Date'
+                          : _formatDate(_deliveryDate!);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Icon(
+                                LucideIcons.truck,
+                                size: 14,
+                                color: const Color(0xFF7C3AED),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'DELIVERY DATE',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                  color: const Color(0xFF7C3AED),
+                                ),
+                              ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: _selectDeliveryDate,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF7C3AED)
+                                        .withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: const Color(0xFF7C3AED)
+                                          .withValues(alpha: 0.4),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.calendarClock,
+                                        size: 12,
+                                        color: const Color(0xFF7C3AED),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        deliveryLabel,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF7C3AED),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }),
                   ] else ...[
                     // Vendor: show date pill standalone (no mobile field)
                     const SizedBox(height: 20),
@@ -2407,72 +2508,53 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                           ),
                                         ),
                                         const SizedBox(height: 4),
-                                        Container(
-                                          height: 44,
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                              color: context.borderColor,
-                                            ),
-                                            borderRadius: BorderRadius.circular(12),
-                                            color: context.surfaceColor,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              GestureDetector(
-                                                onTap: () {
-                                                  HapticFeedback.lightImpact();
-                                                  setState(() {
-                                                    if (item.quantity > 1.0) {
-                                                      item.quantity -= 1.0;
-                                                    } else {
-                                                      final removed = _items
-                                                          .removeAt(idx);
-                                                      removed.dispose();
-                                                    }
-                                                  });
-                                                  _bumpTotal();
-                                                },
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 8,
-                                                  ),
-                                                  child: const Icon(
-                                                    LucideIcons.minus,
-                                                    size: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                              Text(
-                                                '${item.quantity % 1 == 0 ? item.quantity.toInt().toString() : item.quantity} ${item.unit != 'NOS' ? item.unit : ''}'.trim(),
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                              GestureDetector(
-                                                onTap: () {
-                                                  HapticFeedback.lightImpact();
-                                                  setState(() {
-                                                    item.quantity += 1.0;
-                                                  });
-                                                  _bumpTotal();
-                                                },
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 8,
-                                                  ),
-                                                  child: const Icon(
-                                                    LucideIcons.plus,
-                                                    size: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                        EditableQtyStepper(
+                                          qty: item.quantity,
+                                          isDecimal: item.unit == 'KG' ||
+                                              item.unit == 'LITRE' ||
+                                              item.unit == 'L',
+                                          showTrashAtOne: true,
+                                          itemName: item.name.isEmpty ? 'Manual Entry Item' : item.name,
+                                          rate: item.rate,
+                                          unit: item.unit,
+                                          onChanged: (newQty) {
+                                            setState(() {
+                                              item.quantity = newQty.toDouble();
+                                            });
+                                            _bumpTotal();
+                                          },
+                                          onDecrement: () {
+                                            HapticFeedback.lightImpact();
+                                            setState(() {
+                                              if (item.quantity > 1.0) {
+                                                final step =
+                                                    (item.unit == 'KG' ||
+                                                            item.unit ==
+                                                                'LITRE' ||
+                                                            item.unit == 'L')
+                                                        ? 0.5
+                                                        : 1.0;
+                                                item.quantity -= step;
+                                              } else {
+                                                final removed =
+                                                    _items.removeAt(idx);
+                                                removed.dispose();
+                                              }
+                                            });
+                                            _bumpTotal();
+                                          },
+                                          onIncrement: () {
+                                            HapticFeedback.lightImpact();
+                                            setState(() {
+                                              final step = (item.unit == 'KG' ||
+                                                      item.unit == 'LITRE' ||
+                                                      item.unit == 'L')
+                                                  ? 0.5
+                                                  : 1.0;
+                                              item.quantity += step;
+                                            });
+                                            _bumpTotal();
+                                          },
                                         ),
                                       ],
                                     ),

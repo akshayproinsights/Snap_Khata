@@ -669,6 +669,8 @@ class _PoSuccessSheetState extends ConsumerState<_PoSuccessSheet> {
         return;
       }
 
+      // Ensure shop name is loaded before generating the PDF.
+      await ref.read(shopProvider.notifier).ensureValidShopName();
       final shopProfile = ref.read(shopProvider);
       final bytes = await MaterialRequestPdfGenerator.generate(
         details,
@@ -834,6 +836,8 @@ class _PoHistoryCardState extends ConsumerState<_PoHistoryCard> {
         .getPurchaseOrderDetails(po.id);
 
     if (details != null) {
+      // Ensure shop name is loaded before generating the PDF.
+      await ref.read(shopProvider.notifier).ensureValidShopName();
       final shopProfile = ref.read(shopProvider);
       final bytes = await MaterialRequestPdfGenerator.generate(
         details, 

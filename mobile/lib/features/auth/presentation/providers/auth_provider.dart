@@ -5,6 +5,7 @@ import 'package:mobile/features/auth/data/auth_repository.dart';
 import 'package:mobile/features/auth/domain/models/user_model.dart';
 import 'package:mobile/core/routing/app_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 
 // Track whether GoogleSignIn.instance has been initialized.
 // initialize() must be called EXACTLY ONCE on the singleton — calling it
@@ -106,6 +107,8 @@ class AuthNotifier extends Notifier<AuthState> {
         // Persist the correct username for future checks
         await prefs.setString('auth_username', user.username);
         state = state.copyWith(user: user, isLoading: false);
+        // shopProvider already starts _doInit() in its own build() via
+        // Future.microtask — no need to forceRefresh here.
       } else {
         state = state.copyWith(isLoading: false);
       }
@@ -140,6 +143,10 @@ class AuthNotifier extends Notifier<AuthState> {
         user: user,
         isLoading: false,
       );
+      // Pre-load shop profile for the newly logged-in user so WhatsApp
+      // messages always show the real shop name, not "Our Shop".
+      // Fire-and-forget: ensureValidShopName() in each call site awaits it.
+      ref.read(shopProvider.notifier).forceRefresh();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -196,6 +203,8 @@ class AuthNotifier extends Notifier<AuthState> {
         user: user,
         isLoading: false,
       );
+      // Pre-load shop profile for the Google-signed-in user.
+      ref.read(shopProvider.notifier).forceRefresh();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -210,6 +219,9 @@ class AuthNotifier extends Notifier<AuthState> {
     } catch (_) {
       // ignore
     } finally {
+      // Clear shop state BEFORE clearing prefs so the notifier can still
+      // read auth_username for any in-flight operations.
+      ref.read(shopProvider.notifier).resetState();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
       await prefs.remove('auth_username'); // CRITICAL: clear username too

@@ -784,6 +784,8 @@ class WhatsAppUtils {
     double? receivedAmount,
     double? balanceDue,
     String? whatsappCustomNote,
+    DateTime? orderDate,
+    DateTime? deliveryDate,
   }) {
     final cleanName = _cleanDisplayName(customerName);
     final totalFmt = formatIndianCurrency(total);
@@ -801,11 +803,17 @@ class WhatsAppUtils {
         final amount = item['amount'] ?? (qty * rate);
 
         final qtyStr = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
-        final unit = item['unit'] ?? 'NOS';
+        final rawUnit = (item['unit']?.toString() ?? '').trim().toUpperCase();
+        final unit = (rawUnit == 'NOS' || rawUnit.isEmpty) ? '' : rawUnit;
         final rateFmt = formatIndianCurrency(rate.toDouble());
         final amountFmt = formatIndianCurrency(amount.toDouble());
 
-        buffer.writeln('• *$name* × $qtyStr $unit @ $rateFmt — *$amountFmt*');
+        if (qty == 1 && unit.isEmpty) {
+          buffer.writeln('• *$name* @ $rateFmt — *$amountFmt*');
+        } else {
+          final unitPart = unit.isNotEmpty ? ' $unit' : '';
+          buffer.writeln('• *$name* × $qtyStr$unitPart @ $rateFmt — *$amountFmt*');
+        }
       }
       buffer.writeln();
       buffer.writeln('*Total Bill: $totalFmt*');
@@ -828,6 +836,14 @@ class WhatsAppUtils {
       buffer.writeln('\n⚠️ *Total Balance Due: ${formatIndianCurrency(balanceDue)}*');
     }
 
+    // Laundry-style: show order + delivery promise dates when provided
+    if (orderDate != null && deliveryDate != null) {
+      final orderStr = _formatMessageDate(orderDate);
+      final deliveryStr = _formatMessageDate(deliveryDate);
+      buffer.writeln('\n📅 *Order Date:* $orderStr');
+      buffer.writeln('🚚 *Delivery Promise:* $deliveryStr');
+    }
+
     if (whatsappCustomNote != null && whatsappCustomNote.trim().isNotEmpty) {
       buffer.writeln('\n👉 *Note:* ${whatsappCustomNote.trim()}');
     }
@@ -835,6 +851,15 @@ class WhatsAppUtils {
     buffer.writeln('\nThank you! 🙏\n— *${shopName.trim()}*');
 
     return buffer.toString();
+  }
+
+  /// Formats a DateTime as "27 May 2026" for WhatsApp messages.
+  static String _formatMessageDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   /// Returns true only if the browser's Web Share API supports sharing files.

@@ -1322,6 +1322,7 @@ class ManualLineItem(BaseModel):
     quantity: float = 1.0
     rate: float = 0.0
     amount: float
+    unit: Optional[str] = ""
 
 class ManualUdharEntry(BaseModel):
     party_type: str # 'customer' or 'vendor'
@@ -2262,6 +2263,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                     'quantity': it.quantity,
                     'rate': it.rate,
                     'amount': round(it.quantity * it.rate, 2),
+                    'unit': it.unit or "",
                 })
 
         # Assign a sequential receipt number for every manual entry
@@ -2365,7 +2367,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                             "username": username,
                             "item_name": name,
                             "last_price": float(cat_existing[name]["last_price"] or 0.0),
-                            "unit": cat_existing[name]["unit"] or "NOS",
+                            "unit": cat_existing[name]["unit"] or it.unit or "",
                             "use_count": (cat_existing[name]["use_count"] or 1) + 1,
                             "last_used_at": entry_date
                         })
@@ -2375,7 +2377,7 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                             "username": username,
                             "item_name": name,
                             "last_price": it.rate,
-                            "unit": "NOS",
+                            "unit": it.unit or "",
                             "use_count": 1,
                             "last_used_at": entry_date
                         })

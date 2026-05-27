@@ -58,6 +58,8 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
 
     final authState = ref.read(authProvider);
     final username = authState.user?.username;
+    // Ensure shop name is loaded before composing the message.
+    await ref.read(shopProvider.notifier).ensureValidShopName();
     final shopProfile = ref.read(shopProvider);
     final shopName = shopProfile.name.isNotEmpty ? shopProfile.name : 'Our Shop';
 

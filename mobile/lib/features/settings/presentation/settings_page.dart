@@ -29,6 +29,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopGst = '';
   String _shopUpiId = '';
   String _whatsappCustomNote = '';
+  String _shopType = 'general';
   final bool _isLoadingProfile = false;
 
   @override
@@ -43,9 +44,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  /// Load from provider
+  /// Load initial values from provider (may be empty before sync completes).
+  /// ref.listen in build() will update these fields once backend sync finishes.
   Future<void> _loadShopDetails() async {
     final profile = ref.read(shopProvider);
+    if (!mounted) return;
     setState(() {
       _shopName = profile.name;
       _shopAddress = profile.address;
@@ -53,10 +56,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _shopGst = profile.gst;
       _shopUpiId = profile.upiId;
       _whatsappCustomNote = profile.whatsappCustomNote;
+      _shopType = profile.shopType;
     });
-    
-    // Trigger a sync in the background
-    ref.read(shopProvider.notifier).syncWithBackend();
+    // No manual sync needed — shopProvider.build() already fires _doInit()
+    // which calls syncWithBackend(). The ref.listen below will pick up the
+    // state change and refresh these fields automatically.
   }
 
   /// Save using provider
@@ -68,6 +72,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       gst: _shopGst,
       upiId: _shopUpiId,
       whatsappCustomNote: _whatsappCustomNote,
+      shopType: _shopType,
     );
     await ref.read(shopProvider.notifier).updateProfile(newProfile);
   }
@@ -80,6 +85,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String tempGst = _shopGst;
     String tempUpiId = _shopUpiId;
     String tempWhatsAppNote = _whatsappCustomNote;
+    String tempShopType = _shopType;
 
     showModalBottomSheet(
       context: context,
@@ -180,6 +186,68 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           },
                         ),
                         const SizedBox(height: 16),
+                        // ── Shop Type Selector ────────────────────────────────
+                        Text(
+                          'Shop Type',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: context.textColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            for (final option in [
+                              ('general', 'General 🏪'),
+                              ('laundry', 'Laundry 👕'),
+                            ])
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setSheetState(
+                                    () => tempShopType = option.$1,
+                                  ),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    margin: EdgeInsets.only(
+                                      right: option.$1 == 'general' ? 8 : 0,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: tempShopType == option.$1
+                                          ? context.primaryColor
+                                          : (context.isDark
+                                                ? Colors.grey.shade900
+                                                : Colors.grey.shade100),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: tempShopType == option.$1
+                                            ? context.primaryColor
+                                            : context.borderColor,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        option.$2,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: tempShopType == option.$1
+                                              ? Colors.white
+                                              : context.textColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
                         Text(
                           'PREVIEW',
                           style: TextStyle(
@@ -239,6 +307,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _shopGst = tempGst;
                         _shopUpiId = tempUpiId;
                         _whatsappCustomNote = tempWhatsAppNote;
+                        _shopType = tempShopType;
                       });
                       await _saveShopDetails();
                       if (!context.mounted) return;
@@ -319,6 +388,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep local fields in sync with the provider — fires when background
+    // syncWithBackend() completes after the page first opens.
+    ref.listen<ShopProfile>(shopProvider, (prev, next) {
+      if (!mounted) return;
+      setState(() {
+        _shopName           = next.name;
+        _shopAddress        = next.address;
+        _shopPhone          = next.phone;
+        _shopGst            = next.gst;
+        _shopUpiId          = next.upiId;
+        _whatsappCustomNote = next.whatsappCustomNote;
+        _shopType           = next.shopType;
+      });
+    });
+
     final userState = ref.watch(authProvider);
     final String userName =
         userState.user?.name ?? userState.user?.username ?? 'User';

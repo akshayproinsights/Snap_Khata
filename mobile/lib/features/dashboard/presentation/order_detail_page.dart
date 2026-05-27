@@ -592,7 +592,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                   : () async {
                       HapticFeedback.lightImpact();
 
-                      final shopProfile = ref.read(shopProvider);
                       final authState = ref.read(authProvider);
                       final username = authState.user?.username;
 
@@ -601,6 +600,13 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       if (isEditing) {
                         _saveChanges();
                       }
+
+                      // Ensure shop name is loaded before composing the message.
+                      await ref.read(shopProvider.notifier).ensureValidShopName();
+                      final shopProfile = ref.read(shopProvider);
+                      final shopName = shopProfile.name.isNotEmpty
+                          ? shopProfile.name
+                          : 'Our Shop';
 
                       // Load persisted GST mode for this receipt
                       final prefs = await SharedPreferences.getInstance();
@@ -625,10 +631,6 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                 content: Text('Could not generate receipt link.')));
                         return;
                       }
-
-                      final shopName = shopProfile.name.isNotEmpty
-                          ? shopProfile.name
-                          : 'Our Shop';
 
                       final double totalAmount = _totalAfterGst(widget.group);
                       final double balanceDue = totalAmount - _receivedAmount;
@@ -1156,6 +1158,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                                 onPressed: () async {
                                   HapticFeedback.lightImpact();
                                   // Reuse the same logic as the AppBar button but for this specific number
+                                  // Ensure shop name is loaded before composing the message.
+                                  await ref.read(shopProvider.notifier).ensureValidShopName();
                                   final shopProfile = ref.read(shopProvider);
                                   final authState = ref.read(authProvider);
                                   final username = authState.user?.username;

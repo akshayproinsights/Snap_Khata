@@ -424,6 +424,8 @@ class _InvoiceGroupTile extends ConsumerWidget {
                         ? group.customerName
                         : 'Customer';
 
+                    // Ensure shop name is loaded before composing the message.
+                    await ref.read(shopProvider.notifier).ensureValidShopName();
                     final shopName = ref.read(shopProvider).name.isNotEmpty
                         ? ref.read(shopProvider).name
                         : 'Our Shop';

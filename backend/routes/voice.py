@@ -32,7 +32,7 @@ class ParseItemsRequest(BaseModel):
 class ParsedItem(BaseModel):
     name: str
     quantity: float = 1.0
-    unit: str = "NOS"
+    unit: str = ""
 
 
 class ParseItemsResponse(BaseModel):
@@ -55,13 +55,13 @@ Rules:
 - name: clean English / common item name (Title Case). Use the closest
   match from the catalogue if provided, else normalise the spoken word.
 - quantity: a number (float). Default 1.0 if not mentioned.
-- unit: one of KG, GM, LTR, ML, NOS, PKT, BOX, DOZ. Default NOS.
+- unit: one of KG, GM, LTR, ML, PKT, BOX, DOZ. Default empty string ("") if not mentioned or if no specific unit applies (do NOT default to NOS).
 - Ignore filler words (bhai, sahib, ek number, please, aaj, etc.).
 - Handle number words: ek=1, do=2, teen=3, char=4, paanch=5, chhe=6,
   saat=7, aath=8, nau=9, das=10, barah=12, aadha=0.5, pav=0.25,
   savaa=1.25, dedh=1.5.
 - Handle unit words: kilo/kg, litre/ltr/tel, gram/gm, packet/pkt,
-  dozen/doz, box, piece/pcs/nos, ml.
+  dozen/doz, box, piece/pcs, ml.
 - If quantity appears AFTER the name ("atta 2 kilo"), parse correctly.
 - If items are separated by comma, "and", "aur", "ani", treat as separate.
 - Never return an empty items array unless the transcript has no items at all.
@@ -126,9 +126,11 @@ def _call_gemini(transcript: str, catalogue_names: List[str]) -> List[Dict]:
             qty = float(it.get("quantity") or 1.0)
         except (TypeError, ValueError):
             qty = 1.0
-        unit = str(it.get("unit") or "NOS").strip().upper()
-        if unit not in {"KG", "GM", "LTR", "ML", "NOS", "PKT", "BOX", "DOZ"}:
-            unit = "NOS"
+        unit = str(it.get("unit") or "").strip().upper()
+        if unit == "NOS":
+            unit = ""
+        if unit not in {"KG", "GM", "LTR", "ML", "PKT", "BOX", "DOZ", ""}:
+            unit = ""
         parsed.append({"name": name, "quantity": qty, "unit": unit})
 
     return parsed

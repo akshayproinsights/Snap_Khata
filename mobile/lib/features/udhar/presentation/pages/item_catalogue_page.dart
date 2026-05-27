@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
+import 'package:mobile/core/widgets/editable_qty_stepper.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/item_catalogue_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
@@ -376,65 +377,30 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                   ),
                                 ),
                                 const Spacer(),
-                                // Decrement
-                                GestureDetector(
-                                  onTap: () {
+                                EditableQtyStepper(
+                                  qty: qty,
+                                  itemName: nameController.text.trim().isEmpty ? 'Custom Item' : nameController.text.trim(),
+                                  rate: double.tryParse(priceController.text.trim()) ?? 0.0,
+                                  unit: selectedUnit,
+                                  onChanged: (newQty) {
+                                    setSheetState(() {
+                                      qty = newQty.toInt();
+                                    });
+                                  },
+                                  onDecrement: () {
                                     if (qty > 1) {
-                                      HapticFeedback.lightImpact();
-                                      setSheetState(() => qty--);
+                                      setSheetState(() {
+                                        qty--;
+                                      });
                                     }
                                   },
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: qty <= 1
-                                          ? context.borderColor
-                                              .withValues(alpha: 0.4)
-                                          : context.primaryColor
-                                              .withValues(alpha: 0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(LucideIcons.minus,
-                                        size: 18,
-                                        color: qty <= 1
-                                            ? context.textSecondaryColor
-                                                .withValues(alpha: 0.4)
-                                            : context.primaryColor),
-                                  ),
-                                ),
-                                Container(
-                                  width: 52,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    '$qty',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      color: context.textColor,
-                                    ),
-                                  ),
-                                ),
-                                // Increment
-                                GestureDetector(
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    setSheetState(() => qty++);
+                                  onIncrement: () {
+                                    setSheetState(() {
+                                      qty++;
+                                    });
                                   },
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: context.primaryColor
-                                          .withValues(alpha: 0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(LucideIcons.plus,
-                                        size: 18,
-                                        color: context.primaryColor),
-                                  ),
+                                  showTrashAtOne: false,
+                                  isDecimal: false,
                                 ),
                               ],
                             ),
@@ -762,6 +728,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                       onAdd: () => _incrementCart(item.id),
                       onIncrement: () => _incrementCart(item.id),
                       onDecrement: () => _decrementCart(item.id),
+                      onQtyChanged: (newQty) => _addToCartWithQty(item.id, newQty.toInt()),
                       onEdit: () => _showQuickAddSheet(item: item),
                       highlighted: _highlightedItemId == item.id,
                     );
@@ -1179,6 +1146,7 @@ class _SelectionItemCard extends StatelessWidget {
     required this.onAdd,
     required this.onIncrement,
     required this.onDecrement,
+    required this.onQtyChanged,
     required this.onEdit,
     this.highlighted = false,
   });
@@ -1188,6 +1156,7 @@ class _SelectionItemCard extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
+  final ValueChanged<int> onQtyChanged;
   final VoidCallback onEdit;
   final bool highlighted;
 
@@ -1352,73 +1321,18 @@ class _SelectionItemCard extends StatelessWidget {
               )
             else
               // Inline stepper
-              Container(
-                decoration: BoxDecoration(
-                  color: context.primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: context.primaryColor.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Decrement / Remove
-                    GestureDetector(
-                      onTap: onDecrement,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: qty == 1
-                              ? context.errorColor.withValues(alpha: 0.1)
-                              : Colors.transparent,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(13),
-                            bottomLeft: Radius.circular(13),
-                          ),
-                        ),
-                        child: Icon(
-                          qty == 1 ? LucideIcons.trash2 : LucideIcons.minus,
-                          size: 14,
-                          color: qty == 1
-                              ? context.errorColor
-                              : context.primaryColor,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 32,
-                      child: Center(
-                        child: Text(
-                          '$qty',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
-                            color: context.primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Increment
-                    GestureDetector(
-                      onTap: onIncrement,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color:
-                              context.primaryColor.withValues(alpha: 0.12),
-                          borderRadius: const BorderRadius.only(
-                            topRight: Radius.circular(13),
-                            bottomRight: Radius.circular(13),
-                          ),
-                        ),
-                        child: Icon(LucideIcons.plus,
-                            size: 14, color: context.primaryColor),
-                      ),
-                    ),
-                  ],
-                ),
+              EditableQtyStepper(
+                qty: qty,
+                itemName: item.itemName,
+                rate: item.lastPrice,
+                unit: item.unit,
+                isDecimal: item.unit == 'KG' ||
+                    item.unit == 'LITRE' ||
+                    item.unit == 'L',
+                onChanged: (newQty) => onQtyChanged(newQty.toInt()),
+                onDecrement: onDecrement,
+                onIncrement: onIncrement,
+                showTrashAtOne: true,
               ),
           ],
         ),

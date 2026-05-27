@@ -1341,16 +1341,19 @@ class _VendorLedgerDetailPageState
     );
   }
 
-  void _showWhatsAppReminderSheet(
+  Future<void> _showWhatsAppReminderSheet(
     BuildContext context,
     WidgetRef ref,
     VendorLedger ledger,
     double spent,
     double paid,
-  ) {
+  ) async {
+    // Ensure shop name is loaded before composing the message.
+    await ref.read(shopProvider.notifier).ensureValidShopName();
     final shop = ref.read(shopProvider);
     final user = ref.read(authProvider).user;
 
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: context.surfaceColor,
