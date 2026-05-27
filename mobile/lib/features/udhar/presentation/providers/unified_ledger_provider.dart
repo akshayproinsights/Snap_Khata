@@ -27,7 +27,9 @@ final unifiedLedgerProvider = Provider<List<UnifiedLedger>>((ref) {
     for (var ledger in udharState.ledgers) {
       if (filterMode == UdharFilterMode.pending && ledger.balanceDue == 0) continue;
       
-      if (searchQuery.isNotEmpty && !ledger.customerName.toLowerCase().contains(searchQuery)) continue;
+      final matchesName = ledger.customerName.toLowerCase().contains(searchQuery);
+      final matchesPhone = ledger.customerPhone != null && ledger.customerPhone!.toLowerCase().contains(searchQuery);
+      if (searchQuery.isNotEmpty && !matchesName && !matchesPhone) continue;
 
       unifiedList.add(
         UnifiedLedger(

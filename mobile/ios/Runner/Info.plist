@@ -41,6 +41,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SnapKhata uses your microphone to let you search for customers by speaking their name.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>SnapKhata uses speech recognition to convert your spoken customer name into text for quick search.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

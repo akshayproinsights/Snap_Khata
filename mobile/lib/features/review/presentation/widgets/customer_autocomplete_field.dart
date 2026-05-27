@@ -206,7 +206,9 @@ class _CustomerAutocompleteFieldState
         // Example: query="Deshmukh 123" → "Deshmukh" is NOT shown because "123"
         // is not a prefix of any word in "Deshmukh".
         return sortedLedgers.where((CustomerLedger option) {
-          return _matchesQuery(option.customerName, textEditingValue.text);
+          final matchesName = _matchesQuery(option.customerName, textEditingValue.text);
+          final matchesPhone = option.customerPhone != null && option.customerPhone!.contains(textEditingValue.text);
+          return matchesName || matchesPhone;
         });
       },
       onSelected: (CustomerLedger selection) {

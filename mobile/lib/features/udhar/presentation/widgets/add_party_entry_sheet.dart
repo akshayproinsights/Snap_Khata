@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,9 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_to_text.dart' show SpeechListenOptions;
+import 'package:fuzzy/fuzzy.dart';
 
 class AddPartyEntrySheet extends ConsumerStatefulWidget {
   final List<CatalogueCartItem>? initialItems;
@@ -44,6 +48,7 @@ class _ManualItem {
   double rate;
   String unit;
   late final TextEditingController rateController;
+  late final FocusNode rateFocusNode;
 
   _ManualItem({
     required this.name,
@@ -54,10 +59,12 @@ class _ManualItem {
     rateController = TextEditingController(
       text: rate > 0 ? rate.toStringAsFixed(0) : '',
     );
+    rateFocusNode = FocusNode();
   }
 
   void dispose() {
     rateController.dispose();
+    rateFocusNode.dispose();
   }
 
   Map<String, dynamic> toJson() => {
@@ -90,6 +97,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   CustomerLedger? _selectedCustomer;
   VendorLedger? _selectedVendor;
   bool _showSuggestions = false;
+
+  // ── Voice search ──────────────────────────────────────────────────────────
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  String _heardText = ''; // raw transcript shown to user
+  Timer? _voicePulseTimer;
+  double _micPulse = 1.0; // scale for animated mic ring
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Line items list
   final List<_ManualItem> _items = [];
@@ -175,6 +191,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
         });
       }
     });
+
+    // Initialise speech engine (async — does not block UI)
+    _initSpeech();
   }
 
   @override
@@ -190,8 +209,141 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _mobileController.dispose();
     _paidAmountController.dispose();
     _mobileFocusNode.dispose();
+    _voicePulseTimer?.cancel();
+    _speech.stop();
     super.dispose();
   }
+
+  // ── Voice / Fuzzy helpers ─────────────────────────────────────────────────────
+
+  Future<void> _initSpeech() async {
+    final available = await _speech.initialize(
+      onError: (e) {
+        if (mounted) setState(() => _isListening = false);
+      },
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          if (mounted) setState(() => _isListening = false);
+          _voicePulseTimer?.cancel();
+        }
+      },
+    );
+    if (mounted) setState(() => _speechAvailable = available);
+  }
+
+  Future<void> _startListening() async {
+    if (!_speechAvailable || _isListening) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isListening = true;
+      _heardText = '';
+    });
+
+    // Animate the mic pulse ring
+    _voicePulseTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) {
+        setState(() {
+          _micPulse = _micPulse == 1.0 ? 1.35 : 1.0;
+        });
+      }
+    });
+
+    // en-IN handles Indian English names (Akshay, Ramesh, etc.) naturally.
+    // Filler words are stripped in _processHeardText below.
+    await _speech.listen(
+      listenOptions: SpeechListenOptions(
+        localeId: 'en-IN',
+        listenFor: const Duration(seconds: 6),
+        pauseFor: const Duration(seconds: 2),
+        partialResults: true,
+      ),
+      onResult: (result) {
+        if (!mounted) return;
+        final raw = result.recognizedWords;
+        final cleaned = _processHeardText(raw);
+        setState(() {
+          _heardText = raw;
+          _partySearchController.text = cleaned;
+          _showSuggestions = cleaned.isNotEmpty;
+        });
+      },
+    );
+  }
+
+
+  Future<void> _stopListening() async {
+    _voicePulseTimer?.cancel();
+    await _speech.stop();
+    if (mounted) setState(() => _isListening = false);
+  }
+
+  /// Strip Hindi/Marathi filler words so "Akshay bhai ka naam" → "Akshay"
+  String _processHeardText(String raw) {
+    const fillers = [
+      'bhai', 'bhaiya', 'ka', 'naam', 'wala', 'wali', 'ji',
+      'sahab', 'saheb', 'seth', 'dada', 'didi', 'tai', 'kaka',
+      'mama', 'mami', 'nana', 'nani', 'bai', 'anna',
+    ];
+    final words = raw.trim().toLowerCase().split(RegExp(r'\s+'));
+    final meaningful = words.where((w) => w.isNotEmpty && !fillers.contains(w)).toList();
+    if (meaningful.isEmpty) return raw.trim();
+    // Capitalize first letter of each word for name display
+    return meaningful.map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
+  }
+
+  /// Fuzzy-ranked customer search using the `fuzzy` package.
+  /// Returns customers sorted by match score descending.
+  List<CustomerLedger> _fuzzySearchCustomers(
+    String query,
+    List<CustomerLedger> all,
+  ) {
+    if (query.isEmpty) return all;
+    final q = query.toLowerCase().trim();
+
+    // Score each customer
+    final scored = all.map((c) {
+      final name = c.customerName.toLowerCase();
+      double score = 0.0;
+
+      // Exact match
+      if (name == q) {
+        score = 1.0;
+      // Starts with query
+      } else if (name.startsWith(q)) {
+        score = 0.9;
+      // Contains query
+      } else if (name.contains(q)) {
+        score = 0.75;
+      } else {
+        // Fuzzy: use fuzzy package for similarity
+        final fuse = Fuzzy<String>(
+          [name],
+          options: FuzzyOptions(
+            threshold: 0.6,
+            distance: 100,
+            tokenize: false,
+          ),
+        );
+        final results = fuse.search(q);
+        if (results.isNotEmpty) {
+          // Fuzzy score is 0 (perfect) to 1 (no match) — invert it
+          score = math.max(0.0, 1.0 - results.first.score);
+        }
+        // Also check phone number match
+        if (c.customerPhone != null && c.customerPhone!.contains(q)) {
+          score = math.max(score, 0.7);
+        }
+      }
+      return (customer: c, score: score);
+    }).toList();
+
+    // Filter out near-zero matches and sort by score descending
+    scored.removeWhere((e) => e.score < 0.25);
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    return scored.map((e) => e.customer).toList();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   void _bumpTotal() {
     if (!_totalBumpController.isAnimating) {
@@ -580,16 +732,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     // Silence unused warning
     final _ = _selectedVendor?.vendorName;
 
-    // Filtered suggestions
-    final query = _partySearchController.text.trim().toLowerCase();
+    // Fuzzy-ranked suggestions (customers) / exact match (vendors)
+    final query = _partySearchController.text.trim();
     List<dynamic> partySuggestions = [];
     if (_partyType == 'customer') {
-      partySuggestions = customerState.ledgers
-          .where((l) => l.customerName.toLowerCase().contains(query))
-          .toList();
+      partySuggestions = _fuzzySearchCustomers(query, customerState.ledgers);
     } else {
+      final q = query.toLowerCase();
       partySuggestions = vendorState.ledgers
-          .where((l) => l.vendorName.toLowerCase().contains(query))
+          .where((l) => l.vendorName.toLowerCase().contains(q))
           .toList();
     }
 
@@ -876,55 +1027,164 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextField(
-                          controller: _partySearchController,
-                          focusNode: _partySearchFocusNode,
-                          style: TextStyle(
-                            color: context.textColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: _partyType == 'customer'
-                                ? 'Search Customer'
-                                : 'Search Supplier',
-                            hintText: 'Enter name or select...',
-                            prefixIcon: const Icon(
-                              LucideIcons.search,
-                              size: 20,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: context.borderColor,
+                        // ── Search field with mic button ──────────────────
+                        Stack(
+                          children: [
+                            TextField(
+                              controller: _partySearchController,
+                              focusNode: _partySearchFocusNode,
+                              style: TextStyle(
+                                color: context.textColor,
+                                fontWeight: FontWeight.bold,
                               ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: context.primaryColor,
+                              decoration: InputDecoration(
+                                labelText: _partyType == 'customer'
+                                    ? 'Search Customer'
+                                    : 'Search Supplier',
+                                hintText: _isListening
+                                    ? 'Listening...'
+                                    : 'Type name or use voice button →',
+                                prefixIcon: Icon(
+                                  _isListening
+                                      ? LucideIcons.mic
+                                      : LucideIcons.search,
+                                  size: 20,
+                                  color: _isListening
+                                      ? Colors.red
+                                      : context.textSecondaryColor,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _isListening
+                                        ? Colors.red.withValues(alpha: 0.6)
+                                        : context.borderColor,
+                                    width: _isListening ? 2 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: _isListening
+                                        ? Colors.red
+                                        : context.primaryColor,
+                                    width: _isListening ? 2 : 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                // Right side: clear OR mic
+                                suffixIcon: _partySearchController.text.isNotEmpty && !_isListening
+                                    ? IconButton(
+                                        icon: const Icon(LucideIcons.x, size: 16),
+                                        onPressed: () {
+                                          setState(() {
+                                            _partySearchController.clear();
+                                            _selectedCustomer = null;
+                                            _selectedVendor = null;
+                                            _mobileController.clear();
+                                            _heardText = '';
+                                          });
+                                        },
+                                      )
+                                    : _partyType == 'customer' && _speechAvailable
+                                        ? GestureDetector(
+                                            onTap: _isListening ? _stopListening : _startListening,
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(10),
+                                              child: AnimatedScale(
+                                                scale: _isListening ? _micPulse : 1.0,
+                                                duration: const Duration(milliseconds: 300),
+                                                child: Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: _isListening
+                                                        ? Colors.red
+                                                        : context.primaryColor,
+                                                    boxShadow: _isListening
+                                                        ? [
+                                                            BoxShadow(
+                                                              color: Colors.red.withValues(alpha: 0.4),
+                                                              blurRadius: 12,
+                                                              spreadRadius: 2,
+                                                            ),
+                                                          ]
+                                                        : [],
+                                                  ),
+                                                  child: Icon(
+                                                    _isListening
+                                                        ? LucideIcons.micOff
+                                                        : LucideIcons.mic,
+                                                    size: 18,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : null,
                               ),
-                              borderRadius: BorderRadius.circular(16),
                             ),
-                            suffixIcon: _partySearchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(LucideIcons.x, size: 16),
-                                    onPressed: () {
-                                      setState(() {
-                                        _partySearchController.clear();
-                                        _selectedCustomer = null;
-                                        _selectedVendor = null;
-                                        _mobileController.clear();
-                                      });
-                                    },
-                                  )
-                                : null,
-                          ),
+                          ],
                         ),
 
-                        // Suggestions overlay panel
-                        if (_showSuggestions && partySuggestions.isNotEmpty)
+                        // ── "I heard: X" banner (shown after voice input) ─
+                        if (_heardText.isNotEmpty && !_isListening)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.primaryColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: context.primaryColor.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    LucideIcons.volume2,
+                                    size: 14,
+                                    color: context.primaryColor,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: context.textSecondaryColor,
+                                        ),
+                                        children: [
+                                          const TextSpan(text: 'I heard: '),
+                                          TextSpan(
+                                            text: '"$_heardText"',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: context.textColor,
+                                            ),
+                                          ),
+                                          const TextSpan(
+                                            text: '  — Select from below or type to refine',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // ── Suggestions dropdown panel ────────────────────
+                        if (_showSuggestions)
                           Container(
                             margin: const EdgeInsets.only(top: 8),
-                            constraints: const BoxConstraints(maxHeight: 180),
+                            constraints: const BoxConstraints(maxHeight: 220),
                             decoration: BoxDecoration(
                               color: context.surfaceColor,
                               borderRadius: BorderRadius.circular(16),
@@ -934,68 +1194,126 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                               ),
                               boxShadow: context.premiumShadow,
                             ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: partySuggestions.length,
-                              itemBuilder: (ctx, idx) {
-                                final p = partySuggestions[idx];
-                                final String name = _partyType == 'customer'
-                                    ? (p as CustomerLedger).customerName
-                                    : (p as VendorLedger).vendorName;
-                                final double balance = p.balanceDue;
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (partySuggestions.isNotEmpty)
+                                  Flexible(
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      itemCount: partySuggestions.length,
+                                      itemBuilder: (ctx, idx) {
+                                        final p = partySuggestions[idx];
+                                        final String name = _partyType == 'customer'
+                                            ? (p as CustomerLedger).customerName
+                                            : (p as VendorLedger).vendorName;
+                                        final double balance = p.balanceDue;
+                                        // Show a ✓ match indicator for top result after voice
+                                        final bool isTopVoiceMatch =
+                                            _heardText.isNotEmpty && idx == 0;
 
-                                return ListTile(
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: context.primaryColor
-                                        .withValues(alpha: 0.1),
-                                    child: Text(
-                                      name.isNotEmpty
-                                          ? name[0].toUpperCase()
-                                          : '',
-                                      style: TextStyle(
-                                        color: context.primaryColor,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                        return ListTile(
+                                          leading: CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: isTopVoiceMatch
+                                                ? context.primaryColor.withValues(alpha: 0.18)
+                                                : context.primaryColor.withValues(alpha: 0.1),
+                                            child: Text(
+                                              name.isNotEmpty ? name[0].toUpperCase() : '',
+                                              style: TextStyle(
+                                                color: context.primaryColor,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          title: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  style: TextStyle(
+                                                    color: context.textColor,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isTopVoiceMatch)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'Best match',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.green,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          subtitle: Text(
+                                            'Balance: ₹${balance.toStringAsFixed(0)}',
+                                            style: TextStyle(
+                                              color: context.textSecondaryColor,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          onTap: () {
+                                            HapticFeedback.selectionClick();
+                                            setState(() {
+                                              _partySearchController.text = name;
+                                              _heardText = '';
+                                              if (_partyType == 'customer') {
+                                                _selectedCustomer = p as CustomerLedger;
+                                                final phone =
+                                                    _selectedCustomer?.customerPhone ?? '';
+                                                _mobileController.text = phone
+                                                    .replaceAll('+91', '')
+                                                    .trim();
+                                              } else {
+                                                _selectedVendor = p as VendorLedger;
+                                              }
+                                              _showSuggestions = false;
+                                            });
+                                            _partySearchFocusNode.unfocus();
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  )
+                                else
+                                  // No matches — show create new hint
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          LucideIcons.userPlus,
+                                          size: 16,
+                                          color: context.primaryColor,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'No existing customer found. A new one will be created.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: context.textSecondaryColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  title: Text(
-                                    name,
-                                    style: TextStyle(
-                                      color: context.textColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    'Balance: ₹${balance.toStringAsFixed(0)}',
-                                    style: TextStyle(
-                                      color: context.textSecondaryColor,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  onTap: () {
-                                    HapticFeedback.selectionClick();
-                                    // Cancel the delayed hide so no double-setState
-                                    setState(() {
-                                      _partySearchController.text = name;
-                                      if (_partyType == 'customer') {
-                                        _selectedCustomer = p as CustomerLedger;
-                                        final phone =
-                                            _selectedCustomer?.customerPhone ??
-                                            '';
-                                        _mobileController.text = phone
-                                            .replaceAll('+91', '')
-                                            .trim();
-                                      } else {
-                                        _selectedVendor = p as VendorLedger;
-                                      }
-                                      _showSuggestions = false;
-                                    });
-                                    _partySearchFocusNode.unfocus();
-                                  },
-                                );
-                              },
+                              ],
                             ),
                           ),
                       ],
@@ -1161,58 +1479,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ),
                     ),
                   ] else ...[
-                    // Table header
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                            flex: 3,
-                            child: Text(
-                              'Item Name',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const Expanded(
-                            flex: 2,
-                            child: Text(
-                              'Qty',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const Expanded(
-                            flex: 2,
-                            child: Text(
-                              'Rate',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          // Subtotal column header
-                          SizedBox(
-                            width: 68,
-                            child: Text(
-                              'Amount',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                      ),
-                    ),
-                    // Line Items builder
+                    // Line Items builder using spacious card design
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -1220,17 +1487,30 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       itemBuilder: (ctx, idx) {
                         final item = _items[idx];
                         final rowSubtotal = item.quantity * item.rate;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12.0),
+                          padding: const EdgeInsets.all(12.0),
+                          decoration: BoxDecoration(
+                            color: context.surfaceColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: context.borderColor.withValues(alpha: 0.6),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Row 1: Item Search / Input & Delete button
                               Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // Name field with autocomplete
                                   Expanded(
-                                    flex: 3,
                                     child: Autocomplete<CatalogueItem>(
                                       displayStringForOption: (option) =>
                                           option.itemName,
@@ -1265,6 +1545,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                               .toStringAsFixed(0);
                                         });
                                         _bumpTotal();
+                                        // Auto-focus rate field on selection
+                                        item.rateFocusNode.requestFocus();
                                       },
                                       fieldViewBuilder:
                                           (
@@ -1286,10 +1568,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                 fontWeight: FontWeight.bold,
                                               ),
                                               decoration: InputDecoration(
-                                                hintText: 'Item...',
+                                                labelText: 'Item Name',
+                                                labelStyle: TextStyle(
+                                                  fontSize: 12,
+                                                  color: context.textSecondaryColor,
+                                                ),
+                                                hintText: 'Search or enter item...',
                                                 contentPadding:
                                                     const EdgeInsets.symmetric(
-                                                      horizontal: 10,
+                                                      horizontal: 12,
                                                       vertical: 12,
                                                     ),
                                                 enabledBorder:
@@ -1300,7 +1587,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                       ),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            10,
+                                                            12,
                                                           ),
                                                     ),
                                                 focusedBorder:
@@ -1311,7 +1598,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                       ),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            10,
+                                                            12,
                                                           ),
                                                     ),
                                               ),
@@ -1332,7 +1619,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                 .withValues(alpha: 0.15),
                                             color: context.surfaceColor,
                                             child: Container(
-                                              width: 220,
+                                              width: MediaQuery.of(context).size.width - 100,
                                               constraints: const BoxConstraints(
                                                 maxHeight: 200,
                                               ),
@@ -1372,7 +1659,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                         padding:
                                                             const EdgeInsets.symmetric(
                                                               horizontal: 12,
-                                                              vertical: 10,
+                                                              vertical: 12,
                                                             ),
                                                         child: Row(
                                                           mainAxisAlignment:
@@ -1386,7 +1673,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
-                                                                  fontSize: 13,
+                                                                  fontSize: 14,
                                                                 ),
                                                                 maxLines: 1,
                                                                 overflow:
@@ -1397,7 +1684,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                             Text(
                                                               '₹${option.lastPrice.toStringAsFixed(0)}',
                                                               style: TextStyle(
-                                                                fontSize: 12,
+                                                                fontSize: 13,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .bold,
@@ -1418,179 +1705,232 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                       },
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  // Qty stepper
-                                  Expanded(
-                                    flex: 2,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: context.borderColor,
-                                        ),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () {
-                                              HapticFeedback.lightImpact();
-                                              setState(() {
-                                                if (item.quantity > 1.0) {
-                                                  item.quantity -= 1.0;
-                                                } else {
-                                                  final removed = _items
-                                                      .removeAt(idx);
-                                                  removed.dispose();
-                                                }
-                                              });
-                                              _bumpTotal();
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.all(
-                                                8.0,
-                                              ),
-                                              child: const Icon(
-                                                LucideIcons.minus,
-                                                size: 14,
-                                              ),
-                                            ),
-                                          ),
-                                          Text(
-                                            item.quantity % 1 == 0
-                                                ? item.quantity
-                                                      .toInt()
-                                                      .toString()
-                                                : item.quantity.toString(),
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          GestureDetector(
-                                            onTap: () {
-                                              HapticFeedback.lightImpact();
-                                              setState(() {
-                                                item.quantity += 1.0;
-                                              });
-                                              _bumpTotal();
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.all(
-                                                8.0,
-                                              ),
-                                              child: const Icon(
-                                                LucideIcons.plus,
-                                                size: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: Icon(
+                                      LucideIcons.trash2,
+                                      color: context.errorColor.withValues(alpha: 0.8),
+                                      size: 20,
                                     ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  // Rate input
-                                  Expanded(
-                                    flex: 2,
-                                    child: TextFormField(
-                                      controller: item.rateController,
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                      decoration: InputDecoration(
-                                        prefixText: '₹',
-                                        hintText: '0',
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 12,
-                                            ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: context.borderColor,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: BorderSide(
-                                            color: context.primaryColor,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      onChanged: (val) {
-                                        setState(() {
-                                          item.rate =
-                                              double.tryParse(val) ?? 0.0;
-                                        });
-                                        _bumpTotal();
-                                      },
-                                    ),
-                                  ),
-                                  // Row subtotal chip
-                                  SizedBox(
-                                    width: 68,
-                                    child: AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      transitionBuilder: (child, animation) =>
-                                          FadeTransition(
-                                            opacity: animation,
-                                            child: SlideTransition(
-                                              position: Tween<Offset>(
-                                                begin: const Offset(0, -0.3),
-                                                end: Offset.zero,
-                                              ).animate(animation),
-                                              child: child,
-                                            ),
-                                          ),
-                                      child: Text(
-                                        key: ValueKey(
-                                          'sub_${idx}_${rowSubtotal.toInt()}',
-                                        ),
-                                        rowSubtotal > 0
-                                            ? '₹${rowSubtotal.toStringAsFixed(0)}'
-                                            : '—',
-                                        textAlign: TextAlign.right,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: rowSubtotal > 0
-                                              ? context.primaryColor
-                                              : context.textSecondaryColor,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  // Remove button
-                                  GestureDetector(
-                                    onTap: () {
+                                    onPressed: () {
+                                      HapticFeedback.lightImpact();
                                       setState(() {
-                                        _items.removeAt(idx);
+                                        final removed = _items.removeAt(idx);
+                                        removed.dispose();
                                       });
                                       _bumpTotal();
                                     },
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(left: 4),
-                                      child: Icon(
-                                        LucideIcons.xCircle,
-                                        color: context.errorColor.withValues(
-                                          alpha: 0.7,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Row 2: Qty Stepper, Rate Input, Amount Display
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Quantity Stepper
+                                  Expanded(
+                                    flex: 4,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Quantity',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.textSecondaryColor,
+                                          ),
                                         ),
-                                        size: 18,
-                                      ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: context.borderColor,
+                                            ),
+                                            borderRadius: BorderRadius.circular(12),
+                                            color: context.surfaceColor,
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              GestureDetector(
+                                                onTap: () {
+                                                  HapticFeedback.lightImpact();
+                                                  setState(() {
+                                                    if (item.quantity > 1.0) {
+                                                      item.quantity -= 1.0;
+                                                    } else {
+                                                      final removed = _items
+                                                          .removeAt(idx);
+                                                      removed.dispose();
+                                                    }
+                                                  });
+                                                  _bumpTotal();
+                                                },
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 8,
+                                                  ),
+                                                  child: const Icon(
+                                                    LucideIcons.minus,
+                                                    size: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                '${item.quantity % 1 == 0 ? item.quantity.toInt().toString() : item.quantity} ${item.unit != 'NOS' ? item.unit : ''}'.trim(),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  HapticFeedback.lightImpact();
+                                                  setState(() {
+                                                    item.quantity += 1.0;
+                                                  });
+                                                  _bumpTotal();
+                                                },
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 8,
+                                                  ),
+                                                  child: const Icon(
+                                                    LucideIcons.plus,
+                                                    size: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Rate Input
+                                  Expanded(
+                                    flex: 4,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Rate',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.textSecondaryColor,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        SizedBox(
+                                          height: 44,
+                                          child: TextFormField(
+                                            controller: item.rateController,
+                                            focusNode: item.rateFocusNode,
+                                            keyboardType:
+                                                const TextInputType.numberWithOptions(
+                                                  decimal: true,
+                                                ),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                            decoration: InputDecoration(
+                                              prefixText: '₹',
+                                              hintText: '0',
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 10,
+                                                  ),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderSide: BorderSide(
+                                                  color: context.borderColor,
+                                                ),
+                                                borderRadius: BorderRadius.circular(
+                                                  12,
+                                                ),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderSide: BorderSide(
+                                                  color: context.primaryColor,
+                                                ),
+                                                borderRadius: BorderRadius.circular(
+                                                  12,
+                                                ),
+                                              ),
+                                            ),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                item.rate =
+                                                    double.tryParse(val) ?? 0.0;
+                                              });
+                                              _bumpTotal();
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Amount Display
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'Amount',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.textSecondaryColor,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          height: 44,
+                                          alignment: Alignment.centerRight,
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            transitionBuilder: (child, animation) =>
+                                                FadeTransition(
+                                                  opacity: animation,
+                                                  child: SlideTransition(
+                                                    position: Tween<Offset>(
+                                                      begin: const Offset(0, -0.3),
+                                                      end: Offset.zero,
+                                                    ).animate(animation),
+                                                    child: child,
+                                                  ),
+                                                ),
+                                            child: Text(
+                                              key: ValueKey(
+                                                'sub_${idx}_${rowSubtotal.toInt()}',
+                                              ),
+                                              rowSubtotal > 0
+                                                  ? '₹${rowSubtotal.toStringAsFixed(0)}'
+                                                  : '—',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w900,
+                                                color: rowSubtotal > 0
+                                                    ? context.primaryColor
+                                                    : context.textSecondaryColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -1599,33 +1939,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                           ),
                         );
                       },
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _items.add(_ManualItem(name: ''));
-                            });
-                          },
-                          icon: const Icon(LucideIcons.plusCircle, size: 14),
-                          label: const Text('Add Custom Item'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _items.clear();
-                            });
-                            _bumpTotal();
-                          },
-                          child: Text(
-                            'Clear Items',
-                            style: TextStyle(color: context.errorColor),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                   const SizedBox(height: 20),

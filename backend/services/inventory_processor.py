@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
-FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
+FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping variable to prevent NameError
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%

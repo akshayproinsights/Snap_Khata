@@ -41,8 +41,8 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 MAX_RETRIES = 5
 
 # Model Configuration  (3-tier cascade: Lite → Flash → Pro)
-LITE_MODEL    = "gemini-3.1-flash-lite-preview"   # cheapest / fastest
-FLASH_MODEL   = "gemini-3-flash-preview"  # mid-tier
+LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
+FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping so we do not get NameError
 ACCURACY_THRESHOLD = 50.0  # escalate to next tier if accuracy < 50%

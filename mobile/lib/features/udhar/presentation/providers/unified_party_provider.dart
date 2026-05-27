@@ -38,7 +38,9 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
   // Add Customers
   if (filter == HomePartyFilter.all || filter == HomePartyFilter.customers || filter == HomePartyFilter.pending) {
     for (var ledger in udharState.ledgers) {
-      if (searchQuery.isNotEmpty && !ledger.customerName.toLowerCase().contains(searchQuery)) continue;
+      final matchesName = ledger.customerName.toLowerCase().contains(searchQuery);
+      final matchesPhone = ledger.customerPhone != null && ledger.customerPhone!.toLowerCase().contains(searchQuery);
+      if (searchQuery.isNotEmpty && !matchesName && !matchesPhone) continue;
       
       // Filter for pending: balanceDue > 0
       if (filter == HomePartyFilter.pending && ledger.balanceDue.abs() < 0.01) continue;

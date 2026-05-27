@@ -242,7 +242,7 @@ async def upload_mapping_sheet(
             
             # 4. Extract data using Gemini
             response = client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model="gemini-3.5-flash",
                 contents=[
                     types.Part.from_bytes(data=content, mime_type=content_type),
                     system_instruction
