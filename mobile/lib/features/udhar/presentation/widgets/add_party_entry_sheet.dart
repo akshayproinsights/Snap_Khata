@@ -803,6 +803,30 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     }
   }
 
+  Future<void> _openQuickBill() async {
+    final result = await Navigator.push<List<CatalogueCartItem>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ItemCataloguePage(selectionMode: true),
+      ),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      setState(() {
+        _items.addAll(
+          result.map(
+            (ci) => _ManualItem(
+              name: ci.name,
+              rate: ci.rate,
+              unit: ci.unit,
+              quantity: ci.qty.toDouble(),
+            ),
+          ),
+        );
+      });
+      _bumpTotal();
+    }
+  }
+
   double get _computedTotal {
     if (_items.isEmpty) return 0.0;
     return _items.fold(0.0, (sum, item) => sum + (item.quantity * item.rate));
@@ -1128,6 +1152,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => PhoneNumpadSheet(
         initial: _mobileController.text,
@@ -1974,11 +1999,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _items.add(_ManualItem(name: ''));
-                            });
-                          },
+                          onPressed: _openQuickBill,
                           icon: const Icon(LucideIcons.plusCircle, size: 16),
                           label: const Text('Add Line Items'),
                         ),
@@ -2034,7 +2055,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ],
                     ),
                   ] else ...[
-                    // ── Items header row with Add + Mic buttons ──────────────
+                    // ── Items header row with Add buttons ──────────────
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
@@ -2049,68 +2070,9 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                             ),
                           ),
                           const Spacer(),
-                          // Mic button
-                          if (_speechAvailable)
-                            GestureDetector(
-                              onTap: () => _isItemListening
-                                  ? _stopItemListening()
-                                  : _startItemListening(catalogueState.items),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  color: _isItemListening
-                                      ? const Color(0xFFFF5722).withValues(alpha: 0.12)
-                                      : context.primaryColor.withValues(alpha: 0.08),
-                                  border: Border.all(
-                                    color: _isItemListening
-                                        ? const Color(0xFFFF5722)
-                                        : context.primaryColor.withValues(alpha: 0.4),
-                                    width: 1.2,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Transform.scale(
-                                      scale: _isItemListening ? _itemMicPulse : 1.0,
-                                      child: Icon(
-                                        _isItemListening
-                                            ? LucideIcons.micOff
-                                            : LucideIcons.mic,
-                                        size: 14,
-                                        color: _isItemListening
-                                            ? const Color(0xFFFF5722)
-                                            : context.primaryColor,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      _isItemListening ? 'Stop' : 'Add by voice',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: _isItemListening
-                                            ? const Color(0xFFFF5722)
-                                            : context.primaryColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          const SizedBox(width: 8),
                           // Add item manually
                           GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _items.add(_ManualItem(name: ''));
-                              });
-                            },
+                            onTap: _openQuickBill,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
@@ -2685,6 +2647,105 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                           ),
                         );
                       },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Add item button at bottom of list
+                        GestureDetector(
+                          onTap: _openQuickBill,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: context.primaryColor.withValues(alpha: 0.08),
+                              border: Border.all(
+                                color: context.primaryColor.withValues(alpha: 0.4),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.plus,
+                                  size: 14,
+                                  color: context.primaryColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Add Item',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: context.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_speechAvailable) ...[
+                          const SizedBox(width: 12),
+                          // Voice mic button at bottom of list
+                          GestureDetector(
+                            onTap: () => _isItemListening
+                                ? _stopItemListening()
+                                : _startItemListening(catalogueState.items),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: _isItemListening
+                                    ? const Color(0xFFFF5722).withValues(alpha: 0.12)
+                                    : context.primaryColor.withValues(alpha: 0.08),
+                                border: Border.all(
+                                  color: _isItemListening
+                                      ? const Color(0xFFFF5722)
+                                      : context.primaryColor.withValues(alpha: 0.4),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Transform.scale(
+                                    scale: _isItemListening ? _itemMicPulse : 1.0,
+                                    child: Icon(
+                                      _isItemListening
+                                          ? LucideIcons.micOff
+                                          : LucideIcons.mic,
+                                      size: 14,
+                                      color: _isItemListening
+                                          ? const Color(0xFFFF5722)
+                                          : context.primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _isItemListening ? 'Stop' : 'Add by voice',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _isItemListening
+                                          ? const Color(0xFFFF5722)
+                                          : context.primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                   const SizedBox(height: 20),

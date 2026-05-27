@@ -168,6 +168,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                           await showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
+                            useRootNavigator: true,
                             backgroundColor: Colors.transparent,
                             builder: (context) => const AddPartyEntrySheet(),
                           );
@@ -202,6 +203,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
         await showModalBottomSheet(
           context: widget.parentContext,
           isScrollControlled: true,
+          useRootNavigator: true,
           backgroundColor: Colors.transparent,
           builder: (context) => AddPartyEntrySheet(initialItems: result),
         );

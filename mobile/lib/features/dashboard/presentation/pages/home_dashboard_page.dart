@@ -691,6 +691,7 @@ class HomeDashboardPage extends ConsumerWidget {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
+              useRootNavigator: true,
               backgroundColor: Colors.transparent,
               builder: (_) => BillTypeSelectionSheet(parentContext: context),
             );
@@ -724,6 +725,7 @@ class HomeDashboardPage extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const ReviewCenterSheet(),
     );

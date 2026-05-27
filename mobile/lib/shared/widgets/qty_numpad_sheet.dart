@@ -61,9 +61,8 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
   @override
   void initState() {
     super.initState();
-    // Initialize digits
-    _digits = _formatQty(widget.initial);
-    if (_digits == '0') _digits = '';
+    // Start with empty digits so user can type immediately
+    _digits = '';
 
     _bounceCtrl = AnimationController(
       vsync: this,
@@ -158,27 +157,7 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
     if (!_bounceCtrl.isAnimating) _bounceCtrl.forward(from: 0);
   }
 
-  // ── Absolute Presets ──────────────────────────────────────────────────────
 
-  void _applyAbsolutePreset(num value) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _digits = _formatQty(value);
-    });
-    _triggerBounce();
-  }
-
-  // ── Relative Adjustments ──────────────────────────────────────────────────
-
-  void _applyRelativeAdjustment(num delta) {
-    HapticFeedback.mediumImpact();
-    final current = _currentValue;
-    final next = (current + delta).clamp(0.0, 99999.0);
-    setState(() {
-      _digits = _formatQty(next);
-    });
-    _triggerBounce();
-  }
 
   // ── Voice ─────────────────────────────────────────────────────────────────
 
@@ -299,15 +278,6 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
     final value = _currentValue;
     final subtotal = value * widget.rate;
     final isValid = value > 0;
-
-    // Standard preset lists
-    final absolutePresets = widget.isDecimal
-        ? [0.5, 1, 2, 5, 10, 25]
-        : [1, 2, 5, 10, 25, 50];
-
-    final relativeAdjustments = widget.isDecimal
-        ? [0.5, 1.0, 5.0]
-        : [1.0, 5.0, 10.0];
 
     return Container(
       decoration: BoxDecoration(
@@ -542,128 +512,7 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
               ),
             ),
 
-          // ── Presets Rows ──────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            child: Column(
-              children: [
-                // Row 1: Absolute values
-                SizedBox(
-                  height: 36,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: absolutePresets.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, idx) {
-                      if (idx == 0) {
-                        return Center(
-                          child: Text(
-                            'Presets:',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: context.textSecondaryColor,
-                            ),
-                          ),
-                        );
-                      }
-                      final val = absolutePresets[idx - 1];
-                      final isSelected = widget.isDecimal 
-                          ? value == val
-                          : value.toInt() == val.toInt();
-                      return ChoiceChip(
-                        label: Text(
-                          widget.isDecimal ? val.toString() : val.toInt().toString(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: isSelected ? Colors.white : context.textColor,
-                          ),
-                        ),
-                        selected: isSelected,
-                        onSelected: (_) => _applyAbsolutePreset(val),
-                        selectedColor: context.primaryColor,
-                        backgroundColor: context.surfaceColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: isSelected ? context.primaryColor : context.borderColor,
-                            width: 1,
-                          ),
-                        ),
-                        showCheckmark: false,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Row 2: Add-on values
-                SizedBox(
-                  height: 36,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: relativeAdjustments.length + 2,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, idx) {
-                      if (idx == 0) {
-                        return Center(
-                          child: Text(
-                            'Adjust:',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: context.textSecondaryColor,
-                            ),
-                          ),
-                        );
-                      }
-                      if (idx == 1) {
-                        // Quick Clear / Reset
-                        return ActionChip(
-                          avatar: Icon(LucideIcons.rotateCcw, size: 11, color: context.errorColor),
-                          label: Text(
-                            'Reset',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: context.errorColor,
-                            ),
-                          ),
-                          onPressed: _onClear,
-                          backgroundColor: context.errorColor.withValues(alpha: 0.05),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(color: context.errorColor.withValues(alpha: 0.2)),
-                          ),
-                        );
-                      }
-                      final delta = relativeAdjustments[idx - 2];
-                      final label = '+${widget.isDecimal ? delta.toString() : delta.toInt().toString()}';
-                      return ActionChip(
-                        label: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: context.primaryColor,
-                          ),
-                        ),
-                        onPressed: () => _applyRelativeAdjustment(delta),
-                        backgroundColor: context.primaryColor.withValues(alpha: 0.05),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(color: context.borderColor),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
 
           // ── Numpad Grid ───────────────────────────────────────────────────
           Padding(
@@ -812,7 +661,7 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
                     const SizedBox(width: 8),
                     Text(
                       isValid
-                          ? 'Set Quantity · ₹${subtotal.toStringAsFixed(0)}'
+                          ? 'Set Quantity'
                           : 'Enter a valid quantity',
                       style: const TextStyle(
                         fontSize: 16,
