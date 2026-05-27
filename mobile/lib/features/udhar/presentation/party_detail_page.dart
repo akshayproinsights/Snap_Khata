@@ -1,4 +1,5 @@
 import "package:mobile/core/theme/context_extension.dart";
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,8 @@ import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_to_text.dart' show SpeechListenOptions;
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -748,181 +751,30 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     BuildContext context,
     CustomerLedger currentLedger,
   ) {
-    final phoneController = TextEditingController(
-      text: currentLedger.customerPhone ?? '',
-    );
-    bool isSubmitting = false;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 24,
-                right: 24,
-                top: 24,
-              ),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: context.borderColor,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Mobile Number',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                    ),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    maxLength: 10,
-                    decoration: InputDecoration(
-                      labelText: 'Customer Mobile Number',
-                      labelStyle: TextStyle(color: context.textSecondaryColor),
-                      prefixIcon: Icon(
-                        LucideIcons.phone,
-                        color: context.primaryColor,
-                      ),
-                      filled: true,
-                      fillColor: context.textSecondaryColor.withValues(
-                        alpha: 0.03,
-                      ),
-                      suffixIcon: ContactUtils.isSupported
-                          ? IconButton(
-                              icon: Icon(
-                                LucideIcons.contact,
-                                color: context.primaryColor,
-                              ),
-                              onPressed: () async {
-                                final phone =
-                                    await ContactUtils.pickContactPhone();
-                                if (phone != null && mounted) {
-                                  setState(() {
-                                    phoneController.text = phone;
-                                  });
-                                }
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: context.borderColor),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: context.borderColor),
-                      ),
-                      counterText: '',
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              final phone = phoneController.text.trim();
-
-                              setModalState(() => isSubmitting = true);
-                              final success = await ref
-                                  .read(udharProvider.notifier)
-                                  .updateCustomerPhone(currentLedger.id, phone);
-
-                              if (success && context.mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Mobile number saved! 🎉'),
-                                  ),
-                                );
-                              } else {
-                                setModalState(() => isSubmitting = false);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Failed to save mobile number.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.primaryColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: isSubmitting
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
+      builder: (ctx) => _EditPhoneSheet(
+        currentLedger: currentLedger,
+        onSaved: (phone) async {
+          final success = await ref
+              .read(udharProvider.notifier)
+              .updateCustomerPhone(currentLedger.id, phone);
+          if (success && ctx.mounted) {
+            Navigator.pop(ctx);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Mobile number saved! 🎉')),
+              );
+            }
+          } else if (ctx.mounted) {
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              const SnackBar(content: Text('Failed to save mobile number.')),
             );
-          },
-        );
-      },
+          }
+        },
+      ),
     );
   }
 
@@ -3176,6 +3028,528 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ),
             textAlign: TextAlign.center,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+/// Voice-enabled phone edit bottom sheet.
+/// Owns its own SpeechToText so it can properly manage mic lifecycle.
+// ─────────────────────────────────────────────────────────────────────────────
+class _EditPhoneSheet extends StatefulWidget {
+  final CustomerLedger currentLedger;
+  final Future<void> Function(String phone) onSaved;
+
+  const _EditPhoneSheet({
+    required this.currentLedger,
+    required this.onSaved,
+  });
+
+  @override
+  State<_EditPhoneSheet> createState() => _EditPhoneSheetState();
+}
+
+class _EditPhoneSheetState extends State<_EditPhoneSheet> {
+  late final TextEditingController _phoneController;
+  final stt.SpeechToText _speech = stt.SpeechToText();
+
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  double _micPulse = 1.0;
+  Timer? _pulseTimer;
+  String _heardText = '';
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneController = TextEditingController(
+      text: widget.currentLedger.customerPhone ?? '',
+    );
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    final ok = await _speech.initialize(
+      onError: (_) {
+        if (mounted) setState(() => _isListening = false);
+        _pulseTimer?.cancel();
+      },
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          _pulseTimer?.cancel();
+          if (mounted) setState(() => _isListening = false);
+        }
+      },
+    );
+    if (mounted) setState(() => _speechAvailable = ok);
+  }
+
+  Future<void> _startListening() async {
+    if (!_speechAvailable || _isListening) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isListening = true;
+      _micPulse = 1.0;
+      _heardText = '';
+    });
+
+    _pulseTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) setState(() => _micPulse = _micPulse == 1.0 ? 1.35 : 1.0);
+    });
+
+    await _speech.listen(
+      listenOptions: SpeechListenOptions(
+        localeId: 'en-IN',
+        listenFor: const Duration(seconds: 10),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+      ),
+      onResult: (result) {
+        if (!mounted) return;
+        final raw = result.recognizedWords;
+        setState(() => _heardText = raw);
+        if (raw.trim().isNotEmpty) {
+          final digits = _parseSpokenMobileNumber(raw);
+          if (digits.isNotEmpty) {
+            setState(() => _phoneController.text = digits);
+          }
+        }
+        if (result.finalResult) _stopListening();
+      },
+    );
+  }
+
+  Future<void> _stopListening() async {
+    _pulseTimer?.cancel();
+    await _speech.stop();
+    if (mounted) setState(() => _isListening = false);
+  }
+
+  /// Converts spoken number utterances to a digit string (max 10 digits).
+  /// Handles: digit-by-digit, pairs (English & Marathi), mixed.
+  String _parseSpokenMobileNumber(String raw) {
+    if (raw.trim().isEmpty) return '';
+
+    const marathiTens = {
+      'vis': 20, 'vees': 20, 'wees': 20,
+      'tees': 30, 'this': 30,
+      'challees': 40, 'chalis': 40, 'chhalees': 40,
+      'pannhas': 50, 'pannas': 50, 'panas': 50,
+      'saath': 60, 'saatth': 60, 'sath': 60, 'saahath': 60,
+      'sattar': 70, 'satar': 70,
+      'ashi': 80, 'aashi': 80,
+      'nabbad': 90, 'navad': 90, 'nabbud': 90,
+    };
+
+    const digitWords = {
+      'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4,
+      'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+      'ek': 1, 'shunya': 0,
+      'don': 2, 'do': 2, 'dohn': 2,
+      'teen': 3, 'tin': 3,
+      'char': 4,
+      'paach': 5, 'panch': 5, 'paanch': 5,
+      'saha': 6, 'chha': 6, 'che': 6,
+      'aath': 8, 'aatth': 8,
+      'nau': 9, 'nav': 9,
+    };
+
+    const englishTens = {
+      'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
+      'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
+      'eighteen': 18, 'nineteen': 19,
+      'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50,
+      'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
+    };
+
+    const marathiCompound = {
+      'ekvis': 21, 'bavis': 22, 'teyvis': 23, 'chauvis': 24,
+      'panchvis': 25, 'savis': 26, 'sataavis': 27, 'atthavis': 28, 'ekonatis': 29,
+      'ekatis': 31, 'battis': 32, 'battees': 32, 'tettis': 33, 'chautis': 34,
+      'pentis': 35, 'chattis': 36, 'settis': 37, 'apphatthis': 38, 'ekonchalis': 39,
+      'ekchalis': 41, 'bechalis': 42, 'trechalis': 43, 'chaucalis': 44,
+      'panchechalis': 45, 'sehechalis': 46, 'sataachalis': 47, 'atthaachalis': 48, 'ekonpannas': 49,
+      'ekavan': 51, 'bavan': 52, 'trevan': 53, 'chavan': 54, 'chauvan': 54,
+      'panchavan': 55, 'sahavan': 56, 'sattavan': 57, 'athhavan': 58, 'ekonsaath': 59,
+      'eksaath': 61, 'basaath': 62, 'tresaath': 63, 'chausaath': 64,
+      'pansaath': 65, 'sahesaath': 66, 'satsaath': 67, 'atthsaath': 68, 'ekonsattar': 69,
+      'eksattar': 71, 'basattar': 72, 'tresattar': 73, 'chausattar': 74,
+      'pansattar': 75, 'sahesattar': 76, 'shahattar': 76, 'satsattar': 77, 'atthasattar': 78, 'ekonashi': 79,
+      'ekaashi': 81, 'byasi': 82, 'treashi': 83, 'chorashi': 84,
+      'panchaashi': 85, 'sahashi': 86, 'sataashi': 87, 'athhashi': 88, 'ekonanabba': 89,
+      'ekanabba': 91, 'banabba': 92, 'trenabba': 93, 'chaunabba': 94,
+      'panchananabba': 95, 'shahanabba': 96, 'sattaanabba': 97,
+      'aathyanabba': 98, 'aathyanab': 98,
+      'navaanabba': 99,
+    };
+
+    final tokens = raw.toLowerCase().trim()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    final nums = <int>[];
+    int i = 0;
+    while (i < tokens.length) {
+      final t = tokens[i];
+      final asInt = int.tryParse(t);
+      if (asInt != null) { nums.add(asInt); i++; continue; }
+      if (marathiCompound.containsKey(t)) { nums.add(marathiCompound[t]!); i++; continue; }
+      if (marathiTens.containsKey(t)) { nums.add(marathiTens[t]!); i++; continue; }
+      if (englishTens.containsKey(t)) {
+        int val = englishTens[t]!;
+        if (i + 1 < tokens.length) {
+          final nextDigit = digitWords[tokens[i + 1]];
+          if (nextDigit != null && val >= 20) { nums.add(val + nextDigit); i += 2; continue; }
+        }
+        nums.add(val); i++; continue;
+      }
+      if (digitWords.containsKey(t)) { nums.add(digitWords[t]!); i++; continue; }
+      i++;
+    }
+
+    if (nums.isEmpty) return '';
+    final sb = StringBuffer();
+    for (final n in nums) { sb.write(n.toString()); }
+    final digits = sb.toString().replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+  }
+
+  @override
+  void dispose() {
+    _pulseTimer?.cancel();
+    _speech.stop();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = _phoneController.text;
+    final isValid = phone.length == 10;
+    final isEmpty = phone.isEmpty;
+
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 24,
+        right: 24,
+        top: 24,
+      ),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Mobile Number',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(LucideIcons.x),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Phone field row ─────────────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // +91 prefix
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _isListening
+                      ? Colors.red.withValues(alpha: 0.08)
+                      : context.primaryColor.withValues(alpha: 0.08),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                  border: Border(
+                    top: BorderSide(color: _isListening ? Colors.red.withValues(alpha: 0.6) : context.primaryColor.withValues(alpha: 0.3)),
+                    left: BorderSide(color: _isListening ? Colors.red.withValues(alpha: 0.6) : context.primaryColor.withValues(alpha: 0.3)),
+                    bottom: BorderSide(color: _isListening ? Colors.red.withValues(alpha: 0.6) : context.primaryColor.withValues(alpha: 0.3)),
+                  ),
+                ),
+                child: Text(
+                  '+91',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: _isListening ? Colors.red : context.primaryColor,
+                  ),
+                ),
+              ),
+              // Number input
+              Expanded(
+                child: TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    letterSpacing: 1.5,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    hintText: _isListening ? 'Bol... number sanga' : '98765 43210',
+                    hintStyle: TextStyle(
+                      color: _isListening
+                          ? Colors.red.withValues(alpha: 0.7)
+                          : context.textSecondaryColor.withValues(alpha: 0.4),
+                      fontWeight: _isListening ? FontWeight.w600 : FontWeight.normal,
+                      fontSize: 14,
+                      letterSpacing: 0,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      borderSide: BorderSide(
+                        color: _isListening
+                            ? Colors.red.withValues(alpha: 0.6)
+                            : context.primaryColor.withValues(alpha: 0.3),
+                        width: _isListening ? 2 : 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                      ),
+                      borderSide: BorderSide(
+                        color: _isListening ? Colors.red : context.primaryColor,
+                        width: 2,
+                      ),
+                    ),
+                    fillColor: _isListening
+                        ? Colors.red.withValues(alpha: 0.03)
+                        : context.primaryColor.withValues(alpha: 0.03),
+                    filled: true,
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Mic button
+                        if (_speechAvailable)
+                          GestureDetector(
+                            onTap: _isListening ? _stopListening : _startListening,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              child: AnimatedScale(
+                                scale: _isListening ? _micPulse : 1.0,
+                                duration: const Duration(milliseconds: 300),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _isListening ? Colors.red : context.primaryColor,
+                                    boxShadow: _isListening
+                                        ? [BoxShadow(color: Colors.red.withValues(alpha: 0.45), blurRadius: 14, spreadRadius: 2)]
+                                        : [],
+                                  ),
+                                  child: Icon(
+                                    _isListening ? LucideIcons.micOff : LucideIcons.mic,
+                                    size: 17,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Contact picker
+                        if (ContactUtils.isSupported)
+                          IconButton(
+                            icon: Icon(LucideIcons.contact, color: context.primaryColor),
+                            onPressed: () async {
+                              final p = await ContactUtils.pickContactPhone();
+                              if (p != null && mounted) {
+                                setState(() {
+                                  _phoneController.text = p;
+                                  _heardText = '';
+                                });
+                              }
+                            },
+                          ),
+                        // Validity indicator
+                        if (!isEmpty && !_isListening)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(
+                              isValid ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+                              size: 18,
+                              color: isValid ? context.successColor : context.warningColor,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+
+          // Validation hint
+          if (!isEmpty && !isValid && !_isListening)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 4),
+              child: Text(
+                'Enter 10-digit mobile number',
+                style: TextStyle(fontSize: 11, color: context.warningColor),
+              ),
+            ),
+
+          // Live listening banner
+          if (_isListening)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedScale(
+                      scale: _micPulse,
+                      duration: const Duration(milliseconds: 300),
+                      child: const Icon(LucideIcons.mic, size: 14, color: Colors.red),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Bolte raho... ek ek ya jodi jodi\n'
+                        'e.g. "nine eight" · "vis" · "battees" · "ninety eight"',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.red.withValues(alpha: 0.8),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // "I heard" banner
+          if (_heardText.isNotEmpty && !_isListening)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: context.primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: context.primaryColor.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.volume2, size: 14, color: context.primaryColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
+                          children: [
+                            const TextSpan(text: 'I heard: '),
+                            TextSpan(
+                              text: '"$_heardText"',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: context.textColor),
+                            ),
+                            if (isValid)
+                              TextSpan(
+                                text: '  ✓ Number set',
+                                style: TextStyle(color: context.successColor, fontWeight: FontWeight.w600),
+                              )
+                            else
+                              const TextSpan(text: '  — Tap to edit'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _heardText = ''),
+                      child: Icon(LucideIcons.x, size: 14, color: context.textSecondaryColor),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 28),
+
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _isSubmitting
+                  ? null
+                  : () async {
+                      setState(() => _isSubmitting = true);
+                      await widget.onSaved(_phoneController.text.trim());
+                      if (mounted) setState(() => _isSubmitting = false);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Save', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );

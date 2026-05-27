@@ -47,6 +47,8 @@ class _ManualItem {
   double quantity;
   double rate;
   String unit;
+  /// True when this item was added via voice and is NOT in the catalogue (new item).
+  bool isNew;
   late final TextEditingController rateController;
   late final FocusNode rateFocusNode;
 
@@ -55,6 +57,7 @@ class _ManualItem {
     this.quantity = 1.0,
     this.rate = 0.0,
     this.unit = 'NOS',
+    this.isNew = false,
   }) {
     rateController = TextEditingController(
       text: rate > 0 ? rate.toStringAsFixed(0) : '',
@@ -98,13 +101,24 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   VendorLedger? _selectedVendor;
   bool _showSuggestions = false;
 
-  // ── Voice search ──────────────────────────────────────────────────────────
+  // ── Voice search (customer name) ─────────────────────────────────────────
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
   String _heardText = ''; // raw transcript shown to user
   Timer? _voicePulseTimer;
   double _micPulse = 1.0; // scale for animated mic ring
+
+  // ── Voice input (item list) ───────────────────────────────────────────────
+  bool _isItemListening = false;
+  Timer? _itemVoiceTimer;
+  double _itemMicPulse = 1.0;
+
+  // ── Voice input (mobile number) ───────────────────────────────────────────
+  bool _isMobileListening = false;
+  Timer? _mobileVoiceTimer;
+  double _mobileMicPulse = 1.0;
+  String _heardMobileText = ''; // raw transcript for "I heard" banner
   // ─────────────────────────────────────────────────────────────────────────
 
   // Line items list
@@ -210,6 +224,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _paidAmountController.dispose();
     _mobileFocusNode.dispose();
     _voicePulseTimer?.cancel();
+    _itemVoiceTimer?.cancel();
+    _mobileVoiceTimer?.cancel();
     _speech.stop();
     super.dispose();
   }
@@ -276,6 +292,512 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     await _speech.stop();
     if (mounted) setState(() => _isListening = false);
   }
+
+  // ── Item list voice methods ───────────────────────────────────────────────
+
+  Future<void> _startItemListening(List<CatalogueItem> catalogue) async {
+    if (!_speechAvailable || _isItemListening || _isListening) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isItemListening = true;
+      _itemMicPulse = 1.0;
+    });
+
+    _itemVoiceTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) {
+        setState(() {
+          _itemMicPulse = _itemMicPulse == 1.0 ? 1.35 : 1.0;
+        });
+      }
+    });
+
+    await _speech.listen(
+      listenOptions: SpeechListenOptions(
+        localeId: 'en-IN',
+        listenFor: const Duration(seconds: 12),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: false,
+      ),
+      onResult: (result) async {
+        if (!mounted) return;
+        if (result.finalResult) {
+          _stopItemListening();
+          final transcript = result.recognizedWords;
+          if (transcript.trim().isEmpty) return;
+
+          // ── Gemini-first parse ────────────────────────────────────────────
+          // Try the backend AI endpoint. On any failure (offline, error, empty
+          // result) silently fall back to the local regex parser.
+          List<_ManualItem> parsed = [];
+          try {
+            parsed = await _parseItemsWithGemini(transcript, catalogue);
+          } catch (_) {
+            parsed = [];
+          }
+
+          // ── Local regex fallback ──────────────────────────────────────────
+          if (parsed.isEmpty) {
+            parsed = _parseVoiceItems(transcript, catalogue);
+          }
+
+          if (parsed.isNotEmpty && mounted) {
+            setState(() {
+              _items.addAll(parsed);
+            });
+            _bumpTotal();
+            AppToast.showSuccess(
+              context,
+              '${parsed.length} item${parsed.length == 1 ? '' : 's'} added 🎉',
+            );
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _stopItemListening() async {
+    _itemVoiceTimer?.cancel();
+    await _speech.stop();
+    if (mounted) setState(() => _isItemListening = false);
+  }
+
+  /// Call the backend `/api/voice/parse-items` endpoint.
+  /// Returns an empty list on any error so the caller falls back to regex.
+  Future<List<_ManualItem>> _parseItemsWithGemini(
+    String transcript,
+    List<CatalogueItem> catalogue,
+  ) async {
+    final response = await ApiClient().dio.post(
+      '/api/voice/parse-items',
+      data: {
+        'transcript': transcript,
+        'catalogue_names': catalogue.map((c) => c.itemName).toList(),
+      },
+    );
+
+    final status = response.data['status'] as String? ?? '';
+    if (status != 'success') return [];
+
+    final rawItems = response.data['items'] as List<dynamic>? ?? [];
+    if (rawItems.isEmpty) return [];
+
+    final results = <_ManualItem>[];
+    for (final it in rawItems) {
+      final name = (it['name'] as String? ?? '').trim();
+      if (name.isEmpty) continue;
+      final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
+      final unit = (it['unit'] as String? ?? 'NOS').toUpperCase();
+
+      // Try to match returned name against catalogue for price autofill
+      final catalogueMatch = _matchCatalogueItem(name, catalogue);
+      if (catalogueMatch != null) {
+        results.add(
+          _ManualItem(
+            name: catalogueMatch.itemName,
+            quantity: qty,
+            rate: catalogueMatch.lastPrice,
+            unit: unit == 'NOS' ? catalogueMatch.unit : unit,
+            isNew: false,
+          )..rateController.text = catalogueMatch.lastPrice > 0
+              ? catalogueMatch.lastPrice.toStringAsFixed(0)
+              : '',
+        );
+      } else {
+        results.add(
+          _ManualItem(
+            name: name,
+            quantity: qty,
+            rate: 0.0,
+            unit: unit,
+            isNew: true,
+          ),
+        );
+      }
+    }
+    return results;
+  }
+
+  // ── Mobile number voice helpers ───────────────────────────────────────────
+
+  Future<void> _startMobileListening() async {
+    if (!_speechAvailable || _isMobileListening || _isListening || _isItemListening) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isMobileListening = true;
+      _mobileMicPulse = 1.0;
+      _heardMobileText = '';
+    });
+
+    _mobileVoiceTimer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) {
+        setState(() {
+          _mobileMicPulse = _mobileMicPulse == 1.0 ? 1.35 : 1.0;
+        });
+      }
+    });
+
+    // Use mr-IN for Marathi, fall back to en-IN if not available.
+    // The recognizer typically handles mixed Marathi+English well on en-IN too.
+    await _speech.listen(
+      listenOptions: SpeechListenOptions(
+        localeId: 'en-IN',
+        listenFor: const Duration(seconds: 10),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+      ),
+      onResult: (result) {
+        if (!mounted) return;
+        final raw = result.recognizedWords;
+        setState(() => _heardMobileText = raw);
+        if (result.finalResult || raw.trim().isNotEmpty) {
+          final digits = _parseSpokenMobileNumber(raw);
+          if (digits.isNotEmpty) {
+            setState(() {
+              _mobileController.text = digits;
+            });
+          }
+          if (result.finalResult) {
+            _stopMobileListening();
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _stopMobileListening() async {
+    _mobileVoiceTimer?.cancel();
+    await _speech.stop();
+    if (mounted) setState(() => _isMobileListening = false);
+  }
+
+  /// Converts spoken number utterances to a 10-digit string.
+  ///
+  /// Handles:
+  ///  • Digit-by-digit: "nine eight seven six five four three two one zero"
+  ///  • Pairs (English): "ninety eight seventy six fifty four thirty two ten"
+  ///  • Pairs (Marathi): "aathyanab shahattar chauvan battees das"
+  ///  • Mixed: "98 76 54 32 10"
+  ///  • Marathi tens: vis=20, tees=30, challees=40, pannhas=50, saath=60,
+  ///                  sattar=70, ashi=80, nabbad=90
+  String _parseSpokenMobileNumber(String raw) {
+    if (raw.trim().isEmpty) return '';
+
+    // ── Marathi one-word numbers (1-99) ──────────────────────────────────────
+    // Tens
+    const marathiTens = {
+      'vis': 20, 'vees': 20, 'wees': 20,
+      'tees': 30, 'this': 30,
+      'challees': 40, 'chalis': 40, 'chhalees': 40,
+      'pannhas': 50, 'pannas': 50, 'pannas ': 50, 'panas': 50,
+      'saath': 60, 'saatth': 60, 'sath': 60, 'saahath': 60,
+      'sattar': 70, 'satar': 70,
+      'ashi': 80, 'aashi': 80,
+      'nabbad': 90, 'navad': 90, 'nabbud': 90,
+    };
+
+    // Single digits (Marathi + Hindi + English words)
+    const digitWords = {
+      // English
+      'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4,
+      'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+      // Hindi/Marathi single digits
+      'ek': 1, 'shunya': 0,
+      'don': 2, 'do': 2, 'dohn': 2,
+      'teen': 3, 'tin': 3,
+      'char': 4,
+      'paach': 5, 'panch': 5, 'paanch': 5,
+      'saha': 6, 'chha': 6, 'che': 6, 'saat': 6,
+      'saat_': 7, // collision with saat=60 handled by context
+      'aath': 8, 'aatth': 8,
+      'nau': 9, 'nav': 9,
+    };
+
+    // Two-digit English tens
+    const englishTens = {
+      'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
+      'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
+      'eighteen': 18, 'nineteen': 19,
+      'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50,
+      'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
+    };
+
+    // Marathi compound 2-digit numbers (ek+te = ones+tens pattern)
+    // e.g. "ekvis" = 21, "bavis" = 22 ... "navvas" = 99
+    // These are recognized by speech-to-text often as full words.
+    const marathiCompound = {
+      'ekvis': 21, 'bavis': 22, 'teyvis': 23, 'chauvis': 24,
+      'panchvis': 25, 'savis': 26, 'sataavis': 27, 'atthavis': 28, 'ekonatis': 29,
+      'ekonatis_': 29,
+      'ekatis': 31, 'battis': 32, 'tettis': 33, 'chautis': 34,
+      'pentis': 35, 'chattis': 36, 'settis': 37, 'apphatthis': 38, 'ekonchalis': 39,
+      'ekchalis': 41, 'bechalis': 42, 'trechalis': 43, 'chaucalis': 44,
+      'panchechalis': 45, 'sehechalis': 46, 'sataachalis': 47, 'atthaachalis': 48, 'ekonpannas': 49,
+      'ekavan': 51, 'bavan': 52, 'trevan': 53, 'chavan': 54,
+      'panchavan': 55, 'sahavan': 56, 'sattavan': 57, 'athhavan': 58, 'ekonsaath': 59,
+      'eksaath': 61, 'basaath': 62, 'tresaath': 63, 'chausaath': 64,
+      'pansaath': 65, 'sahesaath': 66, 'satsaath': 67, 'atthsaath': 68, 'ekonsattar': 69,
+      'eksattar': 71, 'basattar': 72, 'tresattar': 73, 'chausattar': 74,
+      'pansattar': 75, 'sahesattar': 76, 'satsattar': 77, 'atthasattar': 78, 'ekonashi': 79,
+      'ekaashi': 81, 'byasi': 82, 'treashi': 83, 'chorashi': 84,
+      'panchaashi': 85, 'sahashi': 86, 'sataashi': 87, 'athhashi': 88, 'ekonanabba': 89,
+      'ekanabba': 91, 'banabba': 92, 'trenabba': 93, 'chaunabba': 94,
+      'panchananabba': 95, 'shahanabba': 96, 'sattaanabba': 97, 'aathyanabba': 98,
+      'aathyanab': 98,
+      'navaanabba': 99,
+      // Common Marathi pronunciations that STT may return
+      'sehachalis': 46, 'sehesattar': 76, 'shahattar': 76,
+      'chauvan': 54, 'battees': 32, 'battis_': 32,
+    };
+
+    final tokens = raw.toLowerCase().trim()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    final collectedNums = <int>[];
+
+    int i = 0;
+    while (i < tokens.length) {
+      final t = tokens[i];
+
+      // 1. Pure digits already in the transcript
+      final asInt = int.tryParse(t);
+      if (asInt != null) {
+        if (asInt >= 10) {
+          // Multi-digit chunk — explode into separate digits
+          collectedNums.add(asInt);
+        } else {
+          collectedNums.add(asInt);
+        }
+        i++;
+        continue;
+      }
+
+      // 2. Marathi compound word (e.g. aathyanab=98)
+      if (marathiCompound.containsKey(t)) {
+        collectedNums.add(marathiCompound[t]!);
+        i++;
+        continue;
+      }
+
+      // 3. Marathi tens (vis=20, tees=30...)
+      if (marathiTens.containsKey(t)) {
+        // Check if next token is a single digit to form a 2-digit number
+        // e.g. "vis ek" = 21 — but STT usually gives compound words.
+        // We'll just treat the tens as its own value.
+        collectedNums.add(marathiTens[t]!);
+        i++;
+        continue;
+      }
+
+      // 4. English tens (twenty, thirty ...)
+      if (englishTens.containsKey(t)) {
+        int val = englishTens[t]!;
+        // If next token is a single digit word, combine: "twenty one" = 21
+        if (i + 1 < tokens.length) {
+          final next = tokens[i + 1];
+          final nextDigit = digitWords[next];
+          if (nextDigit != null && val >= 20) {
+            collectedNums.add(val + nextDigit);
+            i += 2;
+            continue;
+          }
+        }
+        collectedNums.add(val);
+        i++;
+        continue;
+      }
+
+      // 5. Single digit words
+      if (digitWords.containsKey(t)) {
+        collectedNums.add(digitWords[t]!);
+        i++;
+        continue;
+      }
+
+      // Skip unrecognized tokens
+      i++;
+    }
+
+    if (collectedNums.isEmpty) return '';
+
+    // Now flatten: numbers >= 10 stay as 2-digit, singles as 1-digit.
+    // Build the digit string.
+    final sb = StringBuffer();
+    for (final n in collectedNums) {
+      if (n >= 10) {
+        sb.write(n.toString()); // e.g. 98 → "98"
+      } else {
+        sb.write(n.toString()); // e.g. 7 → "7"
+      }
+    }
+
+    // Extract only the digits and take max 10
+    final digits = sb.toString().replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Parse voice utterance into a list of _ManualItem entries.
+  ///
+  /// Handles patterns like:
+  ///   "2 kg atta, 5 litre oil, 3 soap"
+  ///   "ek atta do oil teen soap" (number words)
+  ///   "atta 2, oil 5, soap" (name-first format)
+  List<_ManualItem> _parseVoiceItems(
+    String raw,
+    List<CatalogueItem> catalogue,
+  ) {
+    if (raw.trim().isEmpty) return [];
+
+    // Number-word map (Hindi/English)
+    const numWords = {
+      'ek': 1, 'one': 1, 'do': 2, 'two': 2, 'teen': 3, 'three': 3,
+      'char': 4, 'four': 4, 'paanch': 5, 'five': 5, 'chhe': 6, 'six': 6,
+      'saat': 7, 'seven': 7, 'aath': 8, 'eight': 8, 'nau': 9, 'nine': 9,
+      'das': 10, 'ten': 10, 'barah': 12, 'twelve': 12, 'pachas': 50,
+      'fifty': 50, 'sou': 100, 'hundred': 100,
+    };
+
+    // Known unit words to strip from item name
+    const unitWords = {
+      'kg': 'KG', 'kilo': 'KG', 'kilogram': 'KG', 'kilograms': 'KG',
+      'gm': 'GM', 'gram': 'GM', 'grams': 'GM', 'g': 'GM',
+      'ltr': 'LTR', 'litre': 'LTR', 'litres': 'LTR', 'liter': 'LTR',
+      'liters': 'LTR', 'l': 'LTR',
+      'ml': 'ML', 'milliliter': 'ML', 'millilitre': 'ML',
+      'pcs': 'NOS', 'piece': 'NOS', 'pieces': 'NOS', 'nos': 'NOS',
+      'packet': 'PKT', 'packets': 'PKT', 'pkt': 'PKT',
+      'box': 'BOX', 'boxes': 'BOX',
+      'dozen': 'DOZ', 'doz': 'DOZ',
+    };
+
+    // Split by comma, "and", or "aur"
+    final segments = raw
+        .toLowerCase()
+        .split(RegExp(r',|\band\b|\baur\b'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    final results = <_ManualItem>[];
+
+    for (final seg in segments) {
+      final tokens = seg.trim().split(RegExp(r'\s+'));
+      if (tokens.isEmpty) continue;
+
+      double qty = 1.0;
+      String unit = 'NOS';
+      final nameTokens = <String>[];
+
+      int i = 0;
+      // Try to extract a leading quantity (numeric or word)
+      if (i < tokens.length) {
+        final t = tokens[i];
+        final parsed = double.tryParse(t) ?? numWords[t]?.toDouble();
+        if (parsed != null) {
+          qty = parsed;
+          i++;
+        }
+      }
+      // Try to extract a unit word
+      if (i < tokens.length && unitWords.containsKey(tokens[i])) {
+        unit = unitWords[tokens[i]]!;
+        i++;
+      }
+      // Remaining tokens are the item name
+      while (i < tokens.length) {
+        final t = tokens[i];
+        // Trailing quantity (e.g. "atta 2")
+        if (nameTokens.isNotEmpty && double.tryParse(t) != null) {
+          qty = double.parse(t);
+        } else if (!unitWords.containsKey(t)) {
+          nameTokens.add(t);
+        }
+        i++;
+      }
+
+      if (nameTokens.isEmpty) continue;
+
+      final rawName = nameTokens
+          .map((w) => w[0].toUpperCase() + w.substring(1))
+          .join(' ');
+
+      // Try to fuzzy-match against catalogue
+      final catalogueMatch = _matchCatalogueItem(rawName, catalogue);
+
+      if (catalogueMatch != null) {
+        results.add(
+          _ManualItem(
+            name: catalogueMatch.itemName,
+            quantity: qty,
+            rate: catalogueMatch.lastPrice,
+            unit: unit == 'NOS' ? catalogueMatch.unit : unit,
+            isNew: false,
+          )..rateController.text = catalogueMatch.lastPrice > 0
+              ? catalogueMatch.lastPrice.toStringAsFixed(0)
+              : '',
+        );
+      } else {
+        // New item — not in catalogue, highlight it
+        results.add(
+          _ManualItem(
+            name: rawName,
+            quantity: qty,
+            rate: 0.0,
+            unit: unit,
+            isNew: true,
+          ),
+        );
+      }
+    }
+
+    return results;
+  }
+
+  /// Fuzzy-match a raw voice name against the catalogue.
+  /// Returns null if no close match found.
+  CatalogueItem? _matchCatalogueItem(
+    String rawName,
+    List<CatalogueItem> catalogue,
+  ) {
+    if (catalogue.isEmpty) return null;
+    final q = rawName.toLowerCase();
+
+    // 1. Exact match
+    for (final item in catalogue) {
+      if (item.itemName.toLowerCase() == q) return item;
+    }
+    // 2. Starts-with
+    for (final item in catalogue) {
+      if (item.itemName.toLowerCase().startsWith(q)) return item;
+    }
+    // 3. Contains
+    for (final item in catalogue) {
+      if (item.itemName.toLowerCase().contains(q)) return item;
+    }
+    // 4. Any catalogue item contains the query word
+    for (final item in catalogue) {
+      if (q.contains(item.itemName.toLowerCase())) return item;
+    }
+    // 5. Fuzzy
+    final fuse = Fuzzy<String>(
+      catalogue.map((c) => c.itemName.toLowerCase()).toList(),
+      options: FuzzyOptions(threshold: 0.5, distance: 100),
+    );
+    final hits = fuse.search(q);
+    if (hits.isNotEmpty) {
+      final matched = hits.first.item;
+      return catalogue.firstWhere(
+        (c) => c.itemName.toLowerCase() == matched,
+        orElse: () => catalogue.first,
+      );
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   /// Strip Hindi/Marathi filler words so "Akshay bhai ka naam" → "Akshay"
   String _processHeardText(String raw) {
@@ -576,20 +1098,28 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
               decoration: BoxDecoration(
-                color: context.primaryColor.withValues(alpha: 0.08),
+                color: _isMobileListening
+                    ? Colors.red.withValues(alpha: 0.08)
+                    : context.primaryColor.withValues(alpha: 0.08),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   bottomLeft: Radius.circular(16),
                 ),
                 border: Border(
                   top: BorderSide(
-                    color: context.primaryColor.withValues(alpha: 0.3),
+                    color: _isMobileListening
+                        ? Colors.red.withValues(alpha: 0.6)
+                        : context.primaryColor.withValues(alpha: 0.3),
                   ),
                   left: BorderSide(
-                    color: context.primaryColor.withValues(alpha: 0.3),
+                    color: _isMobileListening
+                        ? Colors.red.withValues(alpha: 0.6)
+                        : context.primaryColor.withValues(alpha: 0.3),
                   ),
                   bottom: BorderSide(
-                    color: context.primaryColor.withValues(alpha: 0.3),
+                    color: _isMobileListening
+                        ? Colors.red.withValues(alpha: 0.6)
+                        : context.primaryColor.withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -598,7 +1128,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
-                  color: context.primaryColor,
+                  color: _isMobileListening ? Colors.red : context.primaryColor,
                 ),
               ),
             ),
@@ -623,16 +1153,27 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     horizontal: 14,
                     vertical: 13,
                   ),
-                  hintText: '98765 43210',
+                  hintText: _isMobileListening
+                      ? 'Bol... number sanga'
+                      : '98765 43210',
                   hintStyle: TextStyle(
-                    color: context.textSecondaryColor.withValues(alpha: 0.4),
-                    fontWeight: FontWeight.normal,
+                    color: _isMobileListening
+                        ? Colors.red.withValues(alpha: 0.7)
+                        : context.textSecondaryColor.withValues(alpha: 0.4),
+                    fontWeight: _isMobileListening
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     letterSpacing: 0,
                   ),
-                  border: const OutlineInputBorder(
-                    borderRadius: BorderRadius.only(
+                  border: OutlineInputBorder(
+                    borderRadius: const BorderRadius.only(
                       topRight: Radius.circular(16),
                       bottomRight: Radius.circular(16),
+                    ),
+                    borderSide: BorderSide(
+                      color: _isMobileListening
+                          ? Colors.red
+                          : context.borderColor,
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
@@ -641,7 +1182,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       bottomRight: Radius.circular(16),
                     ),
                     borderSide: BorderSide(
-                      color: context.primaryColor.withValues(alpha: 0.3),
+                      color: _isMobileListening
+                          ? Colors.red.withValues(alpha: 0.6)
+                          : context.primaryColor.withValues(alpha: 0.3),
+                      width: _isMobileListening ? 2 : 1,
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
@@ -650,15 +1194,65 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       bottomRight: Radius.circular(16),
                     ),
                     borderSide: BorderSide(
-                      color: context.primaryColor,
+                      color: _isMobileListening
+                          ? Colors.red
+                          : context.primaryColor,
                       width: 2,
                     ),
                   ),
-                  fillColor: context.primaryColor.withValues(alpha: 0.03),
+                  fillColor: _isMobileListening
+                      ? Colors.red.withValues(alpha: 0.03)
+                      : context.primaryColor.withValues(alpha: 0.03),
                   filled: true,
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // ── Mic button ──────────────────────────────────────
+                      if (_speechAvailable)
+                        GestureDetector(
+                          onTap: _isMobileListening
+                              ? _stopMobileListening
+                              : _startMobileListening,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 8,
+                            ),
+                            child: AnimatedScale(
+                              scale: _isMobileListening ? _mobileMicPulse : 1.0,
+                              duration: const Duration(milliseconds: 300),
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _isMobileListening
+                                      ? Colors.red
+                                      : context.primaryColor,
+                                  boxShadow: _isMobileListening
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.red.withValues(
+                                              alpha: 0.45,
+                                            ),
+                                            blurRadius: 14,
+                                            spreadRadius: 2,
+                                          ),
+                                        ]
+                                      : [],
+                                ),
+                                child: Icon(
+                                  _isMobileListening
+                                      ? LucideIcons.audioLines
+                                      : LucideIcons.audioLines,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // ── Contact picker ──────────────────────────────────
                       if (ContactUtils.isSupported)
                         IconButton(
                           icon: Icon(
@@ -670,11 +1264,13 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                             if (phone != null && mounted) {
                               setState(() {
                                 _mobileController.text = phone;
+                                _heardMobileText = '';
                               });
                             }
                           },
                         ),
-                      if (!isEmpty)
+                      // ── Validity indicator ──────────────────────────────
+                      if (!isEmpty && !_isMobileListening)
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Icon(
@@ -699,12 +1295,118 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             ),
           ],
         ),
-        if (!isEmpty && !isValid)
+        // ── Validation hint ───────────────────────────────────────────────
+        if (!isEmpty && !isValid && !_isMobileListening)
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 4),
             child: Text(
               'Enter 10-digit mobile number',
               style: TextStyle(fontSize: 11, color: context.warningColor),
+            ),
+          ),
+        // ── "I heard" banner ──────────────────────────────────────────────
+        if (_heardMobileText.isNotEmpty && !_isMobileListening)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: context.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: context.primaryColor.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.volume2,
+                    size: 14,
+                    color: context.primaryColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.textSecondaryColor,
+                        ),
+                        children: [
+                          const TextSpan(text: 'I heard: '),
+                          TextSpan(
+                            text: '"$_heardMobileText"',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: context.textColor,
+                            ),
+                          ),
+                          if (isValid)
+                            TextSpan(
+                              text: '  ✓ Number set',
+                              style: TextStyle(
+                                color: context.successColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          else
+                            const TextSpan(
+                              text: '  — Tap to edit',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() => _heardMobileText = ''),
+                    child: Icon(
+                      LucideIcons.x,
+                      size: 14,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        // ── Live listening banner ─────────────────────────────────────────
+        if (_isMobileListening)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.red.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedScale(
+                    scale: _mobileMicPulse,
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      LucideIcons.audioLines,
+                      size: 14,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Bolte raho... number ek ek ya jodi jodi sanga\n'
+                      'e.g. "nine eight" "vis" "battees" "ninety eight"',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.red.withValues(alpha: 0.8),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
       ],
@@ -1046,7 +1748,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                     : 'Type name or use voice button →',
                                 prefixIcon: Icon(
                                   _isListening
-                                      ? LucideIcons.mic
+                                      ? LucideIcons.audioLines
                                       : LucideIcons.search,
                                   size: 20,
                                   color: _isListening
@@ -1113,8 +1815,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                                   ),
                                                   child: Icon(
                                                     _isListening
-                                                        ? LucideIcons.micOff
-                                                        : LucideIcons.mic,
+                                                        ? LucideIcons.audioLines
+                                                        : LucideIcons.audioLines,
                                                     size: 18,
                                                     color: Colors.white,
                                                   ),
@@ -1467,18 +2169,229 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _items.add(_ManualItem(name: ''));
-                          });
-                        },
-                        icon: const Icon(LucideIcons.plusCircle, size: 16),
-                        label: const Text('Add Line Items'),
-                      ),
+                    // ── Add items row: button + mic ──────────────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _items.add(_ManualItem(name: ''));
+                            });
+                          },
+                          icon: const Icon(LucideIcons.plusCircle, size: 16),
+                          label: const Text('Add Line Items'),
+                        ),
+                        if (_speechAvailable) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _isItemListening
+                                ? _stopItemListening()
+                                : _startItemListening(catalogueState.items),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _isItemListening
+                                    ? const Color(0xFFFF5722).withValues(alpha: 0.15)
+                                    : context.primaryColor.withValues(alpha: 0.08),
+                                border: Border.all(
+                                  color: _isItemListening
+                                      ? const Color(0xFFFF5722)
+                                      : context.primaryColor.withValues(alpha: 0.4),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Transform.scale(
+                                scale: _isItemListening ? _itemMicPulse : 1.0,
+                                child: Icon(
+                                  _isItemListening
+                                      ? LucideIcons.audioLines
+                                      : LucideIcons.audioLines,
+                                  size: 18,
+                                  color: _isItemListening
+                                      ? const Color(0xFFFF5722)
+                                      : context.primaryColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isItemListening ? 'Listening…' : 'or speak items',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _isItemListening
+                                  ? const Color(0xFFFF5722)
+                                  : context.textSecondaryColor,
+                              fontWeight: _isItemListening
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ] else ...[
+                    // ── Items header row with Add + Mic buttons ──────────────
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Line Items',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: context.textSecondaryColor,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const Spacer(),
+                          // Mic button
+                          if (_speechAvailable)
+                            GestureDetector(
+                              onTap: () => _isItemListening
+                                  ? _stopItemListening()
+                                  : _startItemListening(catalogueState.items),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: _isItemListening
+                                      ? const Color(0xFFFF5722).withValues(alpha: 0.12)
+                                      : context.primaryColor.withValues(alpha: 0.08),
+                                  border: Border.all(
+                                    color: _isItemListening
+                                        ? const Color(0xFFFF5722)
+                                        : context.primaryColor.withValues(alpha: 0.4),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Transform.scale(
+                                      scale: _isItemListening ? _itemMicPulse : 1.0,
+                                      child: Icon(
+                                        _isItemListening
+                                            ? LucideIcons.audioLines
+                                            : LucideIcons.audioLines,
+                                        size: 14,
+                                        color: _isItemListening
+                                            ? const Color(0xFFFF5722)
+                                            : context.primaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _isItemListening ? 'Stop' : 'Add by voice',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: _isItemListening
+                                            ? const Color(0xFFFF5722)
+                                            : context.primaryColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 8),
+                          // Add item manually
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _items.add(_ManualItem(name: ''));
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: context.primaryColor.withValues(alpha: 0.08),
+                                border: Border.all(
+                                  color: context.primaryColor.withValues(alpha: 0.4),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.plus,
+                                    size: 14,
+                                    color: context.primaryColor,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Add Item',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Listening indicator banner
+                    if (_isItemListening)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5722).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFF5722).withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              LucideIcons.audioLines,
+                              size: 16,
+                              color: Color(0xFFFF5722),
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Listening… say items like: "2 kg atta, 5 litre oil, 3 soap"',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFFFF5722),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _stopItemListening,
+                              child: const Icon(
+                                LucideIcons.x,
+                                size: 16,
+                                color: Color(0xFFFF5722),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Line Items builder using spacious card design
                     ListView.builder(
                       shrinkWrap: true,
@@ -1487,14 +2400,23 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       itemBuilder: (ctx, idx) {
                         final item = _items[idx];
                         final rowSubtotal = item.quantity * item.rate;
+                        // NEW item highlight: amber border if added via voice and not in catalogue
+                        final cardBorderColor = item.isNew
+                            ? const Color(0xFFFFC107).withValues(alpha: 0.8)
+                            : context.borderColor.withValues(alpha: 0.6);
+                        final cardBgColor = item.isNew
+                            ? const Color(0xFFFFC107).withValues(alpha: 0.05)
+                            : context.surfaceColor;
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12.0),
                           padding: const EdgeInsets.all(12.0),
                           decoration: BoxDecoration(
-                            color: context.surfaceColor,
+                            color: cardBgColor,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: context.borderColor.withValues(alpha: 0.6),
+                              color: cardBorderColor,
+                              width: item.isNew ? 1.5 : 1.0,
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -1507,6 +2429,49 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // NEW badge for voice-added items not in catalogue
+                              if (item.isNew)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFC107).withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: const Color(0xFFFFC107),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              LucideIcons.sparkles,
+                                              size: 11,
+                                              color: Color(0xFFE65100),
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'NEW ITEM — set price',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFFE65100),
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               // Row 1: Item Search / Input & Delete button
                               Row(
                                 children: [
