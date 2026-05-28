@@ -891,6 +891,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     });
 
     try {
+      final earlyShopProfile = ref.read(shopProvider);
       final payload = {
         'party_type': _partyType,
         'party_name': partyName,
@@ -913,6 +914,11 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
         'date': _selectedDate.toUtc().toIsoformat(),
         'notes': _notesController.text.trim(),
         'items': _items.map((it) => it.toJson()).toList(),
+        if (earlyShopProfile.shopType == 'laundry') ...{
+          'order_date': _selectedDate.toIso8601String().substring(0, 10),
+          if (_deliveryDate != null)
+            'delivery_date': _deliveryDate!.toIso8601String().substring(0, 10),
+        },
       };
 
       final response = await ApiClient().dio.post(
@@ -1121,7 +1127,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ),
               ),
             ),
-            // Right actions
+            // Right actions: contact picker + valid check (no phone icon)
             if (ContactUtils.isSupported)
               IconButton(
                 icon: Icon(LucideIcons.contact, color: context.primaryColor, size: 20),
@@ -1135,13 +1141,14 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                     });
                   }
                 },
+              )
+            else
+              const SizedBox(width: 8),
+            if (isValid)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(LucideIcons.checkCircle2, color: context.successColor, size: 20),
               ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: isValid
-                  ? Icon(LucideIcons.checkCircle2, color: context.successColor, size: 20)
-                  : Icon(LucideIcons.phone, color: context.primaryColor, size: 20),
-            ),
           ],
         ),
       ),
@@ -1198,10 +1205,10 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     }
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
+      height: MediaQuery.of(context).size.height,
       decoration: BoxDecoration(
         color: context.backgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.15),
@@ -1850,19 +1857,19 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       if (shopProfile.shopType != 'laundry') {
                         return const SizedBox.shrink();
                       }
-                      final deliveryLabel = _deliveryDate == null
-                          ? 'Pick Delivery Date'
-                          : _formatDate(_deliveryDate!);
+                      final hasDate = _deliveryDate != null;
+                      const deliveryPurple = Color(0xFF7C3AED);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 14),
+                          // Label row
                           Row(
                             children: [
                               Icon(
                                 LucideIcons.truck,
                                 size: 14,
-                                color: const Color(0xFF7C3AED),
+                                color: deliveryPurple,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1871,49 +1878,79 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.5,
-                                  color: const Color(0xFF7C3AED),
-                                ),
-                              ),
-                              const Spacer(),
-                              GestureDetector(
-                                onTap: _selectDeliveryDate,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF7C3AED)
-                                        .withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: const Color(0xFF7C3AED)
-                                          .withValues(alpha: 0.4),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        LucideIcons.calendarClock,
-                                        size: 12,
-                                        color: const Color(0xFF7C3AED),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        deliveryLabel,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF7C3AED),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  color: deliveryPurple,
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          // Full-width tappable delivery date tile — same height as mobile number field
+                          GestureDetector(
+                            onTap: _selectDeliveryDate,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: deliveryPurple.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: hasDate
+                                      ? deliveryPurple.withValues(alpha: 0.6)
+                                      : deliveryPurple.withValues(alpha: 0.3),
+                                  width: hasDate ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  // Calendar icon badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: hasDate
+                                          ? deliveryPurple.withValues(alpha: 0.12)
+                                          : deliveryPurple.withValues(alpha: 0.07),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(15),
+                                        bottomLeft: Radius.circular(15),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      LucideIcons.calendarClock,
+                                      size: 20,
+                                      color: deliveryPurple,
+                                    ),
+                                  ),
+                                  // Date text
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      child: hasDate
+                                          ? Text(
+                                              _formatDate(_deliveryDate!),
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.5,
+                                                color: deliveryPurple,
+                                              ),
+                                            )
+                                          : Text(
+                                              'Tap to pick delivery date',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: deliveryPurple.withValues(alpha: 0.45),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                  // Check / calendar icon on right
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 14),
+                                    child: hasDate
+                                        ? const Icon(LucideIcons.checkCircle2, color: deliveryPurple, size: 20)
+                                        : const Icon(LucideIcons.chevronRight, color: deliveryPurple, size: 20),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       );
@@ -2161,7 +2198,6 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       itemCount: _items.length,
                       itemBuilder: (ctx, idx) {
                         final item = _items[idx];
-                        final rowSubtotal = item.quantity * item.rate;
                         // NEW item highlight: amber border if added via voice and not in catalogue
                         final cardBorderColor = item.isNew
                             ? const Color(0xFFFFC107).withValues(alpha: 0.8)
@@ -2451,198 +2487,202 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              // Row 2: Qty Stepper, Rate Input, Amount Display
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Quantity Stepper
-                                  Expanded(
-                                    flex: 4,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Quantity',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: context.textSecondaryColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        EditableQtyStepper(
-                                          qty: item.quantity,
-                                          isDecimal: item.unit == 'KG' ||
-                                              item.unit == 'LITRE' ||
-                                              item.unit == 'L',
-                                          showTrashAtOne: true,
-                                          itemName: item.name.isEmpty ? 'Manual Entry Item' : item.name,
-                                          rate: item.rate,
-                                          unit: item.unit,
-                                          onChanged: (newQty) {
-                                            setState(() {
-                                              item.quantity = newQty.toDouble();
-                                            });
-                                            _bumpTotal();
-                                          },
-                                          onDecrement: () {
-                                            HapticFeedback.lightImpact();
-                                            setState(() {
-                                              if (item.quantity > 1.0) {
-                                                final step =
-                                                    (item.unit == 'KG' ||
-                                                            item.unit ==
-                                                                'LITRE' ||
+                              // Row 2: Qty | Rate (₹) | Amount — fixed widths via LayoutBuilder
+                              LayoutBuilder(
+                                builder: (ctx2, constraints) {
+                                  const amountWidth = 68.0;
+                                  const spacing = 8.0;
+                                  final remaining = constraints.maxWidth - amountWidth - spacing * 2;
+                                  final qtyWidth = remaining * 0.44;
+                                  final rateWidth = remaining * 0.56;
+                                  final rowSubtotal = item.quantity * item.rate;
+                                  return Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // ── Qty ─────────────────────────────────────────
+                                      SizedBox(
+                                        width: qtyWidth,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Qty',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: ctx2.textSecondaryColor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            EditableQtyStepper(
+                                              qty: item.quantity,
+                                              btnSize: 36.0,
+                                              boxWidth: (qtyWidth - 72).clamp(30.0, 56.0),
+                                              boxHeight: 44.0,
+                                              isDecimal: item.unit == 'KG' ||
+                                                  item.unit == 'LITRE' ||
+                                                  item.unit == 'L',
+                                              showTrashAtOne: true,
+                                              itemName: item.name.isEmpty
+                                                  ? 'Manual Entry Item'
+                                                  : item.name,
+                                              rate: item.rate,
+                                              unit: item.unit,
+                                              onChanged: (newQty) {
+                                                setState(() {
+                                                  item.quantity = newQty.toDouble();
+                                                });
+                                                _bumpTotal();
+                                              },
+                                              onDecrement: () {
+                                                HapticFeedback.lightImpact();
+                                                setState(() {
+                                                  if (item.quantity > 1.0) {
+                                                    final step = (item.unit == 'KG' ||
+                                                            item.unit == 'LITRE' ||
                                                             item.unit == 'L')
                                                         ? 0.5
                                                         : 1.0;
-                                                item.quantity -= step;
-                                              } else {
-                                                final removed =
-                                                    _items.removeAt(idx);
-                                                removed.dispose();
-                                              }
-                                            });
-                                            _bumpTotal();
-                                          },
-                                          onIncrement: () {
-                                            HapticFeedback.lightImpact();
-                                            setState(() {
-                                              final step = (item.unit == 'KG' ||
-                                                      item.unit == 'LITRE' ||
-                                                      item.unit == 'L')
-                                                  ? 0.5
-                                                  : 1.0;
-                                              item.quantity += step;
-                                            });
-                                            _bumpTotal();
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Rate Input
-                                  Expanded(
-                                    flex: 4,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Rate',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: context.textSecondaryColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        SizedBox(
-                                          height: 44,
-                                          child: TextFormField(
-                                            controller: item.rateController,
-                                            focusNode: item.rateFocusNode,
-                                            keyboardType:
-                                                const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w900,
+                                                    item.quantity -= step;
+                                                  } else {
+                                                    final removed = _items.removeAt(idx);
+                                                    removed.dispose();
+                                                  }
+                                                });
+                                                _bumpTotal();
+                                              },
+                                              onIncrement: () {
+                                                HapticFeedback.lightImpact();
+                                                setState(() {
+                                                  final step = (item.unit == 'KG' ||
+                                                          item.unit == 'LITRE' ||
+                                                          item.unit == 'L')
+                                                      ? 0.5
+                                                      : 1.0;
+                                                  item.quantity += step;
+                                                });
+                                                _bumpTotal();
+                                              },
                                             ),
-                                            decoration: InputDecoration(
-                                              prefixText: '₹',
-                                              hintText: '0',
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 10,
-                                                  ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderSide: BorderSide(
-                                                  color: context.borderColor,
-                                                ),
-                                                borderRadius: BorderRadius.circular(
-                                                  12,
-                                                ),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderSide: BorderSide(
-                                                  color: context.primaryColor,
-                                                ),
-                                                borderRadius: BorderRadius.circular(
-                                                  12,
-                                                ),
-                                              ),
-                                            ),
-                                            onChanged: (val) {
-                                              setState(() {
-                                                item.rate =
-                                                    double.tryParse(val) ?? 0.0;
-                                              });
-                                              _bumpTotal();
-                                            },
-                                          ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Amount Display
-                                  Expanded(
-                                    flex: 3,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          'Amount',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: context.textSecondaryColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Container(
-                                          height: 44,
-                                          alignment: Alignment.centerRight,
-                                          child: AnimatedSwitcher(
-                                            duration: const Duration(
-                                              milliseconds: 200,
-                                            ),
-                                            transitionBuilder: (child, animation) =>
-                                                FadeTransition(
-                                                  opacity: animation,
-                                                  child: SlideTransition(
-                                                    position: Tween<Offset>(
-                                                      begin: const Offset(0, -0.3),
-                                                      end: Offset.zero,
-                                                    ).animate(animation),
-                                                    child: child,
-                                                  ),
-                                                ),
-                                            child: Text(
-                                              key: ValueKey(
-                                                'sub_${idx}_${rowSubtotal.toInt()}',
-                                              ),
-                                              rowSubtotal > 0
-                                                  ? '₹${rowSubtotal.toStringAsFixed(0)}'
-                                                  : '—',
+                                      ),
+                                      const SizedBox(width: spacing),
+                                      // ── Rate (₹) ────────────────────────────────────
+                                      SizedBox(
+                                        width: rateWidth,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Rate (₹)',
                                               style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w900,
-                                                color: rowSubtotal > 0
-                                                    ? context.primaryColor
-                                                    : context.textSecondaryColor,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: ctx2.textSecondaryColor,
                                               ),
                                             ),
-                                          ),
+                                            const SizedBox(height: 4),
+                                            SizedBox(
+                                              height: 44,
+                                              child: TextFormField(
+                                                controller: item.rateController,
+                                                focusNode: item.rateFocusNode,
+                                                keyboardType:
+                                                    const TextInputType.numberWithOptions(
+                                                      decimal: true,
+                                                    ),
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  prefixText: '₹',
+                                                  hintText: '0',
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 10,
+                                                      ),
+                                                  enabledBorder: OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                        color: ctx2.borderColor),
+                                                    borderRadius:
+                                                        BorderRadius.circular(12),
+                                                  ),
+                                                  focusedBorder: OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                        color: ctx2.primaryColor),
+                                                    borderRadius:
+                                                        BorderRadius.circular(12),
+                                                  ),
+                                                ),
+                                                onChanged: (val) {
+                                                  setState(() {
+                                                    item.rate =
+                                                        double.tryParse(val) ?? 0.0;
+                                                  });
+                                                  _bumpTotal();
+                                                },
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                      ),
+                                      const SizedBox(width: spacing),
+                                      // ── Amount ──────────────────────────────────────
+                                      SizedBox(
+                                        width: amountWidth,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                           children: [
+                                             Text(
+                                               'Amount',
+                                               style: TextStyle(
+                                                 fontSize: 11,
+                                                 fontWeight: FontWeight.w700,
+                                                 color: ctx2.textSecondaryColor,
+                                               ),
+                                             ),
+                                             const SizedBox(height: 4),
+                                             Container(
+                                               height: 44,
+                                               alignment: Alignment.centerRight,
+                                               child: AnimatedSwitcher(
+                                                 duration: const Duration(milliseconds: 200),
+                                                 transitionBuilder: (child, animation) =>
+                                                     FadeTransition(
+                                                       opacity: animation,
+                                                       child: SlideTransition(
+                                                         position: Tween<Offset>(
+                                                           begin: const Offset(0, -0.3),
+                                                           end: Offset.zero,
+                                                         ).animate(animation),
+                                                         child: child,
+                                                       ),
+                                                     ),
+                                                 child: Text(
+                                                   key: ValueKey('sub_${idx}_${rowSubtotal.toInt()}'),
+                                                   rowSubtotal > 0
+                                                       ? '₹${rowSubtotal.toStringAsFixed(0)}'
+                                                       : '—',
+                                                   style: TextStyle(
+                                                     fontSize: 13,
+                                                     fontWeight: FontWeight.w900,
+                                                     color: rowSubtotal > 0
+                                                         ? ctx2.primaryColor
+                                                         : ctx2.textSecondaryColor,
+                                                   ),
+                                                 ),
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ),
+                                     ],
+                                   );
+                                 },
+                               ),
                             ],
                           ),
                         );

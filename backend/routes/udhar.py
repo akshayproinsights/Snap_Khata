@@ -1336,6 +1336,8 @@ class ManualUdharEntry(BaseModel):
     date: Optional[str] = None
     items: Optional[List[ManualLineItem]] = None
     mobile_number: Optional[str] = None
+    order_date: Optional[str] = None       # Laundry: date clothes were received (ISO date string)
+    delivery_date: Optional[str] = None    # Laundry: promised delivery date (ISO date string)
 
 async def sync_customer_ledgers_from_invoices(current_user: Dict):
     """
@@ -2292,6 +2294,8 @@ async def create_manual_entry(entry: ManualUdharEntry, current_user: Dict = Depe
                 'items': item_details,
                 'payment_mode': entry.payment_mode or 'Credit',
                 'is_manual_entry': True,
+                **({'order_date': entry.order_date} if entry.order_date else {}),
+                **({'delivery_date': entry.delivery_date} if entry.delivery_date else {}),
             }
         }
         if entry.party_type == 'customer' and entry.mobile_number:

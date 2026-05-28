@@ -18,6 +18,7 @@ class ShopProfileResponse(BaseModel):
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
     whatsapp_custom_note: Optional[str] = ""
+    shop_type: Optional[str] = "general"
 
 
 class ShopProfileRequest(BaseModel):
@@ -27,6 +28,7 @@ class ShopProfileRequest(BaseModel):
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
     whatsapp_custom_note: Optional[str] = ""
+    shop_type: Optional[str] = "general"
 
 
 @router.get("/shop-profile", response_model=ShopProfileResponse)
@@ -44,7 +46,7 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
         db = get_database_client()
         resp = (
             db.client.table("user_profiles")
-            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, whatsapp_custom_note")
+            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, whatsapp_custom_note, shop_type")
             .eq("username", username)
             .limit(1)
             .execute()
@@ -58,6 +60,7 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
                 shop_gst=row.get("shop_gst") or "",
                 shop_upi_id=row.get("shop_upi_id") or "",
                 whatsapp_custom_note=row.get("whatsapp_custom_note") or "",
+                shop_type=row.get("shop_type") or "general",
             )
         # No row yet — return empty defaults
         return ShopProfileResponse()
@@ -90,11 +93,12 @@ async def update_shop_profile(
                 "shop_gst": body.shop_gst or "",
                 "shop_upi_id": body.shop_upi_id or "",
                 "whatsapp_custom_note": body.whatsapp_custom_note or "",
+                "shop_type": body.shop_type or "general",
             },
             on_conflict="username",
         ).execute()
 
-        logger.info(f"Shop profile updated for {username}: '{body.shop_name}'")
+        logger.info(f"Shop profile updated for {username}: '{body.shop_name}' (type: {body.shop_type})")
         return ShopProfileResponse(
             shop_name=body.shop_name or "",
             shop_address=body.shop_address or "",
@@ -102,6 +106,7 @@ async def update_shop_profile(
             shop_gst=body.shop_gst or "",
             shop_upi_id=body.shop_upi_id or "",
             whatsapp_custom_note=body.whatsapp_custom_note or "",
+            shop_type=body.shop_type or "general",
         )
     except Exception as e:
         logger.error(f"Error updating shop profile for {username}: {e}")

@@ -7,6 +7,7 @@ import 'package:mobile/core/widgets/editable_qty_stepper.dart';
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/features/udhar/presentation/providers/item_catalogue_provider.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
+import 'package:mobile/shared/widgets/qty_numpad_sheet.dart';
 
 // ── Cart result model — returned to caller in selection mode ──────────────────
 class CatalogueCartItem {
@@ -55,6 +56,11 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
   // ── Cart state (selection mode only) ─────────────────────────────────────
   final Map<int, int> _cartQty = {};
 
+  // ── Multi-select delete state ─────────────────────────────────────────────
+  bool _isMultiSelectMode = false;
+  final Set<int> _selectedItemIds = {};
+
+
   int get _totalCartItems => _cartQty.values.fold(0, (sum, q) => sum + q);
 
   double _cartTotal(List<CatalogueItem> allItems) {
@@ -85,6 +91,117 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
 
   void _addToCartWithQty(int itemId, int qty) {
     setState(() => _cartQty[itemId] = qty);
+  }
+
+  /// Opens the qty numpad directly — bypasses the inline +1 stepper.
+  Future<void> _openQtyNumpad(CatalogueItem item) async {
+    HapticFeedback.mediumImpact();
+    final current = _cartQty[item.id] ?? 0;
+    final isDecimal =
+        item.unit == 'KG' || item.unit == 'LITRE' || item.unit == 'L';
+    final result = await showModalBottomSheet<num>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QtyNumpadSheet(
+        initial: current.toDouble(),
+        itemName: item.itemName,
+        rate: item.lastPrice,
+        unit: item.unit,
+        isDecimal: isDecimal,
+      ),
+    );
+    if (result != null) {
+      if (result > 0) {
+        _addToCartWithQty(item.id, result.toInt());
+      } else {
+        setState(() => _cartQty.remove(item.id));
+      }
+    }
+  }
+
+  void _enterMultiSelectMode(int firstItemId) {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isMultiSelectMode = true;
+      _selectedItemIds.add(firstItemId);
+    });
+  }
+
+  void _exitMultiSelectMode() {
+    setState(() {
+      _isMultiSelectMode = false;
+      _selectedItemIds.clear();
+    });
+  }
+
+  void _toggleItemSelection(int itemId) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_selectedItemIds.contains(itemId)) {
+        _selectedItemIds.remove(itemId);
+        if (_selectedItemIds.isEmpty) _isMultiSelectMode = false;
+      } else {
+        _selectedItemIds.add(itemId);
+      }
+    });
+  }
+
+  Future<void> _bulkDeleteSelected() async {
+    if (_selectedItemIds.isEmpty) return;
+    final count = _selectedItemIds.length;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.surfaceColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: context.borderColor, width: 0.5),
+        ),
+        title: Text(
+          'Remove $count item${count == 1 ? '' : 's'}?',
+          style: TextStyle(
+              color: context.textColor, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'These items will be permanently removed from your catalogue.',
+          style: TextStyle(color: context.textSecondaryColor),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: TextStyle(color: context.textSecondaryColor)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.errorColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Remove $count'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final ids = List<int>.from(_selectedItemIds);
+      int removed = 0;
+      for (final id in ids) {
+        final ok =
+            await ref.read(itemCatalogueProvider.notifier).deleteItem(id);
+        if (ok) {
+          removed++;
+          _cartQty.remove(id);
+        }
+      }
+      if (!mounted) return;
+      _exitMultiSelectMode();
+      AppToast.showSuccess(
+          context, '$removed item${removed == 1 ? '' : 's'} removed');
+    }
   }
 
   /// Pops the page and returns the selected items to the caller.
@@ -410,7 +527,8 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
 
                           // ── Action Buttons ──────────────────────────────
                           if (widget.selectionMode) ...[
-                            // PRIMARY: Save & Add to Bill
+                            // NEW item → Save & Add to Bill
+                            // EDIT existing → Save Changes (no cart add)
                             SizedBox(
                               width: double.infinity,
                               height: 54,
@@ -430,6 +548,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                   bool success;
                                   int targetId = -1;
                                   if (item == null) {
+                                    // Creating NEW item → add to cart
                                     success = await ref
                                         .read(
                                             itemCatalogueProvider.notifier)
@@ -445,34 +564,49 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                                         targetId = match.first.id;
                                       }
                                     }
+                                    if (!ctx.mounted) return;
+                                    if (success && targetId != -1) {
+                                      _addToCartWithQty(targetId, qty);
+                                      Navigator.pop(ctx);
+                                      _triggerHighlight(targetId, name);
+                                      AppToast.showSuccess(
+                                          context,
+                                          '✅ "$name" added to bill (qty $qty)');
+                                    } else {
+                                      AppToast.showError(
+                                          context, 'Failed to save item');
+                                    }
                                   } else {
+                                    // Editing EXISTING item → just save, stay in list
                                     success = await ref
                                         .read(
                                             itemCatalogueProvider.notifier)
-                                        .updateItem(item.id, name, price, selectedUnit);
+                                        .updateItem(
+                                            item.id, name, price, selectedUnit);
                                     targetId = item.id;
-                                  }
-
-                                  if (!ctx.mounted) return;
-                                  if (success && targetId != -1) {
-                                    _addToCartWithQty(targetId, qty);
+                                    if (!ctx.mounted) return;
                                     Navigator.pop(ctx);
-                                    _triggerHighlight(targetId, name);
-                                    AppToast.showSuccess(
-                                        context,
-                                        item == null
-                                            ? '✅ "$name" added to bill (qty $qty)'
-                                            : '✅ "$name" updated & added to bill (qty $qty)');
-                                  } else {
-                                    AppToast.showError(
-                                        context, 'Failed to save item');
+                                    if (success) {
+                                      _triggerHighlight(targetId, name);
+                                      AppToast.showSuccess(
+                                          context, '✅ "$name" updated');
+                                    } else {
+                                      AppToast.showError(
+                                          context, 'Failed to update item');
+                                    }
                                   }
                                 },
-                                icon: const Icon(LucideIcons.shoppingCart,
-                                    size: 18),
-                                label: const Text(
-                                  'Save & Add to Bill',
-                                  style: TextStyle(
+                                icon: Icon(
+                                  item == null
+                                      ? LucideIcons.shoppingCart
+                                      : LucideIcons.check,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  item == null
+                                      ? 'Save & Add to Bill'
+                                      : 'Save Changes',
+                                  style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold),
                                 ),
@@ -725,12 +859,16 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                     return _SelectionItemCard(
                       item: item,
                       qty: _cartQty[item.id] ?? 0,
-                      onAdd: () => _incrementCart(item.id),
+                      onOpenNumpad: () => _openQtyNumpad(item),
                       onIncrement: () => _incrementCart(item.id),
                       onDecrement: () => _decrementCart(item.id),
                       onQtyChanged: (newQty) => _addToCartWithQty(item.id, newQty.toInt()),
                       onEdit: () => _showQuickAddSheet(item: item),
                       highlighted: _highlightedItemId == item.id,
+                      isMultiSelectMode: _isMultiSelectMode,
+                      isSelected: _selectedItemIds.contains(item.id),
+                      onLongPress: () => _enterMultiSelectMode(item.id),
+                      onToggleSelect: () => _toggleItemSelection(item.id),
                     );
                   }
                   return _ManageItemCard(
@@ -738,6 +876,10 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                     onEdit: () => _showQuickAddSheet(item: item),
                     onDelete: () => _deleteItem(item),
                     highlighted: _highlightedItemId == item.id,
+                    isMultiSelectMode: _isMultiSelectMode,
+                    isSelected: _selectedItemIds.contains(item.id),
+                    onLongPress: () => _enterMultiSelectMode(item.id),
+                    onToggleSelect: () => _toggleItemSelection(item.id),
                   );
                 },
               );
@@ -798,6 +940,47 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
   PreferredSizeWidget _buildAppBar(
       BuildContext context, ItemCatalogueState state, bool hasItems) {
     final cartCount = _totalCartItems;
+
+    // Multi-select mode — show count + bulk delete
+    if (_isMultiSelectMode) {
+      final selCount = _selectedItemIds.length;
+      return AppBar(
+        backgroundColor: context.errorColor.withValues(alpha: 0.08),
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(LucideIcons.x, color: context.textColor),
+          onPressed: _exitMultiSelectMode,
+          tooltip: 'Cancel selection',
+        ),
+        title: Text(
+          '$selCount item${selCount == 1 ? '' : 's'} selected',
+          style: TextStyle(
+            color: context.textColor,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+          ),
+        ),
+        actions: [
+          if (selCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ElevatedButton.icon(
+                onPressed: _bulkDeleteSelected,
+                icon: const Icon(LucideIcons.trash2, size: 16),
+                label: Text('Delete $selCount'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.errorColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return AppBar(
       backgroundColor: context.backgroundColor,
       elevation: 0,
@@ -1143,198 +1326,243 @@ class _SelectionItemCard extends StatelessWidget {
   const _SelectionItemCard({
     required this.item,
     required this.qty,
-    required this.onAdd,
+    required this.onOpenNumpad,
     required this.onIncrement,
     required this.onDecrement,
     required this.onQtyChanged,
     required this.onEdit,
     this.highlighted = false,
+    this.isMultiSelectMode = false,
+    this.isSelected = false,
+    this.onLongPress,
+    this.onToggleSelect,
   });
 
   final CatalogueItem item;
   final int qty;
-  final VoidCallback onAdd;
+  final VoidCallback onOpenNumpad;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final ValueChanged<int> onQtyChanged;
   final VoidCallback onEdit;
   final bool highlighted;
+  final bool isMultiSelectMode;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onToggleSelect;
 
   bool get _inCart => qty > 0;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: highlighted
-            ? context.successColor.withValues(alpha: 0.08)
-            : (_inCart
-                ? context.primaryColor.withValues(alpha: 0.06)
-                : context.surfaceColor),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: highlighted
-              ? context.successColor
-              : (_inCart
-                  ? context.primaryColor.withValues(alpha: 0.45)
-                  : context.borderColor),
-          width: highlighted ? 2.0 : (_inCart ? 1.5 : 0.5),
+    return GestureDetector(
+      onLongPress: isMultiSelectMode ? null : onLongPress,
+      onTap: isMultiSelectMode ? onToggleSelect : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? context.errorColor.withValues(alpha: 0.07)
+              : highlighted
+                  ? context.successColor.withValues(alpha: 0.08)
+                  : (_inCart
+                      ? context.primaryColor.withValues(alpha: 0.06)
+                      : context.surfaceColor),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected
+                ? context.errorColor.withValues(alpha: 0.6)
+                : highlighted
+                    ? context.successColor
+                    : (_inCart
+                        ? context.primaryColor.withValues(alpha: 0.45)
+                        : context.borderColor),
+            width:
+                isSelected ? 1.5 : (highlighted ? 2.0 : (_inCart ? 1.5 : 0.5)),
+          ),
+          boxShadow: highlighted
+              ? [
+                  BoxShadow(
+                    color: context.successColor.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : context.premiumShadow,
         ),
-        boxShadow: highlighted
-            ? [
-                BoxShadow(
-                  color: context.successColor.withValues(alpha: 0.25),
-                  blurRadius: 12,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 4),
-                )
-              ]
-            : context.premiumShadow,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            // ── Left: status dot + name + price ────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (_inCart) ...[
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: context.primaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Flexible(
-                        child: Text(
-                          item.itemName,
-                          style: TextStyle(
-                            color: context.textColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Edit pencil
-                      GestureDetector(
-                        onTap: onEdit,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Icon(
-                            LucideIcons.pencil,
-                            size: 13,
-                            color: context.textSecondaryColor
-                                .withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ),
-                      if (highlighted) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: context.successColor,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(LucideIcons.check,
-                                  size: 10, color: Colors.white),
-                              SizedBox(width: 2),
-                              Text(
-                                'Saved',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(17),
+          child: Row(
+            children: [
+              // ── Checkbox (multi-select mode) ──────────────────────────
+              if (isMultiSelectMode)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onToggleSelect?.call(),
+                    activeColor: context.errorColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                  ),
+                ),
+
+              // ── LEFT HALF: tap = Edit ─────────────────────────────────
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: isMultiSelectMode ? null : onEdit,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (_inCart) ...[
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: context.primaryColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                item.itemName,
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
+                                  color: context.textColor,
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Pencil badge — 28×28, clearly visible
+                            if (!isMultiSelectMode) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: context.borderColor
+                                      .withValues(alpha: 0.35),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  LucideIcons.pencil,
+                                  size: 14,
+                                  color: context.textSecondaryColor,
                                 ),
                               ),
                             ],
+                            if (highlighted) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.successColor,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(LucideIcons.check,
+                                        size: 10, color: Colors.white),
+                                    SizedBox(width: 2),
+                                    Text(
+                                      'Saved',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '₹${item.lastPrice.toStringAsFixed(0)} per ${item.unit}',
+                          style: TextStyle(
+                            color: context.primaryColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '₹${item.lastPrice.toStringAsFixed(0)} per ${item.unit}',
-                    style: TextStyle(
-                      color: context.primaryColor,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // ── Right: Add button OR inline qty stepper ─────────────────
-            if (!_inCart)
-              GestureDetector(
-                onTap: onAdd,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: context.primaryColor,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.primaryColor.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.plus, color: Colors.white, size: 15),
-                      SizedBox(width: 4),
-                      Text(
-                        'Add',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
-              )
-            else
-              // Inline stepper
-              EditableQtyStepper(
-                qty: qty,
-                itemName: item.itemName,
-                rate: item.lastPrice,
-                unit: item.unit,
-                isDecimal: item.unit == 'KG' ||
-                    item.unit == 'LITRE' ||
-                    item.unit == 'L',
-                onChanged: (newQty) => onQtyChanged(newQty.toInt()),
-                onDecrement: onDecrement,
-                onIncrement: onIncrement,
-                showTrashAtOne: true,
               ),
-          ],
+
+              // ── RIGHT HALF: Add (→ direct numpad) or stepper ──────────
+              if (!isMultiSelectMode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 10, 12, 10),
+                  child: !_inCart
+                      ? GestureDetector(
+                          onTap: onOpenNumpad,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: context.primaryColor,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: context.primaryColor
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                )
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(LucideIcons.plus,
+                                    color: Colors.white, size: 15),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Add',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : EditableQtyStepper(
+                          qty: qty,
+                          itemName: item.itemName,
+                          rate: item.lastPrice,
+                          unit: item.unit,
+                          isDecimal: item.unit == 'KG' ||
+                              item.unit == 'LITRE' ||
+                              item.unit == 'L',
+                          onChanged: (newQty) => onQtyChanged(newQty.toInt()),
+                          onDecrement: onDecrement,
+                          onIncrement: onIncrement,
+                          showTrashAtOne: true,
+                        ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1350,29 +1578,44 @@ class _ManageItemCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.highlighted = false,
+    this.isMultiSelectMode = false,
+    this.isSelected = false,
+    this.onLongPress,
+    this.onToggleSelect,
   });
 
   final CatalogueItem item;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final bool highlighted;
+  final bool isMultiSelectMode;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onToggleSelect;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onEdit,
+      onTap: isMultiSelectMode ? onToggleSelect : onEdit,
+      onLongPress: isMultiSelectMode ? null : onLongPress,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: highlighted
-              ? context.successColor.withValues(alpha: 0.08)
-              : context.surfaceColor,
+          color: isSelected
+              ? context.errorColor.withValues(alpha: 0.07)
+              : highlighted
+                  ? context.successColor.withValues(alpha: 0.08)
+                  : context.surfaceColor,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: highlighted ? context.successColor : context.borderColor,
-            width: highlighted ? 2.0 : 0.5,
+            color: isSelected
+                ? context.errorColor.withValues(alpha: 0.6)
+                : highlighted
+                    ? context.successColor
+                    : context.borderColor,
+            width: isSelected ? 1.5 : (highlighted ? 2.0 : 0.5),
           ),
           boxShadow: highlighted
               ? [
@@ -1389,6 +1632,19 @@ class _ManageItemCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
+              // ── Checkbox (multi-select) ───────────────────────────────
+              if (isMultiSelectMode)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onToggleSelect?.call(),
+                    activeColor: context.errorColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                  ),
+                ),
+
               // ── Left: name + usage ────────────────────────────────────
               Expanded(
                 child: Column(
@@ -1457,54 +1713,56 @@ class _ManageItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // ── Right: price + edit hint + menu ────────────────────────
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '₹${item.lastPrice.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: context.primaryColor,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
+              // ── Right: price + menu ───────────────────────────────────
+              if (!isMultiSelectMode) ...[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹${item.lastPrice.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: context.primaryColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'per ${item.unit}',
-                    style: TextStyle(
-                        color: context.textSecondaryColor, fontSize: 10),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 4),
-              PopupMenuButton<String>(
-                icon: Icon(LucideIcons.moreVertical,
-                    color: context.textSecondaryColor, size: 18),
-                onSelected: (val) {
-                  if (val == 'edit') onEdit();
-                  if (val == 'delete') onDelete();
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      Icon(LucideIcons.edit, size: 14),
-                      SizedBox(width: 8),
-                      Text('Edit'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(LucideIcons.trash2,
-                          size: 14, color: Colors.red),
-                      const SizedBox(width: 8),
-                      const Text('Remove',
-                          style: TextStyle(color: Colors.red)),
-                    ]),
-                  ),
-                ],
-              ),
+                    Text(
+                      'per ${item.unit}',
+                      style: TextStyle(
+                          color: context.textSecondaryColor, fontSize: 10),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  icon: Icon(LucideIcons.moreVertical,
+                      color: context.textSecondaryColor, size: 18),
+                  onSelected: (val) {
+                    if (val == 'edit') onEdit();
+                    if (val == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(children: [
+                        Icon(LucideIcons.edit, size: 14),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(children: [
+                        Icon(LucideIcons.trash2,
+                            size: 14, color: Colors.red),
+                        const SizedBox(width: 8),
+                        const Text('Remove',
+                            style: TextStyle(color: Colors.red)),
+                      ]),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

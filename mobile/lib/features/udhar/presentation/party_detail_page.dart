@@ -21,7 +21,6 @@ import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
-import 'package:mobile/shared/widgets/phone_numpad_sheet.dart';
 
 
 class PartyDetailPage extends ConsumerStatefulWidget {
@@ -581,9 +580,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  void _showEditNameDialog(BuildContext context, CustomerLedger currentLedger) {
+  void _showEditCustomerSheet(
+    BuildContext context,
+    CustomerLedger currentLedger,
+  ) {
     final nameController = TextEditingController(
       text: currentLedger.customerName,
+    );
+    final phoneController = TextEditingController(
+      text: currentLedger.customerPhone ?? '',
     );
     bool isSubmitting = false;
 
@@ -594,182 +599,257 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
+            return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 24,
-                right: 24,
-                top: 24,
               ),
-              decoration: BoxDecoration(
-                color: context.surfaceColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: context.borderColor,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                decoration: BoxDecoration(
+                  color: context.surfaceColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Edit Name',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: context.borderColor,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: nameController,
-                    textCapitalization: TextCapitalization.words,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
                     ),
-                    decoration: InputDecoration(
-                      labelText: 'Customer Name',
-                      labelStyle: TextStyle(color: context.textSecondaryColor),
-                      prefixIcon: Icon(
-                        LucideIcons.user,
-                        color: context.primaryColor,
+                    const SizedBox(height: 20),
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: context.primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            LucideIcons.userCog,
+                            color: context.primaryColor,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Edit Customer',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                'Update name & mobile number',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.x),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    // Name field
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
                       ),
-                      filled: true,
-                      fillColor: context.textSecondaryColor.withValues(
-                        alpha: 0.03,
+                      decoration: InputDecoration(
+                        labelText: 'Customer Name',
+                        hintText: 'e.g. Ramesh Sharma',
+                        labelStyle: TextStyle(color: context.textSecondaryColor),
+                        prefixIcon: Icon(
+                          LucideIcons.user,
+                          color: context.primaryColor,
+                          size: 20,
+                        ),
+                        filled: true,
+                        fillColor: context.textSecondaryColor.withValues(
+                          alpha: 0.04,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: context.primaryColor,
+                            width: 2,
+                          ),
+                        ),
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: context.borderColor),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 16),
+                    // Mobile number field
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: context.borderColor),
+                      decoration: InputDecoration(
+                        labelText: 'Mobile Number',
+                        hintText: 'e.g. 9876543210',
+                        labelStyle: TextStyle(color: context.textSecondaryColor),
+                        prefixIcon: Icon(
+                          LucideIcons.smartphone,
+                          color: context.primaryColor,
+                          size: 20,
+                        ),
+                        filled: true,
+                        fillColor: context.textSecondaryColor.withValues(
+                          alpha: 0.04,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: context.borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: context.primaryColor,
+                            width: 2,
+                          ),
+                        ),
                       ),
                     ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              final name = nameController.text.trim();
-                              if (name.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Name cannot be empty'),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              setModalState(() => isSubmitting = true);
-                              final success = await ref
-                                  .read(udharProvider.notifier)
-                                  .updateCustomerName(currentLedger.id, name);
-
-                              if (success && context.mounted) {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Name updated! 🎉'),
-                                  ),
-                                );
-                              } else {
-                                setModalState(() => isSubmitting = false);
-                                if (context.mounted) {
+                    const SizedBox(height: 28),
+                    // Save button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final name = nameController.text.trim();
+                                if (name.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Failed to update name.'),
+                                      content: Text('Name cannot be empty'),
                                     ),
                                   );
+                                  return;
                                 }
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.primaryColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+
+                                setModalState(() => isSubmitting = true);
+
+                                final phone = phoneController.text.trim();
+                                final nameChanged =
+                                    name != currentLedger.customerName;
+                                final phoneChanged =
+                                    phone !=
+                                    (currentLedger.customerPhone ?? '');
+
+                                bool success = true;
+                                if (nameChanged) {
+                                  success = await ref
+                                      .read(udharProvider.notifier)
+                                      .updateCustomerName(
+                                        currentLedger.id,
+                                        name,
+                                      );
+                                }
+                                if (success && phoneChanged) {
+                                  success = await ref
+                                      .read(udharProvider.notifier)
+                                      .updateCustomerPhone(
+                                        currentLedger.id,
+                                        phone,
+                                      );
+                                }
+
+                                if (!mounted) return;
+                                if (success && context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Customer updated! 🎉'),
+                                    ),
+                                  );
+                                } else {
+                                  setModalState(() => isSubmitting = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Failed to update. Try again.'),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.primaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                       ),
-                      child: isSubmitting
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-
-  void _showEditPhoneDialog(
-    BuildContext context,
-    CustomerLedger currentLedger,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => PhoneNumpadSheet(
-        initial: currentLedger.customerPhone ?? '',
-        title: 'Customer Mobile Number',
-      ),
-    );
-    if (result == null || !mounted) return;
-    final success = await ref
-        .read(udharProvider.notifier)
-        .updateCustomerPhone(currentLedger.id, result);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? 'Mobile number saved! 🎉' : 'Failed to save mobile number.',
-        ),
-      ),
     );
   }
 
@@ -1048,7 +1128,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: () => _showEditNameDialog(context, currentLedger),
+                    onTap: () =>
+                        _showEditCustomerSheet(context, currentLedger),
                     behavior: HitTestBehavior.opaque,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1066,52 +1147,44 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Icon(
-                          LucideIcons.edit2,
+                          LucideIcons.pencil,
                           size: 14,
                           color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ],
                     ),
                   ),
-                  Row(
-                    children: [
-                      if (currentLedger.customerPhone != null &&
-                          currentLedger.customerPhone!.isNotEmpty)
-                        Text(
-                          currentLedger.customerPhone!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w500,
+                  GestureDetector(
+                    onTap: () =>
+                        _showEditCustomerSheet(context, currentLedger),
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (currentLedger.customerPhone != null &&
+                            currentLedger.customerPhone!.isNotEmpty)
+                          Text(
+                            currentLedger.customerPhone!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Add Mobile Number',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontWeight: FontWeight.w500,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
-                        )
-                      else
-                        Text(
-                          'Add Mobile Number',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.5),
-                            fontWeight: FontWeight.w500,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () =>
-                            _showEditPhoneDialog(context, currentLedger),
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Icon(
-                            LucideIcons.edit2,
-                            size: 12,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1581,6 +1654,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         }
         // ────────────────────────────────────────────────────────────
 
+        // Mutable delivery date that the user can edit in the share sheet
+        // without affecting the stored transaction. Initialized from the tx
+        // when the sheet opens and re-initialized when selectedTx changes.
+        DateTime? editableDeliveryDate = selectedTx?.deliveryDate;
+
         return StatefulBuilder(
           builder: (ctx, setSheet) {
             // Build the correct preview message depending on shareMode
@@ -1597,6 +1675,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 receivedAmount: selectedTx!.receivedAmount,
                 balanceDue: _computedBalance,
                 whatsappCustomNote: shopProfile.whatsappCustomNote,
+                orderDate: selectedTx!.orderDate,
+                deliveryDate: editableDeliveryDate ?? selectedTx!.deliveryDate,
               );
             } else {
               message = WhatsAppUtils.buildPartyReminderMessage(
@@ -1850,6 +1930,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     setSheet(() {
                                       selectedTx = tx;
                                       shareMode = newMode;
+                                      editableDeliveryDate = tx.deliveryDate;
                                     });
                                   },
                                   borderRadius: BorderRadius.circular(12),
@@ -1954,6 +2035,83 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               letterSpacing: 1.2,
                             ),
                           ),
+                          // ── Editable Delivery Date (laundry manual bills) ───
+                          if (shareMode == 'manualBill' &&
+                              (editableDeliveryDate != null ||
+                                  (selectedTx?.deliveryDate != null))) ...[
+                            const SizedBox(height: 10),
+                            GestureDetector(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: editableDeliveryDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                  helpText: 'Change Delivery Date',
+                                );
+                                if (picked != null) {
+                                  setSheet(() => editableDeliveryDate = picked);
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.07),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      LucideIcons.truck,
+                                      size: 16,
+                                      color: Color(0xFF7C3AED),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'DELIVERY DATE',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w900,
+                                              color: Color(0xFF7C3AED),
+                                              letterSpacing: 1,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            editableDeliveryDate != null
+                                                ? DateFormat('dd MMM yyyy').format(editableDeliveryDate!)
+                                                : 'Tap to set',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF7C3AED),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      LucideIcons.pencil,
+                                      size: 14,
+                                      color: Color(0xFF7C3AED),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
@@ -2580,6 +2738,43 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          // ── Delivery Date chip (Laundry only) ──────────────
+                          if (tx.deliveryDate != null) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7C3AED).withValues(alpha: 0.07),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    LucideIcons.truck,
+                                    size: 10,
+                                    color: Color(0xFF7C3AED),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Delivery: ${DateFormat("dd MMM yyyy").format(tx.deliveryDate!.toLocal())}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF7C3AED),
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ],

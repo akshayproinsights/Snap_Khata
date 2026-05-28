@@ -95,6 +95,8 @@ class LedgerTransaction {
   // True when this PAYMENT row is an advance linked to a MANUAL_CREDIT bill.
   // Flutter hides these from the card list — the amount is shown inline on the bill card.
   final bool isAdvanceLinked;
+  final DateTime? orderDate;     // Laundry: date clothes were received
+  final DateTime? deliveryDate;  // Laundry: promised delivery date
 
   LedgerTransaction({
     required this.id,
@@ -113,6 +115,8 @@ class LedgerTransaction {
     this.items = const [],
     this.isManualEntry = false,
     this.isAdvanceLinked = false,
+    this.orderDate,
+    this.deliveryDate,
   });
 
   // Getters for backwards compatibility
@@ -157,6 +161,12 @@ class LedgerTransaction {
       items: parsedItems,
       isManualEntry: parsedIsManual,
       isAdvanceLinked: json['is_advance_linked'] == true,
+      orderDate: extra is Map && extra['order_date'] != null
+          ? DateTime.tryParse(extra['order_date'].toString())
+          : null,
+      deliveryDate: extra is Map && extra['delivery_date'] != null
+          ? DateTime.tryParse(extra['delivery_date'].toString())
+          : null,
     );
   }
 }
