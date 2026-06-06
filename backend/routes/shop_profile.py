@@ -17,6 +17,8 @@ class ShopProfileResponse(BaseModel):
     shop_phone: Optional[str] = ""
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
+    shop_logo_url: Optional[str] = ""
+    custom_terms: Optional[str] = ""
     whatsapp_custom_note: Optional[str] = ""
     shop_type: Optional[str] = "general"
 
@@ -27,6 +29,8 @@ class ShopProfileRequest(BaseModel):
     shop_phone: Optional[str] = ""
     shop_gst: Optional[str] = ""
     shop_upi_id: Optional[str] = ""
+    shop_logo_url: Optional[str] = ""
+    custom_terms: Optional[str] = ""
     whatsapp_custom_note: Optional[str] = ""
     shop_type: Optional[str] = "general"
 
@@ -46,7 +50,7 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
         db = get_database_client()
         resp = (
             db.client.table("user_profiles")
-            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, whatsapp_custom_note, shop_type")
+            .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, shop_logo_url, custom_terms, whatsapp_custom_note, shop_type")
             .eq("username", username)
             .limit(1)
             .execute()
@@ -59,6 +63,8 @@ async def get_shop_profile(current_user: Dict[str, Any] = Depends(auth.get_curre
                 shop_phone=row.get("shop_phone") or "",
                 shop_gst=row.get("shop_gst") or "",
                 shop_upi_id=row.get("shop_upi_id") or "",
+                shop_logo_url=row.get("shop_logo_url") or "",
+                custom_terms=row.get("custom_terms") or "",
                 whatsapp_custom_note=row.get("whatsapp_custom_note") or "",
                 shop_type=row.get("shop_type") or "general",
             )
@@ -92,6 +98,8 @@ async def update_shop_profile(
                 "shop_phone": body.shop_phone or "",
                 "shop_gst": body.shop_gst or "",
                 "shop_upi_id": body.shop_upi_id or "",
+                "shop_logo_url": body.shop_logo_url or "",
+                "custom_terms": body.custom_terms or "",
                 "whatsapp_custom_note": body.whatsapp_custom_note or "",
                 "shop_type": body.shop_type or "general",
             },
@@ -105,6 +113,8 @@ async def update_shop_profile(
             shop_phone=body.shop_phone or "",
             shop_gst=body.shop_gst or "",
             shop_upi_id=body.shop_upi_id or "",
+            shop_logo_url=body.shop_logo_url or "",
+            custom_terms=body.custom_terms or "",
             whatsapp_custom_note=body.whatsapp_custom_note or "",
             shop_type=body.shop_type or "general",
         )

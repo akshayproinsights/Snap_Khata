@@ -28,6 +28,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _shopPhone = '';
   String _shopGst = '';
   String _shopUpiId = '';
+  String _shopLogoUrl = '';
+  String _customTerms = '';
   String _whatsappCustomNote = '';
   String _shopType = 'general';
   final bool _isLoadingProfile = false;
@@ -55,12 +57,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _shopPhone = profile.phone;
       _shopGst = profile.gst;
       _shopUpiId = profile.upiId;
+      _shopLogoUrl = profile.logoUrl;
+      _customTerms = profile.customTerms;
       _whatsappCustomNote = profile.whatsappCustomNote;
       _shopType = profile.shopType;
     });
-    // No manual sync needed — shopProvider.build() already fires _doInit()
-    // which calls syncWithBackend(). The ref.listen below will pick up the
-    // state change and refresh these fields automatically.
   }
 
   /// Save using provider
@@ -71,6 +72,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       phone: _shopPhone,
       gst: _shopGst,
       upiId: _shopUpiId,
+      logoUrl: _shopLogoUrl,
+      customTerms: _customTerms,
       whatsappCustomNote: _whatsappCustomNote,
       shopType: _shopType,
     );
@@ -84,6 +87,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String tempPhone = _shopPhone;
     String tempGst = _shopGst;
     String tempUpiId = _shopUpiId;
+    String tempLogoUrl = _shopLogoUrl;
+    String tempCustomTerms = _customTerms;
     String tempWhatsAppNote = _whatsappCustomNote;
     String tempShopType = _shopType;
 
@@ -153,6 +158,137 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           initialValue: tempUpiId,
                           placeholder: 'UPI ID (Optional)',
                           onSave: (val) => tempUpiId = val,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'UPI ID is shown as Scan-to-Pay QR on your invoice',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.textSecondaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // ── Shop Logo URL ─────────────────────────────────────
+                        Text(
+                          'Shop Logo',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: context.textColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        StatefulBuilder(
+                          builder: (context, setLogoState) => Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MobileTextField(
+                                initialValue: tempLogoUrl,
+                                placeholder: 'Logo Image URL (https://...)',
+                                onSave: (val) {
+                                  setSheetState(() => tempLogoUrl = val);
+                                  setLogoState(() {});
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              // Logo preview
+                              if (tempLogoUrl.isNotEmpty)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    tempLogoUrl,
+                                    height: 64,
+                                    width: 64,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 64,
+                                      width: 64,
+                                      decoration: BoxDecoration(
+                                        color: context.primaryColor.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: context.errorColor.withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                      child: Icon(LucideIcons.imageOff,
+                                          color: context.errorColor, size: 24),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  height: 64,
+                                  width: 64,
+                                  decoration: BoxDecoration(
+                                    color: context.primaryColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: context.borderColor,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      tempName.isNotEmpty ? tempName[0].toUpperCase() : 'S',
+                                      style: TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.primaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tempLogoUrl.isEmpty
+                                    ? 'Paste a public image URL. We\'ll show initials if no logo is set.'
+                                    : 'Logo preview shown above',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.textSecondaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // ── Custom Terms ─────────────────────────────────────
+                        Text(
+                          'Terms & Conditions on Invoice',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: context.textColor,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          initialValue: tempCustomTerms,
+                          maxLines: 3,
+                          style: TextStyle(color: context.textColor, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. Goods once sold will not be returned. All disputes subject to local jurisdiction.',
+                            hintStyle: TextStyle(
+                              color: context.textSecondaryColor.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                            filled: true,
+                            fillColor: context.isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          ),
+                          onChanged: (val) => setSheetState(() => tempCustomTerms = val),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'This replaces the default "Thank you for your business" on invoices.',
+                          style: TextStyle(fontSize: 11, color: context.textSecondaryColor),
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -307,6 +443,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _shopPhone = tempPhone;
                         _shopGst = tempGst;
                         _shopUpiId = tempUpiId;
+                        _shopLogoUrl = tempLogoUrl;
+                        _customTerms = tempCustomTerms;
                         _whatsappCustomNote = tempWhatsAppNote;
                         _shopType = tempShopType;
                       });
@@ -400,6 +538,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _shopPhone          = next.phone;
         _shopGst            = next.gst;
         _shopUpiId          = next.upiId;
+        _shopLogoUrl        = next.logoUrl;
+        _customTerms        = next.customTerms;
         _whatsappCustomNote = next.whatsappCustomNote;
         _shopType           = next.shopType;
       });

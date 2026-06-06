@@ -4,6 +4,8 @@ class ShopProfile {
   final String phone;
   final String gst;
   final String upiId;
+  final String logoUrl;
+  final String customTerms;
   final String whatsappCustomNote;
   /// 'general' (default) or 'laundry'
   final String shopType;
@@ -14,6 +16,8 @@ class ShopProfile {
     this.phone = '',
     this.gst = '',
     this.upiId = '',
+    this.logoUrl = '',
+    this.customTerms = '',
     this.whatsappCustomNote = '',
     this.shopType = 'general',
   });
@@ -24,6 +28,8 @@ class ShopProfile {
     String? phone,
     String? gst,
     String? upiId,
+    String? logoUrl,
+    String? customTerms,
     String? whatsappCustomNote,
     String? shopType,
   }) {
@@ -33,6 +39,8 @@ class ShopProfile {
       phone: phone ?? this.phone,
       gst: gst ?? this.gst,
       upiId: upiId ?? this.upiId,
+      logoUrl: logoUrl ?? this.logoUrl,
+      customTerms: customTerms ?? this.customTerms,
       whatsappCustomNote: whatsappCustomNote ?? this.whatsappCustomNote,
       shopType: shopType ?? this.shopType,
     );

@@ -336,10 +336,13 @@ async def get_public_receipt(
         shop_address = ""
         shop_phone = ""
         shop_gst = ""
+        shop_upi_id = ""
+        shop_logo_url = ""
+        custom_terms = ""
         if username:
             try:
                 profile_response = db.client.from_("user_profiles") \
-                    .select("shop_name, shop_address, shop_phone, shop_gst") \
+                    .select("shop_name, shop_address, shop_phone, shop_gst, shop_upi_id, shop_logo_url, custom_terms") \
                     .eq("username", username) \
                     .limit(1) \
                     .execute()
@@ -349,6 +352,9 @@ async def get_public_receipt(
                     shop_address = profile_data.get("shop_address") or ""
                     shop_phone = profile_data.get("shop_phone") or ""
                     shop_gst = profile_data.get("shop_gst") or ""
+                    shop_upi_id = profile_data.get("shop_upi_id") or ""
+                    shop_logo_url = profile_data.get("shop_logo_url") or ""
+                    custom_terms = profile_data.get("custom_terms") or ""
             except Exception:
                 pass  # stay as default
 
@@ -462,6 +468,9 @@ async def get_public_receipt(
             "shop_address": shop_address,
             "shop_phone": shop_phone,
             "shop_gst": shop_gst,
+            "shop_upi_id": shop_upi_id,
+            "shop_logo_url": shop_logo_url,
+            "custom_terms": custom_terms,
             "customer_name": header.get("customer_name") or "Walk-in Customer",
             "customer_phone": header.get("customer_phone"),
             "vehicle_number": header.get("vehicle_number"),

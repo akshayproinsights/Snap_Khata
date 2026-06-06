@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -8,16 +8,283 @@ import {
     Users,
     Truck,
     Search,
-    MoreVertical,
     Plus,
-    Filter,
-    CheckCircle2,
     Clock,
     FileText,
     ChevronRight,
     ArrowUpRight,
-    ArrowDownLeft
+    ArrowDownLeft,
+    X,
+    Image,
+    FileDown,
+    MessageCircle,
+    Send
 } from 'lucide-react';
+
+// ── Payment Reminder Modal ───────────────────────────────────────────────────
+interface ReminderModalProps {
+    ledger: Ledger;
+    onClose: () => void;
+}
+
+const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
+    type ShareMode = 'receiptPhoto' | 'accountStatement';
+    const [shareMode, setShareMode] = useState<ShareMode>('accountStatement');
+    const [phoneInput, setPhoneInput] = useState('');
+    const [isPdfLoading, setIsPdfLoading] = useState(false);
+    const backdropRef = useRef<HTMLDivElement>(null);
+
+    const name = ledger.customer_name || ledger.vendor_name || 'Customer';
+    const balanceDue = ledger.balance_due;
+    const totalBilled = ledger.latest_bill_amount || balanceDue;
+    const billNo = ledger.latest_bill_number;
+
+    // Detect if this ledger might have a receipt image (based on bill number)
+    const hasReceiptPhoto = !!(ledger.latest_bill_number);
+
+    // Build WhatsApp message preview
+    const message = [
+        `Hi ${name},`,
+        '',
+        `⚠️ *Amount Due: ${formatCurrency(balanceDue)}*${billNo ? ` (Bill #${billNo})` : ''}`,
+        '',
+        'Please settle this amount as soon as possible.',
+        '',
+        'Thank you! 🙏',
+    ].join('\n');
+
+    const handleWhatsApp = () => {
+        const phone = phoneInput.trim();
+        const encodedMsg = encodeURIComponent(message);
+        if (phone) {
+            const cleaned = phone.replace(/\D/g, '');
+            const num = cleaned.startsWith('91') ? cleaned : `91${cleaned}`;
+            window.open(`https://wa.me/${num}?text=${encodedMsg}`, '_blank');
+        } else {
+            // Share without number — opens WhatsApp picker
+            window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
+        }
+        onClose();
+    };
+
+    const handleSharePdf = async () => {
+        setIsPdfLoading(true);
+        try {
+            // Build a minimal text-based PDF via browser print
+            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            if (!printWindow) {
+                toast.error('Please allow pop-ups to download the PDF.');
+                return;
+            }
+            const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            printWindow.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Account Statement - ${name}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #1e293b; padding: 32px; }
+    .header { background: #1a2744; color: white; padding: 20px 24px; border-radius: 8px 8px 0 0; }
+    .header h1 { font-size: 20px; letter-spacing: 1px; }
+    .sub-header { background: #f1f5f9; padding: 10px 24px; font-size: 12px; color: #64748b; }
+    .section { border: 1px solid #e2e8f0; border-radius: 0 0 8px 8px; }
+    .meta { display: flex; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; }
+    .meta-block h3 { font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+    .meta-block p { font-size: 14px; font-weight: bold; }
+    .summary { display: flex; padding: 20px 24px; gap: 24px; border-bottom: 1px solid #e2e8f0; }
+    .chip { flex: 1; text-align: center; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .chip label { font-size: 10px; text-transform: uppercase; color: #64748b; display: block; }
+    .chip strong { font-size: 18px; display: block; margin-top: 4px; }
+    .due { color: #dc2626; }
+    .paid { color: #16a34a; }
+    .footer { padding: 20px 24px; font-size: 11px; color: #94a3b8; text-align: center; }
+    .title-bar { background: #4F46E5; color: white; text-align: center; padding: 8px; font-size: 11px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 16px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header"><h1>ACCOUNT STATEMENT</h1></div>
+  <div class="sub-header">Generated on ${date}</div>
+  <div class="section">
+    <div class="meta">
+      <div class="meta-block"><h3>Customer</h3><p>${name}</p></div>
+      <div class="meta-block" style="text-align:right">
+        <h3>Status</h3>
+        <p style="color:${balanceDue > 0 ? '#dc2626' : '#16a34a'}">${balanceDue > 0 ? 'UNPAID' : 'PAID'}</p>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="chip"><label>Total Billed</label><strong>${formatCurrency(totalBilled)}</strong></div>
+      <div class="chip"><label>Paid</label><strong class="paid">${formatCurrency(Math.max(0, totalBilled - balanceDue))}</strong></div>
+      <div class="chip"><label>Balance Due</label><strong class="${balanceDue > 0 ? 'due' : 'paid'}">${formatCurrency(balanceDue)}</strong></div>
+    </div>
+    ${billNo ? `<div style="padding: 12px 24px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">Bill #${billNo}</div>` : ''}
+    <div class="footer">Generated by SnapKhata · Account Statement</div>
+  </div>
+</body>
+</html>`);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        } catch (err) {
+            console.error(err);
+            toast.error('Could not generate PDF.');
+        } finally {
+            setIsPdfLoading(false);
+        }
+    };
+
+    // Close on backdrop click
+    const handleBackdropClick = (e: React.MouseEvent) => {
+        if (e.target === backdropRef.current) onClose();
+    };
+
+    return (
+        <div
+            ref={backdropRef}
+            onClick={handleBackdropClick}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+            style={{ animation: 'fadeIn 0.15s ease' }}
+        >
+            <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+                 style={{ animation: 'slideUp 0.2s ease' }}
+            >
+                {/* Header */}
+                <div className="flex items-start justify-between p-6 pb-4">
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900 leading-tight">Send Payment Reminder</h2>
+                        <p className="text-sm text-gray-500 font-semibold mt-0.5">{name}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors -mt-1 -mr-1">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Scroll content */}
+                <div className="flex-1 overflow-y-auto px-6 space-y-5">
+                    {/* Summary Strip */}
+                    <div className="flex items-center justify-around bg-gray-50 rounded-2xl border border-gray-100 p-4">
+                        <div className="text-center">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Billed</p>
+                            <p className="text-base font-black text-gray-900">{formatCurrency(totalBilled)}</p>
+                        </div>
+                        <div className="w-px h-8 bg-gray-200" />
+                        <div className="text-center">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid</p>
+                            <p className="text-base font-black text-emerald-600">{formatCurrency(Math.max(0, totalBilled - balanceDue))}</p>
+                        </div>
+                        <div className="w-px h-8 bg-gray-200" />
+                        <div className="text-center">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Due</p>
+                            <p className="text-base font-black text-rose-600">{formatCurrency(balanceDue)}</p>
+                        </div>
+                    </div>
+
+                    {/* Send As Tabs */}
+                    <div>
+                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">Send As</p>
+                        <div className="flex rounded-2xl border border-gray-200 overflow-hidden">
+                            {hasReceiptPhoto && (
+                                <button
+                                    onClick={() => setShareMode('receiptPhoto')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all ${
+                                        shareMode === 'receiptPhoto'
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Image size={15} />
+                                    Receipt Photo
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShareMode('accountStatement')}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all ${
+                                    shareMode === 'accountStatement'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                } ${hasReceiptPhoto ? 'border-l border-gray-200' : ''}`}
+                            >
+                                <FileText size={15} />
+                                Account Statement
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Message Preview */}
+                    <div>
+                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">Preview</p>
+                        <div className="bg-[#DCF8C6] rounded-tr-2xl rounded-br-2xl rounded-bl-2xl p-4 shadow-sm">
+                            <p className="text-sm text-gray-900 whitespace-pre-line leading-relaxed">{message}</p>
+                        </div>
+                    </div>
+
+                    {/* Optional phone field */}
+                    <div>
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">
+                            Customer Mobile (optional)
+                        </label>
+                        <div className="flex items-center border border-gray-200 rounded-2xl overflow-hidden focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all">
+                            <span className="px-3 py-3 text-sm font-bold text-gray-400 border-r border-gray-200 bg-gray-50">+91</span>
+                            <input
+                                type="tel"
+                                placeholder="9876543210"
+                                value={phoneInput}
+                                onChange={(e) => setPhoneInput(e.target.value)}
+                                className="flex-1 px-3 py-3 text-sm outline-none bg-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="pb-2" />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="px-6 pb-6 pt-4 border-t border-gray-100 space-y-3">
+                    {/* Share as PDF — only for Account Statement */}
+                    {shareMode === 'accountStatement' && (
+                        <button
+                            onClick={handleSharePdf}
+                            disabled={isPdfLoading}
+                            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-indigo-500 text-indigo-600 font-black text-sm hover:bg-indigo-50 transition-all disabled:opacity-60"
+                            style={{ background: 'rgba(99,102,241,0.06)' }}
+                        >
+                            <FileDown size={18} />
+                            {isPdfLoading ? 'Preparing PDF…' : 'Share as PDF'}
+                        </button>
+                    )}
+
+                    {/* Cancel + WhatsApp row */}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3.5 rounded-2xl border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleWhatsApp}
+                            className="flex-[2] flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                            style={{ background: '#25D366' }}
+                        >
+                            <Send size={16} />
+                            SEND ON WHATSAPP
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <style>{`
+                @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+                @keyframes slideUp { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+            `}</style>
+        </div>
+    );
+};
 
 const UdharDashboardPage: React.FC = () => {
     const queryClient = useQueryClient();
@@ -31,6 +298,7 @@ const UdharDashboardPage: React.FC = () => {
 
     const [activeTab, setActiveTab] = useState<'customers' | 'suppliers'>('customers');
     const [searchTerm, setSearchTerm] = useState('');
+    const [reminderLedger, setReminderLedger] = useState<Ledger | null>(null);
 
     // Persist toggle preference
     useEffect(() => {
@@ -118,6 +386,7 @@ const UdharDashboardPage: React.FC = () => {
     }, [setHeaderActions]);
 
     return (
+        <>
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
             {/* Credit Summary Cards - horizontal Style */}
             <div className="grid grid-cols-2 gap-3 px-1">
@@ -233,21 +502,32 @@ const UdharDashboardPage: React.FC = () => {
                                 key={`${ledger.party_type}-${ledger.id}`}
                                 ledger={ledger}
                                 onPay={handleRecordPayment}
+                                onReminder={setReminderLedger}
                             />
                         ))
                     )}
                 </div>
             </div>
         </div>
+
+        {/* Payment Reminder Modal */}
+        {reminderLedger && (
+            <ReminderModal
+                ledger={reminderLedger!}
+                onClose={() => setReminderLedger(null)}
+            />
+        )}
+        </>
     );
 };
 
 interface PartyCardProps {
     ledger: Ledger;
     onPay: (id: number, amount: number) => void;
+    onReminder: (ledger: Ledger) => void;
 }
 
-const PartyCard: React.FC<PartyCardProps> = ({ ledger, onPay }) => {
+const PartyCard: React.FC<PartyCardProps> = ({ ledger, onPay, onReminder }) => {
     const isDue = ledger.balance_due > 0;
     const name = ledger.customer_name || ledger.vendor_name || 'Unnamed Party';
     
@@ -324,6 +604,18 @@ const PartyCard: React.FC<PartyCardProps> = ({ ledger, onPay }) => {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                        {isDue && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReminder(ledger);
+                                }}
+                                className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-600 hover:text-white transition-all uppercase tracking-wider"
+                            >
+                                <MessageCircle size={13} />
+                                Remind
+                            </button>
+                        )}
                         {isDue && (
                             <button 
                                 onClick={(e) => {

@@ -2338,7 +2338,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── Share as PDF button ─────────────────────────────
+                        // ── Share as PDF button (only for Account Statement / Manual Bill) ──
+                        if (shareMode != 'receiptPhoto')
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -2394,7 +2395,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             },
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        if (shareMode != 'receiptPhoto')
+                          const SizedBox(height: 10),
                         // ── Cancel + WhatsApp row ───────────────────────────
                         Row(
                           children: [
@@ -2579,7 +2581,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       final InvoiceData invoiceData;
 
       if (tx != null) {
-        // Use locally loaded transaction data — works offline
+        // ── Authoritative payment amounts from ledger ──────────────────────
         final double txTotal = tx.amount;
         final double txPaid = tx.receivedAmount ?? (
           (_transactions ?? [])
@@ -2593,6 +2595,45 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
             ? 'PAID'
             : (txPaid > 0 ? 'PARTIAL' : 'UNPAID');
 
+        // ── Items: prefer local, fall back to verified_invoices API ────────
+        // Manual/catalogue entries store items directly on the transaction.
+        // AI-processed invoice receipts store items in verified_invoices
+        // (one row per line item, keyed by receipt_number).
+        List<Map<String, dynamic>> rawItems = tx.items;
+        String gstMode = 'none';
+        String? vehicleNumber;
+        String? odometerReading;
+
+        if (rawItems.isEmpty && tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty) {
+          // Fetch the verified invoice rows for this receipt
+          try {
+            final repo = ref.read(verifiedRepositoryProvider);
+            final records = await repo.getVerifiedInvoices(
+              receiptNumber: tx.receiptNumber,
+            );
+
+            if (records.isNotEmpty) {
+              final first = records.first;
+              gstMode = first.gstMode ?? 'none';
+              vehicleNumber = first.extraFields['vehicle_number']?.toString() ??
+                  first.extraFields['car_number']?.toString();
+              odometerReading = first.extraFields['odometer']?.toString() ??
+                  first.extraFields['odometer_reading']?.toString();
+
+              // Each VerifiedInvoice record = one line item
+              rawItems = records.map((r) => <String, dynamic>{
+                'name': r.description.isNotEmpty ? r.description : 'Item',
+                'qty': r.quantity,
+                'rate': r.rate,
+                'amount': r.amount,
+                'type': r.type.toLowerCase(), // 'part', 'labour', 'service'
+              }).toList();
+            }
+          } catch (_) {
+            // If API fetch fails, still generate PDF with amounts (no items)
+          }
+        }
+
         invoiceData = InvoicePdfGenerator.fromLocalTransaction(
           shopName: shopName,
           shopAddress: shopAddress,
@@ -2602,13 +2643,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ? ledger.customerName
               : 'Customer',
           customerPhone: ledger.customerPhone,
+          vehicleNumber: vehicleNumber,
+          odometerReading: odometerReading,
           receiptNumber: tx.receiptNumber ?? ledger.id.toString(),
           date: tx.createdAt,
           totalAmount: txTotal,
           receivedAmount: txPaid > 0 ? txPaid : null,
           balanceDue: txBalance > 0 ? txBalance : 0,
-          rawItems: tx.items,
-          gstMode: 'none', // manual entries don't carry GST mode locally
+          rawItems: rawItems,
+          gstMode: gstMode,
           industry: shopType,
           status: txStatus,
         );

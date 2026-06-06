@@ -68,13 +68,15 @@ class ShopNotifier extends Notifier<ShopProfile> {
     String read(String base) =>
         prefs.getString(_prefKey(base, u)) ?? prefs.getString(base) ?? '';
 
-    final cachedName     = read('shop_title');
-    final cachedAddress  = read('shop_address');
-    final cachedPhone    = read('shop_phone');
-    final cachedGst      = read('shop_gst');
-    final cachedUpi      = read('shop_upi_id');
-    final cachedWaNote   = read('whatsapp_custom_note');
-    final cachedShopType = read('shop_type');
+    final cachedName      = read('shop_title');
+    final cachedAddress   = read('shop_address');
+    final cachedPhone     = read('shop_phone');
+    final cachedGst       = read('shop_gst');
+    final cachedUpi       = read('shop_upi_id');
+    final cachedLogoUrl   = read('shop_logo_url');
+    final cachedTerms     = read('shop_custom_terms');
+    final cachedWaNote    = read('whatsapp_custom_note');
+    final cachedShopType  = read('shop_type');
 
     developer.log(
       'Cached shop name: "$cachedName" (user: "$u")',
@@ -87,6 +89,8 @@ class ShopNotifier extends Notifier<ShopProfile> {
       phone: cachedPhone,
       gst: cachedGst,
       upiId: cachedUpi,
+      logoUrl: cachedLogoUrl,
+      customTerms: cachedTerms,
       whatsappCustomNote: cachedWaNote,
       shopType: cachedShopType.isEmpty ? 'general' : cachedShopType,
     );
@@ -113,6 +117,8 @@ class ShopNotifier extends Notifier<ShopProfile> {
           phone:             (data['shop_phone']           as String?) ?? '',
           gst:               (data['shop_gst']             as String?) ?? '',
           upiId:             (data['shop_upi_id']          as String?) ?? '',
+          logoUrl:           (data['shop_logo_url']        as String?) ?? '',
+          customTerms:       (data['custom_terms']         as String?) ?? '',
           whatsappCustomNote:(data['whatsapp_custom_note'] as String?) ?? '',
           shopType:          (data['shop_type']            as String?) ?? 'general',
         );
@@ -135,6 +141,8 @@ class ShopNotifier extends Notifier<ShopProfile> {
           await prefs.setString(_prefKey('shop_phone',           username), newProfile.phone);
           await prefs.setString(_prefKey('shop_gst',             username), newProfile.gst);
           await prefs.setString(_prefKey('shop_upi_id',          username), newProfile.upiId);
+          await prefs.setString(_prefKey('shop_logo_url',        username), newProfile.logoUrl);
+          await prefs.setString(_prefKey('shop_custom_terms',    username), newProfile.customTerms);
           await prefs.setString(_prefKey('whatsapp_custom_note', username), newProfile.whatsappCustomNote);
           await prefs.setString(_prefKey('shop_type',            username), newProfile.shopType);
 
@@ -172,6 +180,8 @@ class ShopNotifier extends Notifier<ShopProfile> {
     await prefs.setString(_prefKey('shop_phone',           username), profile.phone);
     await prefs.setString(_prefKey('shop_gst',             username), profile.gst);
     await prefs.setString(_prefKey('shop_upi_id',          username), profile.upiId);
+    await prefs.setString(_prefKey('shop_logo_url',        username), profile.logoUrl);
+    await prefs.setString(_prefKey('shop_custom_terms',    username), profile.customTerms);
     await prefs.setString(_prefKey('whatsapp_custom_note', username), profile.whatsappCustomNote);
     await prefs.setString(_prefKey('shop_type',            username), profile.shopType);
 
@@ -183,6 +193,8 @@ class ShopNotifier extends Notifier<ShopProfile> {
         'shop_phone':           profile.phone,
         'shop_gst':             profile.gst,
         'shop_upi_id':          profile.upiId,
+        'shop_logo_url':        profile.logoUrl,
+        'custom_terms':         profile.customTerms,
         'whatsapp_custom_note': profile.whatsappCustomNote,
         'shop_type':            profile.shopType,
       });

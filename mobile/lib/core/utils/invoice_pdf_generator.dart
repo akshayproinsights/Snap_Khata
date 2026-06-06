@@ -78,14 +78,20 @@ class InvoiceLineItem {
 class InvoicePdfGenerator {
   InvoicePdfGenerator._();
 
-  // ── Color palette (matches Vyapar-style, professional) ────────────────────
+  // ── Color palette (Vyapar-inspired, professional) ─────────────────────
   static const _black = PdfColor.fromInt(0xFF000000);
+  static const _headerNavy = PdfColor.fromInt(0xFF1a2744); // deep navy header
+  static const _headerNavyLight = PdfColor.fromInt(0xFF243460);
   static const _darkSlate = PdfColor.fromInt(0xFF1e293b);
   static const _midSlate = PdfColor.fromInt(0xFF334155);
-  static const _lightGray = PdfColor.fromInt(0xFFf8fafc);
-  static const _borderGray = PdfColor.fromInt(0xFFcccccc);
+  static const _lightGray = PdfColor.fromInt(0xFFf1f5f9);
+  static const _tableHeaderBg = PdfColor.fromInt(0xFFe2e8f0);
+  static const _borderGray = PdfColor.fromInt(0xFFcbd5e1);
+  static const _white = PdfColor.fromInt(0xFFFFFFFF);
   static const _green = PdfColor.fromInt(0xFF16a34a);
+  static const _greenBg = PdfColor.fromInt(0xFFdcfce7);
   static const _orange = PdfColor.fromInt(0xFFea580c);
+  static const _orangeBg = PdfColor.fromInt(0xFFfff7ed);
   static const _red = PdfColor.fromInt(0xFFb91c1c);
   static const _snapBlue = PdfColor.fromInt(0xFF4F46E5);
 
@@ -271,6 +277,7 @@ class InvoicePdfGenerator {
 
     final isPaid = displayStatus == 'PAID';
     final statusColor = isPaid ? _green : _orange;
+    final statusBgColor = isPaid ? _greenBg : _orangeBg;
 
     return [
       // ── Document title ─────────────────────────────────────────────────
@@ -280,7 +287,7 @@ class InvoicePdfGenerator {
           style: pw.TextStyle(
             font: bold,
             fontSize: 18,
-            color: _darkSlate,
+            color: _headerNavy,
           ),
         ),
       ),
@@ -298,7 +305,7 @@ class InvoicePdfGenerator {
             _shopHeader(data, regular, bold, semiBold),
 
             // ── Bill To / Invoice Details grid ─────────────────────────────
-            _metaGrid(data, displayStatus, statusColor, regular, bold, semiBold),
+            _metaGrid(data, displayStatus, statusColor, statusBgColor, regular, bold, semiBold),
 
             // ── Items table ────────────────────────────────────────────────
             _itemsTable(
@@ -344,7 +351,7 @@ class InvoicePdfGenerator {
     ];
   }
 
-  // ── Shop Header ──────────────────────────────────────────────────────────
+  // ── Shop Header (Vyapar-style colored bar) ───────────────────────────────
 
   static pw.Widget _shopHeader(
     InvoiceData data,
@@ -354,46 +361,71 @@ class InvoicePdfGenerator {
   ) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(12),
       decoration: const pw.BoxDecoration(
         border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            data.shopName.toUpperCase(),
-            style: pw.TextStyle(
-              font: bold,
-              fontSize: 16,
-              color: _darkSlate,
-              letterSpacing: 0.5,
-            ),
-          ),
-          if (data.shopAddress != null && data.shopAddress!.isNotEmpty) ...[
-            pw.SizedBox(height: 3),
-            pw.Text(
-              data.shopAddress!,
-              style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
-            ),
-          ],
-          pw.SizedBox(height: 3),
-          pw.Row(
-            children: [
-              if (data.shopPhone != null && data.shopPhone!.isNotEmpty)
+          // ── Colored top bar with shop name ──────────────────────────────
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: _headerNavy,
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
                 pw.Expanded(
                   child: pw.Text(
-                    'Phone: ${data.shopPhone!.replaceAll('+91', '').trim()}',
-                    style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                    data.shopName.toUpperCase(),
+                    style: pw.TextStyle(
+                      font: bold,
+                      fontSize: 16,
+                      color: _white,
+                      letterSpacing: 0.8,
+                    ),
                   ),
                 ),
-              if (data.shopGst != null && data.shopGst!.isNotEmpty)
-                pw.Text(
-                  'GSTIN: ${data.shopGst}',
-                  style: pw.TextStyle(font: semiBold, fontSize: 9, color: _midSlate),
-                ),
-            ],
+                if (data.shopGst != null && data.shopGst!.isNotEmpty)
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: pw.BoxDecoration(
+                      color: _headerNavyLight,
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                    ),
+                    child: pw.Text(
+                      'GSTIN: ${data.shopGst}',
+                      style: pw.TextStyle(font: semiBold, fontSize: 8, color: _white),
+                    ),
+                  ),
+              ],
+            ),
           ),
+          // ── Sub-header: address + phone ─────────────────────────────────
+          if ((data.shopAddress != null && data.shopAddress!.isNotEmpty) ||
+              (data.shopPhone != null && data.shopPhone!.isNotEmpty))
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              color: _lightGray,
+              child: pw.Row(
+                children: [
+                  if (data.shopAddress != null && data.shopAddress!.isNotEmpty)
+                    pw.Expanded(
+                      child: pw.Text(
+                        data.shopAddress!,
+                        style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                      ),
+                    ),
+                  if (data.shopPhone != null && data.shopPhone!.isNotEmpty)
+                    pw.Text(
+                      'Ph: ${data.shopPhone!.replaceAll('+91', '').trim()}',
+                      style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                    ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -405,6 +437,7 @@ class InvoicePdfGenerator {
     InvoiceData data,
     String displayStatus,
     PdfColor statusColor,
+    PdfColor statusBgColor,
     pw.Font regular,
     pw.Font bold,
     pw.Font semiBold,
@@ -490,9 +523,7 @@ class InvoicePdfGenerator {
                   pw.Container(
                     padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: pw.BoxDecoration(
-                      color: statusColor == _green
-                          ? PdfColor.fromInt(0xFFdcfce7)
-                          : PdfColor.fromInt(0xFFfff7ed),
+                      color: statusBgColor,
                       borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
                     ),
                     child: pw.Text(
@@ -556,7 +587,7 @@ class InvoicePdfGenerator {
 
     pw.TableRow headerRow() {
       return pw.TableRow(
-        decoration: const pw.BoxDecoration(color: _lightGray),
+        decoration: const pw.BoxDecoration(color: _tableHeaderBg),
         children: List.generate(headers.length, (i) {
           return pw.Padding(
             padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
@@ -1038,6 +1069,8 @@ class InvoicePdfGenerator {
     String? shopGst,
     required String customerName,
     String? customerPhone,
+    String? vehicleNumber,
+    String? odometerReading,
     required String receiptNumber,
     required DateTime date,
     required double totalAmount,
@@ -1065,6 +1098,8 @@ class InvoicePdfGenerator {
       shopGst: shopGst,
       customerName: customerName,
       customerPhone: customerPhone,
+      vehicleNumber: vehicleNumber,
+      odometerReading: odometerReading,
       receiptNumber: receiptNumber,
       date: date,
       status: status,
