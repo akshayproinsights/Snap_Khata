@@ -279,7 +279,11 @@ class UdharNotifier extends Notifier<UdharState> {
     }
   }
 
-  Future<bool> updateCustomerName(int ledgerId, String name) async {
+  /// Updates the customer name for [ledgerId].
+  /// Returns `null` on success, or an error string on failure.
+  /// A special sentinel value `'duplicate'` is returned when the name is
+  /// already taken by another customer, so the UI can show a targeted hint.
+  Future<String?> updateCustomerName(int ledgerId, String name) async {
     // Optimistic update
     final prevLedgers = state.ledgers;
     state = state.copyWith(
@@ -293,11 +297,23 @@ class UdharNotifier extends Notifier<UdharState> {
         '/api/udhar/ledgers/$ledgerId/name',
         data: {'name': name},
       );
-      return true;
+      return null; // success
     } catch (e) {
       // Roll back on failure
       state = state.copyWith(ledgers: prevLedgers);
-      return false;
+      // Detect duplicate-name conflict (HTTP 409 or 400 with 'duplicate'/'exists' in message)
+      if (e is DioException) {
+        final status = e.response?.statusCode;
+        final body = e.response?.data?.toString().toLowerCase() ?? '';
+        if (status == 409 ||
+            body.contains('duplicate') ||
+            body.contains('already exists') ||
+            body.contains('unique') ||
+            body.contains('conflict')) {
+          return 'duplicate';
+        }
+      }
+      return 'error';
     }
   }
 

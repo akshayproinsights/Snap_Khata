@@ -1798,75 +1798,43 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                 ),
             ],
           ),
-          // ── "I heard" banner for name ─────────────────────────────────
+          // ── Live listening indicator (minimal inline strip) ────────────
           if (_isNameListening)
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.22)),
                 ),
                 child: Row(
                   children: [
                     AnimatedScale(
                       scale: _nameMicPulse,
                       duration: const Duration(milliseconds: 300),
-                      child: Icon(LucideIcons.mic, size: 14, color: Colors.red),
+                      child: Icon(LucideIcons.mic, size: 13, color: Colors.red),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Bol do customer ka naam…',
+                        _heardNameText.isNotEmpty
+                            ? _heardNameText
+                            : 'Bol do customer ka naam…',
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.red.withValues(alpha: 0.85),
-                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                          color: _heardNameText.isNotEmpty
+                              ? Colors.red.shade700
+                              : Colors.red.withValues(alpha: 0.7),
+                          fontStyle: _heardNameText.isEmpty
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                          fontWeight: _heardNameText.isNotEmpty
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (_heardNameText.isNotEmpty && !_isNameListening)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: context.primaryColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: context.primaryColor.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.volume2, size: 13, color: context.primaryColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
-                          children: [
-                            const TextSpan(text: 'I heard: '),
-                            TextSpan(
-                              text: '"$_heardNameText"',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: context.textColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _heardNameText = ''),
-                      child: Icon(LucideIcons.x, size: 13, color: context.textSecondaryColor),
                     ),
                   ],
                 ),
@@ -1876,6 +1844,8 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
           CustomerAutocompleteField(
             initialValue: header.customerName ?? '',
             label: 'Search or enter customer name...',
+            // Voice text goes directly into the field — no floating banner
+            voiceText: _heardNameText,
             onSaved: (val) {
               final notifier = ref.read(reviewProvider.notifier);
               notifier.updateDateRecord(header.copyWith(customerName: val));

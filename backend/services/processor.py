@@ -16,7 +16,7 @@ from google.genai import types
 from PIL import Image
 
 
-from config import get_google_api_key
+from config import get_google_api_key, get_free_google_api_key
 from config_loader import get_user_config, get_gemini_prompt
 from database import get_database_client, create_fresh_database_client, save_rows_with_retry
 from services.storage import get_storage_client
@@ -40,11 +40,12 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 
 MAX_RETRIES = 5
 
-# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+# Model Configuration  (3-tier cascade: Lite → Flash → [free fallback])
 LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
 FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping so we do not get NameError
+FREE_MODEL    = "gemini-2.0-flash"  # free-tier emergency fallback (15 RPM)
 ACCURACY_THRESHOLD = 50.0  # escalate to next tier if accuracy < 50%
 
 # Pricing Configuration (USD per 1M tokens)
@@ -92,6 +93,39 @@ limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '1500')))
 
 
 
+def _normalize_confidence(val: Any) -> float:
+    """Normalize a confidence value to be in 0-100 range. Handles floats in 0-1 range."""
+    if val is None or val == "" or val == "N/A":
+        return 100.0
+    try:
+        f_val = float(val)
+        if 0.0 < f_val <= 1.0:
+            return f_val * 100.0
+        return f_val
+    except (ValueError, TypeError):
+        return 100.0
+
+
+def _normalize_data_confidences(data: Dict[str, Any]) -> None:
+    """In-place normalization of confidence fields in Gemini response data."""
+    if not isinstance(data, dict):
+        return
+        
+    # Normalize header confidences
+    header = data.get("header")
+    if isinstance(header, dict):
+        for key in ["overall_confidence", "receipt_number_confidence", "date_confidence"]:
+            if key in header:
+                header[key] = _normalize_confidence(header[key])
+                
+    # Normalize item confidences
+    items = data.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and "confidence" in item:
+                item["confidence"] = _normalize_confidence(item["confidence"])
+
+
 def calculate_accuracy(items: List[Dict[str, Any]]) -> float:
     """
     Calculate average accuracy/confidence from line items.
@@ -112,7 +146,7 @@ def calculate_accuracy(items: List[Dict[str, Any]]) -> float:
         # If model wasn't asked to output confidence, assume 100% to prevent fallback
         return 100.0
     
-    confidences = [item.get("confidence", 0) for item in items]
+    confidences = [_normalize_confidence(item.get("confidence", 0)) for item in items]
     return sum(confidences) / len(confidences) if confidences else 0.0
 
 
@@ -280,6 +314,17 @@ def _get_gemini_client():
     return _gemini_client
 
 
+def _is_quota_exhausted(exc: Exception) -> bool:
+    """Return True when the exception signals API quota / billing exhaustion (429)."""
+    msg = str(exc).lower()
+    return (
+        "resource_exhausted" in msg
+        or "429" in msg
+        or "prepayment credits are depleted" in msg
+        or "quota" in msg
+    )
+
+
 def process_single_invoice(
     image_bytes: bytes,
     filename: str,
@@ -351,6 +396,9 @@ def process_single_invoice(
         needs_escalation = False     # Signal to move to next tier
         escalation_reason = ""
         data: Dict[str, Any] = {}    # Initialize data dictionary to avoid uninitialized variable errors
+
+        # Track whether ALL paid models failed due to quota exhaustion
+        quota_exhausted_count = 0
 
         # Each model gets its own full retry cycle via the outer loop.
         for model_attempt in [LITE_MODEL, FLASH_MODEL]:
@@ -443,6 +491,9 @@ def process_single_invoice(
                                 }
                             else:
                                 data = {"header": {}, "items": []}
+                        
+                        # Normalize confidences to be in 0-100 range in place
+                        _normalize_data_confidences(data)
                                 
                     except json.JSONDecodeError as json_err:
                         # Enhanced error logging with actual response
@@ -577,7 +628,12 @@ def process_single_invoice(
                     processing_errors.append(f"{model_name} error: {str(e)}")
                     if attempt == current_max_retries - 1:
                         logger.error(f"❌ {model_name} failed after {current_max_retries} attempts")
-                        
+
+                        # Track quota exhaustion across models
+                        if _is_quota_exhausted(e):
+                            quota_exhausted_count += 1
+                            logger.warning(f"⚠️ Quota exhausted for {model_name} (count={quota_exhausted_count})")
+
                         # Trigger escalation if not already on the final tier
                         if model_name != FLASH_MODEL:
                             needs_escalation = True
@@ -606,7 +662,108 @@ def process_single_invoice(
                 logger.info(f"✓ Using {best_result['model_used']} result: {filename} | Accuracy: {best_result['model_accuracy']}%")
                 logger.info(f"  ⚠️ {tier_label} attempted but failed: {processing_errors[-1] if processing_errors else 'Unknown error'}")
                 return data
-    # After all model attempts (outer loop finished)
+    # After all paid model attempts (outer loop finished)
+        # ── Free-tier emergency fallback ──────────────────────────────────────
+        # If ALL paid models were quota-exhausted, retry once with the free model.
+        if quota_exhausted_count >= 1 and not best_result:
+            logger.warning(
+                f"🆓 All paid models quota-exhausted. Falling back to FREE model: {FREE_MODEL}"
+            )
+            print(f"[QUOTA-FALLBACK] Trying free model: {FREE_MODEL}", flush=True)
+
+            # Use a SEPARATE client with the free-tier API key (different Google project)
+            free_api_key = get_free_google_api_key()
+            free_client = genai.Client(api_key=free_api_key) if free_api_key else client
+            if free_api_key and free_api_key != get_google_api_key():
+                logger.info("Using dedicated free-tier API key for fallback")
+            else:
+                logger.warning("GOOGLE_API_KEY_FREE not set — using same key (may also fail)")
+
+            free_config = types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                temperature=0.1,
+                max_output_tokens=8192
+            )
+
+            FREE_MAX_RETRIES = 3
+            for free_attempt in range(FREE_MAX_RETRIES):
+                try:
+                    print(f"[FREE-MODEL ATTEMPT {free_attempt + 1}/{FREE_MAX_RETRIES}]", flush=True)
+                    logger.info(f"Free model attempt {free_attempt + 1}/{FREE_MAX_RETRIES}")
+                    free_response = free_client.models.generate_content(
+                        model=FREE_MODEL,
+                        contents=[img, "Extract bill data."],
+                        config=free_config
+                    )
+                    free_text = free_response.text.strip()
+                    if free_text.startswith("```json"):
+                        free_text = free_text[7:]
+                    if free_text.startswith("```"):
+                        free_text = free_text[3:]
+                    if free_text.endswith("```"):
+                        free_text = free_text[:-3]
+                    free_text = free_text.strip()
+
+                    free_data = json.loads(free_text)
+                    if not isinstance(free_data, dict):
+                        if isinstance(free_data, list):
+                            free_data = {"header": {"invoice_type": "Printed", "overall_confidence": 70,
+                                                      "receipt_number_confidence": 70, "date_confidence": 70},
+                                         "items": free_data}
+                        else:
+                            free_data = {"header": {}, "items": []}
+
+                    # Normalize confidences to be in 0-100 range in place
+                    _normalize_data_confidences(free_data)
+
+                    if "header" in free_data and "items" in free_data:
+                        free_usage = free_response.usage_metadata
+                        free_in  = getattr(free_usage, 'prompt_token_count', 0) if free_usage else 0
+                        free_out = getattr(free_usage, 'candidates_token_count', 0) if free_usage else 0
+                        free_acc = calculate_accuracy(free_data.get("items", []))
+                        free_cost = 0.0  # free tier — no charge
+
+                        free_data["receipt_link"] = receipt_link
+                        free_data["upload_date"] = get_ist_now_str()
+                        free_data["model_used"] = FREE_MODEL
+                        free_data["model_accuracy"] = round(free_acc, 2)
+                        free_data["input_tokens"] = free_in
+                        free_data["output_tokens"] = free_out
+                        free_data["total_tokens"] = free_in + free_out
+                        free_data["cost_inr"] = free_cost
+                        free_data["fallback_attempted"] = True
+                        free_data["fallback_reason"] = "Paid quota exhausted — used free model"
+                        free_data["processing_errors"] = " | ".join(processing_errors) if processing_errors else None
+
+                        print(f"[FREE-MODEL SUCCESS] {filename} processed via {FREE_MODEL} | Accuracy: {free_acc:.2f}%", flush=True)
+                        logger.info(f"✓ Free model success: {filename} | Accuracy: {free_acc:.2f}%")
+
+                        return free_data
+
+                except Exception as free_err:
+                    err_msg = str(free_err)
+                    logger.error(f"Free model ({FREE_MODEL}) attempt {free_attempt + 1} failed: {err_msg[:200]}")
+                    processing_errors.append(f"{FREE_MODEL} error: {err_msg[:200]}")
+
+                    # Parse retryDelay from Google's 429 response (e.g. "retryDelay": "14s")
+                    retry_wait = 20  # default wait seconds
+                    import re as _re
+                    delay_match = _re.search(r"retry[_\s]?[Dd]elay['\"]?\s*[:=]\s*['\"]?(\d+)", err_msg)
+                    if delay_match:
+                        retry_wait = int(delay_match.group(1)) + 2  # add 2s buffer
+                    elif "Please retry in" in err_msg:
+                        delay_match2 = _re.search(r"retry in (\d+)", err_msg)
+                        if delay_match2:
+                            retry_wait = int(delay_match2.group(1)) + 2
+
+                    if free_attempt < FREE_MAX_RETRIES - 1:
+                        print(f"[FREE-MODEL] Rate limited — waiting {retry_wait}s before retry...", flush=True)
+                        logger.warning(f"Free model rate limited. Waiting {retry_wait}s before retry {free_attempt + 2}/{FREE_MAX_RETRIES}")
+                        time.sleep(retry_wait)
+
+
+
         if best_result:
             logger.warning(f"⚠️ Exhausted fallback tiers but keeping best result with accuracy {best_result['model_accuracy']}%")
             data = best_result["data"]
@@ -627,9 +784,9 @@ def process_single_invoice(
         print(f"\n[ERROR] Processing failed for {filename}: {outer_err}\n", flush=True)
         logger.error(f"Unhandled exception processing {filename}: {outer_err}")
     
-    # If we got here, all three tiers failed completely and no best_result was saved
+    # If we got here, all tiers (including free fallback) failed completely
     print(f"\n[ERROR] Processing failed for {filename}\n", flush=True)
-    logger.error(f"Complete failure: Lite, Flash, and Pro models all failed for {filename}")
+    logger.error(f"Complete failure: Lite, Flash, and Free models all failed for {filename}")
     logger.error(f"   Errors: {' | '.join(processing_errors)}")
     return None
 

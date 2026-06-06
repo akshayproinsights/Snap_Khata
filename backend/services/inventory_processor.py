@@ -25,7 +25,7 @@ from services.processor import (
 )
 from services.storage import get_storage_client
 from database import get_database_client
-from config import get_google_api_key
+from config import get_google_api_key, get_free_google_api_key
 from config_loader import get_user_config
 from utils.date_helpers import normalize_date, format_to_db, get_ist_now_str
 
@@ -34,11 +34,12 @@ logger = logging.getLogger(__name__)
 # Rate limiter for API calls — Gemini Flash supports 250+ RPM
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
-# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+# Model Configuration  (3-tier cascade: Lite → Flash → [free fallback])
 LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
 FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
 # PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
 PRO_MODEL     = None # Keeping variable to prevent NameError
+FREE_MODEL    = "gemini-2.0-flash"  # free-tier emergency fallback (15 RPM)
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
 
 # ── v2.1 Mathematical Processing Engine ──────────────────────────────────────
@@ -266,6 +267,17 @@ def _get_gemini_client() -> "genai.Client":
     return _gemini_client
 
 
+def _is_quota_exhausted(exc: Exception) -> bool:
+    """Return True when the exception signals API quota / billing exhaustion (429)."""
+    msg = str(exc).lower()
+    return (
+        "resource_exhausted" in msg
+        or "429" in msg
+        or "prepayment credits are depleted" in msg
+        or "quota" in msg
+    )
+
+
 def process_vendor_invoice(
     image_bytes: bytes,
     filename: str,
@@ -330,6 +342,9 @@ def process_vendor_invoice(
 
             try:
                 data = json.loads(json_text)
+                # Normalize confidences to be in 0-100 range in place
+                from services.processor import _normalize_data_confidences
+                _normalize_data_confidences(data)
             except json.JSONDecodeError:
                 preview = str(json_text)
                 if len(preview) > 200:
@@ -377,6 +392,8 @@ def process_vendor_invoice(
             return data, _items, acc, in_tok, out_tok, cost
         except Exception as e:
             logger.error(f"Error in _run_model for {tier_label}: {e}")
+            if _is_quota_exhausted(e):
+                logger.warning(f"⚠️ Quota exhausted in {tier_label} — will try free model if all paid tiers fail")
             return None, [], 0.0, 0, 0, 0.0
 
     try:
@@ -411,6 +428,7 @@ def process_vendor_invoice(
                 time.sleep(1) # Small backoff before retry
 
         # ── Tier 2: Flash (if Lite failed or accuracy < threshold) ────────────
+        flash_quota_exhausted = False
         if accuracy < ACCURACY_THRESHOLD or not best_res_stored:
             logger.warning(f"Lite finished with {accuracy}% accuracy. Escalating to Flash...")
             try:
@@ -425,9 +443,61 @@ def process_vendor_invoice(
                     }
             except Exception as e:
                 logger.error(f"Flash tier crash: {e}")
+                if _is_quota_exhausted(e):
+                    flash_quota_exhausted = True
+
+        # ── Tier 3: Free model (emergency fallback when paid quota is exhausted) ──
+        if not best_res_stored:
+            logger.warning(
+                f"🆓 All paid models failed. Falling back to FREE model: {FREE_MODEL}"
+            )
+            # Use a SEPARATE client with the free-tier API key (different Google project)
+            free_api_key = get_free_google_api_key()
+            if free_api_key and free_api_key != get_google_api_key():
+                free_client = genai.Client(api_key=free_api_key)
+                logger.info("Using dedicated free-tier API key for vendor invoice fallback")
+            else:
+                free_client = client
+                logger.warning("GOOGLE_API_KEY_FREE not set — using same key for free model (may also fail)")
+            try:
+                # Temporarily override the client used in _run_model by calling API directly
+                free_cfg = types.GenerateContentConfig(
+                    system_instruction=vendor_prompt,
+                    response_mime_type="application/json",
+                    temperature=0.1
+                )
+                free_resp = free_client.models.generate_content(
+                    model=FREE_MODEL,
+                    contents=[img, "Extract all vendor invoice data according to the instructions."],
+                    config=free_cfg
+                )
+                free_json_text = free_resp.text.strip() if free_resp.text else "{}"
+                free_json_text = free_json_text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                free_data = json.loads(free_json_text) if free_json_text else {}
+                if isinstance(free_data, list):
+                    free_data = {"invoice_type": "Printed", "invoice_date": "", "invoice_number": "", "items": free_data}
+                if isinstance(free_data, dict):
+                    # Normalize confidences to be in 0-100 range in place
+                    from services.processor import _normalize_data_confidences
+                    _normalize_data_confidences(free_data)
+                    free_items = free_data.get("items", [])
+                    free_acc = calculate_accuracy(free_items)
+                    free_usage = free_resp.usage_metadata
+                    free_in  = (free_usage.prompt_token_count or 0) if free_usage else 0
+                    free_out = (free_usage.candidates_token_count or 0) if free_usage else 0
+                    extracted_data, items, accuracy, input_tokens, output_tokens, cost_inr = \
+                        free_data, free_items, free_acc, free_in, free_out, 0.0
+                    model_used = "Free"
+                    best_res_stored = {
+                        "data": free_data, "items": free_items, "acc": free_acc,
+                        "in": free_in, "out": free_out, "cost": 0.0, "model": "Free"
+                    }
+                    logger.info(f"✓ Free model succeeded for vendor invoice (Accuracy: {free_acc}%)")
+            except Exception as e:
+                logger.error(f"Free model ({FREE_MODEL}) also failed: {e}")
 
         if not best_res_stored:
-            logger.error("All models (Lite, Flash) failed to return a result.")
+            logger.error("All models (Lite, Flash, Free) failed to return a result.")
             return None
 
         # Re-assign from best result for consistency

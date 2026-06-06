@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     
     # Google API
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
+    # Separate key for free-tier fallback model (different Google project with free quota)
+    google_api_key_free: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY_FREE")
     
     class Config:
         env_file = ".env"
@@ -56,6 +58,19 @@ def get_google_api_key() -> Optional[str]:
         return settings.google_api_key
     
     return configs.get_google_api_key()
+
+
+def get_free_google_api_key() -> Optional[str]:
+    """
+    Get API key for the free-tier fallback model (GOOGLE_API_KEY_FREE).
+    This should be a key from a SEPARATE Google Cloud project that has free-tier
+    quota, so it continues to work even when the primary paid key is exhausted.
+    Falls back to the primary key if GOOGLE_API_KEY_FREE is not configured.
+    """
+    if settings.google_api_key_free:
+        return settings.google_api_key_free
+    # Fall back to primary key (better than nothing)
+    return get_google_api_key()
 
 def get_supabase_config() -> Optional[Dict[str, str]]:
     """

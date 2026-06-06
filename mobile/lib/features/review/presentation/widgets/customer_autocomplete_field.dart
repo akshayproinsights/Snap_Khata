@@ -17,6 +17,9 @@ class CustomerAutocompleteField extends ConsumerStatefulWidget {
   final bool showOnFocus;
   /// Compact mode: single-line style for use inside header card.
   final bool compact;
+  /// When non-empty this text is pushed directly into the field (voice input).
+  /// The parent sets this to the recognised speech; the field fills itself.
+  final String voiceText;
 
   const CustomerAutocompleteField({
     super.key,
@@ -27,6 +30,7 @@ class CustomerAutocompleteField extends ConsumerStatefulWidget {
     this.hasError = false,
     this.showOnFocus = true,
     this.compact = false,
+    this.voiceText = '',
   });
 
   @override
@@ -37,6 +41,8 @@ class CustomerAutocompleteField extends ConsumerStatefulWidget {
 class _CustomerAutocompleteFieldState
     extends ConsumerState<CustomerAutocompleteField> {
   late TextEditingController _controller;
+  // Reference to Autocomplete's internal controller so voice pushes are visible
+  TextEditingController? _autocompleteController;
   final FocusNode _focusNode = FocusNode();
   Timer? _debounceTimer;
   bool _isNew = false;
@@ -56,6 +62,30 @@ class _CustomerAutocompleteFieldState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _matchInitialParty(widget.initialValue);
     });
+  }
+
+  @override
+  void didUpdateWidget(CustomerAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Push voice-recognised text directly into the field when it arrives
+    if (widget.voiceText.isNotEmpty &&
+        widget.voiceText != oldWidget.voiceText &&
+        widget.voiceText != _controller.text) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final cleaned = widget.voiceText;
+        _controller.text = cleaned;
+        // Also push into Autocomplete's internal controller (the visible box)
+        if (_autocompleteController != null &&
+            _autocompleteController!.text != cleaned) {
+          _autocompleteController!.text = cleaned;
+          _autocompleteController!.selection =
+              TextSelection.collapsed(offset: cleaned.length);
+        }
+        _checkIfNew(cleaned);
+        _save();
+      });
+    }
   }
 
   @override
@@ -227,11 +257,18 @@ class _CustomerAutocompleteFieldState
       },
       fieldViewBuilder:
           (context, textController, focusNode, onFieldSubmitted) {
+        // Capture reference so voice pushes from didUpdateWidget reach this box
+        _autocompleteController = textController;
+
         // Sync our local controller with Autocomplete's internal controller
-        if (_controller.text != textController.text &&
-            _controller.text.isEmpty &&
-            textController.text.isNotEmpty) {
-          _controller.text = textController.text;
+        if (_controller.text != textController.text) {
+          if (_controller.text.isEmpty && textController.text.isNotEmpty) {
+            _controller.text = textController.text;
+          } else if (_controller.text.isNotEmpty &&
+              textController.text.isEmpty) {
+            // Voice pushed into _controller before Autocomplete built — fill it
+            textController.text = _controller.text;
+          }
         }
 
         textController.addListener(() {

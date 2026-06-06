@@ -21,6 +21,8 @@ import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
+import 'package:mobile/core/utils/invoice_pdf_generator.dart';
+import 'package:printing/printing.dart';
 
 
 class PartyDetailPage extends ConsumerStatefulWidget {
@@ -591,6 +593,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       text: currentLedger.customerPhone ?? '',
     );
     bool isSubmitting = false;
+    String? nameError; // null = no error, 'duplicate' = name taken, 'error' = generic
 
     showModalBottomSheet(
       context: context,
@@ -681,37 +684,138 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                       ),
+                      onChanged: (_) {
+                        if (nameError != null) {
+                          setModalState(() => nameError = null);
+                        }
+                      },
                       decoration: InputDecoration(
                         labelText: 'Customer Name',
                         hintText: 'e.g. Ramesh Sharma',
-                        labelStyle: TextStyle(color: context.textSecondaryColor),
+                        labelStyle: TextStyle(
+                          color: nameError != null
+                              ? Colors.red.shade600
+                              : context.textSecondaryColor,
+                        ),
                         prefixIcon: Icon(
                           LucideIcons.user,
-                          color: context.primaryColor,
+                          color: nameError != null
+                              ? Colors.red.shade600
+                              : context.primaryColor,
                           size: 20,
                         ),
                         filled: true,
-                        fillColor: context.textSecondaryColor.withValues(
-                          alpha: 0.04,
-                        ),
+                        fillColor: nameError != null
+                            ? Colors.red.withValues(alpha: 0.05)
+                            : context.textSecondaryColor.withValues(alpha: 0.04),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: context.borderColor),
+                          borderSide: BorderSide(
+                            color: nameError != null
+                                ? Colors.red.shade400
+                                : context.borderColor,
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: context.borderColor),
+                          borderSide: BorderSide(
+                            color: nameError != null
+                                ? Colors.red.shade400
+                                : context.borderColor,
+                            width: nameError != null ? 1.5 : 1,
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide(
-                            color: context.primaryColor,
+                            color: nameError != null
+                                ? Colors.red.shade600
+                                : context.primaryColor,
                             width: 2,
                           ),
                         ),
                       ),
                       autofocus: true,
                     ),
+                    // Duplicate name error banner
+                    if (nameError == 'duplicate') ...[  
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFFB74D),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('⚠️', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'यह नाम पहले से मौजूद है!',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                      color: Color(0xFFE65100),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'कोई और नाम डालें — जैसे "${nameController.text.trim()} 2" या "${nameController.text.trim()} (नया)"',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF6D4C41),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else if (nameError == 'error') ...[  
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red.shade300,
+                            width: 1.2,
+                          ),
+                        ),
+                        child: const Row(
+                          children: [
+                            Text('❌', style: TextStyle(fontSize: 16)),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Save नहीं हो सका। Internet check करें और दोबारा try करें।',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFFC62828),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     // Mobile number field
                     TextField(
@@ -762,15 +866,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             : () async {
                                 final name = nameController.text.trim();
                                 if (name.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Name cannot be empty'),
-                                    ),
-                                  );
+                                  setModalState(() => nameError = 'error');
                                   return;
                                 }
 
-                                setModalState(() => isSubmitting = true);
+                                setModalState(() {
+                                  isSubmitting = true;
+                                  nameError = null;
+                                });
 
                                 final phone = phoneController.text.trim();
                                 final nameChanged =
@@ -779,17 +882,29 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     phone !=
                                     (currentLedger.customerPhone ?? '');
 
-                                bool success = true;
+                                String? nameUpdateError;
                                 if (nameChanged) {
-                                  success = await ref
+                                  nameUpdateError = await ref
                                       .read(udharProvider.notifier)
                                       .updateCustomerName(
                                         currentLedger.id,
                                         name,
                                       );
                                 }
-                                if (success && phoneChanged) {
-                                  success = await ref
+
+                                // If name update failed, show targeted feedback in-sheet
+                                if (nameUpdateError != null) {
+                                  if (!mounted) return;
+                                  setModalState(() {
+                                    isSubmitting = false;
+                                    nameError = nameUpdateError;
+                                  });
+                                  return;
+                                }
+
+                                bool phoneSuccess = true;
+                                if (phoneChanged) {
+                                  phoneSuccess = await ref
                                       .read(udharProvider.notifier)
                                       .updateCustomerPhone(
                                         currentLedger.id,
@@ -798,22 +913,31 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 }
 
                                 if (!mounted) return;
-                                if (success && context.mounted) {
+                                if (phoneSuccess && context.mounted) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Customer updated! 🎉'),
+                                    SnackBar(
+                                      content: const Row(
+                                        children: [
+                                          Text('✅ ', style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            'Customer details saved!',
+                                            style: TextStyle(fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFF2E7D32),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
                                     ),
                                   );
                                 } else {
-                                  setModalState(() => isSubmitting = false);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Failed to update. Try again.'),
-                                      ),
-                                    );
-                                  }
+                                  setModalState(() {
+                                    isSubmitting = false;
+                                    nameError = 'error';
+                                  });
                                 }
                               },
                         style: ElevatedButton.styleFrom(
@@ -2211,135 +2335,196 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         ),
                       ),
                     ),
-                    child: Row(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          flex: 1,
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 52),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              side: BorderSide(color: context.borderColor),
-                            ),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton.icon(
-                            icon: const FaIcon(
-                              FontAwesomeIcons.whatsapp,
+                        // ── Share as PDF button ─────────────────────────────
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(
+                              LucideIcons.fileDown,
                               size: 18,
-                              color: Colors.white,
+                              color: Color(0xFF6366F1),
                             ),
                             label: const Text(
-                              'SEND ON WHATSAPP',
+                              'Share as PDF',
                               style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
+                                color: Color(0xFF6366F1),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF25D366),
-                              minimumSize: const Size(0, 52),
-                              elevation: 0,
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                color: Color(0xFF6366F1),
+                                width: 1.5,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
+                              backgroundColor: const Color(0xFF6366F1)
+                                  .withValues(alpha: 0.06),
                             ),
                             onPressed: () async {
-                              final phone =
-                                  phoneController.text.trim().isNotEmpty
-                                  ? phoneController.text.trim()
-                                  : (ledger.customerPhone ?? '');
-
-                              // Capture all values before popping — ctx becomes invalid after Navigator.pop
-                              String capturedMessage = message;
-                              final capturedReceiptLink =
-                                  selectedTx?.receiptLink;
-                              final capturedReceiptNumber =
-                                  selectedTx?.receiptNumber;
-                              final capturedShareMode = shareMode;
-
+                              // Capture before pop
+                              final capturedTx = selectedTx;
+                              final capturedShopProfile = shopProfile;
                               Navigator.pop(ctx);
+                              if (!context.mounted) return;
+                              await _sharePdfForTransaction(
+                                tx: capturedTx,
+                                ledger: ledger,
+                                shopName: shopName,
+                                shopAddress: capturedShopProfile.address
+                                    .isNotEmpty
+                                    ? capturedShopProfile.address
+                                    : null,
+                                shopPhone: capturedShopProfile.phone
+                                    .isNotEmpty
+                                    ? capturedShopProfile.phone
+                                    : null,
+                                shopGst: capturedShopProfile.gst
+                                    .isNotEmpty
+                                    ? capturedShopProfile.gst
+                                    : null,
+                                shopType: capturedShopProfile.shopType,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // ── Cancel + WhatsApp row ───────────────────────────
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 1,
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 52),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  side: BorderSide(color: context.borderColor),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton.icon(
+                                icon: const FaIcon(
+                                  FontAwesomeIcons.whatsapp,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                                label: const Text(
+                                  'SEND ON WHATSAPP',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF25D366),
+                                  minimumSize: const Size(0, 52),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: () async {
+                                  final phone =
+                                      phoneController.text.trim().isNotEmpty
+                                      ? phoneController.text.trim()
+                                      : (ledger.customerPhone ?? '');
 
-                              // For Account Statement mode, try to fetch a
-                              // receipt-specific signed link (looks better than
-                              // the generic party statement).
-                              if (capturedShareMode == 'accountStatement' &&
-                                  capturedReceiptNumber != null &&
-                                  capturedReceiptNumber.isNotEmpty) {
-                                final shareUrl =
-                                    await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                                  // Capture all values before popping
+                                  String capturedMessage = message;
+                                  final capturedReceiptLink =
+                                      selectedTx?.receiptLink;
+                                  final capturedReceiptNumber =
+                                      selectedTx?.receiptNumber;
+                                  final capturedShareMode = shareMode;
+
+                                  Navigator.pop(ctx);
+
+                                  // For Account Statement mode, try to fetch a
+                                  // receipt-specific signed link
+                                  if (capturedShareMode == 'accountStatement' &&
+                                      capturedReceiptNumber != null &&
+                                      capturedReceiptNumber.isNotEmpty) {
+                                    final shareUrl =
+                                        await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
+                                          receiptNumber: capturedReceiptNumber,
+                                          username: authState.user?.username,
+                                        );
+
+                                    if (shareUrl != null) {
+                                      capturedMessage =
+                                          WhatsAppUtils.buildPartyReminderMessage(
+                                            customerName:
+                                                ledger.customerName.isNotEmpty
+                                                ? ledger.customerName
+                                                : 'Customer',
+                                            shopName: shopName,
+                                            totalBilled: _totalInvoiced,
+                                            totalPaid: _totalPaid,
+                                            balanceDue: _computedBalance,
+                                            statementLink: shareUrl,
+                                            upiId: upiId,
+                                            useReceiptPhoto: false,
+                                            receiptPhotoUrl: null,
+                                            receiptNumber: capturedReceiptNumber,
+                                            whatsappCustomNote:
+                                                shopProfile.whatsappCustomNote,
+                                          );
+                                    }
+                                  }
+
+                                  // Receipt Photo mode
+                                  if (capturedShareMode == 'receiptPhoto' &&
+                                      capturedReceiptLink != null &&
+                                      capturedReceiptLink.isNotEmpty &&
+                                      capturedReceiptLink != 'null') {
+                                    final prefetchedBytes = await prefetchFuture;
+                                    if (!context.mounted) return;
+                                    await WhatsAppUtils.shareActualImageOnWhatsApp(
+                                      context: context,
+                                      imageUrl: capturedReceiptLink,
+                                      caption: capturedMessage,
+                                      phone: phone,
+                                      prefetchedBytes: prefetchedBytes,
                                       receiptNumber: capturedReceiptNumber,
                                       username: authState.user?.username,
                                     );
-
-                                if (shareUrl != null) {
-                                  capturedMessage =
-                                      WhatsAppUtils.buildPartyReminderMessage(
-                                        customerName:
-                                            ledger.customerName.isNotEmpty
-                                            ? ledger.customerName
-                                            : 'Customer',
-                                        shopName: shopName,
-                                        totalBilled: _totalInvoiced,
-                                        totalPaid: _totalPaid,
-                                        balanceDue: _computedBalance,
-                                        statementLink: shareUrl,
-                                        upiId: upiId,
-                                        useReceiptPhoto: false,
-                                        receiptPhotoUrl: null,
-                                        receiptNumber: capturedReceiptNumber,
-                                        whatsappCustomNote:
-                                            shopProfile.whatsappCustomNote,
+                                  } else {
+                                    if (phone.isNotEmpty) {
+                                      await WhatsAppUtils.openWhatsAppChat(
+                                        phone: phone,
+                                        message: capturedMessage,
                                       );
-                                }
-                              }
-
-                              // Receipt Photo mode — share the actual bill image
-                              if (capturedShareMode == 'receiptPhoto' &&
-                                  capturedReceiptLink != null &&
-                                  capturedReceiptLink.isNotEmpty &&
-                                  capturedReceiptLink != 'null') {
-                                final prefetchedBytes = await prefetchFuture;
-                                if (!context.mounted) return;
-                                await WhatsAppUtils.shareActualImageOnWhatsApp(
-                                  context: context,
-                                  imageUrl: capturedReceiptLink,
-                                  caption: capturedMessage,
-                                  phone: phone,
-                                  prefetchedBytes: prefetchedBytes,
-                                  receiptNumber: capturedReceiptNumber,
-                                  username: authState.user?.username,
-                                );
-                              } else {
-                                // Manual Bill or Account Statement — text only
-                                if (phone.isNotEmpty) {
-                                  await WhatsAppUtils.openWhatsAppChat(
-                                    phone: phone,
-                                    message: capturedMessage,
-                                  );
-                                } else {
-                                  if (!context.mounted) return;
-                                  await WhatsAppUtils.shareReceipt(
-                                    context,
-                                    phone: phone,
-                                    message: capturedMessage,
-                                    dialogTitle: 'Send Reminder',
-                                  );
-                                }
-                              }
-                            },
-                          ),
+                                    } else {
+                                      if (!context.mounted) return;
+                                      await WhatsAppUtils.shareReceipt(
+                                        context,
+                                        phone: phone,
+                                        message: capturedMessage,
+                                        dialogTitle: 'Send Reminder',
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -2351,6 +2536,128 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         );
       },
     );
+  }
+
+  // ── PDF Share helper ─────────────────────────────────────────────────────
+  // Generates a professional invoice PDF for [tx] (or a simple balance PDF
+  // if [tx] is null) and opens the native OS share sheet.
+  Future<void> _sharePdfForTransaction({
+    required LedgerTransaction? tx,
+    required CustomerLedger ledger,
+    required String shopName,
+    String? shopAddress,
+    String? shopPhone,
+    String? shopGst,
+    String shopType = 'general',
+  }) async {
+    // Show loading snackbar
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 14),
+            Text('Preparing PDF…'),
+          ],
+        ),
+        duration: Duration(seconds: 30),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    try {
+      final InvoiceData invoiceData;
+
+      if (tx != null) {
+        // Use locally loaded transaction data — works offline
+        final double txTotal = tx.amount;
+        final double txPaid = tx.receivedAmount ?? (
+          (_transactions ?? [])
+              .where((t) =>
+                  t.transactionType == 'PAYMENT' &&
+                  t.receiptNumber == tx.receiptNumber)
+              .fold(0.0, (s, t) => s + t.amount)
+        );
+        final double txBalance = (txTotal - txPaid).clamp(0.0, double.infinity);
+        final String txStatus = txBalance <= 0
+            ? 'PAID'
+            : (txPaid > 0 ? 'PARTIAL' : 'UNPAID');
+
+        invoiceData = InvoicePdfGenerator.fromLocalTransaction(
+          shopName: shopName,
+          shopAddress: shopAddress,
+          shopPhone: shopPhone,
+          shopGst: shopGst,
+          customerName: ledger.customerName.isNotEmpty
+              ? ledger.customerName
+              : 'Customer',
+          customerPhone: ledger.customerPhone,
+          receiptNumber: tx.receiptNumber ?? ledger.id.toString(),
+          date: tx.createdAt,
+          totalAmount: txTotal,
+          receivedAmount: txPaid > 0 ? txPaid : null,
+          balanceDue: txBalance > 0 ? txBalance : 0,
+          rawItems: tx.items,
+          gstMode: 'none', // manual entries don't carry GST mode locally
+          industry: shopType,
+          status: txStatus,
+        );
+      } else {
+        // No specific tx selected — generate a simple balance summary PDF
+        invoiceData = InvoicePdfGenerator.fromLocalTransaction(
+          shopName: shopName,
+          shopAddress: shopAddress,
+          shopPhone: shopPhone,
+          shopGst: shopGst,
+          customerName: ledger.customerName.isNotEmpty
+              ? ledger.customerName
+              : 'Customer',
+          customerPhone: ledger.customerPhone,
+          receiptNumber: ledger.id.toString(),
+          date: DateTime.now(),
+          totalAmount: _totalInvoiced,
+          receivedAmount: _totalPaid > 0 ? _totalPaid : null,
+          balanceDue: _computedBalance,
+          rawItems: const [],
+          status: _computedBalance <= 0 ? 'PAID' : 'UNPAID',
+        );
+      }
+
+      final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);
+
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+
+      final isGst = invoiceData.gstMode != 'none';
+      final fileName = isGst
+          ? 'TaxInvoice_${invoiceData.receiptNumber}.pdf'
+          : 'OrderDetails_${invoiceData.receiptNumber}.pdf';
+
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: fileName,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not generate PDF: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmDeleteTransaction(LedgerTransaction tx) async {
