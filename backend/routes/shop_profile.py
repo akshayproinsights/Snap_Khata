@@ -1,8 +1,10 @@
 """Shop profile endpoints — GET and POST /api/shop-profile"""
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import logging
+import uuid
+import os
 
 import auth
 
@@ -121,3 +123,69 @@ async def update_shop_profile(
     except Exception as e:
         logger.error(f"Error updating shop profile for {username}: {e}")
         raise HTTPException(status_code=500, detail="Failed to save shop profile")
+
+
+@router.post("/shop-profile/upload-logo")
+async def upload_shop_logo(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(auth.get_current_user),
+    r2_bucket: str = Depends(auth.get_current_user_r2_bucket),
+):
+    """
+    Upload a shop logo image to R2 and return its public URL.
+    Accepts JPEG, PNG, or WebP images (max 5 MB).
+    """
+    username = current_user.get("username", "")
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+    content_type = file.content_type or ""
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type '{content_type}'. Allowed: JPEG, PNG, WebP.",
+        )
+
+    # Read file bytes
+    content = await file.read()
+
+    # Enforce 5 MB limit
+    max_bytes = 5 * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=400, detail="Logo image must be under 5 MB.")
+
+    # Build a unique R2 key
+    ext = (file.filename or "logo.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp"):
+        ext = "jpg"
+    unique_id = uuid.uuid4().hex[:12]
+    file_key = f"{username}/logos/shop_logo_{unique_id}.{ext}"
+
+    try:
+        from services.storage import get_storage_client
+        storage = get_storage_client()
+
+        success = storage.upload_file(
+            file_data=content,
+            bucket=r2_bucket,
+            key=file_key,
+            content_type=content_type or "image/jpeg",
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to upload logo to storage.")
+
+        public_url = storage.get_public_url(r2_bucket, file_key)
+        if not public_url:
+            raise HTTPException(status_code=500, detail="Logo uploaded but public URL unavailable.")
+
+        logger.info(f"Shop logo uploaded for {username}: {public_url}")
+        return {"logo_url": public_url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading shop logo for {username}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload shop logo.")
+

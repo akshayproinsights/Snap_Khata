@@ -2391,6 +2391,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     ? capturedShopProfile.gst
                                     : null,
                                 shopType: capturedShopProfile.shopType,
+                                customTerms: capturedShopProfile.customTerms
+                                    .isNotEmpty
+                                    ? capturedShopProfile.customTerms
+                                    : null,
                               );
                             },
                           ),
@@ -2551,6 +2555,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     String? shopPhone,
     String? shopGst,
     String shopType = 'general',
+    String? customTerms,
   }) async {
     // Show loading snackbar
     if (!mounted) return;
@@ -2654,6 +2659,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           gstMode: gstMode,
           industry: shopType,
           status: txStatus,
+          customTerms: customTerms,
         );
       } else {
         // No specific tx selected — generate a simple balance summary PDF
@@ -2673,6 +2679,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           balanceDue: _computedBalance,
           rawItems: const [],
           status: _computedBalance <= 0 ? 'PAID' : 'UNPAID',
+          customTerms: customTerms,
         );
       }
 

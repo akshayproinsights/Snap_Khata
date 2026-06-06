@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/core/theme/theme_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
@@ -12,6 +14,7 @@ import 'package:mobile/features/settings/domain/models/shop_profile.dart';
 import 'package:mobile/core/widgets/brand_wordmark.dart';
 import 'package:mobile/core/localization/locale_provider.dart';
 import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/core/network/api_client.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   final bool openShopDetails;
@@ -33,6 +36,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _whatsappCustomNote = '';
   String _shopType = 'general';
   final bool _isLoadingProfile = false;
+  bool _isUploadingLogo = false;
 
   @override
   void initState() {
@@ -78,6 +82,218 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       shopType: _shopType,
     );
     await ref.read(shopProvider.notifier).updateProfile(newProfile);
+  }
+
+  // ── Logo image helpers ───────────────────────────────────────────────────
+
+  /// Shows a bottom sheet to pick the logo source (gallery / camera)
+  Future<String?> _pickAndUploadLogo(StateSetter setSheetState) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Choose Logo Source',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: context.textColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Icon(LucideIcons.image, color: context.primaryColor),
+              title: Text('Choose from Gallery',
+                  style: TextStyle(color: context.textColor)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            ListTile(
+              leading: Icon(LucideIcons.camera, color: context.primaryColor),
+              title: Text('Take a Photo',
+                  style: TextStyle(color: context.textColor)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return null;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null) return null;
+
+    // Show uploading indicator
+    setSheetState(() => _isUploadingLogo = true);
+
+    try {
+      final bytes = await picked.readAsBytes();
+      final ext = picked.name.split('.').last.toLowerCase();
+      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: 'shop_logo.$ext',
+          contentType: DioMediaType.parse(contentType),
+        ),
+      });
+
+      final response = await ApiClient().dio.post(
+        '/api/shop-profile/upload-logo',
+        data: formData,
+      );
+
+      final url = response.data['logo_url'] as String? ?? '';
+      return url.isEmpty ? null : url;
+    } catch (e) {
+      if (mounted) {
+        AppToast.showError(context, 'Failed to upload logo: $e');
+      }
+      return null;
+    } finally {
+      setSheetState(() => _isUploadingLogo = false);
+    }
+  }
+
+  /// Picks from a specific [source] and returns the uploaded public URL.
+  Future<String?> _pickLogoFromSource(
+      ImageSource source, StateSetter setSheetState) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null) return null;
+
+    setSheetState(() => _isUploadingLogo = true);
+
+    try {
+      final bytes = await picked.readAsBytes();
+      final ext = picked.name.split('.').last.toLowerCase();
+      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: 'shop_logo.$ext',
+          contentType: DioMediaType.parse(contentType),
+        ),
+      });
+
+      final response = await ApiClient().dio.post(
+        '/api/shop-profile/upload-logo',
+        data: formData,
+      );
+
+      final url = response.data['logo_url'] as String? ?? '';
+      return url.isEmpty ? null : url;
+    } catch (e) {
+      if (mounted) {
+        AppToast.showError(context, 'Failed to upload logo: $e');
+      }
+      return null;
+    } finally {
+      setSheetState(() => _isUploadingLogo = false);
+    }
+  }
+
+  /// Renders an initials box to use as a logo placeholder.
+  Widget _logoPlaceholder(BuildContext ctx, String shopName) {
+    return Container(
+      height: 80,
+      width: 80,
+      color: ctx.primaryColor.withValues(alpha: 0.08),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.imagePlus,
+                color: ctx.primaryColor.withValues(alpha: 0.6), size: 22),
+            const SizedBox(height: 4),
+            Text(
+              shopName.isNotEmpty ? shopName[0].toUpperCase() : 'S',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: ctx.primaryColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Renders a compact action button for gallery/camera logo picking.
+  Widget _logoActionButton({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: enabled
+              ? context.primaryColor.withValues(alpha: 0.08)
+              : context.borderColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled
+                ? context.primaryColor.withValues(alpha: 0.25)
+                : context.borderColor,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon,
+                size: 16,
+                color: enabled
+                    ? context.primaryColor
+                    : context.textSecondaryColor),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: enabled
+                    ? context.primaryColor
+                    : context.textSecondaryColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showShopDetailsSheet() {
@@ -168,7 +384,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        // ── Shop Logo URL ─────────────────────────────────────
+                        // ── Shop Logo ─────────────────────────────────────────
                         Text(
                           'Shop Logo',
                           style: TextStyle(
@@ -180,77 +396,148 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                         const SizedBox(height: 8),
                         StatefulBuilder(
-                          builder: (context, setLogoState) => Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              MobileTextField(
-                                initialValue: tempLogoUrl,
-                                placeholder: 'Logo Image URL (https://...)',
-                                onSave: (val) {
-                                  setSheetState(() => tempLogoUrl = val);
-                                  setLogoState(() {});
-                                },
-                              ),
-                              const SizedBox(height: 8),
-                              // Logo preview
-                              if (tempLogoUrl.isNotEmpty)
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    tempLogoUrl,
-                                    height: 64,
-                                    width: 64,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      height: 64,
-                                      width: 64,
-                                      decoration: BoxDecoration(
-                                        color: context.primaryColor.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: context.errorColor.withValues(alpha: 0.4),
+                          builder: (context, setLogoState) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // ── Logo preview / placeholder ────────────────
+                                GestureDetector(
+                                  onTap: _isUploadingLogo
+                                      ? null
+                                      : () async {
+                                          final url =
+                                              await _pickAndUploadLogo((fn) {
+                                            setLogoState(fn);
+                                            setSheetState(fn);
+                                          });
+                                          if (url != null) {
+                                            setLogoState(() {
+                                              tempLogoUrl = url;
+                                            });
+                                            setSheetState(() {
+                                              tempLogoUrl = url;
+                                            });
+                                          }
+                                        },
+                                  child: AnimatedContainer(
+                                    duration:
+                                        const Duration(milliseconds: 200),
+                                    height: 80,
+                                    width: 80,
+                                    decoration: BoxDecoration(
+                                      color: context.primaryColor
+                                          .withValues(alpha: 0.08),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: tempLogoUrl.isNotEmpty
+                                            ? context.primaryColor
+                                                .withValues(alpha: 0.5)
+                                            : context.borderColor,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: _isUploadingLogo
+                                        ? Center(
+                                            child: SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: context.primaryColor,
+                                              ),
+                                            ),
+                                          )
+                                        : ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: tempLogoUrl.isNotEmpty
+                                                ? Image.network(
+                                                    tempLogoUrl,
+                                                    height: 80,
+                                                    width: 80,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (_, __, ___) =>
+                                                            _logoPlaceholder(
+                                                                context,
+                                                                tempName),
+                                                  )
+                                                : _logoPlaceholder(
+                                                    context, tempName),
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                // ── Action buttons ────────────────────────────
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _logoActionButton(
+                                        context: context,
+                                        icon: LucideIcons.image,
+                                        label: 'Choose from Gallery',
+                                        enabled: !_isUploadingLogo,
+                                        onTap: () async {
+                                          final url =
+                                              await _pickLogoFromSource(
+                                                  ImageSource.gallery,
+                                                  setSheetState);
+                                          if (url != null) {
+                                            setLogoState(() =>
+                                                tempLogoUrl = url);
+                                            setSheetState(() =>
+                                                tempLogoUrl = url);
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _logoActionButton(
+                                        context: context,
+                                        icon: LucideIcons.camera,
+                                        label: 'Take a Photo',
+                                        enabled: !_isUploadingLogo,
+                                        onTap: () async {
+                                          final url =
+                                              await _pickLogoFromSource(
+                                                  ImageSource.camera,
+                                                  setSheetState);
+                                          if (url != null) {
+                                            setLogoState(() =>
+                                                tempLogoUrl = url);
+                                            setSheetState(() =>
+                                                tempLogoUrl = url);
+                                          }
+                                        },
+                                      ),
+                                      if (tempLogoUrl.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        GestureDetector(
+                                          onTap: () {
+                                            setLogoState(
+                                                () => tempLogoUrl = '');
+                                            setSheetState(
+                                                () => tempLogoUrl = '');
+                                          },
+                                          child: Text(
+                                            'Remove logo',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: context.errorColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      child: Icon(LucideIcons.imageOff,
-                                          color: context.errorColor, size: 24),
-                                    ),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  height: 64,
-                                  width: 64,
-                                  decoration: BoxDecoration(
-                                    color: context.primaryColor.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: context.borderColor,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      tempName.isNotEmpty ? tempName[0].toUpperCase() : 'S',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.primaryColor,
-                                      ),
-                                    ),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                              const SizedBox(height: 4),
-                              Text(
-                                tempLogoUrl.isEmpty
-                                    ? 'Paste a public image URL. We\'ll show initials if no logo is set.'
-                                    : 'Logo preview shown above',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: context.textSecondaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 16),
                         // ── Custom Terms ─────────────────────────────────────
