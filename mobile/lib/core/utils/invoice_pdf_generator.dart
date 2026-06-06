@@ -78,22 +78,46 @@ class InvoiceLineItem {
 class InvoicePdfGenerator {
   InvoicePdfGenerator._();
 
+  // ── Font cache (prevents re-downloading large font files every call) ─────
+  static pw.Font? _cachedRegular;
+  static pw.Font? _cachedBold;
+  static pw.Font? _cachedSemiBold;
+
+  static Future<void> _ensureFonts() async {
+    // Only download once per app session — NotoSans fonts are 4–10 MB each
+    // and loading all three simultaneously on low-memory devices causes OOM.
+    _cachedRegular ??= await PdfGoogleFonts.notoSansRegular();
+    _cachedBold    ??= await PdfGoogleFonts.notoSansBold();
+    _cachedSemiBold ??= await PdfGoogleFonts.notoSansMedium();
+  }
+
   // ── Color palette (Vyapar-inspired, professional) ─────────────────────
   static const _black = PdfColor.fromInt(0xFF000000);
-  static const _headerNavy = PdfColor.fromInt(0xFF1a2744); // deep navy header
+  static const _headerNavy = PdfColor.fromInt(0xFF1a2744);
   static const _headerNavyLight = PdfColor.fromInt(0xFF243460);
   static const _darkSlate = PdfColor.fromInt(0xFF1e293b);
-  static const _midSlate = PdfColor.fromInt(0xFF334155);
+  static const _midSlate = PdfColor.fromInt(0xFF475569);
   static const _lightGray = PdfColor.fromInt(0xFFf1f5f9);
-  static const _tableHeaderBg = PdfColor.fromInt(0xFFe2e8f0);
-  static const _borderGray = PdfColor.fromInt(0xFFcbd5e1);
+  static const _tableHeaderBg = PdfColor.fromInt(0xFFdde3ed);
+  static const _rowAlt = PdfColor.fromInt(0xFFf4f6f8);   // alternating row – visible
+  static const _borderGray = PdfColor.fromInt(0xFFb0bec5); // inner dividers
   static const _white = PdfColor.fromInt(0xFFFFFFFF);
   static const _green = PdfColor.fromInt(0xFF16a34a);
   static const _greenBg = PdfColor.fromInt(0xFFdcfce7);
-  static const _orange = PdfColor.fromInt(0xFFea580c);
-  static const _orangeBg = PdfColor.fromInt(0xFFfff7ed);
+  static const _orange = PdfColor.fromInt(0xFFd97706);
+  static const _orangeBg = PdfColor.fromInt(0xFFfef3c7);
   static const _red = PdfColor.fromInt(0xFFb91c1c);
   static const _snapBlue = PdfColor.fromInt(0xFF4F46E5);
+
+  // ── Border helpers ────────────────────────────────────────────────────
+  // Outer frame = 1.2 pt solid black  (was 0.5 — that's why it looked faint)
+  // Inner dividers = 0.5 pt for a clean hierarchy
+  static const _outerBorder = pw.Border.fromBorderSide(
+    pw.BorderSide(color: _black, width: 1.2),
+  );
+  static const _outerBorderBottom = pw.Border(
+    bottom: pw.BorderSide(color: _black, width: 1.2),
+  );
 
   // ── Number formatting ─────────────────────────────────────────────────────
 
@@ -176,11 +200,11 @@ class InvoicePdfGenerator {
 
   /// Generates a PDF as [Uint8List]. Call [Printing.sharePdf] to share it.
   static Future<Uint8List> generate(InvoiceData data) async {
-    // Use system-available fonts (Helvetica) so we don't need bundled font files.
-    // For Devanagari/Hindi text we rely on the pdf package's built-in Latin fonts.
-    final regularFont = await PdfGoogleFonts.notoSansRegular();
-    final boldFont = await PdfGoogleFonts.notoSansBold();
-    final semiBoldFont = await PdfGoogleFonts.notoSansMedium();
+    // Load fonts (cached after first call to avoid repeated ~10 MB downloads).
+    await _ensureFonts();
+    final regularFont = _cachedRegular!;
+    final boldFont    = _cachedBold!;
+    final semiBoldFont = _cachedSemiBold!;
 
     final doc = pw.Document(
       title: _docTitle(data),
@@ -198,7 +222,10 @@ class InvoicePdfGenerator {
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4,
           theme: theme,
-          margin: const pw.EdgeInsets.all(20 * PdfPageFormat.mm),
+          margin: const pw.EdgeInsets.symmetric(
+            horizontal: 14 * PdfPageFormat.mm,
+            vertical: 14 * PdfPageFormat.mm,
+          ),
         ),
         build: (context) => _buildContent(data, regularFont, boldFont, semiBoldFont),
         footer: (context) => _buildFooter(context, data, regularFont),
@@ -286,17 +313,18 @@ class InvoicePdfGenerator {
           docTitle,
           style: pw.TextStyle(
             font: bold,
-            fontSize: 18,
+            fontSize: 15,
             color: _headerNavy,
+            letterSpacing: 0.3,
           ),
         ),
       ),
-      pw.SizedBox(height: 12),
+      pw.SizedBox(height: 8),
 
       // ── Main bordered document ──────────────────────────────────────────
       pw.Container(
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: _black, width: 0.5),
+        decoration: const pw.BoxDecoration(
+          border: _outerBorder, // 1.2 pt — crisp outer frame
         ),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -362,7 +390,7 @@ class InvoicePdfGenerator {
     return pw.Container(
       width: double.infinity,
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
+        border: _outerBorderBottom, // crisp 1.2 pt separator
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -370,7 +398,7 @@ class InvoicePdfGenerator {
           // ── Colored top bar with shop name ──────────────────────────────
           pw.Container(
             width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: _headerNavy,
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -381,7 +409,7 @@ class InvoicePdfGenerator {
                     data.shopName.toUpperCase(),
                     style: pw.TextStyle(
                       font: bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: _white,
                       letterSpacing: 0.8,
                     ),
@@ -389,14 +417,14 @@ class InvoicePdfGenerator {
                 ),
                 if (data.shopGst != null && data.shopGst!.isNotEmpty)
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: pw.BoxDecoration(
                       color: _headerNavyLight,
                       borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
                     ),
                     child: pw.Text(
                       'GSTIN: ${data.shopGst}',
-                      style: pw.TextStyle(font: semiBold, fontSize: 8, color: _white),
+                      style: pw.TextStyle(font: semiBold, fontSize: 7.5, color: _white),
                     ),
                   ),
               ],
@@ -407,7 +435,7 @@ class InvoicePdfGenerator {
               (data.shopPhone != null && data.shopPhone!.isNotEmpty))
             pw.Container(
               width: double.infinity,
-              padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               color: _lightGray,
               child: pw.Row(
                 children: [
@@ -415,13 +443,13 @@ class InvoicePdfGenerator {
                     pw.Expanded(
                       child: pw.Text(
                         data.shopAddress!,
-                        style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                        style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                       ),
                     ),
                   if (data.shopPhone != null && data.shopPhone!.isNotEmpty)
                     pw.Text(
                       'Ph: ${data.shopPhone!.replaceAll('+91', '').trim()}',
-                      style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                 ],
               ),
@@ -446,7 +474,7 @@ class InvoicePdfGenerator {
 
     return pw.Container(
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
+        border: _outerBorderBottom, // 1.2 pt separator
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -454,41 +482,41 @@ class InvoicePdfGenerator {
           // Bill To
           pw.Expanded(
             child: pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(9),
               decoration: const pw.BoxDecoration(
-                border: pw.Border(right: pw.BorderSide(color: _black, width: 0.5)),
+                border: pw.Border(right: pw.BorderSide(color: _borderGray, width: 0.5)),
               ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
                     data.documentType == 'ledger' ? 'Customer Details:' : 'Bill To:',
-                    style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+                    style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
                   ),
-                  pw.SizedBox(height: 5),
+                  pw.SizedBox(height: 4),
                   pw.Text(
                     data.customerName,
-                    style: pw.TextStyle(font: bold, fontSize: 11, color: _darkSlate),
+                    style: pw.TextStyle(font: bold, fontSize: 10, color: _darkSlate),
                   ),
                   if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
-                      style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                   ],
                   if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Vehicle: ${data.vehicleNumber}',
-                      style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                   ],
                   if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Odometer: ${data.odometerReading} km',
-                      style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                   ],
                 ],
@@ -497,40 +525,40 @@ class InvoicePdfGenerator {
           ),
           // Invoice / Order Details
           pw.SizedBox(
-            width: 180,
+            width: 170,
             child: pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(9),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
                     isGst ? 'Invoice Details:' : (data.documentType == 'ledger' ? 'Statement Info:' : 'Order Details:'),
-                    style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+                    style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
                   ),
-                  pw.SizedBox(height: 5),
+                  pw.SizedBox(height: 4),
                   if (data.documentType != 'ledger') ...[
                     pw.Text(
                       'No: ${data.receiptNumber}',
-                      style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                     pw.SizedBox(height: 2),
                   ],
                   pw.Text(
                     'Date: ${_fmtDate(data.date)}',
-                    style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+                    style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                   ),
-                  pw.SizedBox(height: 6),
+                  pw.SizedBox(height: 5),
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: pw.BoxDecoration(
                       color: statusBgColor,
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
                     ),
                     child: pw.Text(
                       displayStatus,
                       style: pw.TextStyle(
                         font: bold,
-                        fontSize: 9,
+                        fontSize: 8,
                         color: statusColor,
                       ),
                     ),
@@ -579,7 +607,7 @@ class InvoicePdfGenerator {
             : (centerAlign ? pw.TextAlign.center : pw.TextAlign.left),
         style: pw.TextStyle(
           font: isHeader ? bold : regular,
-          fontSize: isHeader ? 8.5 : 8,
+          fontSize: isHeader ? 8 : 7.5,
           color: color ?? (isHeader ? _darkSlate : _midSlate),
         ),
       );
@@ -590,7 +618,7 @@ class InvoicePdfGenerator {
         decoration: const pw.BoxDecoration(color: _tableHeaderBg),
         children: List.generate(headers.length, (i) {
           return pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             child: cell(
               headers[i],
               isHeader: true,
@@ -637,33 +665,33 @@ class InvoicePdfGenerator {
         final itemTotal = isGst ? (item.isLabor ? baseAmt : baseAmt + itemGst) : item.amount;
 
         rows.add(pw.TableRow(
-          decoration: i.isOdd ? const pw.BoxDecoration(color: PdfColor.fromInt(0xFFfafafa)) : null,
+          decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
           children: [
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell('$srNo', centerAlign: true),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell(item.name),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell(_fmtQty(qty), centerAlign: true),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell(_fmtMoney(baseRate), rightAlign: true),
             ),
             if (isGst) pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell(
                 item.isLabor ? '—' : '${_fmtMoney(itemGst)} (18%)',
                 rightAlign: true,
               ),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: cell(_fmtMoney(itemTotal), rightAlign: true),
             ),
           ],
@@ -677,7 +705,10 @@ class InvoicePdfGenerator {
     pw.TableRow totalRow() {
       return pw.TableRow(
         decoration: const pw.BoxDecoration(
-          border: pw.Border(top: pw.BorderSide(color: _black, width: 0.5)),
+          color: _lightGray,
+          border: pw.Border(
+            top: pw.BorderSide(color: _darkSlate, width: 0.8), // strong top line
+          ),
         ),
         children: [
           pw.Padding(
@@ -688,7 +719,7 @@ class InvoicePdfGenerator {
             padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             child: pw.Text(
               'Total',
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
             ),
           ),
           pw.Padding(
@@ -696,7 +727,7 @@ class InvoicePdfGenerator {
             child: pw.Text(
               _fmtQty(totalQty),
               textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
             ),
           ),
           pw.Padding(
@@ -708,7 +739,7 @@ class InvoicePdfGenerator {
             child: pw.Text(
               _fmtMoney(gstAmt),
               textAlign: pw.TextAlign.right,
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
             ),
           ),
           pw.Padding(
@@ -716,7 +747,7 @@ class InvoicePdfGenerator {
             child: pw.Text(
               _fmtMoney(grandTotal),
               textAlign: pw.TextAlign.right,
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
             ),
           ),
         ],
@@ -743,13 +774,13 @@ class InvoicePdfGenerator {
 
     return pw.Container(
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
+        border: _outerBorderBottom, // 1.2 pt bottom
       ),
       child: pw.Table(
         columnWidths: columnWidths,
         border: pw.TableBorder(
-          horizontalInside: const pw.BorderSide(color: _borderGray, width: 0.3),
-          verticalInside: const pw.BorderSide(color: _borderGray, width: 0.3),
+          horizontalInside: const pw.BorderSide(color: _borderGray, width: 0.4),
+          verticalInside: const pw.BorderSide(color: _borderGray, width: 0.4),
         ),
         children: tableRows,
       ),
@@ -783,24 +814,24 @@ class InvoicePdfGenerator {
               label,
               style: pw.TextStyle(
                 font: isBold ? bold : regular,
-                fontSize: 9,
+                fontSize: 8.5,
                 color: _midSlate,
               ),
             ),
           ),
           pw.Text(
             ':',
-            style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+            style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
           ),
           pw.SizedBox(width: 4),
           pw.SizedBox(
-            width: 100,
+            width: 95,
             child: pw.Text(
               value,
               textAlign: pw.TextAlign.right,
               style: pw.TextStyle(
                 font: isBold ? bold : semiBold,
-                fontSize: isBold ? 10 : 9,
+                fontSize: isBold ? 9.5 : 8.5,
                 color: valueColor ?? _darkSlate,
               ),
             ),
@@ -811,7 +842,7 @@ class InvoicePdfGenerator {
 
     return pw.Container(
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
+        border: _outerBorderBottom, // 1.2 pt separator
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -819,9 +850,9 @@ class InvoicePdfGenerator {
           // Left: automobile breakdown or empty
           pw.Expanded(
             child: pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(9),
               decoration: const pw.BoxDecoration(
-                border: pw.Border(right: pw.BorderSide(color: _black, width: 0.5)),
+                border: pw.Border(right: pw.BorderSide(color: _borderGray, width: 0.5)),
               ),
               child: isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0)
                   ? pw.Column(
@@ -846,46 +877,46 @@ class InvoicePdfGenerator {
           ),
           // Right: totals
           pw.SizedBox(
-            width: 210,
+            width: 205,
             child: pw.Padding(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(9),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   amtRow('Sub Total', _fmtMoney(subtotal)),
                   if (isGst) ...[
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(height: 3),
                     amtRow('Total GST (18%)', _fmtMoney(gstAmt)),
                   ],
-                  pw.SizedBox(height: 4),
+                  pw.SizedBox(height: 3),
                   amtRow('Total', _fmtMoney(grandTotal), isBold: true),
                   if (received != null && received > 0) ...[
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(height: 3),
                     amtRow('Amount Paid', '-${_fmtMoney(received)}'),
                   ],
                   if (balance > 0) ...[
-                    pw.SizedBox(height: 4),
+                    pw.SizedBox(height: 3),
                     amtRow('Balance Due', _fmtMoney(balance), isBold: true, valueColor: _red),
                   ],
-                  pw.Divider(color: _borderGray, height: 12),
+                  pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
                   pw.Text(
                     'Invoice Amount In Words :',
-                    style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+                    style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
                   ),
-                  pw.SizedBox(height: 3),
+                  pw.SizedBox(height: 2),
                   pw.Text(
                     '$wordsTotal Rupees only',
-                    style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                    style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                   ),
                   if (received != null && received > 0) ...[
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Received  : ${_fmtMoney(received)}',
-                      style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                     ),
                     pw.Text(
                       'Balance   : ${_fmtMoney(balance)}',
-                      style: pw.TextStyle(font: regular, fontSize: 8.5, color: balance > 0 ? _red : _green),
+                      style: pw.TextStyle(font: regular, fontSize: 8, color: balance > 0 ? _red : _green),
                     ),
                   ],
                 ],
@@ -902,21 +933,22 @@ class InvoicePdfGenerator {
   static pw.Widget _termsSection(pw.Font regular, pw.Font bold) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _black, width: 0.5)),
+        border: _outerBorderBottom, // 1.2 pt separator
+        color: _lightGray,
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
             'Terms And Conditions:',
-            style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate),
+            style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
           ),
           pw.SizedBox(height: 2),
           pw.Text(
             'Thank you for doing business with us.',
-            style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate),
+            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
           ),
         ],
       ),
@@ -931,27 +963,27 @@ class InvoicePdfGenerator {
       children: [
         pw.Expanded(
           child: pw.Container(
-            padding: const pw.EdgeInsets.all(12),
+            padding: const pw.EdgeInsets.all(10),
             decoration: const pw.BoxDecoration(
-              border: pw.Border(right: pw.BorderSide(color: _black, width: 0.5)),
+              border: pw.Border(right: pw.BorderSide(color: _borderGray, width: 0.5)),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
                   'This is a computer-generated document.',
-                  style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   children: [
                     pw.Text(
                       'Powered by ',
-                      style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                      style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
                     ),
                     pw.Text(
                       'SnapKhata',
-                      style: pw.TextStyle(font: bold, fontSize: 8, color: _snapBlue),
+                      style: pw.TextStyle(font: bold, fontSize: 7.5, color: _snapBlue),
                     ),
                   ],
                 ),
@@ -960,26 +992,27 @@ class InvoicePdfGenerator {
           ),
         ),
         pw.SizedBox(
-          width: 180,
+          width: 170,
           child: pw.Container(
-            padding: const pw.EdgeInsets.fromLTRB(12, 48, 12, 12),
+            padding: const pw.EdgeInsets.fromLTRB(12, 44, 12, 10),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
+                // Signature line — 1.0 pt so it's clearly visible
                 pw.Container(
-                  height: 0.5,
-                  color: _midSlate,
-                  width: 140,
+                  height: 1.0,
+                  color: _darkSlate,
+                  width: 130,
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
                   'For ${data.shopName.toUpperCase()}',
-                  style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+                  style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
                   'Authorised Signatory',
-                  style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
                 ),
               ],
             ),

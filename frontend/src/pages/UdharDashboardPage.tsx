@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { udharAPI, Ledger } from '../services/udharAPI';
+import { udharAPI } from '../services/udharAPI';
+import type { Ledger, Transaction } from '../services/udharAPI';
 import { formatCurrency, formatActivityDate } from '../utils/dashboardHelpers';
 import {
     Users,
@@ -70,13 +71,69 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
     const handleSharePdf = async () => {
         setIsPdfLoading(true);
         try {
-            // Build a minimal text-based PDF via browser print
+            // Fetch full transaction history first
+            let transactions: Transaction[] = [];
+            try {
+                const result = await udharAPI.getTransactions(ledger.id);
+                transactions = result.data ?? [];
+            } catch (_) {
+                // If fetch fails, still generate a summary-only PDF
+            }
+
             const printWindow = window.open('', '_blank', 'width=800,height=600');
             if (!printWindow) {
                 toast.error('Please allow pop-ups to download the PDF.');
+                setIsPdfLoading(false);
                 return;
             }
+
             const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+            // Build transaction table rows
+            let runningBalance = 0;
+            const txRows = transactions
+                .slice()
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map(tx => {
+                    const isInvoice = tx.transaction_type === 'INVOICE';
+                    if (isInvoice) runningBalance += tx.amount;
+                    else runningBalance -= tx.amount;
+                    const txDate = new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    return `
+                    <tr style="border-bottom:1px solid #f1f5f9;">
+                        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${txDate}</td>
+                        <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${isInvoice ? '#1e293b' : '#16a34a'};">
+                            ${isInvoice ? 'Credit Sale' : 'Payment'}
+                        </td>
+                        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${tx.receipt_number ?? tx.invoice_number ?? '—'}</td>
+                        <td style="padding:10px 12px;font-size:12px;text-align:right;font-weight:600;color:${isInvoice ? '#dc2626' : '#16a34a'};">
+                            ${isInvoice ? '+' : '-'} ${formatCurrency(tx.amount)}
+                        </td>
+                        <td style="padding:10px 12px;font-size:12px;text-align:right;font-weight:700;color:${runningBalance > 0 ? '#dc2626' : '#16a34a'};">
+                            ${formatCurrency(Math.abs(runningBalance))}
+                        </td>
+                    </tr>`;
+                }).join('');
+
+            const txTableHtml = transactions.length > 0 ? `
+            <div style="padding:20px 24px 0;border-top:1px solid #e2e8f0;">
+                <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:0.8px;margin-bottom:12px;">
+                    Transaction History (${transactions.length} entries)
+                </p>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f8fafc;border-bottom:2px solid #1e293b;">
+                            <th style="padding:8px 12px;font-size:11px;text-align:left;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Date</th>
+                            <th style="padding:8px 12px;font-size:11px;text-align:left;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Type</th>
+                            <th style="padding:8px 12px;font-size:11px;text-align:left;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Bill #</th>
+                            <th style="padding:8px 12px;font-size:11px;text-align:right;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Amount</th>
+                            <th style="padding:8px 12px;font-size:11px;text-align:right;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>${txRows}</tbody>
+                </table>
+            </div>` : '';
+
             printWindow.document.write(`
 <!DOCTYPE html>
 <html>
@@ -85,42 +142,55 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; color: #1e293b; padding: 32px; }
-    .header { background: #1a2744; color: white; padding: 20px 24px; border-radius: 8px 8px 0 0; }
+    .header { background: #1a2744; color: white; padding: 20px 24px; }
     .header h1 { font-size: 20px; letter-spacing: 1px; }
-    .sub-header { background: #f1f5f9; padding: 10px 24px; font-size: 12px; color: #64748b; }
-    .section { border: 1px solid #e2e8f0; border-radius: 0 0 8px 8px; }
+    .header p { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .sub-header { background: #f1f5f9; padding: 8px 24px; font-size: 11px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    .outer { border: 1.5px solid #1e293b; border-radius: 0 0 6px 6px; }
     .meta { display: flex; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; }
-    .meta-block h3 { font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+    .meta-block h3 { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .meta-block p { font-size: 14px; font-weight: bold; }
-    .summary { display: flex; padding: 20px 24px; gap: 24px; border-bottom: 1px solid #e2e8f0; }
-    .chip { flex: 1; text-align: center; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; }
-    .chip label { font-size: 10px; text-transform: uppercase; color: #64748b; display: block; }
-    .chip strong { font-size: 18px; display: block; margin-top: 4px; }
+    .summary { display: flex; padding: 16px 24px; gap: 16px; border-bottom: 1px solid #e2e8f0; }
+    .chip { flex: 1; text-align: center; padding: 12px 8px; border: 1px solid #e2e8f0; border-radius: 6px; }
+    .chip label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; display: block; margin-bottom: 4px; }
+    .chip strong { font-size: 16px; display: block; }
     .due { color: #dc2626; }
-    .paid { color: #16a34a; }
-    .footer { padding: 20px 24px; font-size: 11px; color: #94a3b8; text-align: center; }
-    .title-bar { background: #4F46E5; color: white; text-align: center; padding: 8px; font-size: 11px; font-weight: bold; letter-spacing: 1px; border-radius: 4px; margin-bottom: 16px; }
-    @media print { body { padding: 0; } }
+    .paid-color { color: #16a34a; }
+    .footer { padding: 14px 24px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #f1f5f9; }
+    @media print {
+      body { padding: 0; }
+      @page { size: A4; margin: 12mm 14mm; }
+    }
   </style>
 </head>
 <body>
-  <div class="header"><h1>ACCOUNT STATEMENT</h1></div>
+  <div class="header">
+    <h1>ACCOUNT STATEMENT</h1>
+    <p>Powered by SnapKhata</p>
+  </div>
   <div class="sub-header">Generated on ${date}</div>
-  <div class="section">
+  <div class="outer">
     <div class="meta">
-      <div class="meta-block"><h3>Customer</h3><p>${name}</p></div>
+      <div class="meta-block">
+        <h3>Customer / Party</h3>
+        <p>${name}</p>
+      </div>
       <div class="meta-block" style="text-align:right">
         <h3>Status</h3>
-        <p style="color:${balanceDue > 0 ? '#dc2626' : '#16a34a'}">${balanceDue > 0 ? 'UNPAID' : 'PAID'}</p>
+        <p style="color:${balanceDue > 0 ? '#dc2626' : '#16a34a'};font-size:13px;">
+          ${balanceDue > 0 ? '⚠ UNPAID' : '✓ SETTLED'}
+        </p>
       </div>
     </div>
     <div class="summary">
       <div class="chip"><label>Total Billed</label><strong>${formatCurrency(totalBilled)}</strong></div>
-      <div class="chip"><label>Paid</label><strong class="paid">${formatCurrency(Math.max(0, totalBilled - balanceDue))}</strong></div>
-      <div class="chip"><label>Balance Due</label><strong class="${balanceDue > 0 ? 'due' : 'paid'}">${formatCurrency(balanceDue)}</strong></div>
+      <div class="chip"><label>Total Paid</label><strong class="paid-color">${formatCurrency(Math.max(0, totalBilled - balanceDue))}</strong></div>
+      <div class="chip"><label>Balance Due</label><strong class="${balanceDue > 0 ? 'due' : 'paid-color'}">${formatCurrency(balanceDue)}</strong></div>
     </div>
-    ${billNo ? `<div style="padding: 12px 24px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">Bill #${billNo}</div>` : ''}
-    <div class="footer">Generated by SnapKhata · Account Statement</div>
+    ${txTableHtml}
+    <div class="footer">
+      This is a computer-generated statement &nbsp;·&nbsp; snapkhata.com
+    </div>
   </div>
 </body>
 </html>`);
