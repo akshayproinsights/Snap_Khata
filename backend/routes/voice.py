@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 import auth
-from config import get_google_api_key
+from config import get_google_api_key, get_free_google_api_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -79,11 +79,15 @@ def _call_gemini(transcript: str, catalogue_names: List[str]) -> List[Dict]:
     except ImportError:
         raise RuntimeError("google-genai SDK not installed")
 
-    api_key = get_google_api_key()
-    if not api_key:
-        raise RuntimeError("Google API key not configured")
+    try:
+        from google.genai import types
+    except ImportError:
+        raise RuntimeError("google-genai SDK not installed")
 
-    client = genai.Client(api_key=api_key)
+    from utils.gemini_client import generate_content_robust
+
+    if not get_google_api_key() and not get_free_google_api_key():
+        raise RuntimeError("Google API key not configured")
 
     # Build user message
     user_msg = f'Transcript: "{transcript}"'
@@ -99,10 +103,13 @@ def _call_gemini(transcript: str, catalogue_names: List[str]) -> List[Dict]:
         max_output_tokens=1024,
     )
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
+    # generate_content_robust tries Vertex AI first, then paid key, then free key
+    logger.info("Calling Gemini (voice parsing) with model gemini-3.1-flash-lite via robust client...")
+    response = generate_content_robust(
+        model="gemini-3.1-flash-lite",
         contents=[user_msg],
         config=config,
+        use_free_key=True,
     )
 
     text = (response.text or "").strip()

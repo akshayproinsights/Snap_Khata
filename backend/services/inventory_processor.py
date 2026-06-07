@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 # Rate limiter for API calls — Gemini Flash supports 250+ RPM
 limiter = RateLimiter(rpm=int(os.getenv('GEMINI_RPM_LIMIT', '250')))
 
-# Model Configuration  (3-tier cascade: Lite → Flash → [free fallback])
-LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
-FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
-# PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
-PRO_MODEL     = None # Keeping variable to prevent NameError
-FREE_MODEL    = "gemini-2.0-flash"  # free-tier emergency fallback (15 RPM)
+# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+# All three run on Vertex AI (global endpoint) with API key as automatic fallback.
+LITE_MODEL    = "gemini-3.1-flash-lite"    # cheapest / fastest — free first-try
+FLASH_MODEL   = "gemini-3.5-flash"         # mid-tier paid
+PRO_MODEL     = "gemini-3.1-pro-preview"   # highest quality
+FREE_MODEL    = "gemini-3.1-flash-lite"    # free-tier emergency key fallback
 ACCURACY_THRESHOLD = 50.0  # escalate if accuracy < 50%
 
 # ── v2.1 Mathematical Processing Engine ──────────────────────────────────────
@@ -248,23 +248,15 @@ def process_invoice_item(item_data: Dict) -> Dict:
     }
 
 
-# ── Gemini client singleton ───────────────────────────────────────────────────
-# Thread-safe: genai.Client is stateless and safe to share across threads.
-_gemini_client: Optional["genai.Client"] = None
-_gemini_client_lock = threading.Lock()
+# ── Gemini robust caller ──────────────────────────────────────────────────────
+# Uses Vertex AI (global endpoint / impersonated SA) as primary tier,
+# falling back automatically to GOOGLE_API_KEY, then GOOGLE_API_KEY_FREE.
+from utils.gemini_client import generate_content_robust
+
 
 def _get_gemini_client() -> "genai.Client":
-    """Return a cached module-level Gemini client (created once, reused everywhere)."""
-    global _gemini_client
-    if _gemini_client is None:
-        with _gemini_client_lock:
-            if _gemini_client is None:  # double-checked locking
-                api_key = get_google_api_key()
-                if not api_key:
-                    raise RuntimeError("No Google API key configured")
-                _gemini_client = genai.Client(api_key=api_key)
-                logger.info("Gemini client singleton created")
-    return _gemini_client
+    """Legacy shim — kept so any external caller still compiles. Returns None."""
+    return None  # All calls now go through generate_content_robust()
 
 
 def _is_quota_exhausted(exc: Exception) -> bool:
@@ -330,10 +322,10 @@ def process_vendor_invoice(
                 temperature=0.1
             )
             # Add timeout to prevent hanging
-            resp = client.models.generate_content(
+            resp = generate_content_robust(
                 model=model_name,
                 contents=[img, "Extract all vendor invoice data according to the instructions."],
-                config=cfg
+                config=cfg,
             )
             json_text = resp.text.strip() if resp.text else "{}"
             
@@ -395,6 +387,82 @@ def process_vendor_invoice(
             if _is_quota_exhausted(e):
                 logger.warning(f"⚠️ Quota exhausted in {tier_label} — will try free model if all paid tiers fail")
             return None, [], 0.0, 0, 0, 0.0
+
+    # Try Free Key first since user has few users right now
+    free_key = get_free_google_api_key()
+    if free_key:
+        try:
+            logger.info(f"[FREE-FIRST] Trying Free Key first for vendor invoice with model {FREE_MODEL}...")
+            free_client = genai.Client(api_key=free_key)
+            free_cfg = types.GenerateContentConfig(
+                system_instruction=vendor_prompt,
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+            limiter.wait()
+            free_resp = generate_content_robust(
+                model=FREE_MODEL,
+                contents=[img, "Extract all vendor invoice data according to the instructions."],
+                config=free_cfg,
+                use_free_key=True,
+            )
+            free_json_text = free_resp.text.strip() if free_resp.text else "{}"
+            free_json_text = free_json_text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            free_data = json.loads(free_json_text) if free_json_text else {}
+            if isinstance(free_data, list):
+                free_data = {"invoice_type": "Printed", "invoice_date": "", "invoice_number": "", "items": free_data}
+            if isinstance(free_data, dict):
+                from services.processor import _normalize_data_confidences
+                _normalize_data_confidences(free_data)
+                free_items = free_data.get("items", [])
+                free_acc = calculate_accuracy(free_items)
+                free_usage = free_resp.usage_metadata
+                free_in  = (free_usage.prompt_token_count or 0) if free_usage else 0
+                free_out = (free_usage.candidates_token_count or 0) if free_usage else 0
+                
+                hdr = free_data.get("header", {}) if isinstance(free_data.get("header"), dict) else {}
+                vname = free_data.get("vendor_name", "") or hdr.get("vendor_name", "")
+                
+                # If we have a valid vendor name and items look reasonable, return it directly!
+                if vname and str(vname).strip() and free_acc >= ACCURACY_THRESHOLD:
+                    total_tokens = free_in + free_out
+                    result = {
+                        "header": {
+                            "invoice_type": free_data.get("invoice_type", "Printed"),
+                            "invoice_number": free_data.get("invoice_number", ""),
+                            "date": free_data.get("invoice_date", ""),
+                            "vendor_name": free_data.get("vendor_name", ""),
+                            "vendor_gstin": free_data.get("vendor_gstin"),
+                            "place_of_supply": free_data.get("place_of_supply"),
+                            "tax_type": free_data.get("tax_type", "UNKNOWN"),
+                            "header_adjustments": free_data.get("header_adjustments", []),
+                            "source_file": filename
+                        },
+                        "items": free_items,
+                        "receipt_link": receipt_link,
+                        "upload_date": get_ist_now_str(),
+                        "model_used": "Free-First",
+                        "model_accuracy": free_acc,
+                        "input_tokens": free_in,
+                        "output_tokens": free_out,
+                        "total_tokens": total_tokens,
+                        "cost_inr": 0.0
+                    }
+                    logger.info(f"✓ [FREE-FIRST SUCCESS] vendor invoice processed via {FREE_MODEL} | Accuracy: {free_acc:.2f}%")
+                    return result
+                else:
+                    logger.warning(f"[FREE-FIRST] Free result had low accuracy ({free_acc}%) or missing vendor name. Escalating to paid tiers.")
+        except Exception as e:
+            err_msg = str(e).lower()
+            is_quota = (
+                "resource_exhausted" in err_msg
+                or "429" in err_msg
+                or "prepayment credits are depleted" in err_msg
+                or "quota" in err_msg
+            )
+            if not is_quota:
+                raise
+            logger.warning(f"Free API key rate limited or exhausted in vendor invoice processor: {e}. Falling back to Paid Key cascade.")
 
     try:
         best_res_stored: Optional[Dict[str, Any]] = None
@@ -466,10 +534,11 @@ def process_vendor_invoice(
                     response_mime_type="application/json",
                     temperature=0.1
                 )
-                free_resp = free_client.models.generate_content(
+                free_resp = generate_content_robust(
                     model=FREE_MODEL,
                     contents=[img, "Extract all vendor invoice data according to the instructions."],
-                    config=free_cfg
+                    config=free_cfg,
+                    use_free_key=True,
                 )
                 free_json_text = free_resp.text.strip() if free_resp.text else "{}"
                 free_json_text = free_json_text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()

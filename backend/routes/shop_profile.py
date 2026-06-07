@@ -12,7 +12,7 @@ from google import genai
 from google.genai import types
 
 import auth
-from config import get_google_api_key
+from config import get_google_api_key, get_free_google_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -229,12 +229,9 @@ async def autofill_shop_profile(
         img = Image.open(BytesIO(content))
         img.load()
         
-        api_key = get_google_api_key()
-        if not api_key:
+        if not get_google_api_key() and not get_free_google_api_key():
             raise HTTPException(status_code=500, detail="Google API key not configured")
             
-        client = genai.Client(api_key=api_key)
-        
         system_instruction = (
             "OCR extractor for a shop's own receipt, invoice, bill, or business card. "
             "Extract the shop's details to populate their profile.\n"
@@ -259,12 +256,16 @@ async def autofill_shop_profile(
             max_output_tokens=1024
         )
         
-        # Call Gemini (gemini-3.5-flash)
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
+        from utils.gemini_client import generate_content_robust
+        # generate_content_robust tries Vertex AI first, then paid key, then free key
+        logger.info("Calling Gemini (shop profile autofill) via robust client (gemini-3.1-flash-lite)...")
+        response = generate_content_robust(
+            model="gemini-3.1-flash-lite",
             contents=[img, "Extract shop profile details from this image."],
-            config=config
+            config=config,
+            use_free_key=True,
         )
+        logger.info("Gemini robust client call succeeded for shop profile autofill.")
         
         text = response.text.strip()
         

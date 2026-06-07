@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from database import get_database_client
 from auth import get_current_user
 from services.storage import get_storage_client
-from config import get_google_api_key, get_mappings_folder
+from config import get_google_api_key, get_free_google_api_key, get_mappings_folder
 from config_loader import get_user_config
 
 logger = logging.getLogger(__name__)
@@ -321,13 +321,14 @@ async def extract_from_image(
         if not image_bytes:
             raise HTTPException(status_code=404, detail="Could not download image")
         
-        # Configure Gemini
-        api_key = get_google_api_key()
-        client = genai.Client(api_key=api_key)
-        
-        # Call Gemini with image
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        if not get_google_api_key() and not get_free_google_api_key():
+            raise HTTPException(status_code=500, detail="Google API key not configured")
+            
+        from utils.gemini_client import generate_content_robust
+        # generate_content_robust: Vertex AI first, paid key fallback, free key last
+        logger.info("Calling Gemini (vendor mapping extract) via robust client (gemini-3.5-flash)...")
+        response = generate_content_robust(
+            model="gemini-3.5-flash",
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
                 system_instruction
@@ -335,8 +336,10 @@ async def extract_from_image(
             config=types.GenerateContentConfig(
                 temperature=0.1,
                 response_mime_type="application/json"
-            )
+            ),
+            use_free_key=True,
         )
+        logger.info("Gemini robust client call succeeded in vendor mapping extract.")
         
         # Parse response
         result_text = response.text
@@ -583,7 +586,8 @@ def process_scans_sync(task_id: str, file_keys: List[str], username: str):
         storage = get_storage_client()
         user_config = get_user_config(username)
         bucket = user_config.get("r2_bucket")
-        api_key = get_google_api_key()
+        free_key = get_free_google_api_key()
+        primary_key = get_google_api_key()
         
         # Pre-fetch stock levels for lookups
         db = get_database_client()
@@ -620,13 +624,14 @@ def process_scans_sync(task_id: str, file_keys: List[str], username: str):
                 if not image_bytes:
                     raise Exception("Failed to download image")
                 
-                # 2. Call Gemini
-                client = genai.Client(api_key=api_key)
+                # 2. Call Gemini via robust client (Vertex AI first, API key fallback)
+                from utils.gemini_client import generate_content_robust
                 vendor_mapping_config = user_config.get("vendor_mapping_gemini", {})
                 system_instr = vendor_mapping_config.get("system_instruction")
                 
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
+                logger.info("Calling Gemini (background vendor mapping) via robust client (gemini-3.5-flash)...")
+                response = generate_content_robust(
+                    model="gemini-3.5-flash",
                     contents=[
                         types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
                         system_instr
@@ -634,8 +639,10 @@ def process_scans_sync(task_id: str, file_keys: List[str], username: str):
                     config=types.GenerateContentConfig(
                         temperature=0.1,
                         response_mime_type="application/json"
-                    )
+                    ),
+                    use_free_key=True,
                 )
+                logger.info("Gemini robust client call succeeded in background vendor mapping.")
                 
                 # 3. Parse and Enhance
                 text = response.text

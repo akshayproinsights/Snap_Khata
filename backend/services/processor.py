@@ -40,12 +40,12 @@ MAX_WORKERS = int(os.getenv('GEMINI_MAX_WORKERS', '50'))
 
 MAX_RETRIES = 5
 
-# Model Configuration  (3-tier cascade: Lite → Flash → [free fallback])
-LITE_MODEL    = "gemini-3.1-flash-lite"   # cheapest / fastest
-FLASH_MODEL   = "gemini-3.5-flash"  # mid-tier
-# PRO_MODEL     = "gemini-3.1-pro-preview"    # highest quality
-PRO_MODEL     = None # Keeping so we do not get NameError
-FREE_MODEL    = "gemini-2.0-flash"  # free-tier emergency fallback (15 RPM)
+# Model Configuration  (3-tier cascade: Lite → Flash → Pro)
+# All three run on Vertex AI (global endpoint) with API key as automatic fallback.
+LITE_MODEL    = "gemini-3.1-flash-lite"    # cheapest / fastest — free first-try
+FLASH_MODEL   = "gemini-3.5-flash"         # mid-tier paid
+PRO_MODEL     = "gemini-3.1-pro-preview"   # highest quality (jadhav + final escalation)
+FREE_MODEL    = "gemini-3.1-flash-lite"    # free-tier emergency key fallback
 ACCURACY_THRESHOLD = 50.0  # escalate to next tier if accuracy < 50%
 
 # Pricing Configuration (USD per 1M tokens)
@@ -295,23 +295,16 @@ def normalize_text_field(text: str, field_type: str = "general") -> str:
 #         'height': max_y - min_y
 #     }
 
-# ── Gemini client singleton ───────────────────────────────────────────────────
-# Thread-safe: genai.Client is stateless and safe to share across threads.
-_gemini_client = None
-_gemini_client_lock = threading.Lock()
+# ── Gemini robust caller ──────────────────────────────────────────────────────
+# Uses Vertex AI (global endpoint / impersonated SA) as primary tier,
+# falling back automatically to GOOGLE_API_KEY, then GOOGLE_API_KEY_FREE.
+from utils.gemini_client import generate_content_robust
+
 
 def _get_gemini_client():
-    """Return a cached module-level Gemini client (created once, reused everywhere)."""
-    global _gemini_client
-    if _gemini_client is None:
-        with _gemini_client_lock:
-            if _gemini_client is None:  # double-checked locking
-                api_key = get_google_api_key()
-                if not api_key:
-                    raise RuntimeError("Google API key not configured")
-                _gemini_client = genai.Client(api_key=api_key)
-                logger.info("Gemini client singleton created")
-    return _gemini_client
+    """Legacy shim — kept so any external caller still compiles. Returns None.
+    All actual API calls now go through generate_content_robust()."""
+    return None  # No longer used directly
 
 
 def _is_quota_exhausted(exc: Exception) -> bool:
@@ -323,6 +316,275 @@ def _is_quota_exhausted(exc: Exception) -> bool:
         or "prepayment credits are depleted" in msg
         or "quota" in msg
     )
+
+
+# ── JSON auto-repair ─────────────────────────────────────────────────────────
+def _repair_json(text: str) -> str:
+    """
+    Attempt to repair truncated/malformed JSON by closing unclosed structures.
+    Handles the most common case: model output was cut off mid-response.
+    Returns the repaired string (may still fail json.loads if damage is severe).
+    """
+    text = text.strip()
+    if not text:
+        return text
+
+    # Track open brackets and strings
+    stack = []
+    in_string = False
+    escape_next = False
+
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\':
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in ('{', '['):
+            stack.append(ch)
+        elif ch == '}':
+            if stack and stack[-1] == '{':
+                stack.pop()
+        elif ch == ']':
+            if stack and stack[-1] == '[':
+                stack.pop()
+
+    # If we're mid-string, close it first
+    if in_string:
+        text += '"'
+
+    # Close any trailing comma before closing (e.g. last item had trailing comma)
+    stripped = text.rstrip()
+    if stripped.endswith(','):
+        text = stripped[:-1]
+
+    # Close remaining open structures in reverse order
+    for bracket in reversed(stack):
+        text += '}' if bracket == '{' else ']'
+
+    return text
+
+
+def _process_with_max_accuracy(
+    client,
+    img,
+    filename: str,
+    receipt_link: str,
+    system_instruction: str,
+    model_name: str,
+    temperature: float = 0.0,
+    max_output_tokens: int = 16384,
+    max_retries: int = 5,
+    double_check: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Maximum-accuracy processing path for premium users (e.g. jadhav).
+    Goes directly to the specified preferred_model (e.g. gemini-2.5-pro) with:
+      - temperature=0.0 for deterministic output
+      - Full MAX_RETRIES with exponential backoff
+      - Optional double-check: runs the model twice and picks the result
+        where the computed total (sum of item amounts) is closer to the
+        stated total_bill_amount (higher confidence in arithmetic).
+
+    This function is ONLY called when gemini_model_config.accuracy_mode=maximum.
+    """
+    processing_errors = []
+    best_result: Optional[Dict[str, Any]] = None
+    best_accuracy = -1.0
+
+    # Double-check mode: collect up to 2 good results, pick the best
+    # Smart skip: if Run 1 is already perfect (gap=0 and accuracy>=90%),
+    # Run 2 adds no value — skip it to save ~60-90s per file.
+    SKIP_RUN2_ACCURACY_THRESHOLD = 90.0  # skip Run 2 if Run 1 accuracy >= this
+    runs_needed = 2 if double_check else 1
+
+    for run_idx in range(runs_needed):
+        # ── Smart double-check skip ──────────────────────────────────────────
+        # If Run 1 already produced a perfect result (gap=0, high accuracy),
+        # skip Run 2 entirely — it would only waste time and cost.
+        if run_idx == 1 and best_result is not None:
+            prev_gap = best_result.get("arithmetic_gap", float("inf"))
+            prev_acc = best_result.get("model_accuracy", 0.0)
+            if prev_gap == 0 and prev_acc >= SKIP_RUN2_ACCURACY_THRESHOLD:
+                logger.info(
+                    f"[MAX-ACC] ⚡ Skipping Run 2 — Run 1 already perfect "
+                    f"(gap=₹0, accuracy={prev_acc:.1f}% >= {SKIP_RUN2_ACCURACY_THRESHOLD}%) | {filename}"
+                )
+                print(
+                    f"[MAX-ACC] ⚡ Run 2 skipped — Run 1 perfect (gap=₹0, acc={prev_acc:.1f}%)",
+                    flush=True,
+                )
+                break
+
+        run_label = f"Run {run_idx + 1}/{runs_needed}" if double_check else "Single run"
+        logger.info(f"[MAX-ACC] {run_label} | model={model_name} | file={filename}")
+        print(f"[MAX-ACC] {run_label} | model={model_name}", flush=True)
+
+        for attempt in range(max_retries):
+            try:
+                limiter.wait()
+
+                print(
+                    f"[MAX-ACC ATTEMPT {attempt + 1}/{max_retries}] model={model_name} | {filename}",
+                    flush=True,
+                )
+                logger.info(f"[MAX-ACC] attempt {attempt + 1}/{max_retries} | model={model_name}")
+
+                config = types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                )
+
+                response = generate_content_robust(
+                    model=model_name,
+                    contents=[img, "Extract ALL bill data with maximum accuracy. Double-check every number."],
+                    config=config,
+                )
+
+                # Token accounting
+                usage = response.usage_metadata
+                input_tokens  = getattr(usage, "prompt_token_count",     0) if usage else 0
+                output_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
+                total_tokens  = getattr(usage, "total_token_count", input_tokens + output_tokens) if usage else 0
+
+                print(
+                    f"[MAX-ACC TOKENS] Input={input_tokens}, Output={output_tokens}, Total={total_tokens}",
+                    flush=True,
+                )
+
+                # Parse JSON — with auto-repair fallback for truncated responses
+                text = response.text.strip()
+                if text.startswith("```json"): text = text[7:]
+                if text.startswith("```"):     text = text[3:]
+                if text.endswith("```"):       text = text[:-3]
+                text = text.strip()
+
+                # Try direct parse first; if it fails attempt auto-repair
+                try:
+                    data = json.loads(text)
+                except json.JSONDecodeError as json_err:
+                    repaired = _repair_json(text)
+                    if repaired != text:
+                        logger.warning(
+                            f"[MAX-ACC] JSON truncated (out={output_tokens} tokens) — "
+                            f"attempting auto-repair | {filename}"
+                        )
+                        print(
+                            f"[MAX-ACC] ⚠️ JSON truncated — auto-repairing ({output_tokens} output tokens)",
+                            flush=True,
+                        )
+                        data = json.loads(repaired)  # raises if repair insufficient
+                    else:
+                        raise  # re-raise original error
+
+                # Normalise structure
+                if not isinstance(data, dict):
+                    if isinstance(data, list):
+                        data = {
+                            "header": {
+                                "overall_confidence": 70,
+                                "receipt_number_confidence": 70,
+                                "date_confidence": 70,
+                            },
+                            "items": data,
+                        }
+                    else:
+                        data = {"header": {}, "items": []}
+
+                if "header" not in data or "items" not in data:
+                    raise ValueError("Invalid response structure — missing header or items")
+
+                _normalize_data_confidences(data)
+
+                accuracy = calculate_accuracy(data.get("items", []))
+                cost_inr = calculate_cost_inr(input_tokens, output_tokens, model_name)
+
+                print(
+                    f"[MAX-ACC SUCCESS] {filename} | model={model_name} | accuracy={accuracy:.2f}% | cost=₹{cost_inr:.4f}",
+                    flush=True,
+                )
+                logger.info(
+                    f"[MAX-ACC] ✓ {filename} | accuracy={accuracy:.2f}% | "
+                    f"items={len(data.get('items', []))} | cost=₹{cost_inr:.4f}"
+                )
+
+                # Arithmetic double-check: compute sum of item amounts vs stated total
+                items = data.get("items", [])
+                computed_sum = sum(float(it.get("amount", 0) or 0) for it in items)
+                stated_total = float(data.get("header", {}).get("total_bill_amount", 0) or 0)
+                arithmetic_gap = abs(computed_sum - stated_total) if stated_total > 0 else 0
+
+                print(
+                    f"[MAX-ACC CHECK] computed_sum=₹{computed_sum:.0f} vs stated_total=₹{stated_total:.0f} | gap=₹{arithmetic_gap:.0f}",
+                    flush=True,
+                )
+                if arithmetic_gap > 0:
+                    logger.info(f"[MAX-ACC] Arithmetic gap: ₹{arithmetic_gap:.0f}")
+
+                candidate = {
+                    "data": data,
+                    "model_used": model_name,
+                    "model_accuracy": round(accuracy, 2),
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                    "cost_inr": cost_inr,
+                    "arithmetic_gap": arithmetic_gap,
+                }
+
+                # In double-check mode: keep the candidate with the smallest arithmetic gap
+                # (most internally consistent with the bill total)
+                if best_result is None or arithmetic_gap < best_result.get("arithmetic_gap", float("inf")):
+                    best_result = candidate
+                    best_accuracy = accuracy
+
+                break  # This run succeeded — move to next run if double_check
+
+            except json.JSONDecodeError as e:
+                logger.warning(f"[MAX-ACC] JSON decode error attempt {attempt + 1}: {e}")
+                processing_errors.append(f"JSON error: {e}")
+                if attempt < max_retries - 1:
+                    # Flat 0.5s sleep for JSON errors (not exponential) — model issues
+                    # don't benefit from long waits, just retry quickly
+                    time.sleep(0.5)
+            except Exception as e:
+                logger.error(f"[MAX-ACC] Error attempt {attempt + 1}: {e}")
+                processing_errors.append(str(e))
+                if _is_quota_exhausted(e):
+                    logger.error(f"[MAX-ACC] Quota exhausted for {model_name} — aborting max-accuracy path")
+                    break
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+
+    # Assemble final result
+    if best_result:
+        data = best_result["data"]
+        data["receipt_link"]       = receipt_link
+        data["upload_date"]        = get_ist_now_str()
+        data["model_used"]         = best_result["model_used"]
+        data["model_accuracy"]     = best_result["model_accuracy"]
+        data["input_tokens"]       = best_result["input_tokens"]
+        data["output_tokens"]      = best_result["output_tokens"]
+        data["total_tokens"]       = best_result["total_tokens"]
+        data["cost_inr"]           = best_result["cost_inr"]
+        data["fallback_attempted"] = False
+        data["fallback_reason"]    = None
+        data["processing_errors"]  = " | ".join(processing_errors) if processing_errors else None
+        if double_check:
+            data["double_checked"] = True
+            data["arithmetic_gap"] = best_result.get("arithmetic_gap", 0)
+        return data
+
+    logger.error(f"[MAX-ACC] All attempts failed for {filename}")
+    return None
 
 
 def process_single_invoice(
@@ -373,6 +635,33 @@ def process_single_invoice(
             return None
     
     logger.debug(f"Loaded prompt for user {username}, length: {len(system_instruction)}")
+
+    # ── Per-user model configuration ─────────────────────────────────────────
+    # Users can override model, temperature, and accuracy mode in their config JSON.
+    # accuracy_mode=maximum: skip free-key and lite cascade → go straight to preferred model.
+    _user_cfg = get_user_config(username) or {}
+    _model_cfg = _user_cfg.get("gemini_model_config", {})
+    _accuracy_mode       = _model_cfg.get("accuracy_mode", "standard")        # "maximum" | "standard"
+    _preferred_model     = _model_cfg.get("preferred_model", None)             # e.g. "gemini-2.5-pro"
+    _skip_free_key       = _model_cfg.get("skip_free_key", False)
+    _skip_lite_model     = _model_cfg.get("skip_lite_model", False)
+    _user_temperature    = float(_model_cfg.get("temperature", 0.1))
+    _user_max_tokens     = int(_model_cfg.get("max_output_tokens", 8192))
+    _user_max_retries    = int(_model_cfg.get("max_retries", MAX_RETRIES))
+    _double_check        = _model_cfg.get("double_check", False)
+
+    _is_max_accuracy = (_accuracy_mode == "maximum")
+
+    if _is_max_accuracy and _preferred_model:
+        logger.info(
+            f"[ACCURACY-MODE] User '{username}' has accuracy_mode=maximum — "
+            f"skipping free-key/lite cascade, using model: {_preferred_model} "
+            f"(temp={_user_temperature}, max_tokens={_user_max_tokens}, retries={_user_max_retries})"
+        )
+        print(
+            f"[ACCURACY-MODE] {username}: going straight to {_preferred_model} (max accuracy)",
+            flush=True
+        )
     
     # Load image directly from bytes — no temp file disk I/O needed
     try:
@@ -383,6 +672,88 @@ def process_single_invoice(
         print(f">>> PROCESSING IMAGE: {filename}", flush=True)
         print(f"{'='*80}\n", flush=True)
         logger.info(f"Processing image: {filename}")
+        
+        # ── MAXIMUM ACCURACY PATH ────────────────────────────────────────────
+        # When accuracy_mode=maximum is set for this user, skip free-key/lite
+        # and go directly to the preferred model (e.g. gemini-2.5-pro).
+        if _is_max_accuracy and _preferred_model:
+            max_acc_result = _process_with_max_accuracy(
+                client=None,  # unused — calls generate_content_robust internally
+                img=img,
+                filename=filename,
+                receipt_link=receipt_link,
+                system_instruction=system_instruction,
+                model_name=_preferred_model,
+                temperature=_user_temperature,
+                max_output_tokens=_user_max_tokens,
+                max_retries=_user_max_retries,
+                double_check=_double_check,
+            )
+            return max_acc_result
+
+        # ── STANDARD PATH: Try Free Key first since user has few users right now ──
+        free_key = get_free_google_api_key()
+        if free_key and not _skip_free_key:
+            try:
+                logger.info(f"[FREE-FIRST] Trying Free Key first with model {FREE_MODEL}...")
+                free_client = genai.Client(api_key=free_key)
+                free_config = types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                    max_output_tokens=8192
+                )
+                limiter.wait()
+                free_resp = free_client.models.generate_content(
+                    model=FREE_MODEL,
+                    contents=[img, "Extract bill data."],
+                    config=free_config
+                )
+                free_text = free_resp.text.strip()
+                if free_text.startswith("```json"): free_text = free_text[7:]
+                if free_text.startswith("```"): free_text = free_text[3:]
+                if free_text.endswith("```"): free_text = free_text[:-3]
+                free_text = free_text.strip()
+                
+                free_data = json.loads(free_text)
+                if not isinstance(free_data, dict):
+                    if isinstance(free_data, list):
+                        free_data = {"header": {"invoice_type": "Printed", "overall_confidence": 70,
+                                                  "receipt_number_confidence": 70, "date_confidence": 70},
+                                     "items": free_data}
+                    else:
+                        free_data = {"header": {}, "items": []}
+                
+                _normalize_data_confidences(free_data)
+                
+                if "header" in free_data and "items" in free_data:
+                    free_acc = calculate_accuracy(free_data.get("items", []))
+                    free_usage = free_resp.usage_metadata
+                    free_in  = getattr(free_usage, 'prompt_token_count', 0) if free_usage else 0
+                    free_out = getattr(free_usage, 'candidates_token_count', 0) if free_usage else 0
+                    
+                    free_data["receipt_link"] = receipt_link
+                    free_data["upload_date"] = get_ist_now_str()
+                    free_data["model_used"] = FREE_MODEL
+                    free_data["model_accuracy"] = round(free_acc, 2)
+                    free_data["input_tokens"] = free_in
+                    free_data["output_tokens"] = free_out
+                    free_data["total_tokens"] = free_in + free_out
+                    free_data["cost_inr"] = 0.0
+                    free_data["fallback_attempted"] = False
+                    logger.info(f"✓ [FREE-FIRST SUCCESS] processed via {FREE_MODEL} | Accuracy: {free_acc:.2f}%")
+                    return free_data
+            except Exception as e:
+                err_msg = str(e).lower()
+                is_quota = (
+                    "resource_exhausted" in err_msg
+                    or "429" in err_msg
+                    or "prepayment credits are depleted" in err_msg
+                    or "quota" in err_msg
+                )
+                if not is_quota:
+                    raise
+                logger.warning(f"Free API key rate limited or exhausted: {e}. Falling back to Paid Key cascade.")
         
         # 2-tier cascade: Flash → Pro (Lite removed)
         # Each tier gets its own full retry cycle.
@@ -400,13 +771,20 @@ def process_single_invoice(
         # Track whether ALL paid models failed due to quota exhaustion
         quota_exhausted_count = 0
 
+        # Build model cascade list — skip lite if per-user config says so
+        # Full 3-tier cascade: Lite → Flash → Pro (all via Vertex AI, API key fallback)
+        if _skip_lite_model:
+            _cascade_models = [FLASH_MODEL, PRO_MODEL]
+        else:
+            _cascade_models = [LITE_MODEL, FLASH_MODEL, PRO_MODEL]
+        _final_model = _cascade_models[-1]  # used to detect when we're on the last tier
+
         # Each model gets its own full retry cycle via the outer loop.
-        for model_attempt in [LITE_MODEL, FLASH_MODEL]:
+        for model_attempt in _cascade_models:
             model_name = model_attempt
 
-            # Lite always runs first (no escalation needed to start it).
-            # Flash only runs if Lite triggered an escalation.
-            if model_name == FLASH_MODEL and not needs_escalation:
+            # First model always runs. Subsequent models only run if escalation was triggered.
+            if model_name != _cascade_models[0] and not needs_escalation and not _skip_lite_model:
                 continue
             needs_escalation = False  # Reset for this tier
 
@@ -438,11 +816,12 @@ def process_single_invoice(
                         max_output_tokens=8192
                     )
                     
-                    # Call API
-                    response = client.models.generate_content(
+                    # Call API — Vertex AI first, API key fallback automatic
+                    response = generate_content_robust(
                         model=model_name,
                         contents=[img, "Extract bill data."],
-                        config=config
+                        config=config,
+                        use_free_key=False,
                     )
                     
                     # Extract token usage from response metadata
@@ -543,7 +922,7 @@ def process_single_invoice(
                     
                     # Check if we need to escalate to the next tier
                     # (only relevant when we are NOT already on the final tier)
-                    if model_name != FLASH_MODEL:
+                    if model_name != _final_model:
                         escalation_reason_temp = ""
 
                         # Escalation triggers:
@@ -615,7 +994,7 @@ def process_single_invoice(
                         logger.error(f"❌ {model_name} failed after {current_max_retries} attempts")
                         
                         # Trigger escalation if not already on the final tier
-                        if model_name != FLASH_MODEL:
+                        if model_name != _final_model:
                             needs_escalation = True
                             fallback_reason = f"{model_name} JSON parsing failed after all retries"
                             logger.info(f"Escalating from {model_name} due to repeated parsing failures.")
@@ -635,7 +1014,7 @@ def process_single_invoice(
                             logger.warning(f"⚠️ Quota exhausted for {model_name} (count={quota_exhausted_count})")
 
                         # Trigger escalation if not already on the final tier
-                        if model_name != FLASH_MODEL:
+                        if model_name != _final_model:
                             needs_escalation = True
                             err_msg = str(e)
                             fallback_reason = f"{model_name} experienced repeated exceptions: {err_msg[0:100]}"
@@ -671,9 +1050,9 @@ def process_single_invoice(
             )
             print(f"[QUOTA-FALLBACK] Trying free model: {FREE_MODEL}", flush=True)
 
-            # Use a SEPARATE client with the free-tier API key (different Google project)
+            # Use free-tier API key — routed through generate_content_robust with use_free_key=True
             free_api_key = get_free_google_api_key()
-            free_client = genai.Client(api_key=free_api_key) if free_api_key else client
+            free_client = None  # not used directly; generate_content_robust handles free key
             if free_api_key and free_api_key != get_google_api_key():
                 logger.info("Using dedicated free-tier API key for fallback")
             else:
@@ -691,10 +1070,11 @@ def process_single_invoice(
                 try:
                     print(f"[FREE-MODEL ATTEMPT {free_attempt + 1}/{FREE_MAX_RETRIES}]", flush=True)
                     logger.info(f"Free model attempt {free_attempt + 1}/{FREE_MAX_RETRIES}")
-                    free_response = free_client.models.generate_content(
+                    free_response = generate_content_robust(
                         model=FREE_MODEL,
                         contents=[img, "Extract bill data."],
-                        config=free_config
+                        config=free_config,
+                        use_free_key=True,
                     )
                     free_text = free_response.text.strip()
                     if free_text.startswith("```json"):
