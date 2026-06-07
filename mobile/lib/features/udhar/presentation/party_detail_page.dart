@@ -2586,13 +2586,27 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       if (tx != null) {
         // ── Authoritative payment amounts from ledger ──────────────────────
         final double txTotal = tx.amount;
-        final double txPaid = tx.receivedAmount ?? (
-          (_transactions ?? [])
-              .where((t) =>
-                  t.transactionType == 'PAYMENT' &&
-                  t.receiptNumber == tx.receiptNumber)
-              .fold(0.0, (s, t) => s + t.amount)
-        );
+
+        // Sum ALL payments on this customer ledger — not just ones tagged with
+        // this receipt number. Standalone "Record Payment" entries get their own
+        // sequential receipt numbers and would be missed by a receipt_number filter.
+        final allTxs = _transactions ?? [];
+        final totalPaidOnLedger = allTxs
+            .where((t) => t.transactionType == 'PAYMENT')
+            .fold(0.0, (s, t) => s + t.amount);
+        final totalBilledOnLedger = allTxs
+            .where((t) => t.transactionType == 'INVOICE' || t.transactionType == 'MANUAL_CREDIT')
+            .fold(0.0, (s, t) => s + t.amount);
+
+        // Proportionally attribute payments to this specific receipt's share
+        final double txPaid;
+        if (totalBilledOnLedger > 0 && totalPaidOnLedger > 0) {
+          final receiptShare = txTotal / totalBilledOnLedger;
+          txPaid = (totalPaidOnLedger * receiptShare).clamp(0.0, txTotal);
+        } else {
+          // Fallback: use receivedAmount stored on the transaction itself
+          txPaid = tx.receivedAmount ?? 0.0;
+        }
         final double txBalance = (txTotal - txPaid).clamp(0.0, double.infinity);
         final String txStatus = txBalance <= 0
             ? 'PAID'

@@ -375,6 +375,8 @@ async def get_public_receipt(
         # ── Line items ────────────────────────────────────────────────────────────
         items = []
         total_from_items = 0.0
+        ledger_total_billed = 0.0
+        ledger_total_paid = 0.0
 
         if source_table == "verification_dates":
             items_query = db.client.from_("verification_amounts") \
@@ -475,8 +477,103 @@ async def get_public_receipt(
                 ledger_total_billed = 0.0
                 ledger_total_paid = 0.0
 
-        # ── Final Response ────────────────────────────────────────────────────────
+        # ── Cumulative payment lookup for individual receipts ─────────────────────
+        # For receipts (non-ledger), the stored received_amount/balance_due may be
+        # stale — it only reflects the payment made at the time of billing.
+        #
+        # Strategy:
+        # 1. Find the ledger_id for the INVOICE transaction linked to this receipt_number.
+        # 2. Sum ALL PAYMENT transactions on that customer ledger.
+        # 3. Find the INVOICE total from ledger_transactions to get the bill total.
+        # This correctly captures standalone "Record Payment" entries that get their
+        # own sequential receipt numbers (not linked to original receipt_number).
+        cumulative_received = None
+        cumulative_balance_due = None
         is_ledger = source_table == "customer_ledgers"
+
+        if not is_ledger and username:
+            try:
+                # Step 1: Find the INVOICE transaction for this receipt to get ledger_id + amount
+                invoice_tx_resp = db.client.from_("ledger_transactions") \
+                    .select("ledger_id, amount, transaction_type") \
+                    .eq("receipt_number", receipt_number) \
+                    .eq("username", username) \
+                    .execute()
+
+                ledger_id_for_receipt = None
+                invoice_amount_from_ledger = 0.0
+
+                if invoice_tx_resp.data:
+                    for tx in invoice_tx_resp.data:
+                        ttype = tx.get("transaction_type", "").upper()
+                        if ttype == "INVOICE":
+                            ledger_id_for_receipt = tx.get("ledger_id")
+                            invoice_amount_from_ledger = float(tx.get("amount") or 0)
+                        elif ttype == "PAYMENT" and ledger_id_for_receipt is None:
+                            # Some old receipts only have a PAYMENT row — still grab ledger_id
+                            ledger_id_for_receipt = tx.get("ledger_id")
+
+                if ledger_id_for_receipt:
+                    # Step 2: Sum ALL payments on this customer ledger (captures standalone payments too)
+                    all_pay_resp = db.client.from_("ledger_transactions") \
+                        .select("amount, transaction_type") \
+                        .eq("ledger_id", ledger_id_for_receipt) \
+                        .eq("username", username) \
+                        .execute()
+
+                    if all_pay_resp.data:
+                        _payment_types = {"PAYMENT"}
+                        _invoice_types = {"INVOICE", "MANUAL_CREDIT"}
+                        total_paid_on_ledger = sum(
+                            float(tx.get("amount", 0))
+                            for tx in all_pay_resp.data
+                            if tx.get("transaction_type", "").upper() in _payment_types
+                        )
+                        total_billed_on_ledger = sum(
+                            float(tx.get("amount", 0))
+                            for tx in all_pay_resp.data
+                            if tx.get("transaction_type", "").upper() in _invoice_types
+                        )
+                        # Clamp: can't pay more than the total billed across all invoices
+                        # and distribute proportionally to this receipt's share
+                        _bill_total = total_from_items if total_from_items > 0 else (
+                            invoice_amount_from_ledger if invoice_amount_from_ledger > 0 else
+                            float(header.get("received_amount") or 0) + float(header.get("balance_due") or 0)
+                        )
+                        if _bill_total > 0 and total_billed_on_ledger > 0:
+                            # How much of the total payments applies to this specific receipt?
+                            receipt_share = _bill_total / total_billed_on_ledger
+                            cumulative_received = min(_bill_total, total_paid_on_ledger * receipt_share)
+                            cumulative_balance_due = max(0.0, _bill_total - cumulative_received)
+
+                else:
+                    # No ledger transaction found — fall back to simple receipt_number query
+                    pay_query = db.client.from_("ledger_transactions") \
+                        .select("amount, transaction_type") \
+                        .eq("receipt_number", receipt_number) \
+                        .eq("username", username)
+                    pay_resp = pay_query.execute()
+                    if pay_resp.data:
+                        _payment_types = {"PAYMENT"}
+                        cumulative_received = sum(
+                            float(tx.get("amount", 0))
+                            for tx in pay_resp.data
+                            if tx.get("transaction_type", "").upper() in _payment_types
+                        )
+                        _bill_total = total_from_items if total_from_items > 0 else float(header.get("received_amount") or 0) + float(header.get("balance_due") or 0)
+                        if _bill_total > 0:
+                            cumulative_balance_due = max(0.0, _bill_total - cumulative_received)
+
+            except Exception as e:
+                logger.warning(f"Could not fetch cumulative payments for receipt {receipt_number}: {e}")
+                cumulative_received = None
+                cumulative_balance_due = None
+
+        # Use cumulative values if we got them, else fall back to stored values
+        final_received = cumulative_received if cumulative_received is not None else (header.get("received_amount") if not is_ledger else None)
+        final_balance_due = cumulative_balance_due if cumulative_balance_due is not None else header.get("balance_due")
+
+        # ── Final Response ────────────────────────────────────────────────────────
         return {
             "id": receipt_number,
             "type": "ledger" if is_ledger else "receipt",
@@ -496,13 +593,12 @@ async def get_public_receipt(
             "status": "PAID" if is_paid else "UNPAID",
             "items": items,
             "total_amount": total_from_items,
-            # For individual receipts: use the stored received_amount.
-            # For ledger account statements: expose total_billed / total_paid
-            # so the receipt.html can render the Billed / Paid / Due summary.
-            "received_amount": header.get("received_amount") if not is_ledger else None,
+            # received_amount: cumulative total paid across all installments
+            # total_billed / total_paid: only for ledger account statements
+            "received_amount": final_received if not is_ledger else None,
             "total_billed": ledger_total_billed if is_ledger else None,
             "total_paid": ledger_total_paid if is_ledger else None,
-            "balance_due": header.get("balance_due"),
+            "balance_due": final_balance_due,
             "industry": header.get("industry") or "general",
             "gst_mode": header.get("gst_mode") or "none",
             "receipt_link": header.get("receipt_link") or "",

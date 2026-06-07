@@ -777,7 +777,7 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 // Bill To
                 pw.Expanded(
@@ -894,7 +894,7 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 // Left: automobile parts/labour breakdown (or empty spacer)
                 pw.Expanded(
@@ -1024,7 +1024,7 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Expanded(
                   child: pw.Container(
