@@ -1995,18 +1995,17 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         size: 15,
                                       ),
                                     ),
-                                  if (!txIsManual || txHasImage)
-                                    const ButtonSegment<String>(
-                                      value: 'accountStatement',
-                                      label: Text(
-                                        'Account Statement',
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                      icon: Icon(
-                                        LucideIcons.fileText,
-                                        size: 15,
-                                      ),
+                                  const ButtonSegment<String>(
+                                    value: 'accountStatement',
+                                    label: Text(
+                                      'Account Statement',
+                                      style: TextStyle(fontSize: 12),
                                     ),
+                                    icon: Icon(
+                                      LucideIcons.fileText,
+                                      size: 15,
+                                    ),
+                                  ),
                                 ];
 
                                 // Ensure current shareMode is valid for this tx
@@ -2338,7 +2337,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // ── Share as PDF button (only for Account Statement / Manual Bill) ──
                         if (shareMode != 'receiptPhoto')
                         SizedBox(
                           width: double.infinity,
@@ -2663,26 +2661,94 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           documentType: tx.isManualEntry ? 'bill' : 'order',
         );
       } else {
-        // No specific tx selected — generate a full account-statement PDF
-        final ledgerItems = (_transactions ?? []).map((t) {
+        // No specific tx selected — generate a full account-statement PDF.
+        // For INVOICE transactions, expand their line items so the customer
+        // can see exactly what they were charged for (critical for SMB trust).
+        final allTxs = _transactions ?? [];
+        final repo = ref.read(verifiedRepositoryProvider);
+
+        final ledgerItems = <Map<String, dynamic>>[];
+
+        for (final t in allTxs) {
           final isPayment = t.transactionType == 'PAYMENT';
-          String name;
-          if (t.transactionType == 'INVOICE' && (t.receiptNumber ?? '').isNotEmpty) {
-            name = 'Invoice #${t.receiptNumber}';
+
+          if (!isPayment && t.transactionType == 'INVOICE' &&
+              (t.receiptNumber ?? '').isNotEmpty) {
+            // ── Try to get line items for this invoice ──────────────────────
+            List<Map<String, dynamic>> invoiceLineItems = [];
+
+            // 1. Check if items are stored directly on the transaction
+            if (t.items.isNotEmpty) {
+              invoiceLineItems = t.items;
+            } else {
+              // 2. Fall back to verified_invoices API
+              try {
+                final records = await repo.getVerifiedInvoices(
+                  receiptNumber: t.receiptNumber,
+                );
+                if (records.isNotEmpty) {
+                  invoiceLineItems = records.map((r) => <String, dynamic>{
+                    'name': r.description.isNotEmpty ? r.description : 'Item',
+                    'qty': r.quantity,
+                    'rate': r.rate,
+                    'amount': r.amount,
+                    'type': r.type.toLowerCase(),
+                  }).toList();
+                }
+              } catch (_) {
+                // API fetch failed — fall through to summary row
+              }
+            }
+
+            if (invoiceLineItems.isNotEmpty) {
+              // Add a header row for this invoice
+              ledgerItems.add({
+                'name': 'Invoice #${t.receiptNumber} — ${DateFormat("dd MMM yyyy").format(t.createdAt.toLocal())}',
+                'qty': 0.0,
+                'rate': 0.0,
+                'amount': t.amount,
+                'type': 'invoice_header',
+                'date': t.createdAt.toIso8601String(),
+              });
+              // Expand each line item under this invoice
+              for (final item in invoiceLineItems) {
+                ledgerItems.add({
+                  'name': '  • ${item['name'] ?? 'Item'}',
+                  'qty': item['qty'] ?? 1.0,
+                  'rate': item['rate'] ?? 0.0,
+                  'amount': item['amount'] ?? 0.0,
+                  'type': 'invoice_item',
+                  'date': t.createdAt.toIso8601String(),
+                });
+              }
+            } else {
+              // No line items available — show summary row
+              ledgerItems.add({
+                'name': 'Invoice #${t.receiptNumber}',
+                'qty': 1.0,
+                'rate': t.amount,
+                'amount': t.amount,
+                'type': t.transactionType.toLowerCase(),
+                'date': t.createdAt.toIso8601String(),
+              });
+            }
           } else {
-            name = t.transactionType.replaceAll('_', ' ').toLowerCase().split(' ')
-                .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
-                .join(' ');
+            // Payment or other transaction type — show as summary
+            final name = isPayment
+                ? 'Payment Received'
+                : t.transactionType.replaceAll('_', ' ').toLowerCase().split(' ')
+                    .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
+                    .join(' ');
+            ledgerItems.add({
+              'name': name,
+              'qty': 1.0,
+              'rate': isPayment ? 0.0 : t.amount,
+              'amount': t.amount,
+              'type': t.transactionType.toLowerCase(),
+              'date': t.createdAt.toIso8601String(),
+            });
           }
-          return {
-            'name': name,
-            'qty': 1.0,
-            'rate': isPayment ? 0.0 : t.amount,
-            'amount': t.amount,
-            'type': t.transactionType.toLowerCase(),
-            'date': t.createdAt.toIso8601String(),
-          };
-        }).toList();
+        }
 
         invoiceData = InvoicePdfGenerator.fromLocalTransaction(
           shopName: shopName,

@@ -110,6 +110,7 @@ new_css = """/* ─────────────────────�
             padding: 8px;
             color: #334155;
             border-right: 1px solid var(--border-strong);
+            border-bottom: 1px solid var(--border-strong);
             vertical-align: top;
         }
 
@@ -302,7 +303,7 @@ new_os = """function renderOrderSummary(data) {
             itemsHtml += `
             <tr>
                <td></td>
-               <td style="font-weight:700;">Total</td>
+               <td class="right" style="font-weight:700;">Total</td>
                <td class="center" style="font-weight:700;">${totalQty}</td>
                <td></td>
                <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
@@ -503,7 +504,7 @@ new_os = """function renderGstInvoice(data, gstMode) {
             itemsHtml += `
             <tr>
                <td></td>
-               <td style="font-weight:700;">Total</td>
+               <td class="right" style="font-weight:700;">Total</td>
                <td class="center" style="font-weight:700;">${totalQty}</td>
                <td></td>
                <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>

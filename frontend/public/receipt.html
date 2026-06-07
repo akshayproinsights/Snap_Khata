@@ -816,8 +816,18 @@
         const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
         const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
 
-        const fmtMoney = v => '₹\u00a0' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const fmtQty   = v => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmtMoney = v => {
+            const num = Number(v || 0);
+            return '₹\u00a0' + (num % 1 === 0 
+                ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
+                : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        };
+        const fmtQty   = v => {
+            const num = Number(v || 0);
+            return num % 1 === 0 
+                ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
+                : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
         const fmtDate  = raw => {
             if (!raw) return '—';
             try {
