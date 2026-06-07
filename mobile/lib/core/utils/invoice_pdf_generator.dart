@@ -26,7 +26,7 @@ class InvoiceData {
   final double? balanceDue;
   final String gstMode; // 'none' | 'included' | 'excluded'
   final String industry; // 'automobile' | 'general' etc.
-  final String documentType; // 'order' | 'ledger'
+  final String documentType; // 'order' | 'ledger' | 'bill'
   final String? customTerms; // optional custom terms text
   final String? shopLogoUrl; // optional logo (not used in PDF directly)
 
@@ -86,12 +86,20 @@ class InvoicePdfGenerator {
   static pw.Font? _cachedRegular;
   static pw.Font? _cachedBold;
   static pw.Font? _cachedSemiBold;
+  // Devanagari fallback fonts (Marathi / Hindi support)
+  static pw.Font? _cachedDevanagariRegular;
+  static pw.Font? _cachedDevanagariBold;
+  static pw.Font? _cachedDevanagariMedium;
 
   static Future<void> _ensureFonts() async {
-    // Only download once per app session — NotoSans fonts are 4–10 MB each
-    _cachedRegular ??= await PdfGoogleFonts.notoSansRegular();
-    _cachedBold    ??= await PdfGoogleFonts.notoSansBold();
+    // Primary: NotoSans (Latin, numbers, ₹ symbol)
+    _cachedRegular  ??= await PdfGoogleFonts.notoSansRegular();
+    _cachedBold     ??= await PdfGoogleFonts.notoSansBold();
     _cachedSemiBold ??= await PdfGoogleFonts.notoSansMedium();
+    // Fallback: NotoSansDevanagari (Marathi, Hindi — Devanagari script)
+    _cachedDevanagariRegular ??= await PdfGoogleFonts.notoSansDevanagariRegular();
+    _cachedDevanagariBold    ??= await PdfGoogleFonts.notoSansDevanagariBold();
+    _cachedDevanagariMedium  ??= await PdfGoogleFonts.notoSansDevanagariMedium();
   }
 
   // ── Color palette ─────────────────────────────────────────────────────
@@ -216,7 +224,12 @@ class InvoicePdfGenerator {
       creator: 'SnapKhata',
     );
 
-    final theme = pw.ThemeData.withFont(base: regular, bold: bold);
+    final theme = pw.ThemeData.withFont(
+      base: regular,
+      bold: bold,
+      // Allow Devanagari glyphs (Marathi/Hindi) to render correctly in all text
+      fontFallback: [_cachedDevanagariRegular!, _cachedDevanagariBold!],
+    );
 
     // ── Compute financials ────────────────────────────────────────────────
     final items       = data.items;
@@ -268,15 +281,24 @@ class InvoicePdfGenerator {
     final wordsTotal    = _numberToWords(grandTotal.round());
     final docTitle      = isGst
         ? 'Tax Invoice'
-        : (data.documentType == 'ledger' ? 'Account Statement' : 'Order Details');
+        : (data.documentType == 'ledger'
+            ? 'Account Statement'
+            : 'Order Details');
 
     // ── Column widths for items table ─────────────────────────────────────
-    final headers = isGst
-        ? ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'GST (₹)', 'Amount (₹)']
-        : ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
-    final widths  = isGst
-        ? [0.05, 0.33, 0.10, 0.17, 0.17, 0.18]
-        : [0.05, 0.45, 0.10, 0.20, 0.20];
+    final isLedger = data.documentType == 'ledger';
+    final List<String> headers;
+    final List<double> widths;
+    if (isLedger) {
+      headers = ['#', 'Description', 'Type', 'Amount (₹)'];
+      widths  = [0.06, 0.52, 0.18, 0.24];
+    } else if (isGst) {
+      headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'GST (₹)', 'Amount (₹)'];
+      widths  = [0.05, 0.33, 0.10, 0.17, 0.17, 0.18];
+    } else {
+      headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
+      widths  = [0.05, 0.45, 0.10, 0.20, 0.20];
+    }
     final columnWidths = <int, pw.TableColumnWidth>{};
     for (var i = 0; i < widths.length; i++) {
       columnWidths[i] = pw.FlexColumnWidth(widths[i]);
@@ -326,69 +348,108 @@ class InvoicePdfGenerator {
       for (var i = 0; i < rowItems.length; i++) {
         final item    = rowItems[i];
         final srNo    = items.indexOf(item) + 1;
-        final qty     = item.qty;
-        final baseAmt = isGst && data.gstMode == 'included'
-            ? item.amount * 100 / 118
-            : item.amount;
-        final baseRate = item.rate > 0
-            ? (isGst && data.gstMode == 'included' ? item.rate * 100 / 118 : item.rate)
-            : baseAmt / (qty > 0 ? qty : 1);
-        final itemGst   = item.isLabor ? 0.0 : baseAmt * 0.18;
-        final itemTotal = isGst ? (item.isLabor ? baseAmt : baseAmt + itemGst) : item.amount;
 
-        tableRows.add(pw.TableRow(
-          decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: pw.Text(
-                '$srNo',
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+        if (isLedger) {
+          // ── Ledger row: #  |  Description  |  Type badge  |  Amount ──────
+          final isPayment = item.type.toLowerCase() == 'payment';
+          final typeLabel = isPayment ? 'PAYMENT' : 'INVOICE';
+          final typeColor = isPayment ? _green : _red;
+          final typeBg    = isPayment
+              ? PdfColor.fromInt(0xFFdcfce7)
+              : PdfColor.fromInt(0xFFfee2e2);
+          tableRows.add(pw.TableRow(
+            decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text('$srNo',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
               ),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: pw.Text(
-                item.name,
-                style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(item.name,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _darkSlate)),
               ),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: pw.Text(
-                _fmtQty(qty),
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: pw.BoxDecoration(
+                    color: typeBg,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                  ),
+                  child: pw.Text(typeLabel,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(font: bold, fontSize: 7, color: typeColor)),
+                ),
               ),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: pw.Text(
-                _fmtMoney(baseRate),
-                textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
-              ),
-            ),
-            if (isGst)
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 child: pw.Text(
-                  item.isLabor ? '—' : '${_fmtMoney(itemGst)} (18%)',
+                  isPayment ? '− ${_fmtMoney(item.amount)}' : _fmtMoney(item.amount),
                   textAlign: pw.TextAlign.right,
-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+                  style: pw.TextStyle(
+                    font: regular, fontSize: 7.5,
+                    color: isPayment ? _green : _darkSlate)),
+              ),
+            ],
+          ));
+        } else {
+          // ── Standard invoice row ──────────────────────────────────────────
+          final qty     = item.qty;
+          final baseAmt = isGst && data.gstMode == 'included'
+              ? item.amount * 100 / 118
+              : item.amount;
+          final baseRate = item.rate > 0
+              ? (isGst && data.gstMode == 'included' ? item.rate * 100 / 118 : item.rate)
+              : baseAmt / (qty > 0 ? qty : 1);
+          final itemGst   = item.isLabor ? 0.0 : baseAmt * 0.18;
+          final itemTotal = isGst ? (item.isLabor ? baseAmt : baseAmt + itemGst) : item.amount;
+
+          tableRows.add(pw.TableRow(
+            decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text('$srNo',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(item.name,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(_fmtQty(qty),
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(_fmtMoney(baseRate),
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+              ),
+              if (isGst)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: pw.Text(
+                    item.isLabor ? '—' : '${_fmtMoney(itemGst)} (18%)',
+                    textAlign: pw.TextAlign.right,
+                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
                 ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: pw.Text(_fmtMoney(itemTotal),
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
               ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: pw.Text(
-                _fmtMoney(itemTotal),
-                textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
-              ),
-            ),
-          ],
-        ));
+            ],
+          ));
+        }
       }
     }
 
@@ -403,58 +464,92 @@ class InvoicePdfGenerator {
       addItemRows(items);
     }
 
-    // Total row
+    // Total / summary row at the bottom of the table
     if (items.isNotEmpty) {
-      final totalQty = items.fold<double>(0, (s, i) => s + i.qty);
-      tableRows.add(pw.TableRow(
-        decoration: const pw.BoxDecoration(
-          color: _lightGray,
-          border: pw.Border(top: pw.BorderSide(color: _darkSlate, width: 1.0)),
-        ),
-        children: [
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: pw.SizedBox(),
+      if (isLedger) {
+        // Ledger: show Total Billed | — | Net Balance in a 4-col footer
+        final totalBilled = items.fold<double>(0, (s, item) =>
+            item.type.toLowerCase() == 'payment' ? s : s + item.amount);
+        tableRows.add(pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            color: _lightGray,
+            border: pw.Border(top: pw.BorderSide(color: _darkSlate, width: 1.0)),
           ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: pw.Text(
-              'Total',
-              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.SizedBox(),
             ),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: pw.Text(
-              _fmtQty(totalQty),
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.Text('Total Billed',
+                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate)),
             ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.SizedBox(),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.Text(_fmtMoney(totalBilled),
+                textAlign: pw.TextAlign.right,
+                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate)),
+            ),
+          ],
+        ));
+      } else {
+        final totalQty = items.fold<double>(0, (s, i) => s + i.qty);
+        tableRows.add(pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            color: _lightGray,
+            border: pw.Border(top: pw.BorderSide(color: _darkSlate, width: 1.0)),
           ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: pw.SizedBox(),
-          ),
-          if (isGst)
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.SizedBox(),
+            ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
               child: pw.Text(
-                _fmtMoney(gstAmt),
+                'Total',
+                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.Text(
+                _fmtQty(totalQty),
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.SizedBox(),
+            ),
+            if (isGst)
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                child: pw.Text(
+                  _fmtMoney(gstAmt),
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+                ),
+              ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: pw.Text(
+                _fmtMoney(grandTotal),
                 textAlign: pw.TextAlign.right,
                 style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
               ),
             ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: pw.Text(
-              _fmtMoney(grandTotal),
-              textAlign: pw.TextAlign.right,
-              style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
-            ),
-          ),
-        ],
-      ));
+          ],
+        ));
+      }
     }
+
 
     // ── Assemble all MultiPage widgets ────────────────────────────────────
     // KEY FIX: Each section is a top-level widget in MultiPage.build list.
@@ -487,7 +582,7 @@ class InvoicePdfGenerator {
           ),
           pw.SizedBox(height: 8),
 
-          // ── Shop header ──────────────────────────────────────────────
+          // ── Shop header (TOP section — full 4-side border) ───────────
           pw.Container(
             width: double.infinity,
             decoration: const pw.BoxDecoration(
@@ -565,6 +660,7 @@ class InvoicePdfGenerator {
           ),
 
           // ── Bill To / Invoice Details ────────────────────────────────
+          // No top border — it's shared with the bottom of the section above
           pw.Container(
             decoration: const pw.BoxDecoration(
               border: pw.Border(
@@ -595,21 +691,21 @@ class InvoicePdfGenerator {
                           data.customerName,
                           style: pw.TextStyle(font: bold, fontSize: 10, color: _darkSlate),
                         ),
-                        if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[
+                        if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[  
                           pw.SizedBox(height: 2),
                           pw.Text(
                             'Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
                             style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                           ),
                         ],
-                        if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[
+                        if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[  
                           pw.SizedBox(height: 2),
                           pw.Text(
                             'Vehicle: ${data.vehicleNumber}',
                             style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                           ),
                         ],
-                        if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[
+                        if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[  
                           pw.SizedBox(height: 2),
                           pw.Text(
                             'Odometer: ${data.odometerReading} km',
@@ -620,10 +716,10 @@ class InvoicePdfGenerator {
                     ),
                   ),
                 ),
-                // Invoice / Order Details
+                // Invoice / Order Details (right panel, fixed width)
                 pw.SizedBox(
                   width: 170,
-                  child: pw.Container(
+                  child: pw.Padding(
                     padding: const pw.EdgeInsets.all(9),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -631,11 +727,13 @@ class InvoicePdfGenerator {
                         pw.Text(
                           isGst
                               ? 'Invoice Details:'
-                              : (data.documentType == 'ledger' ? 'Statement Info:' : 'Order Details:'),
+                              : (data.documentType == 'ledger'
+                                  ? 'Statement Info:'
+                                  : 'Order Details:'),
                           style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
                         ),
                         pw.SizedBox(height: 4),
-                        if (data.documentType != 'ledger') ...[
+                        if (data.documentType != 'ledger') ...[  
                           pw.Text(
                             'No: ${data.receiptNumber}',
                             style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
@@ -667,8 +765,6 @@ class InvoicePdfGenerator {
           ),
 
           // ── Items table (natively pageable by MultiPage) ─────────────
-          // Use pw.TableHelper.fromTextArray or a plain pw.Table wrapped in
-          // a Container with left/right/bottom border.
           pw.Container(
             decoration: const pw.BoxDecoration(
               border: pw.Border(
@@ -699,14 +795,14 @@ class InvoicePdfGenerator {
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // Left: automobile breakdown or empty
+                // Left: automobile parts/labour breakdown (or empty spacer)
                 pw.Expanded(
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(9),
                     decoration: const pw.BoxDecoration(
                       border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
                     ),
-                    child: isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0)
+                    child: isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) && !isLedger
                         ? pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
@@ -727,7 +823,7 @@ class InvoicePdfGenerator {
                         : pw.SizedBox(),
                   ),
                 ),
-                // Right: amounts
+                // Right: amounts panel
                 pw.SizedBox(
                   width: 205,
                   child: pw.Padding(
@@ -735,39 +831,55 @@ class InvoicePdfGenerator {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        if (isGst) ...[
-                          _amtRow('Total GST (18%)', _fmtMoney(gstAmt), regular: regular, semiBold: semiBold, bold: bold),
+                        if (isLedger) ...[
+                          // ── Account Statement summary ──────────────────
+                          _amtRow('Total Billed', _fmtMoney(grandTotal), isBold: true, regular: regular, semiBold: semiBold, bold: bold),
+                          if (received != null && received > 0) ...[
+                            pw.SizedBox(height: 3),
+                            _amtRow('Amount Paid', '- ${_fmtMoney(received)}', valueColor: _green, regular: regular, semiBold: semiBold, bold: bold),
+                          ],
                           pw.SizedBox(height: 3),
-                        ],
-                        _amtRow('Total', _fmtMoney(grandTotal), isBold: true, regular: regular, semiBold: semiBold, bold: bold),
-                        if (received != null && received > 0) ...[
-                          pw.SizedBox(height: 3),
-                          _amtRow('Amount Paid', '-${_fmtMoney(received)}', regular: regular, semiBold: semiBold, bold: bold),
-                        ],
-                        if (balance > 0) ...[
-                          pw.SizedBox(height: 3),
-                          _amtRow('Balance Due', _fmtMoney(balance), isBold: true, valueColor: _red, regular: regular, semiBold: semiBold, bold: bold),
-                        ],
-                        pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
-                        pw.Text(
-                          'Invoice Amount In Words :',
-                          style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
-                        ),
-                        pw.SizedBox(height: 2),
-                        pw.Text(
-                          '$wordsTotal Rupees only',
-                          style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                        ),
-                        if (received != null && received > 0) ...[
+                          _amtRow('Net Balance', _fmtMoney(balance), isBold: true, valueColor: balance > 0 ? _red : _green, regular: regular, semiBold: semiBold, bold: bold),
+                          pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+                          pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
                           pw.SizedBox(height: 2),
                           pw.Text(
-                            'Received  : ${_fmtMoney(received)}',
+                            '${_numberToWords(balance.round())} Rupees ${balance > 0 ? 'Payable' : 'Credit Balance'}',
                             style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                           ),
+                        ] else ...[
+                          // ── Standard invoice summary ───────────────────
+                          if (isGst) ...[
+                            _amtRow('Total GST (18%)', _fmtMoney(gstAmt), regular: regular, semiBold: semiBold, bold: bold),
+                            pw.SizedBox(height: 3),
+                          ],
+                          _amtRow('Total', _fmtMoney(grandTotal), isBold: true, regular: regular, semiBold: semiBold, bold: bold),
+                          if (received != null && received > 0) ...[
+                            pw.SizedBox(height: 3),
+                            _amtRow('Amount Paid', '- ${_fmtMoney(received)}', regular: regular, semiBold: semiBold, bold: bold),
+                          ],
+                          if (balance > 0) ...[
+                            pw.SizedBox(height: 3),
+                            _amtRow('Balance Due', _fmtMoney(balance), isBold: true, valueColor: _red, regular: regular, semiBold: semiBold, bold: bold),
+                          ],
+                          pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+                          pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+                          pw.SizedBox(height: 2),
                           pw.Text(
-                            'Balance   : ${_fmtMoney(balance)}',
-                            style: pw.TextStyle(font: regular, fontSize: 8, color: balance > 0 ? _red : _green),
+                            '$wordsTotal Rupees only',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                           ),
+                          if (received != null && received > 0) ...[
+                            pw.SizedBox(height: 2),
+                            pw.Text(
+                              'Received  : ${_fmtMoney(received)}',
+                              style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                            ),
+                            pw.Text(
+                              'Balance   : ${_fmtMoney(balance)}',
+                              style: pw.TextStyle(font: regular, fontSize: 8, color: balance > 0 ? _red : _green),
+                            ),
+                          ],
                         ],
                       ],
                     ),
@@ -777,7 +889,7 @@ class InvoicePdfGenerator {
             ),
           ),
 
-          // ── Terms ────────────────────────────────────────────────────
+          // ── Terms & Conditions ───────────────────────────────────────
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -881,6 +993,7 @@ class InvoicePdfGenerator {
     return doc.save();
   }
 
+
   // ── Amount row helper ─────────────────────────────────────────────────────
 
   static pw.Widget _amtRow(
@@ -950,6 +1063,7 @@ class InvoicePdfGenerator {
   static String _docTitle(InvoiceData data) {
     final isGst = data.gstMode != 'none';
     if (data.documentType == 'ledger') return 'Account Statement - ${data.customerName}';
+    if (data.documentType == 'bill') return 'Order Details #${data.receiptNumber} - ${data.customerName}';
     return isGst ? 'Tax Invoice #${data.receiptNumber}' : 'Order Details #${data.receiptNumber}';
   }
 
@@ -1020,6 +1134,7 @@ class InvoicePdfGenerator {
     String industry = 'general',
     String status = 'UNPAID',
     String? customTerms,
+    String documentType = 'order',
   }) {
     final items = rawItems.map((m) {
       return InvoiceLineItem(
@@ -1049,7 +1164,7 @@ class InvoicePdfGenerator {
       balanceDue:      balanceDue,
       gstMode:         gstMode,
       industry:        industry,
-      documentType:    'order',
+      documentType:    documentType,
       customTerms:     customTerms,
     );
   }

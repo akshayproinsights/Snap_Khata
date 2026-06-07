@@ -145,7 +145,7 @@ class LedgerTransaction {
       ledgerId: json['ledger_id'],
       transactionType: json['transaction_type'] ?? 'UNKNOWN',
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
-      receiptNumber: json['receipt_number'],
+      receiptNumber: json['receipt_number']?.toString(),
       notes: json['notes'],
       createdAt: DateTime.parse(json['created_at']),
       isPaid: json['is_paid'] ?? false,

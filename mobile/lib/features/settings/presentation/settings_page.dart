@@ -379,6 +379,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           tempGst = data['shop_gst'] as String? ?? tempGst;
           tempUpiId = data['shop_upi_id'] as String? ?? tempUpiId;
           tempShopType = data['shop_type'] as String? ?? tempShopType;
+          if (data['shop_logo_url'] != null && (data['shop_logo_url'] as String).isNotEmpty) {
+            tempLogoUrl = data['shop_logo_url'] as String;
+          }
         });
 
         if (mounted) {

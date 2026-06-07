@@ -7,6 +7,7 @@ export interface Ledger {
     id: number;
     customer_name?: string;
     vendor_name?: string;
+    customer_phone?: string;
     balance_due: number;
     last_payment_date?: string;
     updated_at: string;
@@ -19,13 +20,28 @@ export interface Ledger {
 export interface Transaction {
     id: number;
     ledger_id: number;
-    transaction_type: 'INVOICE' | 'PAYMENT';
+    transaction_type: 'INVOICE' | 'PAYMENT' | 'MANUAL_CREDIT';
     amount: number;
     receipt_number?: string;
     invoice_number?: string;
     notes?: string;
     created_at: string;
     is_paid?: boolean;
+    received_amount?: number;
+    balance_due?: number;
+    payment_mode?: string;
+    extra_fields?: {
+        items?: Array<{
+            item_name: string;
+            quantity: number;
+            rate: number;
+            amount?: number;
+            unit?: string;
+        }>;
+        is_manual_entry?: boolean;
+        order_date?: string;
+        delivery_date?: string;
+    };
 }
 
 export interface DashboardSummary {

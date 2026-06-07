@@ -2375,7 +2375,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               Navigator.pop(ctx);
                               if (!context.mounted) return;
                               await _sharePdfForTransaction(
-                                tx: capturedTx,
+                                tx: shareMode == 'accountStatement' ? null : capturedTx,
                                 ledger: ledger,
                                 shopName: shopName,
                                 shopAddress: capturedShopProfile.address
@@ -2660,9 +2660,30 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           industry: shopType,
           status: txStatus,
           customTerms: customTerms,
+          documentType: tx.isManualEntry ? 'bill' : 'order',
         );
       } else {
-        // No specific tx selected — generate a simple balance summary PDF
+        // No specific tx selected — generate a full account-statement PDF
+        final ledgerItems = (_transactions ?? []).map((t) {
+          final isPayment = t.transactionType == 'PAYMENT';
+          String name;
+          if (t.transactionType == 'INVOICE' && (t.receiptNumber ?? '').isNotEmpty) {
+            name = 'Invoice #${t.receiptNumber}';
+          } else {
+            name = t.transactionType.replaceAll('_', ' ').toLowerCase().split(' ')
+                .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
+                .join(' ');
+          }
+          return {
+            'name': name,
+            'qty': 1.0,
+            'rate': isPayment ? 0.0 : t.amount,
+            'amount': t.amount,
+            'type': t.transactionType.toLowerCase(),
+            'date': t.createdAt.toIso8601String(),
+          };
+        }).toList();
+
         invoiceData = InvoicePdfGenerator.fromLocalTransaction(
           shopName: shopName,
           shopAddress: shopAddress,
@@ -2677,9 +2698,10 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           totalAmount: _totalInvoiced,
           receivedAmount: _totalPaid > 0 ? _totalPaid : null,
           balanceDue: _computedBalance,
-          rawItems: const [],
+          rawItems: ledgerItems,
           status: _computedBalance <= 0 ? 'PAID' : 'UNPAID',
           customTerms: customTerms,
+          documentType: 'ledger',
         );
       }
 
@@ -2688,10 +2710,29 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       if (!mounted) return;
       messenger.hideCurrentSnackBar();
 
+      // Build filename: ShopName_ReceiptNo_Date.pdf
+      // Handles Marathi/Hindi Devanagari shop names by keeping Unicode letters
+      // e.g. जाधव_1586_07-Jun-2026.pdf  or  AK_Shop_1586_07-Jun-2026.pdf
+      String slugifyPdf(String s) {
+        // Strip control chars and filesystem-unsafe characters, keep Unicode letters/digits
+        final cleaned = s.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '');
+        // Collapse whitespace → underscore
+        final spaced = cleaned.replaceAll(RegExp(r'\s+'), '_');
+        // Remove leading/trailing underscores
+        final slug = spaced.replaceAll(RegExp(r'^_+|_+$'), '');
+        // If entirely empty (shouldn't happen), return 'Shop'
+        return slug.isEmpty ? 'Shop' : slug;
+      }
+
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      final txDate = invoiceData.date.toLocal();
+      final datePart = '${txDate.day.toString().padLeft(2,'0')}-${months[txDate.month-1]}-${txDate.year}';
+      final shopPart = slugifyPdf(invoiceData.shopName);
+      final receiptPart = slugifyPdf(invoiceData.receiptNumber);
       final isGst = invoiceData.gstMode != 'none';
       final fileName = isGst
-          ? 'TaxInvoice_${invoiceData.receiptNumber}.pdf'
-          : 'OrderDetails_${invoiceData.receiptNumber}.pdf';
+          ? '${shopPart}_Tax_${receiptPart}_$datePart.pdf'
+          : '${shopPart}_${receiptPart}_$datePart.pdf';
 
       await Printing.sharePdf(
         bytes: pdfBytes,

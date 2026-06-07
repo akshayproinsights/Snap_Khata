@@ -1597,6 +1597,9 @@
             const shopLogoUrl  = data.shop_logo_url || '';
             const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
 
+            const totalBilled = data.total_billed !== undefined && data.total_billed !== null ? Number(data.total_billed) : null;
+            const totalPaid = data.total_paid !== undefined && data.total_paid !== null ? Number(data.total_paid) : null;
+
             let itemsHtml = '';
             items.forEach((item, idx) => {
                 const amount = Number(item.amount || 0);
@@ -1679,9 +1682,21 @@
                             <div class="inv-summary-grid">
                                 <div class="inv-summary-left"></div>
                                 <div class="inv-totals-panel">
-                                    <div class="inv-totals-row grand">
-                                        <span class="lbl">Net Balance</span>
-                                        <span class="val">${fmtMoney(grandTotal)}</span>
+                                    ${totalBilled !== null ? `
+                                    <div class="inv-totals-row">
+                                        <span class="lbl">Total Billed</span>
+                                        <span class="val">${fmtMoney(totalBilled)}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${totalPaid !== null && totalPaid > 0 ? `
+                                    <div class="inv-totals-row paid-row">
+                                        <span class="lbl">✅ Amount Paid</span>
+                                        <span class="val">− ${fmtMoney(totalPaid)}</span>
+                                    </div>
+                                    ` : ''}
+                                    <div class="inv-totals-row balance-due-row ${grandTotal <= 0 ? 'fully-paid' : ''}">
+                                        <span class="lbl">${grandTotal <= 0 ? '✓ Net Balance' : '⚡ Net Balance'}</span>
+                                        <span class="val">${fmtMoney(Math.abs(grandTotal))}</span>
                                     </div>
                                     <div class="inv-amount-words">${wordsTotal} Rupees ${grandTotal > 0 ? 'Payable' : 'Credit Balance'}</div>
                                 </div>

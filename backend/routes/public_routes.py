@@ -436,6 +436,20 @@ async def get_public_receipt(
                 trans_resp = trans_query.execute()
                 transactions = trans_resp.data or []
                 
+                # Compute billed / paid totals from transactions
+                _credit_types = {"INVOICE", "MANUAL_CREDIT"}
+                _payment_types = {"PAYMENT"}
+                ledger_total_billed = sum(
+                    float(tx.get("amount", 0))
+                    for tx in transactions
+                    if tx.get("transaction_type", "").upper() in _credit_types
+                )
+                ledger_total_paid = sum(
+                    float(tx.get("amount", 0))
+                    for tx in transactions
+                    if tx.get("transaction_type", "").upper() in _payment_types
+                )
+
                 # Transform transactions into items format
                 items = []
                 for tx in transactions:
@@ -458,11 +472,14 @@ async def get_public_receipt(
                 total_from_items = float(header.get("balance_due", 0))
             except Exception as e:
                 logger.error(f"Error fetching ledger transactions: {e}")
+                ledger_total_billed = 0.0
+                ledger_total_paid = 0.0
 
         # ── Final Response ────────────────────────────────────────────────────────
+        is_ledger = source_table == "customer_ledgers"
         return {
             "id": receipt_number,
-            "type": "ledger" if source_table == "customer_ledgers" else "receipt",
+            "type": "ledger" if is_ledger else "receipt",
             "username": username,
             "shop_name": shop_name,
             "shop_address": shop_address,
@@ -479,7 +496,12 @@ async def get_public_receipt(
             "status": "PAID" if is_paid else "UNPAID",
             "items": items,
             "total_amount": total_from_items,
-            "received_amount": header.get("received_amount") if source_table != "customer_ledgers" else None,
+            # For individual receipts: use the stored received_amount.
+            # For ledger account statements: expose total_billed / total_paid
+            # so the receipt.html can render the Billed / Paid / Due summary.
+            "received_amount": header.get("received_amount") if not is_ledger else None,
+            "total_billed": ledger_total_billed if is_ledger else None,
+            "total_paid": ledger_total_paid if is_ledger else None,
             "balance_due": header.get("balance_due"),
             "industry": header.get("industry") or "general",
             "gst_mode": header.get("gst_mode") or "none",

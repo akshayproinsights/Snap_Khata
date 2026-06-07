@@ -172,12 +172,15 @@
             border: 1px solid var(--border-strong);
             width: 100%;
             margin-bottom: 24px;
+            box-sizing: border-box;
+            overflow: hidden;
         }
 
         .inv-header-grid {
             display: grid;
             grid-template-columns: 1fr;
             border-bottom: 1px solid var(--border-strong);
+            width: 100%;
         }
 
         .inv-shop-info {
@@ -239,8 +242,9 @@
             border-collapse: collapse;
             font-size: 13px;
             border-bottom: 1px solid var(--border-strong);
-            border-left: none; /* Remove outer left border */
-            border-right: none; /* Remove outer right border */
+            border-left: 0;
+            border-right: 0;
+            border-top: 0;
         }
 
         .inv-table th {
@@ -365,6 +369,7 @@
         .inv-footer-grid {
             display: grid;
             grid-template-columns: 1fr 320px;
+            border-top: 1px solid var(--border-strong);
         }
 
         .inv-footer-left {

@@ -4,6 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { udharAPI } from '../services/udharAPI';
 import type { Ledger, Transaction } from '../services/udharAPI';
+import { configAPI } from '../services/api';
 import { formatCurrency, formatActivityDate } from '../utils/dashboardHelpers';
 import {
     Users,
@@ -29,11 +30,15 @@ interface ReminderModalProps {
 }
 
 const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
-    type ShareMode = 'receiptPhoto' | 'accountStatement';
+    type ShareMode = 'receiptPhoto' | 'manualBill' | 'accountStatement';
     const [shareMode, setShareMode] = useState<ShareMode>('accountStatement');
     const [phoneInput, setPhoneInput] = useState('');
     const [isPdfLoading, setIsPdfLoading] = useState(false);
     const backdropRef = useRef<HTMLDivElement>(null);
+
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [isLoadingTx, setIsLoadingTx] = useState(true);
+    const [shopProfile, setShopProfile] = useState<any>(null);
 
     const name = ledger.customer_name || ledger.vendor_name || 'Customer';
     const balanceDue = ledger.balance_due;
@@ -43,16 +48,136 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
     // Detect if this ledger might have a receipt image (based on bill number)
     const hasReceiptPhoto = !!(ledger.latest_bill_number);
 
+    useEffect(() => {
+        let active = true;
+        udharAPI.getTransactions(ledger.id)
+            .then(res => {
+                if (active) {
+                    setTransactions(res.data ?? []);
+                    setIsLoadingTx(false);
+                }
+            })
+            .catch(() => {
+                if (active) setIsLoadingTx(false);
+            });
+        
+        configAPI.getShopProfile()
+            .then(profile => {
+                if (active) setShopProfile(profile);
+            })
+            .catch(console.error);
+
+        return () => {
+            active = false;
+        };
+    }, [ledger.id]);
+
+    const shopName = shopProfile?.shop_name || 'Our Shop';
+
+    // Collect invoices and manual bills
+    const invoicesForReminder = useMemo(() => {
+        return transactions.filter(tx => 
+            tx.transaction_type === 'INVOICE' || 
+            tx.transaction_type === 'MANUAL_CREDIT'
+        );
+    }, [transactions]);
+
+    const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+    // Auto-select the first invoice/manual bill on load
+    useEffect(() => {
+        if (invoicesForReminder.length > 0 && !selectedTx) {
+            setSelectedTx(invoicesForReminder[0]);
+        }
+    }, [invoicesForReminder, selectedTx]);
+
+    const defaultMode = (tx: Transaction | null): ShareMode => {
+        if (!tx) return 'accountStatement';
+        const isManual = tx.transaction_type === 'MANUAL_CREDIT' || tx.extra_fields?.is_manual_entry;
+        if (isManual) return 'manualBill';
+        return 'receiptPhoto';
+    };
+
+    // Whenever selectedTx changes, update default mode contextually
+    useEffect(() => {
+        if (selectedTx) {
+            setShareMode(defaultMode(selectedTx));
+        }
+    }, [selectedTx]);
+
     // Build WhatsApp message preview
-    const message = [
-        `Hi ${name},`,
-        '',
-        `⚠️ *Amount Due: ${formatCurrency(balanceDue)}*${billNo ? ` (Bill #${billNo})` : ''}`,
-        '',
-        'Please settle this amount as soon as possible.',
-        '',
-        'Thank you! 🙏',
-    ].join('\n');
+    const message = useMemo(() => {
+        if (shareMode === 'manualBill' && selectedTx) {
+            const items = selectedTx.extra_fields?.items || [];
+            const lines: string[] = [];
+            lines.push(`Hi ${name},`);
+            lines.push(`Here's your bill from *${shopName}* 🧾\n`);
+            
+            if (items.length > 0) {
+                lines.push('📦 *Items:*');
+                items.forEach(item => {
+                    const itemName = item.item_name;
+                    const qty = item.quantity;
+                    const rate = item.rate;
+                    const amount = item.amount || (qty * rate);
+                    const unit = item.unit ? ` ${item.unit}` : '';
+                    
+                    if (qty === 1 && !unit) {
+                        lines.push(`• *${itemName}* @ ${formatCurrency(rate)} — *${formatCurrency(amount)}*`);
+                    } else {
+                        lines.push(`• *${itemName}* × ${qty}${unit} @ ${formatCurrency(rate)} — *${formatCurrency(amount)}*`);
+                    }
+                });
+                lines.push('');
+                lines.push(`*Total Bill: ${formatCurrency(selectedTx.amount)}*`);
+            } else {
+                lines.push(`📋 *Bill Amount: ${formatCurrency(selectedTx.amount)}*`);
+            }
+
+            const received = selectedTx.received_amount || 0;
+            if (received > 0) {
+                lines.push(`✅ Amount Paid: ${formatCurrency(received)}`);
+                const pending = selectedTx.amount - received;
+                if (pending > 0.01) {
+                    lines.push(`⏳ Remaining Bill Balance: ${formatCurrency(pending)}`);
+                }
+            }
+
+            if (balanceDue > 0.01) {
+                lines.push('');
+                lines.push(`⚠️ *Total Balance Due: ${formatCurrency(balanceDue)}*`);
+            }
+
+            const orderDate = selectedTx.extra_fields?.order_date;
+            const deliveryDate = selectedTx.extra_fields?.delivery_date;
+            if (orderDate && deliveryDate) {
+                const formatDateStr = (dStr: string) => {
+                    const d = new Date(dStr);
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+                };
+                lines.push('');
+                lines.push(`📅 *Order Date:* ${formatDateStr(orderDate)}`);
+                lines.push(`🚚 *Delivery Promise:* ${formatDateStr(deliveryDate)}`);
+            }
+
+            lines.push('');
+            lines.push('Thank you! 🙏');
+            lines.push(`— *${shopName}*`);
+            
+            return lines.join('\n');
+        }
+
+        return [
+            `Hi ${name},`,
+            '',
+            `⚠️ *Amount Due: ${formatCurrency(balanceDue)}*${billNo ? ` (Bill #${billNo})` : ''}`,
+            '',
+            'Please settle this amount as soon as possible.',
+            '',
+            'Thank you! 🙏',
+        ].join('\n');
+    }, [shareMode, selectedTx, name, balanceDue, billNo, shopName]);
 
     const handleWhatsApp = () => {
         const phone = phoneInput.trim();
@@ -71,13 +196,158 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
     const handleSharePdf = async () => {
         setIsPdfLoading(true);
         try {
+            if (shareMode === 'manualBill' && selectedTx) {
+                const printWindow = window.open('', '_blank', 'width=800,height=600');
+                if (!printWindow) {
+                    toast.error('Please allow pop-ups to download the PDF.');
+                    setIsPdfLoading(false);
+                    return;
+                }
+
+                const date = new Date(selectedTx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                const items = selectedTx.extra_fields?.items || [];
+                
+                const itemRows = items.map((item, idx) => {
+                    const rate = item.rate || 0;
+                    const qty = item.quantity || 1;
+                    const amount = item.amount || (qty * rate);
+                    const unit = item.unit ? ` ${item.unit}` : '';
+                    return `
+                    <tr style="border-bottom:1px solid #f1f5f9;">
+                        <td style="padding:10px 12px;font-size:12px;color:#64748b;text-align:center;">${idx + 1}</td>
+                        <td style="padding:10px 12px;font-size:12px;font-weight:600;color:#1e293b;">${item.item_name}</td>
+                        <td style="padding:10px 12px;font-size:12px;color:#64748b;text-align:center;">${qty}${unit}</td>
+                        <td style="padding:10px 12px;font-size:12px;color:#64748b;text-align:right;">${formatCurrency(rate)}</td>
+                        <td style="padding:10px 12px;font-size:12px;text-align:right;font-weight:700;color:#1e293b;">${formatCurrency(amount)}</td>
+                    </tr>`;
+                }).join('');
+
+                const received = selectedTx.received_amount || 0;
+                const balance = selectedTx.amount - received;
+
+                const shopAddress = shopProfile?.shop_address || '';
+                const shopPhone = shopProfile?.shop_phone || '';
+                const shopGst = shopProfile?.shop_gst || '';
+                const shopTerms = shopProfile?.custom_terms || 'Thank you for doing business with us.';
+
+                printWindow.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Order Details #${selectedTx.receipt_number || selectedTx.id} - ${name}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #1e293b; padding: 32px; }
+    .header { background: #1a2744; color: white; padding: 20px 24px; }
+    .header h1 { font-size: 20px; letter-spacing: 1px; text-transform: uppercase; }
+    .header p { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .sub-header { background: #f1f5f9; padding: 8px 24px; font-size: 11px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    .outer { border: 1.5px solid #1e293b; border-radius: 0 0 6px 6px; }
+    .meta { display: flex; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; }
+    .meta-block h3 { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .meta-block p { font-size: 14px; font-weight: bold; }
+    .summary { display: flex; padding: 16px 24px; gap: 16px; border-bottom: 1px solid #e2e8f0; }
+    .chip { flex: 1; text-align: center; padding: 12px 8px; border: 1px solid #e2e8f0; border-radius: 6px; }
+    .chip label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; display: block; margin-bottom: 4px; }
+    .chip strong { font-size: 16px; display: block; }
+    .due { color: #dc2626; }
+    .paid-color { color: #16a34a; }
+    .footer { padding: 14px 24px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #f1f5f9; }
+    @media print {
+      body { padding: 0; }
+      @page { size: A4; margin: 12mm 14mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h1>${shopName}</h1>
+      ${shopAddress ? `<p>${shopAddress}</p>` : ''}
+      ${shopPhone ? `<p>Phone: ${shopPhone}</p>` : ''}
+    </div>
+    <div style="text-align: right;">
+      <h2 style="font-size: 18px; color: #94a3b8; letter-spacing: 1px;">ORDER DETAILS</h2>
+      ${shopGst ? `<p style="font-size: 10px; color: #94a3b8; margin-top: 5px;">GSTIN: ${shopGst}</p>` : ''}
+    </div>
+  </div>
+  <div class="sub-header" style="display: flex; justify-content: space-between;">
+    <div>Order Date: ${date} &nbsp;·&nbsp; Order No: ${selectedTx.receipt_number || selectedTx.id}</div>
+    ${selectedTx.extra_fields?.delivery_date ? `<div>Promise Delivery Date: ${new Date(selectedTx.extra_fields.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>` : ''}
+  </div>
+  <div class="outer">
+    <div class="meta">
+      <div class="meta-block">
+        <h3>Customer / Party</h3>
+        <p>${name}</p>
+        ${ledger.customer_phone ? `<p style="font-size:11px;color:#64748b;font-weight:normal;margin-top:2px;">Contact: ${ledger.customer_phone}</p>` : ''}
+      </div>
+      <div class="meta-block" style="text-align:right">
+        <h3>Status</h3>
+        <p style="color:${balance > 0 ? '#dc2626' : '#16a34a'};font-size:13px;">
+          ${balance > 0 ? '⚠ UNPAID' : '✓ PAID'}
+        </p>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="chip"><label>Order Total</label><strong>${formatCurrency(selectedTx.amount)}</strong></div>
+      <div class="chip"><label>Amount Paid</label><strong class="paid-color">${formatCurrency(received)}</strong></div>
+      <div class="chip"><label>Balance Due</label><strong class="${balance > 0 ? 'due' : 'paid-color'}">${formatCurrency(balance)}</strong></div>
+    </div>
+    
+    ${items.length > 0 ? `
+    <div style="padding:20px 24px 0;">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:0.8px;margin-bottom:12px;">
+            Order Items
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+            <thead>
+                <tr style="background:#f8fafc;border-bottom:2px solid #1e293b;">
+                    <th style="padding:8px 12px;font-size:11px;text-align:center;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;width:60px;">#</th>
+                    <th style="padding:8px 12px;font-size:11px;text-align:left;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Item Name</th>
+                    <th style="padding:8px 12px;font-size:11px;text-align:center;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;width:100px;">Qty</th>
+                    <th style="padding:8px 12px;font-size:11px;text-align:right;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;width:120px;">Rate</th>
+                    <th style="padding:8px 12px;font-size:11px;text-align:right;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;width:120px;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+        </table>
+    </div>
+    ` : `
+    <div style="padding:40px 24px;text-align:center;color:#64748b;font-size:14px;font-style:italic;">
+        No itemized breakdown available.
+    </div>
+    `}
+
+    <div style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;">
+        <strong>Terms and Conditions:</strong>
+        <p style="margin-top:4px;">${shopTerms}</p>
+    </div>
+
+    <div class="footer">
+      This is a computer-generated bill &nbsp;·&nbsp; snapkhata.com
+    </div>
+  </div>
+</body>
+</html>`);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.close();
+                }, 500);
+                setIsPdfLoading(false);
+                return;
+            }
+
             // Fetch full transaction history first
-            let transactions: Transaction[] = [];
+            let fullTransactions: Transaction[] = [];
             try {
                 const result = await udharAPI.getTransactions(ledger.id);
-                transactions = result.data ?? [];
+                fullTransactions = result.data ?? [];
             } catch (_) {
                 // If fetch fails, still generate a summary-only PDF
+                fullTransactions = transactions;
             }
 
             const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -91,11 +361,11 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
 
             // Build transaction table rows
             let runningBalance = 0;
-            const txRows = transactions
+            const txRows = fullTransactions
                 .slice()
                 .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
                 .map(tx => {
-                    const isInvoice = tx.transaction_type === 'INVOICE';
+                    const isInvoice = tx.transaction_type === 'INVOICE' || tx.transaction_type === 'MANUAL_CREDIT';
                     if (isInvoice) runningBalance += tx.amount;
                     else runningBalance -= tx.amount;
                     const txDate = new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -103,7 +373,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                     <tr style="border-bottom:1px solid #f1f5f9;">
                         <td style="padding:10px 12px;font-size:12px;color:#64748b;">${txDate}</td>
                         <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${isInvoice ? '#1e293b' : '#16a34a'};">
-                            ${isInvoice ? 'Credit Sale' : 'Payment'}
+                            ${isInvoice ? (tx.transaction_type === 'MANUAL_CREDIT' ? 'Manual Bill' : 'Credit Sale') : 'Payment'}
                         </td>
                         <td style="padding:10px 12px;font-size:12px;color:#64748b;">${tx.receipt_number ?? tx.invoice_number ?? '—'}</td>
                         <td style="padding:10px 12px;font-size:12px;text-align:right;font-weight:600;color:${isInvoice ? '#dc2626' : '#16a34a'};">
@@ -115,10 +385,10 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                     </tr>`;
                 }).join('');
 
-            const txTableHtml = transactions.length > 0 ? `
+            const txTableHtml = fullTransactions.length > 0 ? `
             <div style="padding:20px 24px 0;border-top:1px solid #e2e8f0;">
                 <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:0.8px;margin-bottom:12px;">
-                    Transaction History (${transactions.length} entries)
+                    Transaction History (${fullTransactions.length} entries)
                 </p>
                 <table style="width:100%;border-collapse:collapse;">
                     <thead>
@@ -254,11 +524,53 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                         </div>
                     </div>
 
+                    {/* Choose Bill (if multiple bills exist) */}
+                    {!isLoadingTx && invoicesForReminder.length > 1 && (
+                        <div>
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">
+                                Choose Bill
+                            </p>
+                            <div className="relative">
+                                <select
+                                    value={selectedTx?.id || ''}
+                                    onChange={(e) => {
+                                        const txId = parseInt(e.target.value);
+                                        const found = invoicesForReminder.find(t => t.id === txId);
+                                        if (found) {
+                                            setSelectedTx(found);
+                                        }
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl outline-none text-sm font-bold focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                                >
+                                    {invoicesForReminder.map((tx) => {
+                                        const isManual = tx.transaction_type === 'MANUAL_CREDIT' || tx.extra_fields?.is_manual_entry;
+                                        const dateStr = new Date(tx.created_at).toLocaleDateString('en-IN', {
+                                            day: '2-digit',
+                                            month: 'short',
+                                            year: 'numeric'
+                                        });
+                                        const label = isManual
+                                            ? `Manual Bill · ${dateStr} (₹${tx.amount})`
+                                            : `Bill #${tx.receipt_number || 'N/A'} · ${dateStr} (₹${tx.amount})`;
+                                        return (
+                                            <option key={tx.id} value={tx.id}>
+                                                {label}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                    ▼
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Send As Tabs */}
                     <div>
                         <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">Send As</p>
                         <div className="flex rounded-2xl border border-gray-200 overflow-hidden">
-                            {hasReceiptPhoto && (
+                            {selectedTx && selectedTx.transaction_type === 'INVOICE' && (
                                 <button
                                     onClick={() => setShareMode('receiptPhoto')}
                                     className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all ${
@@ -271,13 +583,26 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                                     Receipt Photo
                                 </button>
                             )}
+                            {selectedTx && (selectedTx.transaction_type === 'MANUAL_CREDIT' || selectedTx.extra_fields?.is_manual_entry) && (
+                                <button
+                                    onClick={() => setShareMode('manualBill')}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all ${
+                                        shareMode === 'manualBill'
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <FileText size={15} />
+                                    Manual Bill
+                                </button>
+                            )}
                             <button
                                 onClick={() => setShareMode('accountStatement')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all ${
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-all border-l border-gray-200 ${
                                     shareMode === 'accountStatement'
                                         ? 'bg-indigo-600 text-white'
                                         : 'bg-white text-gray-600 hover:bg-gray-50'
-                                } ${hasReceiptPhoto ? 'border-l border-gray-200' : ''}`}
+                                }`}
                             >
                                 <FileText size={15} />
                                 Account Statement
@@ -315,8 +640,8 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
 
                 {/* Action Buttons */}
                 <div className="px-6 pb-6 pt-4 border-t border-gray-100 space-y-3">
-                    {/* Share as PDF — only for Account Statement */}
-                    {shareMode === 'accountStatement' && (
+                    {/* Share as PDF — for Account Statement & Manual Bill */}
+                    {shareMode !== 'receiptPhoto' && (
                         <button
                             onClick={handleSharePdf}
                             disabled={isPdfLoading}
