@@ -128,34 +128,47 @@ class ShopNotifier extends Notifier<ShopProfile> {
           name: 'ShopProvider',
         );
 
-        // Only overwrite if the local name is empty OR the backend has a real value.
-        // This prevents backend returning empty from wiping a locally set name.
-        if (state.name.isEmpty || newProfile.name.isNotEmpty) {
-          state = newProfile;
+        // Always apply the backend response — it is the authoritative source of truth.
+        // We merge carefully: keep local name if backend returned empty, but always
+        // sync logo_url and other fields that may have been updated from another device.
+        final mergedProfile = ShopProfile(
+          name: newProfile.name.isNotEmpty ? newProfile.name : state.name,
+          address: newProfile.address.isNotEmpty ? newProfile.address : state.address,
+          phone: newProfile.phone.isNotEmpty ? newProfile.phone : state.phone,
+          gst: newProfile.gst.isNotEmpty ? newProfile.gst : state.gst,
+          upiId: newProfile.upiId.isNotEmpty ? newProfile.upiId : state.upiId,
+          // Logo URL: always use backend value (even empty means user removed it).
+          // If backend has a URL, it is authoritative. Only keep local if backend is blank
+          // AND local is non-empty (i.e. just uploaded but not yet synced).
+          logoUrl: newProfile.logoUrl.isNotEmpty
+              ? newProfile.logoUrl
+              : (state.logoUrl.isNotEmpty ? state.logoUrl : ''),
+          customTerms: newProfile.customTerms.isNotEmpty ? newProfile.customTerms : state.customTerms,
+          whatsappCustomNote: newProfile.whatsappCustomNote.isNotEmpty
+              ? newProfile.whatsappCustomNote
+              : state.whatsappCustomNote,
+          shopType: newProfile.shopType.isNotEmpty ? newProfile.shopType : state.shopType,
+        );
 
-          // Persist to username-scoped cache.
-          final username = await _getStoredUsername();
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_prefKey('shop_title',           username), newProfile.name);
-          await prefs.setString(_prefKey('shop_address',         username), newProfile.address);
-          await prefs.setString(_prefKey('shop_phone',           username), newProfile.phone);
-          await prefs.setString(_prefKey('shop_gst',             username), newProfile.gst);
-          await prefs.setString(_prefKey('shop_upi_id',          username), newProfile.upiId);
-          await prefs.setString(_prefKey('shop_logo_url',        username), newProfile.logoUrl);
-          await prefs.setString(_prefKey('shop_custom_terms',    username), newProfile.customTerms);
-          await prefs.setString(_prefKey('whatsapp_custom_note', username), newProfile.whatsappCustomNote);
-          await prefs.setString(_prefKey('shop_type',            username), newProfile.shopType);
+        state = mergedProfile;
 
-          developer.log(
-            'Updated username-scoped SharedPreferences cache (user: "$username")',
-            name: 'ShopProvider',
-          );
-        } else {
-          developer.log(
-            'Skipping backend update: backend returned empty but local has data.',
-            name: 'ShopProvider',
-          );
-        }
+        // Persist to username-scoped cache.
+        final username = await _getStoredUsername();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_prefKey('shop_title',           username), mergedProfile.name);
+        await prefs.setString(_prefKey('shop_address',         username), mergedProfile.address);
+        await prefs.setString(_prefKey('shop_phone',           username), mergedProfile.phone);
+        await prefs.setString(_prefKey('shop_gst',             username), mergedProfile.gst);
+        await prefs.setString(_prefKey('shop_upi_id',          username), mergedProfile.upiId);
+        await prefs.setString(_prefKey('shop_logo_url',        username), mergedProfile.logoUrl);
+        await prefs.setString(_prefKey('shop_custom_terms',    username), mergedProfile.customTerms);
+        await prefs.setString(_prefKey('whatsapp_custom_note', username), mergedProfile.whatsappCustomNote);
+        await prefs.setString(_prefKey('shop_type',            username), mergedProfile.shopType);
+
+        developer.log(
+          'Synced shop profile from backend. name="${mergedProfile.name}" logoUrl="${mergedProfile.logoUrl}"',
+          name: 'ShopProvider',
+        );
       }
     } catch (e) {
       developer.log('Error syncing with backend: $e', name: 'ShopProvider');

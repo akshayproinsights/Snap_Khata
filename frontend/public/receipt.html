@@ -253,6 +253,7 @@
         .inv-meta-strip {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            align-items: stretch;
             border-bottom: 1px solid var(--border);
             background: #fafbfc;
         }
@@ -260,10 +261,12 @@
         .inv-bill-to,
         .inv-invoice-details {
             padding: 16px 24px;
+            align-self: stretch;
         }
 
         .inv-bill-to {
             border-right: 1px solid var(--border);
+            box-sizing: border-box;
         }
 
         .inv-meta-label {
@@ -325,6 +328,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
+            border: none; /* Remove all outer table borders */
         }
 
         .inv-table thead tr {
@@ -338,6 +342,7 @@
             text-align: left;
             font-size: 12px;
             letter-spacing: 0.3px;
+            border: none; /* Clean header cells — no borders */
         }
 
         .inv-table th:last-child,
@@ -353,8 +358,23 @@
         .inv-table td {
             padding: 10px 12px;
             color: var(--text-secondary);
-            border-bottom: 1px solid #f1f5f9;
+            border: none; /* Reset all borders */
+            border-bottom: 1px solid #f1f5f9; /* Only bottom separator */
             vertical-align: middle;
+        }
+
+        /* First column: no left outer border (removes checkbox look) */
+        .inv-table th:first-child,
+        .inv-table td:first-child {
+            border-left: none;
+            padding-left: 16px;
+        }
+
+        /* Last column: no right outer border (keeps symmetry) */
+        .inv-table th:last-child,
+        .inv-table td:last-child {
+            border-right: none;
+            padding-right: 16px;
         }
 
         .inv-table tbody tr:nth-child(even) {
@@ -368,13 +388,15 @@
         /* Section sub-header (Parts / Labor) */
         .inv-section-row td {
             background: #f1f5f9 !important;
-            padding: 6px 12px !important;
+            padding: 6px 16px !important;
             font-size: 11px !important;
             font-weight: 700 !important;
             letter-spacing: 0.8px !important;
             text-transform: uppercase;
             color: #475569 !important;
             border-bottom: 1px solid var(--border) !important;
+            border-left: none !important;
+            border-right: none !important;
         }
 
         /* Total row */
@@ -382,14 +404,17 @@
             background: #f8fafc;
             font-weight: 700;
             color: var(--text-primary);
-            border-top: 2px solid var(--border);
-            border-bottom: 2px solid var(--border);
+            border-top: 2px solid var(--border) !important;
+            border-bottom: 2px solid var(--border) !important;
+            border-left: none !important;
+            border-right: none !important;
         }
 
         /* ── Summary grid: notes left, totals right ── */
         .inv-summary-grid {
             display: grid;
             grid-template-columns: 1fr 280px;
+            align-items: stretch;
             border-top: 1px solid var(--border);
         }
 
@@ -399,10 +424,15 @@
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
+            align-self: stretch; /* Force full height to match totals panel */
+            box-sizing: border-box;
+            min-height: 100%; /* Ensure border spans full height */
         }
 
         .inv-totals-panel {
             padding: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .inv-totals-row {
@@ -446,6 +476,36 @@
             letter-spacing: -0.5px;
         }
 
+        /* Balance Due row — prominent red highlight */
+        .inv-totals-row.balance-due-row {
+            background: #fff5f5;
+            border-top: 2px solid #fca5a5;
+            border-bottom: 2px solid #fca5a5;
+            padding: 12px 20px;
+        }
+        .inv-totals-row.balance-due-row .lbl {
+            color: var(--red);
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 0.2px;
+        }
+        .inv-totals-row.balance-due-row .val {
+            color: var(--red);
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        /* Fully paid — balance due row turns green */
+        .inv-totals-row.balance-due-row.fully-paid {
+            background: #f0fdf4;
+            border-top-color: #86efac;
+            border-bottom-color: #86efac;
+        }
+        .inv-totals-row.balance-due-row.fully-paid .lbl,
+        .inv-totals-row.balance-due-row.fully-paid .val { color: var(--green); }
+
+        .inv-totals-row.paid-row .lbl { color: var(--green); font-weight: 600; }
         .inv-totals-row.paid-row .val { color: var(--green); }
         .inv-totals-row.due-row .val { color: var(--red); }
         .inv-totals-row.gst-row .lbl, .inv-totals-row.gst-row .val { color: #d97706; }
@@ -583,7 +643,7 @@
             text-align: center;
         }
 
-        /* ── PAID watermark stamp ── */
+        /* ── PAID / PARTIAL watermark stamp ── */
         .inv-watermark {
             position: absolute;
             top: 50%;
@@ -596,6 +656,10 @@
             pointer-events: none;
             white-space: nowrap;
             z-index: 0;
+        }
+        .inv-watermark.partial {
+            color: rgba(217, 119, 6, 0.08);
+            font-size: 52px;
         }
 
         .inv-doc-inner {
@@ -640,17 +704,24 @@
         @media print {
             body { background: #fff; }
 
-            .inv-page { padding: 0; max-width: 100%; }
-
-            .inv-doc {
-                box-shadow: none;
-                border: 1px solid #000;
-                margin: 0;
+            .scaled-container {
+                padding: 0 !important;
+                width: 100% !important;
+                margin: 0 !important;
             }
 
-            .scaled-container {
-                padding: 0;
-                width: 100%;
+            .inv-page {
+                padding: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+
+            .inv-doc {
+                box-shadow: none !important;
+                border: 1px solid #000 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
             }
 
             .fab-print { display: none !important; }
@@ -682,7 +753,7 @@
 
     <!-- FAB: Download PDF -->
     <div class="fab-print" id="fabPrint" style="display:none;">
-        <button type="button" onclick="window.print()" title="Download PDF">
+        <button type="button" onclick="printWithFilename()" title="Download PDF">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                 stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -697,6 +768,48 @@
         const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:8000'
             : 'https://api.snapkhata.com';
+
+        // Filename stored by each renderer: ShopName_ReceiptNo_Date
+        window._pdfFilename = 'Receipt';
+
+        /** Convert a string to a safe filename segment (no special chars, spaces → _) */
+        function slugify(str) {
+            return String(str || '')
+                .trim()
+                .replace(/[^\w\s\-]/g, '')   // remove non-alphanumeric except dash
+                .replace(/\s+/g, '_')         // spaces → underscore
+                .replace(/_+/g, '_')          // collapse multiple underscores
+                .replace(/^_|_$/g, '');       // trim leading/trailing underscores
+        }
+
+        /** Format date as DD-Mon-YYYY for the filename (e.g. 28-Mar-2026) */
+        function fmtDateForFilename(raw) {
+            if (!raw) return '';
+            try {
+                let d;
+                if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+                    const [dd, mm, yyyy] = raw.split('-');
+                    d = new Date(`${yyyy}-${mm}-${dd}`);
+                } else {
+                    d = new Date(raw);
+                }
+                if (isNaN(d)) return '';
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `${String(d.getDate()).padStart(2,'0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
+            } catch { return ''; }
+        }
+
+        /** Print with a descriptive filename (browsers use document.title as PDF name) */
+        function printWithFilename() {
+            const original = document.title;
+            document.title = window._pdfFilename || original;
+            window.print();
+            // Restore title after the print dialog closes
+            window.addEventListener('afterprint', function restore() {
+                document.title = original;
+                window.removeEventListener('afterprint', restore);
+            });
+        }
 
         // ── helpers ──────────────────────────────────────────────────────────
         const $ = id => document.getElementById(id);
@@ -827,32 +940,58 @@
             return lines.join(' &nbsp;·&nbsp; ');
         }
 
-        /** Totals panel rows */
+        /** Totals panel rows
+         *  Standard 3-line payment summary:
+         *  1. Total (of all items) — always shown
+         *  2. Amount Paid          — shown in green only when payment > 0
+         *  3. Balance Due          — always shown, red if outstanding, green if cleared
+         */
         function buildTotalsPanel(subtotal, gstAmt, gstLabel, grandTotal, receivedAmount, balanceDue, wordsTotal) {
             let html = '';
+
+            // GST line (only for GST invoices)
             if (gstAmt !== null) {
                 html += `<div class="inv-totals-row gst-row">
                     <span class="lbl">${gstLabel}</span>
                     <span class="val">${fmtMoney(gstAmt)}</span>
                 </div>`;
             }
+
+            // 1. Total of all items
             html += `<div class="inv-totals-row grand">
-                <span class="lbl">Grand Total</span>
+                <span class="lbl">Total</span>
                 <span class="val">${fmtMoney(grandTotal)}</span>
             </div>`;
+
+            // 2. Amount Paid — only when a payment has been made
             if (receivedAmount !== null && receivedAmount > 0) {
                 html += `<div class="inv-totals-row paid-row">
-                    <span class="lbl">Amount Paid</span>
+                    <span class="lbl">✅ Amount Paid</span>
                     <span class="val">− ${fmtMoney(receivedAmount)}</span>
                 </div>`;
             }
+
+            // 3. Balance Due — prominent, always shown when we have enough info
             if (balanceDue !== null) {
-                html += `<div class="inv-totals-row ${balanceDue > 0 ? 'due-row' : 'paid-row'}">
-                    <span class="lbl">Balance Due</span>
-                    <span class="val">${fmtMoney(balanceDue)}</span>
+                const isCleared = balanceDue <= 0;
+                const dueClass  = isCleared ? 'balance-due-row fully-paid' : 'balance-due-row';
+                const dueLabel  = isCleared ? '✓ Fully Paid' : '⚡ Balance Due';
+                html += `<div class="inv-totals-row ${dueClass}">
+                    <span class="lbl">${dueLabel}</span>
+                    <span class="val">${fmtMoney(Math.abs(balanceDue))}</span>
+                </div>`;
+            } else if (receivedAmount === null) {
+                // No payment info at all — show grand total as balance due
+                html += `<div class="inv-totals-row balance-due-row">
+                    <span class="lbl">⚡ Balance Due</span>
+                    <span class="val">${fmtMoney(grandTotal)}</span>
                 </div>`;
             }
-            html += `<div class="inv-amount-words">${wordsTotal} Rupees only</div>`;
+
+            // Amount in words — use balance due if outstanding, else grand total
+            const amountForWords = (balanceDue !== null && balanceDue > 0) ? balanceDue : grandTotal;
+            const wordsForDue = numberToWords(Math.round(amountForWords));
+            html += `<div class="inv-amount-words">${wordsForDue} Rupees ${balanceDue !== null && balanceDue <= 0 ? 'only' : 'Due'}</div>`;
             return html;
         }
 
@@ -1015,6 +1154,12 @@
         function renderOrderSummary(data) {
             document.title = `Order Summary #${data.id || '—'} • SnapKhata`;
 
+            // Build PDF filename: ShopName_ReceiptNo_Date
+            const _shop = slugify(data.shop_name || 'Shop');
+            const _no   = slugify(data.id || 'Receipt');
+            const _date = fmtDateForFilename(data.created_at);
+            window._pdfFilename = [_shop, _no, _date].filter(Boolean).join('_');
+
             const items        = Array.isArray(data.items) ? data.items : [];
             const isAutomobile = data.industry === 'automobile';
             const shopName     = data.shop_name || 'Our Shop';
@@ -1044,6 +1189,11 @@
                 if (balanceDue <= 0)              displayStatus = 'PAID';
                 else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
             }
+            // Recalculate receivedAmount from balanceDue if only balance_due is given
+            const effectiveReceived = receivedAmount !== null
+                ? receivedAmount
+                : (balanceDue !== null ? Math.max(0, grandTotal - balanceDue) : null);
+            const effectivePaid = effectiveReceived !== null && effectiveReceived > 0 ? effectiveReceived : null;
 
             // Build items HTML
             let itemsHtml = '';
@@ -1108,9 +1258,13 @@
             }
 
             const wordsTotal    = numberToWords(Math.round(grandTotal));
-            const watermark     = displayStatus === 'PAID' ? '<div class="inv-watermark">PAID</div>' : '';
+            const watermark     = displayStatus === 'PAID'
+                ? '<div class="inv-watermark">PAID</div>'
+                : displayStatus === 'PARTIAL'
+                ? '<div class="inv-watermark partial">PARTIALLY PAID</div>'
+                : '';
             const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
-            const totalsPanel   = buildTotalsPanel(subtotal, null, null, grandTotal, receivedAmount, balanceDue, wordsTotal);
+            const totalsPanel   = buildTotalsPanel(subtotal, null, null, grandTotal, effectivePaid, balanceDue, wordsTotal);
 
             // Summary left (parts/labor breakdown if automobile)
             let summaryLeft = '';
@@ -1218,6 +1372,12 @@
         function renderGstInvoice(data, gstMode) {
             document.title = `Tax Invoice #${data.id || '—'} • SnapKhata`;
 
+            // Build PDF filename: ShopName_ReceiptNo_Date
+            const _shop = slugify(data.shop_name || 'Shop');
+            const _no   = slugify(data.id || 'Receipt');
+            const _date = fmtDateForFilename(data.created_at);
+            window._pdfFilename = [_shop, _no, _date].filter(Boolean).join('_');
+
             const items        = Array.isArray(data.items) ? data.items : [];
             const isAutomobile = data.industry === 'automobile';
             const shopName     = data.shop_name || 'Our Shop';
@@ -1255,6 +1415,10 @@
                 if (balanceDue <= 0)              displayStatus = 'PAID';
                 else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
             }
+            const gstEffectiveReceived = receivedAmount !== null
+                ? receivedAmount
+                : (balanceDue !== null ? Math.max(0, grandTotal - balanceDue) : null);
+            const gstEffectivePaid = gstEffectiveReceived !== null && gstEffectiveReceived > 0 ? gstEffectiveReceived : null;
 
             // Build items HTML
             let itemsHtml = '';
@@ -1304,10 +1468,14 @@
             }
 
             const wordsTotal    = numberToWords(Math.round(grandTotal));
-            const watermark     = displayStatus === 'PAID' ? '<div class="inv-watermark">PAID</div>' : '';
+            const watermark     = displayStatus === 'PAID'
+                ? '<div class="inv-watermark">PAID</div>'
+                : displayStatus === 'PARTIAL'
+                ? '<div class="inv-watermark partial">PARTIALLY PAID</div>'
+                : '';
             const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
             const gstLabel      = gstMode === 'included' ? 'GST @18% (Included)' : 'GST @18% (Added)';
-            const totalsPanel   = buildTotalsPanel(totalSubtotal, gstAmt, gstLabel, grandTotal, receivedAmount, balanceDue, wordsTotal);
+            const totalsPanel   = buildTotalsPanel(totalSubtotal, gstAmt, gstLabel, grandTotal, gstEffectivePaid, balanceDue, wordsTotal);
 
             let summaryLeft = '';
             if (isAutomobile) {
@@ -1415,6 +1583,12 @@
         // ─────────────────────────────────────────────────────────────────────
         function renderAccountStatement(data) {
             document.title = `Account Statement - ${data.customer_name || 'Customer'} • SnapKhata`;
+
+            // Build PDF filename: ShopName_CustomerName_Date
+            const _shop     = slugify(data.shop_name || 'Shop');
+            const _customer = slugify(data.customer_name || 'Statement');
+            const _date     = fmtDateForFilename(new Date().toISOString());
+            window._pdfFilename = [_shop, _customer, _date].filter(Boolean).join('_');
 
             const items        = Array.isArray(data.items) ? data.items : [];
             const grandTotal   = Number(data.balance_due) || 0;

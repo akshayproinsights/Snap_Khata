@@ -129,25 +129,35 @@ class WhatsAppUtils {
 
     switch (status) {
       case OrderPaymentStatus.unpaid:
+        // Unpaid: show Total = Balance Due
         return 'Hi ${_cleanDisplayName(customerName)},\n'
-            'Your order from *${businessName.trim()}* is ready. 📝\n\n'
-            '⚠️ *Amount Due: $totalFmt*$extraTexts'
+            'Your order #$orderNumber from *${businessName.trim()}* is ready. 📝\n\n'
+            '📋 Total:             $totalFmt\n'
+            '✅ Amount Paid:  ₹0\n'
+            '⚡ *Balance Due: $totalFmt*'
+            '$extraTexts'
             '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.partiallyPaid:
+        // Partial: show all 3 lines clearly
         return 'Hi ${_cleanDisplayName(customerName)},\n'
-            'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            '🛒 Total Bill: $totalFmt\n'
-            '✅ Amount Paid: $paidFmt\n'
-            '⏳ Pending Due: $pendingFmt$extraTexts'
+            'Your order #$orderNumber from *${businessName.trim()}* has a partial payment. 📝\n\n'
+            '📋 Total:             $totalFmt\n'
+            '✅ Amount Paid:  $paidFmt\n'
+            '⚡ *Balance Due: $pendingFmt*'
+            '$extraTexts'
             '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
 
       case OrderPaymentStatus.fullyPaid:
+        // Fully paid: show total = amount paid, balance = ₹0
         return 'Hi ${_cleanDisplayName(customerName)},\n'
-            'Your order with *${businessName.trim()}* has been successfully generated. 📝\n\n'
-            '💳 Amount Paid: $totalFmt$extraTexts'
+            'Your order #$orderNumber from *${businessName.trim()}* is confirmed. ✅\n\n'
+            '📋 Total:             $totalFmt\n'
+            '✅ Amount Paid:  $totalFmt\n'
+            '✓ *Balance Due:  ₹0*'
+            '$extraTexts'
             '$noteSuffix\n\n'
             'Thank you! 🙏\n— *${businessName.trim()}*';
     }

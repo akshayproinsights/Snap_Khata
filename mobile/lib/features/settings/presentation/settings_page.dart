@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -134,49 +135,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
     if (source == null) return null;
 
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: source,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
-    );
-    if (picked == null) return null;
-
-    // Show uploading indicator
-    setSheetState(() => _isUploadingLogo = true);
-
-    try {
-      final bytes = await picked.readAsBytes();
-      final ext = picked.name.split('.').last.toLowerCase();
-      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
-
-      final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
-          bytes,
-          filename: 'shop_logo.$ext',
-          contentType: DioMediaType.parse(contentType),
-        ),
-      });
-
-      final response = await ApiClient().dio.post(
-        '/api/shop-profile/upload-logo',
-        data: formData,
-      );
-
-      final url = response.data['logo_url'] as String? ?? '';
-      return url.isEmpty ? null : url;
-    } catch (e) {
-      if (mounted) {
-        AppToast.showError(context, 'Failed to upload logo: $e');
-      }
-      return null;
-    } finally {
-      setSheetState(() => _isUploadingLogo = false);
-    }
+    return _pickLogoFromSource(source, setSheetState);
   }
 
-  /// Picks from a specific [source] and returns the uploaded public URL.
+  /// Picks from a specific [source], uploads to R2, then immediately persists
+  /// the returned URL to the backend so it is available on receipts/invoices
+  /// without requiring the user to press "Save & Sync".
   Future<String?> _pickLogoFromSource(
       ImageSource source, StateSetter setSheetState) async {
     final picker = ImagePicker();
@@ -209,7 +173,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
 
       final url = response.data['logo_url'] as String? ?? '';
-      return url.isEmpty ? null : url;
+      if (url.isEmpty) return null;
+
+      // ── Immediately persist the new logo URL so it shows on invoices ──────
+      // Build a merged profile with the new URL and push it to the backend.
+      // This ensures shop_logo_url is in user_profiles for the public receipt
+      // endpoint even if the user dismisses the sheet without pressing Save.
+      final currentProfile = ref.read(shopProvider);
+      final updatedProfile = ShopProfile(
+        name: currentProfile.name,
+        address: currentProfile.address,
+        phone: currentProfile.phone,
+        gst: currentProfile.gst,
+        upiId: currentProfile.upiId,
+        logoUrl: url,
+        customTerms: currentProfile.customTerms,
+        whatsappCustomNote: currentProfile.whatsappCustomNote,
+        shopType: currentProfile.shopType,
+      );
+      // Fire-and-forget: update provider + backend; don't block the UI.
+      unawaited(ref.read(shopProvider.notifier).updateProfile(updatedProfile));
+
+      return url;
     } catch (e) {
       if (mounted) {
         AppToast.showError(context, 'Failed to upload logo: $e');
@@ -307,6 +292,106 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     String tempCustomTerms = _customTerms;
     String tempWhatsAppNote = _whatsappCustomNote;
     String tempShopType = _shopType;
+    bool isAutofilling = false;
+
+    void pickAndAutofillFromReceipt(StateSetter setSheetState) async {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        useRootNavigator: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          decoration: BoxDecoration(
+            color: context.surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Scan Receipt / Business Card',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: context.textColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(LucideIcons.image, color: context.primaryColor),
+                title: Text('Choose from Gallery',
+                    style: TextStyle(color: context.textColor)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              ListTile(
+                leading: Icon(LucideIcons.camera, color: context.primaryColor),
+                title: Text('Take a Photo',
+                    style: TextStyle(color: context.textColor)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (source == null) return;
+
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setSheetState(() => isAutofilling = true);
+
+      try {
+        final bytes = await picked.readAsBytes();
+        final ext = picked.name.split('.').last.toLowerCase();
+        final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+        final formData = FormData.fromMap({
+          'file': MultipartFile.fromBytes(
+            bytes,
+            filename: 'shop_receipt.$ext',
+            contentType: DioMediaType.parse(contentType),
+          ),
+        });
+
+        final response = await ApiClient().dio.post(
+          '/api/shop-profile/autofill-from-receipt',
+          data: formData,
+        );
+
+        final data = response.data as Map<String, dynamic>;
+        
+        setSheetState(() {
+          tempName = data['shop_name'] as String? ?? tempName;
+          tempAddress = data['shop_address'] as String? ?? tempAddress;
+          tempPhone = data['shop_phone'] as String? ?? tempPhone;
+          tempGst = data['shop_gst'] as String? ?? tempGst;
+          tempUpiId = data['shop_upi_id'] as String? ?? tempUpiId;
+          tempShopType = data['shop_type'] as String? ?? tempShopType;
+        });
+
+        if (mounted) {
+          AppToast.showSuccess(context, 'Autofilled successfully! Please review & save.');
+        }
+      } catch (e) {
+        if (mounted) {
+          AppToast.showError(context, 'Failed to extract receipt: $e');
+        }
+      } finally {
+        setSheetState(() => isAutofilling = false);
+      }
+    }
 
     showModalBottomSheet(
       context: context,
@@ -339,6 +424,72 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       fontSize: 13),
                 ),
                 const SizedBox(height: 16),
+                if (isAutofilling)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: context.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: context.primaryColor.withValues(alpha: 0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: context.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'AI extracting shop details...',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: context.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () => pickAndAutofillFromReceipt(setSheetState),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: context.primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: context.primaryColor.withValues(alpha: 0.35),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.sparkles, color: context.primaryColor, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Autofill from Receipt / Card (AI Scan)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: context.primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
