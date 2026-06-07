@@ -228,6 +228,66 @@ async def get_receipt_photo_image(
         logger.error(f"Error proxying receipt photo {receipt_number}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch receipt photo")
 
+@router.get("/shop-logo")
+async def get_shop_logo_proxy(
+    u: Optional[str] = None,
+):
+    """
+    Proxy endpoint that fetches the shop logo from R2 and serves it
+    directly from snapkhata.com. This bypasses any CORS or public-access
+    restrictions on the raw R2 CDN URL and ensures the logo loads
+    correctly in receipt.html regardless of bucket configuration.
+
+    Usage: /api/public/shop-logo?u=<username>
+    """
+    import httpx
+    from fastapi.responses import Response
+
+    if not u:
+        raise HTTPException(status_code=400, detail="Username (u) is required")
+
+    logo_url = ""
+    try:
+        db = get_database_client()
+        resp = db.client.from_("user_profiles") \
+            .select("shop_logo_url") \
+            .eq("username", u) \
+            .limit(1) \
+            .execute()
+        if resp.data and resp.data[0].get("shop_logo_url"):
+            logo_url = resp.data[0]["shop_logo_url"]
+    except Exception as e:
+        logger.error(f"Error fetching shop logo for {u}: {e}")
+
+    if not logo_url:
+        raise HTTPException(status_code=404, detail="Shop logo not found")
+
+    # Validate the URL only proxies known R2 / CDN domains (security guard)
+    allowed_domains = ("r2.dev", "cloudflare.com", "snapkhata.com", "pub-")
+    from urllib.parse import urlparse
+    parsed = urlparse(logo_url)
+    host = parsed.netloc.lower()
+    if not any(d in host for d in allowed_domains):
+        raise HTTPException(status_code=403, detail="Logo URL not from an allowed domain")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            r = await client.get(logo_url)
+            r.raise_for_status()
+            content_type = r.headers.get("content-type", "image/jpeg")
+            return Response(
+                content=r.content,
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=86400",  # cache 24h
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+    except Exception as e:
+        logger.error(f"Error proxying shop logo for {u}: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch shop logo")
+
+
 @router.get("/receipts/{receipt_number:path}")
 async def get_public_receipt(
     receipt_number: str,

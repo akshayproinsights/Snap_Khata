@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -28,7 +29,7 @@ class InvoiceData {
   final String industry; // 'automobile' | 'general' etc.
   final String documentType; // 'order' | 'ledger' | 'bill'
   final String? customTerms; // optional custom terms text
-  final String? shopLogoUrl; // optional logo (not used in PDF directly)
+  final String? shopLogoUrl; // optional logo rendered in the PDF header
 
   const InvoiceData({
     required this.shopName,
@@ -211,6 +212,34 @@ class InvoicePdfGenerator {
   // ─────────────────────────────────────────────────────────────────────────
   // Main public API
   // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Logo image cache (avoids re-downloading within a session) ───────────
+  static final Map<String, Uint8List> _logoCache = {};
+
+  /// Downloads [url] and returns the raw bytes, or null on any error.
+  static Future<Uint8List?> _fetchLogoBytes(String url) async {
+    if (url.isEmpty) return null;
+    if (_logoCache.containsKey(url)) return _logoCache[url];
+    try {
+      final dio = Dio();
+      final response = await dio.get<List<int>>(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
+        final bytes = Uint8List.fromList(response.data!);
+        _logoCache[url] = bytes;
+        return bytes;
+      }
+    } catch (_) {
+      // Network error or timeout — logo will be skipped
+    }
+    return null;
+  }
 
   static Future<Uint8List> generate(InvoiceData data) async {
     await _ensureFonts();
@@ -571,8 +600,11 @@ class InvoicePdfGenerator {
     if (items.isNotEmpty) {
       if (isLedger) {
         // Ledger: show Total Billed | — | Net Balance in a 4-col footer
+        // Sum only invoice_header rows — each one holds the full invoice total.
+        // invoice_item rows are the individual line items that make up the same
+        // total, so including them too would double-count every invoice.
         final totalBilled = items.fold<double>(0, (s, item) =>
-            item.type.toLowerCase() == 'payment' ? s : s + item.amount);
+            item.type.toLowerCase() == 'invoice_header' ? s + item.amount : s);
         tableRows.add(pw.TableRow(
           decoration: const pw.BoxDecoration(
             color: _lightGray,
@@ -662,6 +694,13 @@ class InvoicePdfGenerator {
     // KEY FIX: Each section is a top-level widget in MultiPage.build list.
     // The Table widget is natively pageable — MultiPage will split it across
     // pages automatically without leaving blank space.
+    // ── Pre-fetch logo bytes before entering the synchronous build: callback ──
+    // pw.MultiPage's build: callback is synchronous — await is not allowed inside it.
+    // We resolve the image bytes here (in the async generate() body) then reference
+    // the already-fetched Uint8List inside the widget tree.
+    final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
+        ? await _fetchLogoBytes(data.shopLogoUrl!)
+        : null;
 
     doc.addPage(
       pw.MultiPage(
@@ -712,6 +751,27 @@ class InvoicePdfGenerator {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
+                      // ── Logo + shop name ──────────────────────────────────
+                      if (logoBytes != null && logoBytes.isNotEmpty)
+                        pw.Container(
+                          width: 44,
+                          height: 44,
+                          margin: const pw.EdgeInsets.only(right: 10),
+                          decoration: pw.BoxDecoration(
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                            color: _headerNavyLight,
+                          ),
+                          child: pw.ClipRRect(
+                            horizontalRadius: 6,
+                            verticalRadius: 6,
+                            child: pw.Image(
+                              pw.MemoryImage(logoBytes),
+                              fit: pw.BoxFit.cover,
+                              width: 44,
+                              height: 44,
+                            ),
+                          ),
+                        ),
                       pw.Expanded(
                         child: pw.Text(
                           data.shopName.toUpperCase(),
@@ -1216,6 +1276,7 @@ class InvoicePdfGenerator {
     String? shopAddress,
     String? shopPhone,
     String? shopGst,
+    String? shopLogoUrl,
     required String customerName,
     String? customerPhone,
     String? vehicleNumber,
@@ -1247,6 +1308,7 @@ class InvoicePdfGenerator {
       shopAddress:     shopAddress,
       shopPhone:       shopPhone,
       shopGst:         shopGst,
+      shopLogoUrl:     shopLogoUrl,
       customerName:    customerName,
       customerPhone:   customerPhone,
       vehicleNumber:   vehicleNumber,

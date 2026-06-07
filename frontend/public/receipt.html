@@ -704,6 +704,12 @@
         @media print {
             body { background: #fff; }
 
+            /* Ensure backgrounds, gradients and images print correctly */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
             .scaled-container {
                 padding: 0 !important;
                 width: 100% !important;
@@ -722,6 +728,20 @@
                 margin: 0 !important;
                 width: 100% !important;
                 max-width: 100% !important;
+            }
+
+            /* Logo must be visible when printing */
+            .inv-logo,
+            .inv-logo-initials {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+
+            .inv-logo {
+                /* Force image to render even in print mode */
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .fab-print { display: none !important; }
@@ -874,10 +894,16 @@
         }
 
         /** Build the shop logo/initials block */
-        function buildLogoHtml(logoUrl, shopName) {
+        function buildLogoHtml(logoUrl, shopName, username) {
             if (logoUrl) {
-                return `<img src="${logoUrl}" class="inv-logo" alt="${shopName} logo"
-                    onerror="this.outerHTML='<div class=\\'inv-logo-initials\\'>${getInitials(shopName)}</div>'" />`;
+                // Route through our backend proxy so the image always loads from
+                // snapkhata.com, bypassing any R2 CORS / public-access restrictions.
+                const proxiedUrl = username
+                    ? `${API_BASE}/api/public/shop-logo?u=${encodeURIComponent(username)}`
+                    : logoUrl;
+                const initials = getInitials(shopName);
+                return `<img src="${proxiedUrl}" class="inv-logo" alt="${shopName} logo"
+                    onerror="this.outerHTML='<div class=\\'inv-logo-initials\\'>${initials}</div>'" />`;
             }
             return `<div class="inv-logo-initials">${getInitials(shopName)}</div>`;
         }
@@ -1174,6 +1200,7 @@
             const isAutomobile = data.industry === 'automobile';
             const shopName     = data.shop_name || 'Our Shop';
             const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
             const upiId        = data.shop_upi_id || '';
             const customTerms  = data.custom_terms || '';
 
@@ -1294,7 +1321,7 @@
                             <!-- Header bar -->
                             <div class="inv-header-bar">
                                 <div class="inv-shop-left">
-                                    ${buildLogoHtml(shopLogoUrl, shopName)}
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
                                     <div class="inv-shop-info">
                                         <div class="inv-shop-name">${shopName}</div>
                                         ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
@@ -1406,6 +1433,7 @@
             const isAutomobile = data.industry === 'automobile';
             const shopName     = data.shop_name || 'Our Shop';
             const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
             const upiId        = data.shop_upi_id || '';
             const customTerms  = data.custom_terms || '';
 
@@ -1518,7 +1546,7 @@
                             <!-- Header bar -->
                             <div class="inv-header-bar">
                                 <div class="inv-shop-left">
-                                    ${buildLogoHtml(shopLogoUrl, shopName)}
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
                                     <div class="inv-shop-info">
                                         <div class="inv-shop-name">${shopName}</div>
                                         ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
@@ -1633,6 +1661,7 @@
             const wordsTotal   = numberToWords(Math.round(Math.abs(grandTotal)));
             const shopName     = data.shop_name || 'Our Shop';
             const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
             const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
 
             const totalBilled = data.total_billed !== undefined && data.total_billed !== null ? Number(data.total_billed) : null;
@@ -1671,7 +1700,7 @@
                             <!-- Header bar -->
                             <div class="inv-header-bar">
                                 <div class="inv-shop-left">
-                                    ${buildLogoHtml(shopLogoUrl, shopName)}
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
                                     <div class="inv-shop-info">
                                         <div class="inv-shop-name">${shopName}</div>
                                         ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}

@@ -2389,6 +2389,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     ? capturedShopProfile.gst
                                     : null,
                                 shopType: capturedShopProfile.shopType,
+                                shopLogoUrl: capturedShopProfile.logoUrl.isNotEmpty
+                                    ? capturedShopProfile.logoUrl
+                                    : null,
                                 customTerms: capturedShopProfile.customTerms
                                     .isNotEmpty
                                     ? capturedShopProfile.customTerms
@@ -2553,6 +2556,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     String? shopPhone,
     String? shopGst,
     String shopType = 'general',
+    String? shopLogoUrl,
     String? customTerms,
   }) async {
     // Show loading snackbar
@@ -2656,6 +2660,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           shopAddress: shopAddress,
           shopPhone: shopPhone,
           shopGst: shopGst,
+          shopLogoUrl: shopLogoUrl,
           customerName: ledger.customerName.isNotEmpty
               ? ledger.customerName
               : 'Customer',
@@ -2769,6 +2774,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           shopAddress: shopAddress,
           shopPhone: shopPhone,
           shopGst: shopGst,
+          shopLogoUrl: shopLogoUrl,
           customerName: ledger.customerName.isNotEmpty
               ? ledger.customerName
               : 'Customer',
