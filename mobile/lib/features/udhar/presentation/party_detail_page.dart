@@ -16,7 +16,6 @@ import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
@@ -2464,37 +2463,30 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                                   Navigator.pop(ctx);
 
-                                  // For Account Statement mode, try to fetch a
-                                  // receipt-specific signed link
-                                  if (capturedShareMode == 'accountStatement' &&
-                                      capturedReceiptNumber != null &&
-                                      capturedReceiptNumber.isNotEmpty) {
-                                    final shareUrl =
-                                        await ReceiptShareLinkUtils.buildSignedOrLegacyLink(
-                                          receiptNumber: capturedReceiptNumber,
-                                          username: authState.user?.username,
+                                  // For Account Statement mode, always send the
+                                  // party-level statement.html link (full ledger).
+                                  // The receipt picker only controls which PDF is
+                                  // generated — the WhatsApp link must always point
+                                  // to the account statement, NOT receipt.html.
+                                  if (capturedShareMode == 'accountStatement') {
+                                    capturedMessage =
+                                        WhatsAppUtils.buildPartyReminderMessage(
+                                          customerName:
+                                              ledger.customerName.isNotEmpty
+                                              ? ledger.customerName
+                                              : 'Customer',
+                                          shopName: shopName,
+                                          totalBilled: _totalInvoiced,
+                                          totalPaid: _totalPaid,
+                                          balanceDue: _computedBalance,
+                                          statementLink: partyStatementLink,
+                                          upiId: upiId,
+                                          useReceiptPhoto: false,
+                                          receiptPhotoUrl: null,
+                                          receiptNumber: null,
+                                          whatsappCustomNote:
+                                              shopProfile.whatsappCustomNote,
                                         );
-
-                                    if (shareUrl != null) {
-                                      capturedMessage =
-                                          WhatsAppUtils.buildPartyReminderMessage(
-                                            customerName:
-                                                ledger.customerName.isNotEmpty
-                                                ? ledger.customerName
-                                                : 'Customer',
-                                            shopName: shopName,
-                                            totalBilled: _totalInvoiced,
-                                            totalPaid: _totalPaid,
-                                            balanceDue: _computedBalance,
-                                            statementLink: shareUrl,
-                                            upiId: upiId,
-                                            useReceiptPhoto: false,
-                                            receiptPhotoUrl: null,
-                                            receiptNumber: capturedReceiptNumber,
-                                            whatsappCustomNote:
-                                                shopProfile.whatsappCustomNote,
-                                          );
-                                    }
                                   }
 
                                   // Receipt Photo mode

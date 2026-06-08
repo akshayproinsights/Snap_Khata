@@ -413,18 +413,18 @@
             background: #f8fafc;
             font-weight: 700;
             color: var(--text-primary);
-            border-top: 2px solid var(--border) !important;
-            border-bottom: 2px solid var(--border) !important;
-            border-left: none !important;
-            border-right: none !important;
+            border-top: 2px solid var(--border-strong) !important;
+            border-bottom: 2px solid var(--border-strong) !important;
+            border-left: 1px solid var(--border) !important;
+            border-right: 1px solid var(--border) !important;
         }
 
         /* ── Summary grid: notes left, totals right ── */
         .inv-summary-grid {
             display: grid;
             grid-template-columns: 1fr 280px;
-            align-items: stretch;
             border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
 
         .inv-summary-left {
@@ -432,10 +432,8 @@
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            justify-content: flex-end;
-            align-self: stretch; /* Force full height to match totals panel */
+            justify-content: center;
             box-sizing: border-box;
-            min-height: 100%; /* Ensure border spans full height */
         }
 
         .inv-totals-panel {
@@ -448,8 +446,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 20px;
-            border-bottom: 1px solid #f1f5f9;
+            padding: 9px 20px;
+            border-bottom: 1px solid var(--border);
             font-size: 13px;
         }
 
@@ -490,8 +488,8 @@
         /* Balance Due row — prominent red highlight */
         .inv-totals-row.balance-due-row {
             background: #fff5f5;
-            border-top: 2px solid #fca5a5;
-            border-bottom: 2px solid #fca5a5;
+            border-top: 1px solid #fca5a5;
+            border-bottom: 1px solid #fca5a5;
             padding: 12px 20px;
         }
         .inv-totals-row.balance-due-row .lbl {
@@ -524,10 +522,11 @@
         /* Amount in words */
         .inv-amount-words {
             padding: 10px 20px;
-            border-top: 1px solid #f1f5f9;
+            border-top: 1px solid var(--border);
+            background: #fafbfc;
             font-size: 11.5px;
-            color: var(--text-muted);
-            font-style: italic;
+            color: var(--text-secondary);
+            font-weight: 500;
             line-height: 1.5;
         }
 
@@ -606,6 +605,7 @@
             border-top: 1px solid var(--border);
             display: grid;
             grid-template-columns: 1fr 200px;
+            background: #fafbfc;
         }
 
         .inv-footer-left {
@@ -1014,8 +1014,8 @@
             // 2. Amount Paid — only when a payment has been made
             if (receivedAmount !== null && receivedAmount > 0) {
                 html += `<div class="inv-totals-row paid-row">
-                    <span class="lbl">✅ Amount Paid</span>
-                    <span class="val">− ${fmtMoney(receivedAmount)}</span>
+                    <span class="lbl">Amount Paid</span>
+                    <span class="val">&minus; ${fmtMoney(receivedAmount)}</span>
                 </div>`;
             }
 
@@ -1023,7 +1023,7 @@
             if (balanceDue !== null) {
                 const isCleared = balanceDue <= 0;
                 const dueClass  = isCleared ? 'balance-due-row fully-paid' : 'balance-due-row';
-                const dueLabel  = isCleared ? '✓ Fully Paid' : '⚡ Balance Due';
+                const dueLabel  = isCleared ? 'Fully Paid' : 'Balance Due';
                 html += `<div class="inv-totals-row ${dueClass}">
                     <span class="lbl">${dueLabel}</span>
                     <span class="val">${fmtMoney(Math.abs(balanceDue))}</span>
@@ -1031,7 +1031,7 @@
             } else if (receivedAmount === null) {
                 // No payment info at all — show grand total as balance due
                 html += `<div class="inv-totals-row balance-due-row">
-                    <span class="lbl">⚡ Balance Due</span>
+                    <span class="lbl">Balance Due</span>
                     <span class="val">${fmtMoney(grandTotal)}</span>
                 </div>`;
             }
@@ -1248,7 +1248,6 @@
             let itemsHtml = '';
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
-                    itemsHtml += `<tr class="inv-section-row"><td colspan="5">⚙️ Spare Parts &amp; Consumables</td></tr>`;
                     taxableItems.forEach(item => {
                         const qty    = Number(item.qty || 1);
                         const rate   = Number(item.rate || 0);
@@ -1256,7 +1255,7 @@
                         const srNo   = items.indexOf(item) + 1;
                         itemsHtml += `<tr>
                             <td class="center">${srNo}</td>
-                            <td>${item.name || 'Spare Part'}</td>
+                            <td>${item.name || 'Item'}</td>
                             <td class="center">${fmtQty(qty)}</td>
                             <td style="text-align:right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
                             <td>${fmtMoney(amount)}</td>
@@ -1315,10 +1314,9 @@
             const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
             const totalsPanel   = buildTotalsPanel(subtotal, null, null, grandTotal, effectivePaid, balanceDue, wordsTotal);
 
-            // Summary left (parts/labor breakdown if automobile)
+            // Summary left (labor breakdown if automobile)
             let summaryLeft = '';
             if (isAutomobile) {
-                if (partsSubtotal > 0) summaryLeft += `<div style="margin-bottom:2px;font-size:12.5px;"><span style="font-weight:600;color:#334155;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>`;
                 if (laborSubtotal > 0) summaryLeft += `<div style="font-size:12.5px;"><span style="font-weight:600;color:#334155;">Labour:</span> ${fmtMoney(laborSubtotal)}</div>`;
             }
 
@@ -1362,7 +1360,7 @@
                                     <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(data.created_at)}</div>
                                     ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
                                     ${(effectivePaid !== null && effectivePaid > 0) ? `
-                                    <div class="inv-detail-row" style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;">
+                                    <div class="inv-detail-row" style="margin-top:6px;">
                                         <strong style="color:#334155;">Gross</strong>
                                         <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
                                     </div>
@@ -1509,7 +1507,6 @@
 
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
-                    itemsHtml += `<tr class="inv-section-row"><td colspan="6">⚙️ Spare Parts &amp; Consumables</td></tr>`;
                     taxableItems.forEach(item => { itemsHtml += renderGstRow(item, items.indexOf(item) + 1); });
                 }
                 if (nonTaxableItems.length > 0) {
@@ -1545,7 +1542,6 @@
 
             let summaryLeft = '';
             if (isAutomobile) {
-                if (partsSubtotal > 0) summaryLeft += `<div style="margin-bottom:2px;font-size:12.5px;"><span style="font-weight:600;color:#334155;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>`;
                 if (laborSubtotal > 0) summaryLeft += `<div style="font-size:12.5px;"><span style="font-weight:600;color:#334155;">Labour:</span> ${fmtMoney(laborSubtotal)}</div>`;
             }
 
@@ -1590,7 +1586,7 @@
                                     ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
                                     <div class="inv-detail-row"><strong>GST</strong> 18% ${gstMode === 'included' ? '(incl.)' : '(excl.)'}</div>
                                     ${(gstEffectivePaid !== null && gstEffectivePaid > 0) ? `
-                                    <div class="inv-detail-row" style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;">
+                                    <div class="inv-detail-row" style="margin-top:6px;">
                                         <strong style="color:#334155;">Gross</strong>
                                         <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
                                     </div>

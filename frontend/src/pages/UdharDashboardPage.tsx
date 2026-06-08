@@ -84,13 +84,6 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
 
     const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
-    // Auto-select the first invoice/manual bill on load
-    useEffect(() => {
-        if (invoicesForReminder.length > 0 && !selectedTx) {
-            setSelectedTx(invoicesForReminder[0]);
-        }
-    }, [invoicesForReminder, selectedTx]);
-
     const defaultMode = (tx: Transaction | null): ShareMode => {
         if (!tx) return 'accountStatement';
         const isManual = tx.transaction_type === 'MANUAL_CREDIT' || tx.extra_fields?.is_manual_entry;
@@ -98,12 +91,14 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
         return 'receiptPhoto';
     };
 
-    // Whenever selectedTx changes, update default mode contextually
+    // Auto-select the first invoice/manual bill on load
     useEffect(() => {
-        if (selectedTx) {
-            setShareMode(defaultMode(selectedTx));
+        if (invoicesForReminder.length > 0 && !selectedTx) {
+            const firstTx = invoicesForReminder[0];
+            setSelectedTx(firstTx);
+            setShareMode(defaultMode(firstTx));
         }
-    }, [selectedTx]);
+    }, [invoicesForReminder, selectedTx]);
 
     // Build WhatsApp message preview
     const message = useMemo(() => {
@@ -538,6 +533,20 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                                         const found = invoicesForReminder.find(t => t.id === txId);
                                         if (found) {
                                             setSelectedTx(found);
+                                            // Keep current tab if compatible, otherwise change to default mode of new bill
+                                            const isManual = found.transaction_type === 'MANUAL_CREDIT' || found.extra_fields?.is_manual_entry;
+                                            setShareMode(prevMode => {
+                                                if (isManual) {
+                                                    if (prevMode === 'receiptPhoto') {
+                                                        return 'manualBill';
+                                                    }
+                                                } else {
+                                                    if (prevMode === 'manualBill') {
+                                                        return 'receiptPhoto';
+                                                    }
+                                                }
+                                                return prevMode;
+                                            });
                                         }
                                     }}
                                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl outline-none text-sm font-bold focus:border-indigo-500 transition-all appearance-none cursor-pointer"
