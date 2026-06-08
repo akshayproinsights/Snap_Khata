@@ -266,7 +266,7 @@
         /* ── Bill To / Invoice Details row ── */
         .inv-meta-strip {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 38%;
             align-items: stretch;
             border-bottom: 1px solid var(--border);
             background: #ffffff;
@@ -422,7 +422,7 @@
         /* ── Summary grid: notes left, totals right ── */
         .inv-summary-grid {
             display: grid;
-            grid-template-columns: 1fr 280px;
+            grid-template-columns: 1fr 38%;
             border-top: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
         }
@@ -604,7 +604,7 @@
         .inv-footer {
             border-top: 1px solid var(--border);
             display: grid;
-            grid-template-columns: 1fr 200px;
+            grid-template-columns: 1fr 38%;
             background: #fafbfc;
         }
 
@@ -735,10 +735,69 @@
 
             .inv-doc {
                 box-shadow: none !important;
-                border: 1px solid #000 !important;
+                border: 1.2px solid #000000 !important;
                 margin: 0 !important;
                 width: 100% !important;
                 max-width: 100% !important;
+            }
+
+            .inv-header-bar {
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-meta-strip {
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-bill-to {
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-table {
+                border: 1.2px solid #000000 !important;
+            }
+
+            .inv-table th {
+                border-bottom: 1.2px solid #000000 !important;
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-table td {
+                border-bottom: 1.2px solid #000000 !important;
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-summary-grid {
+                border-top: 1.2px solid #000000 !important;
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-summary-left {
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-totals-row {
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-amount-words {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-upi-section {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-terms {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-footer {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-footer-left {
+                border-right: 1.2px solid #000000 !important;
             }
 
             /* Logo must be visible when printing */

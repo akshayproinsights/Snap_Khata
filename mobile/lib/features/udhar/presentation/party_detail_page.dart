@@ -1711,8 +1711,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final usernameParam = authState.user?.username != null
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
-    final partyStatementLink =
-        'https://snapkhata.com/statement.html?party=${ledger.id}$usernameParam';
 
     // Collect ALL credit transactions (invoices + manual entries) for the picker.
     // Manual entries without a receipt image or number are now included so they
@@ -1786,6 +1784,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
         return StatefulBuilder(
           builder: (ctx, setSheet) {
+            // Dynamically generate receipt link for chosen bill, falling back to party statement in receipt.html
+            final String activeShareLink;
+            final selectedReceiptNumber = selectedTx?.receiptNumber;
+            if (selectedReceiptNumber != null && selectedReceiptNumber.isNotEmpty) {
+              activeShareLink = 'https://snapkhata.com/receipt.html?i=$selectedReceiptNumber$usernameParam';
+            } else {
+              activeShareLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+            }
+
             // Build the correct preview message depending on shareMode
             final String message;
             if (shareMode == 'manualBill' && selectedTx != null) {
@@ -1812,7 +1819,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 totalBilled: _totalInvoiced,
                 totalPaid: _totalPaid,
                 balanceDue: _computedBalance,
-                statementLink: partyStatementLink,
+                statementLink: activeShareLink,
                 upiId: upiId,
                 useReceiptPhoto: shareMode == 'receiptPhoto',
                 receiptPhotoUrl: selectedTx?.receiptLink,
@@ -2480,7 +2487,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                           totalBilled: _totalInvoiced,
                                           totalPaid: _totalPaid,
                                           balanceDue: _computedBalance,
-                                          statementLink: partyStatementLink,
+                                          statementLink: activeShareLink,
                                           upiId: upiId,
                                           useReceiptPhoto: false,
                                           receiptPhotoUrl: null,

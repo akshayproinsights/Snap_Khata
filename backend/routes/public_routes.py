@@ -363,6 +363,48 @@ async def get_public_receipt(
             except Exception as e:
                 logger.error(f"Error querying invoices table as fallback: {e}")
 
+        # ── 3b. Fall back to ledger_transactions (manual entries) ─────────────────
+        if header is None:
+            try:
+                query_tx = db.client.from_("ledger_transactions") \
+                    .select("*") \
+                    .eq("receipt_number", receipt_number)
+                if u:
+                    query_tx = query_tx.eq("username", u)
+                resp_tx = query_tx.limit(1).execute()
+                if resp_tx.data and len(resp_tx.data) > 0:
+                    tx_row = resp_tx.data[0]
+                    # Fetch customer details from customer_ledgers using ledger_id
+                    ledger_id = tx_row.get("ledger_id")
+                    customer_name = "Walk-in Customer"
+                    customer_phone = None
+                    if ledger_id:
+                        ld_resp = db.client.from_("customer_ledgers") \
+                            .select("customer_name, customer_phone") \
+                            .eq("id", ledger_id) \
+                            .limit(1) \
+                            .execute()
+                        if ld_resp.data:
+                            customer_name = ld_resp.data[0].get("customer_name") or customer_name
+                            customer_phone = ld_resp.data[0].get("customer_phone")
+                    
+                    extra = tx_row.get("extra_fields") or {}
+                    vehicle_number = extra.get("vehicle_number") or extra.get("car_number")
+                    odometer_reading = extra.get("odometer") or extra.get("odometer_reading")
+
+                    header = {
+                        **tx_row,
+                        "customer_name": customer_name,
+                        "customer_phone": customer_phone,
+                        "vehicle_number": vehicle_number,
+                        "odometer_reading": odometer_reading,
+                        "verification_status": "done" if tx_row.get("is_paid") else "pending",
+                    }
+                    username = tx_row.get("username")
+                    source_table = "ledger_transactions"
+            except Exception as e:
+                logger.error(f"Error querying ledger_transactions table as fallback: {e}")
+
         # ── 4. Fall back to customer_ledgers (account statements) ─────────────────
         if header is None:
             query_ledgers = db.client.from_("customer_ledgers") \
@@ -485,6 +527,26 @@ async def get_public_receipt(
                         "amount": amount,
                         "type": row.get("type") or "part"
                     })
+
+        elif source_table == "ledger_transactions":
+            # Extract items from extra_fields
+            extra = header.get("extra_fields") or {}
+            if isinstance(extra, dict) and "items" in extra:
+                raw_items = extra["items"]
+                if isinstance(raw_items, list):
+                    for it in raw_items:
+                        if isinstance(it, dict):
+                            qty = float(it.get("quantity") or 1)
+                            rate = float(it.get("rate") or 0)
+                            items.append({
+                                "name": it.get("item_name") or "Item",
+                                "quantity": qty,
+                                "qty": qty,
+                                "rate": rate,
+                                "amount": float(it.get("amount") or (qty * rate)),
+                                "type": "part"
+                            })
+            total_from_items = float(header.get("amount") or 0)
 
         elif source_table == "customer_ledgers":
             try:

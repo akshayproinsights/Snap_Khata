@@ -202,10 +202,13 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
         }
 
         const usernameParam = user?.username ? `&u=${encodeURIComponent(user.username)}` : '';
-        const partyStatementLink = `https://snapkhata.com/statement.html?party=${ledger.id}${usernameParam}`;
+        const selectedReceiptNumber = selectedTx?.receipt_number || selectedTx?.invoice_number;
+        const activeShareLink = selectedReceiptNumber
+            ? `https://snapkhata.com/receipt.html?i=${selectedReceiptNumber}${usernameParam}`
+            : `https://snapkhata.com/receipt.html?party=${ledger.id}${usernameParam}`;
 
-        lines.push('🧾 View full account statement:');
-        lines.push(partyStatementLink);
+        lines.push(selectedReceiptNumber ? '🧾 View Receipt:' : '🧾 View full account statement:');
+        lines.push(activeShareLink);
 
         if (shopProfile?.shop_upi_id) {
             lines.push(`\n💳 Pay via UPI: ${shopProfile.shop_upi_id}`);

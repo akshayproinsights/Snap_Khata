@@ -588,8 +588,10 @@ class WhatsAppUtils {
           '⏳ Balance Due: *${formatIndianCurrency(balanceDue)}*\n\n';
     }
 
-    msg += '🧾 View full account statement:\n'
-        '$statementLink\n';
+    final isSpecificReceipt = statementLink.contains('receipt.html?i=');
+    msg += isSpecificReceipt
+        ? '🧾 View Receipt:\n$statementLink\n'
+        : '🧾 View full account statement:\n$statementLink\n';
 
     if (upiId != null && upiId.isNotEmpty) {
       msg += '\n💳 Pay via UPI: $upiId';

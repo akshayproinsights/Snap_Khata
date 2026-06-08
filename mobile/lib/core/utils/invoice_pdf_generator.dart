@@ -741,6 +741,7 @@ class InvoicePdfGenerator {
           pw.Container(
             width: double.infinity,
             decoration: const pw.BoxDecoration(
+              color: _white,
               border: pw.Border(
                 left:   pw.BorderSide(color: _black, width: 1.2),
                 right:  pw.BorderSide(color: _black, width: 1.2),
@@ -756,7 +757,6 @@ class InvoicePdfGenerator {
                 pw.Container(
                   width: double.infinity,
                   padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
-                  color: _white,
                   child: pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
@@ -828,18 +828,18 @@ class InvoicePdfGenerator {
                 ),
 
                 // ─ Divider line between header and Bill To ────────────
-                pw.Container(height: 1, color: _tableHeaderBg),
+                pw.Container(height: 1.2, color: _black),
 
                 // ─ Bill To / Invoice Details row ────────────────────
                 pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     // Bill To
                     pw.Expanded(
                       child: pw.Container(
                         padding: const pw.EdgeInsets.all(9),
                         decoration: const pw.BoxDecoration(
-                          border: pw.Border(right: pw.BorderSide(color: _tableHeaderBg, width: 1)),
+                          border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
                         ),
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -880,7 +880,7 @@ class InvoicePdfGenerator {
                     ),
                     // Order / Invoice Details (right panel)
                     pw.SizedBox(
-                      width: 170,
+                      width: 206,
                       child: pw.Padding(
                         padding: const pw.EdgeInsets.all(9),
                         child: pw.Column(
@@ -952,14 +952,14 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 // Left: automobile parts/labour breakdown (or empty spacer)
                 pw.Expanded(
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(9),
                     decoration: const pw.BoxDecoration(
-                      border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
+                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
                     ),
                     child: isAutomobile && laborSubtotal > 0 && !isLedger
                         ? pw.Column(
@@ -976,13 +976,8 @@ class InvoicePdfGenerator {
                 ),
                 // Right: amounts panel — fully boxed with left border separator
                 pw.SizedBox(
-                  width: 205,
+                  width: 206,
                   child: pw.Container(
-                    decoration: const pw.BoxDecoration(
-                      border: pw.Border(
-                        left: pw.BorderSide(color: _darkSlate, width: 0.7),
-                      ),
-                    ),
                     padding: const pw.EdgeInsets.all(9),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1078,13 +1073,13 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 pw.Expanded(
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(10),
                     decoration: const pw.BoxDecoration(
-                      border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
+                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
                     ),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1112,13 +1107,13 @@ class InvoicePdfGenerator {
                   ),
                 ),
                 pw.SizedBox(
-                  width: 170,
+                  width: 206,
                   child: pw.Container(
                     padding: const pw.EdgeInsets.fromLTRB(12, 44, 12, 10),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
-                        pw.Container(height: 1.0, color: _darkSlate, width: 130),
+                        pw.Container(height: 1.0, color: _darkSlate, width: 150),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           'For ${data.shopName.toUpperCase()}',
