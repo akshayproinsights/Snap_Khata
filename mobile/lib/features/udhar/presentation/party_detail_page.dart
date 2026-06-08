@@ -2659,6 +2659,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         }
       }
 
+      final invoices = allTxs.where((t) =>
+          t.transactionType == 'INVOICE' ||
+          t.transactionType == 'MANUAL_CREDIT');
+      final payments = allTxs.where((t) => t.transactionType == 'PAYMENT');
+      final bool hideAccountSummary = invoices.length <= 1 && payments.length <= 1;
+
       invoiceData = InvoicePdfGenerator.fromLocalTransaction(
         shopName: shopName,
         shopAddress: shopAddress,
@@ -2683,12 +2689,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         customTerms: customTerms,
         documentType: tx.isManualEntry ? 'bill' : 'order',
         // Account-level summary — shown in the banner at the bottom of the PDF
-        // so the customer can see their full outstanding balance, not just this bill.
-        accountTotalBilled: totalBilledOnLedger > 0 ? totalBilledOnLedger : null,
-        accountTotalPaid: totalPaidOnLedger,
-        accountBalanceDue: totalBilledOnLedger > 0
-            ? (totalBilledOnLedger - totalPaidOnLedger).clamp(0.0, double.infinity)
-            : null,
+        // only when there are multiple receipts/payments. If there is only one
+        // receipt and at most one payment, we hide the Account Summary to keep
+        // the PDF clean and avoid redundant totals.
+        accountTotalBilled: hideAccountSummary ? null : (totalBilledOnLedger > 0 ? totalBilledOnLedger : null),
+        accountTotalPaid: hideAccountSummary ? null : totalPaidOnLedger,
+        accountBalanceDue: hideAccountSummary
+            ? null
+            : (totalBilledOnLedger > 0
+                ? (totalBilledOnLedger - totalPaidOnLedger).clamp(0.0, double.infinity)
+                : null),
       );
 
       final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);

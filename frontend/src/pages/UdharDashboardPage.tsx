@@ -6,6 +6,7 @@ import { udharAPI } from '../services/udharAPI';
 import type { Ledger, Transaction } from '../services/udharAPI';
 import { configAPI } from '../services/api';
 import { formatCurrency, formatActivityDate } from '../utils/dashboardHelpers';
+import { useAuth } from '../contexts/AuthContext';
 import {
     Users,
     Truck,
@@ -30,6 +31,7 @@ interface ReminderModalProps {
 }
 
 const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
+    const { user } = useAuth();
     type ShareMode = 'receiptPhoto' | 'manualBill' | 'accountStatement';
     const [shareMode, setShareMode] = useState<ShareMode>('accountStatement');
     const [phoneInput, setPhoneInput] = useState('');
@@ -98,11 +100,16 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
 
     // Build WhatsApp message preview
     const message = useMemo(() => {
+        const shop = shopName.trim();
+        const noteSuffix = shopProfile?.whatsapp_custom_note?.trim()
+            ? `\n\n👉 *Note:* ${shopProfile.whatsapp_custom_note.trim()}`
+            : '';
+
         if (shareMode === 'manualBill' && selectedTx) {
             const items = selectedTx.extra_fields?.items || [];
             const lines: string[] = [];
             lines.push(`Hi ${name},`);
-            lines.push(`Here's your bill from *${shopName}* 🧾\n`);
+            lines.push(`Here's your bill from *${shop}* 🧾\n`);
             
             if (items.length > 0) {
                 lines.push('📦 *Items:*');
@@ -152,23 +159,68 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                 lines.push(`🚚 *Delivery Promise:* ${formatDateStr(deliveryDate)}`);
             }
 
+            if (noteSuffix) {
+                lines.push(noteSuffix);
+            }
+
             lines.push('');
             lines.push('Thank you! 🙏');
-            lines.push(`— *${shopName}*`);
+            lines.push(`— *${shop}*`);
             
             return lines.join('\n');
         }
 
-        return [
-            `Hi ${name},`,
-            '',
-            `⚠️ *Amount Due: ${formatCurrency(balanceDue)}*${billNo ? ` (Bill #${billNo})` : ''}`,
-            '',
-            'Please settle this amount as soon as possible.',
-            '',
-            'Thank you! 🙏',
-        ].join('\n');
-    }, [shareMode, selectedTx, name, balanceDue, billNo, shopName]);
+        if (shareMode === 'receiptPhoto' && selectedTx) {
+            const invoiceRef = selectedTx.receipt_number || selectedTx.invoice_number ? ` (Bill #${selectedTx.receipt_number || selectedTx.invoice_number})` : '';
+            return [
+                `Hi ${name},`,
+                '',
+                `⚠️ *Amount Due: ${formatCurrency(balanceDue)}*${invoiceRef}`,
+                '',
+                'Please settle this amount as soon as possible.',
+                noteSuffix,
+                '',
+                'Thank you! 🙏',
+                `— *${shop}*`
+            ].join('\n');
+        }
+
+        // Default: Account Statement Mode
+        const hasBillingData = totalBilled > 0 || (totalBilled - balanceDue) > 0;
+        
+        const lines: string[] = [];
+        lines.push(`Hi ${name},`);
+        lines.push('');
+        lines.push(`⚠️ *Total Balance Due: ${formatCurrency(balanceDue)}*`);
+        lines.push('');
+        
+        if (hasBillingData) {
+            lines.push(`📋 Total Billed: ${formatCurrency(totalBilled)}`);
+            lines.push(`✅ Amount Paid: ${formatCurrency(Math.max(0, totalBilled - balanceDue))}`);
+            lines.push(`⏳ Balance Due: *${formatCurrency(balanceDue)}*`);
+            lines.push('');
+        }
+
+        const usernameParam = user?.username ? `&u=${encodeURIComponent(user.username)}` : '';
+        const partyStatementLink = `https://snapkhata.com/statement.html?party=${ledger.id}${usernameParam}`;
+
+        lines.push('🧾 View full account statement:');
+        lines.push(partyStatementLink);
+
+        if (shopProfile?.shop_upi_id) {
+            lines.push(`\n💳 Pay via UPI: ${shopProfile.shop_upi_id}`);
+        }
+
+        if (noteSuffix) {
+            lines.push(noteSuffix);
+        }
+
+        lines.push('');
+        lines.push('Thank you! 🙏');
+        lines.push(`— *${shop}*`);
+
+        return lines.join('\n');
+    }, [shareMode, selectedTx, name, balanceDue, billNo, shopName, shopProfile, user]);
 
     const handleWhatsApp = () => {
         const phone = phoneInput.trim();

@@ -14,6 +14,10 @@
                     "destination": "/receipt.html"
                 },
                 {
+                    "source": "/statement.html",
+                    "destination": "/statement.html"
+                },
+                {
                     "source": "**",
                     "destination": "/index.html"
                 }
@@ -31,6 +35,10 @@
                 {
                     "source": "/receipt.html",
                     "destination": "/receipt.html"
+                },
+                {
+                    "source": "/statement.html",
+                    "destination": "/statement.html"
                 },
                 {
                     "source": "**",
