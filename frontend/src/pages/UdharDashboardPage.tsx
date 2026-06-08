@@ -44,10 +44,6 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
     const balanceDue = ledger.balance_due;
     const totalBilled = ledger.latest_bill_amount || balanceDue;
     const billNo = ledger.latest_bill_number;
-
-    // Detect if this ledger might have a receipt image (based on bill number)
-    const hasReceiptPhoto = !!(ledger.latest_bill_number);
-
     useEffect(() => {
         let active = true;
         udharAPI.getTransactions(ledger.id)
@@ -189,15 +185,16 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
     };
 
     const handleSharePdf = async () => {
+        // Open print window synchronously to capture user gesture context
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (!printWindow) {
+            toast.error('Please allow pop-ups to download the PDF.');
+            return;
+        }
+
         setIsPdfLoading(true);
         try {
             if (shareMode === 'manualBill' && selectedTx) {
-                const printWindow = window.open('', '_blank', 'width=800,height=600');
-                if (!printWindow) {
-                    toast.error('Please allow pop-ups to download the PDF.');
-                    setIsPdfLoading(false);
-                    return;
-                }
 
                 const date = new Date(selectedTx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
                 const items = selectedTx.extra_fields?.items || [];
@@ -345,12 +342,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                 fullTransactions = transactions;
             }
 
-            const printWindow = window.open('', '_blank', 'width=800,height=600');
-            if (!printWindow) {
-                toast.error('Please allow pop-ups to download the PDF.');
-                setIsPdfLoading(false);
-                return;
-            }
+            // Note: printWindow was already opened synchronously at the start of the function.
 
             const date = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -467,6 +459,9 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
             }, 500);
         } catch (err) {
             console.error(err);
+            if (printWindow) {
+                printWindow.close();
+            }
             toast.error('Could not generate PDF.');
         } finally {
             setIsPdfLoading(false);

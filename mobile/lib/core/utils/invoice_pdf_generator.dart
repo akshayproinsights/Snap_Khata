@@ -31,6 +31,13 @@ class InvoiceData {
   final String? customTerms; // optional custom terms text
   final String? shopLogoUrl; // optional logo rendered in the PDF header
 
+  // ── Account-level totals (optional) ─────────────────────────────────────
+  // When set, a "Account Summary" banner is rendered below the invoice totals
+  // so the customer can see their full balance across ALL bills at a glance.
+  final double? accountTotalBilled;
+  final double? accountTotalPaid;
+  final double? accountBalanceDue;
+
   const InvoiceData({
     required this.shopName,
     this.shopAddress,
@@ -52,6 +59,9 @@ class InvoiceData {
     required this.documentType,
     this.customTerms,
     this.shopLogoUrl,
+    this.accountTotalBilled,
+    this.accountTotalPaid,
+    this.accountBalanceDue,
   });
 }
 
@@ -105,8 +115,7 @@ class InvoicePdfGenerator {
 
   // ── Color palette ─────────────────────────────────────────────────────
   static const _black        = PdfColor.fromInt(0xFF000000);
-  static const _headerNavy  = PdfColor.fromInt(0xFF1a2744);
-  static const _headerNavyLight = PdfColor.fromInt(0xFF243460);
+  static const _headerNavy  = PdfColor.fromInt(0xFF1a2744); // kept for potential future use
   static const _darkSlate   = PdfColor.fromInt(0xFF1e293b);
   static const _midSlate    = PdfColor.fromInt(0xFF475569);
   static const _lightGray   = PdfColor.fromInt(0xFFf1f5f9);
@@ -587,7 +596,7 @@ class InvoicePdfGenerator {
 
     if (isAutomobile && (taxableItems.isNotEmpty || laborItems.isNotEmpty)) {
       if (taxableItems.isNotEmpty) {
-        addItemRows(taxableItems, label: 'SPARE PARTS & CONSUMABLES');
+        addItemRows(taxableItems); // no section label for spare parts
       }
       if (laborItems.isNotEmpty) {
         addItemRows(laborItems, label: 'LABOUR & SERVICES');
@@ -742,11 +751,11 @@ class InvoicePdfGenerator {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // Colored shop name bar
+                // White shop name bar with black text
                 pw.Container(
                   width: double.infinity,
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  color: _headerNavy,
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  color: _white,
                   child: pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -758,12 +767,12 @@ class InvoicePdfGenerator {
                           height: 44,
                           margin: const pw.EdgeInsets.only(right: 10),
                           decoration: pw.BoxDecoration(
-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-                            color: _headerNavyLight,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                            border: pw.Border.all(color: _tableHeaderBg, width: 1),
                           ),
                           child: pw.ClipRRect(
-                            horizontalRadius: 6,
-                            verticalRadius: 6,
+                            horizontalRadius: 4,
+                            verticalRadius: 4,
                             child: pw.Image(
                               pw.MemoryImage(logoBytes),
                               fit: pw.BoxFit.cover,
@@ -778,7 +787,7 @@ class InvoicePdfGenerator {
                           style: pw.TextStyle(
                             font: bold,
                             fontSize: 14,
-                            color: _white,
+                            color: _darkSlate,
                             letterSpacing: 0.8,
                           ),
                         ),
@@ -787,12 +796,12 @@ class InvoicePdfGenerator {
                         pw.Container(
                           padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                           decoration: pw.BoxDecoration(
-                            color: _headerNavyLight,
+                            color: _tableHeaderBg,
                             borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
                           ),
                           child: pw.Text(
                             'GSTIN: ${data.shopGst}',
-                            style: pw.TextStyle(font: semiBold, fontSize: 7.5, color: _white),
+                            style: pw.TextStyle(font: semiBold, fontSize: 7.5, color: _darkSlate),
                           ),
                         ),
                     ],
@@ -804,7 +813,10 @@ class InvoicePdfGenerator {
                   pw.Container(
                     width: double.infinity,
                     padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    color: _lightGray,
+                    decoration: const pw.BoxDecoration(
+                      color: _lightGray,
+                      border: pw.Border(top: pw.BorderSide(color: _tableHeaderBg, width: 1)),
+                    ),
                     child: pw.Row(
                       children: [
                         if (data.shopAddress != null && data.shopAddress!.isNotEmpty)
@@ -827,7 +839,7 @@ class InvoicePdfGenerator {
           ),
 
           // ── Bill To / Invoice Details ────────────────────────────────
-          // No top border — it's shared with the bottom of the section above
+          // No top border — shared with bottom border of section above
           pw.Container(
             decoration: const pw.BoxDecoration(
               border: pw.Border(
@@ -963,31 +975,28 @@ class InvoicePdfGenerator {
                     decoration: const pw.BoxDecoration(
                       border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
                     ),
-                    child: isAutomobile && (partsSubtotal > 0 || laborSubtotal > 0) && !isLedger
+                    child: isAutomobile && laborSubtotal > 0 && !isLedger
                         ? pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
-                              if (partsSubtotal > 0) ...[
-                                pw.Row(children: [
-                                  pw.Text('Spare Parts: ', style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate)),
-                                  pw.Text(_fmtMoney(partsSubtotal), style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate)),
-                                ]),
-                                pw.SizedBox(height: 3),
-                              ],
-                              if (laborSubtotal > 0)
-                                pw.Row(children: [
-                                  pw.Text('Servicing: ', style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate)),
-                                  pw.Text(_fmtMoney(laborSubtotal), style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate)),
-                                ]),
+                              pw.Row(children: [
+                                pw.Text('Labour: ', style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate)),
+                                pw.Text(_fmtMoney(laborSubtotal), style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate)),
+                              ]),
                             ],
                           )
                         : pw.SizedBox(),
                   ),
                 ),
-                // Right: amounts panel
+                // Right: amounts panel — fully boxed with left border separator
                 pw.SizedBox(
                   width: 205,
-                  child: pw.Padding(
+                  child: pw.Container(
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(
+                        left: pw.BorderSide(color: _darkSlate, width: 0.7),
+                      ),
+                    ),
                     padding: const pw.EdgeInsets.all(9),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1034,6 +1043,16 @@ class InvoicePdfGenerator {
                               'Balance   : ${_fmtMoney(balance)}',
                               style: pw.TextStyle(font: regular, fontSize: 8, color: balance > 0 ? _red : _green),
                             ),
+                          ],
+                          if (!isLedger && data.accountTotalBilled != null && data.accountBalanceDue != null) ...[
+                            pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+                            pw.Text('Account Summary:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+                            pw.SizedBox(height: 3),
+                            _amtRow('Total Billed', _fmtMoney(data.accountTotalBilled!), regular: regular, semiBold: semiBold, bold: bold),
+                            pw.SizedBox(height: 3),
+                            _amtRow('Total Paid', _fmtMoney(data.accountTotalPaid ?? 0.0), valueColor: _green, regular: regular, semiBold: semiBold, bold: bold),
+                            pw.SizedBox(height: 3),
+                            _amtRow('Total Due', _fmtMoney(data.accountBalanceDue!), isBold: true, valueColor: data.accountBalanceDue! > 0 ? _red : _green, regular: regular, semiBold: semiBold, bold: bold),
                           ],
                         ],
                       ],
@@ -1148,8 +1167,6 @@ class InvoicePdfGenerator {
 
     return doc.save();
   }
-
-
   // ── Amount row helper ─────────────────────────────────────────────────────
 
   static pw.Widget _amtRow(
@@ -1292,6 +1309,10 @@ class InvoicePdfGenerator {
     String status = 'UNPAID',
     String? customTerms,
     String documentType = 'order',
+    // Account-level totals — shown in the Account Summary banner
+    double? accountTotalBilled,
+    double? accountTotalPaid,
+    double? accountBalanceDue,
   }) {
     final items = rawItems.map((m) {
       return InvoiceLineItem(
@@ -1304,26 +1325,29 @@ class InvoicePdfGenerator {
     }).toList();
 
     return InvoiceData(
-      shopName:        shopName,
-      shopAddress:     shopAddress,
-      shopPhone:       shopPhone,
-      shopGst:         shopGst,
-      shopLogoUrl:     shopLogoUrl,
-      customerName:    customerName,
-      customerPhone:   customerPhone,
-      vehicleNumber:   vehicleNumber,
-      odometerReading: odometerReading,
-      receiptNumber:   receiptNumber,
-      date:            date,
-      status:          status,
-      items:           items,
-      totalAmount:     totalAmount,
-      receivedAmount:  receivedAmount,
-      balanceDue:      balanceDue,
-      gstMode:         gstMode,
-      industry:        industry,
-      documentType:    documentType,
-      customTerms:     customTerms,
+      shopName:          shopName,
+      shopAddress:       shopAddress,
+      shopPhone:         shopPhone,
+      shopGst:           shopGst,
+      shopLogoUrl:       shopLogoUrl,
+      customerName:      customerName,
+      customerPhone:     customerPhone,
+      vehicleNumber:     vehicleNumber,
+      odometerReading:   odometerReading,
+      receiptNumber:     receiptNumber,
+      date:              date,
+      status:            status,
+      items:             items,
+      totalAmount:       totalAmount,
+      receivedAmount:    receivedAmount,
+      balanceDue:        balanceDue,
+      gstMode:           gstMode,
+      industry:          industry,
+      documentType:      documentType,
+      customTerms:       customTerms,
+      accountTotalBilled:  accountTotalBilled,
+      accountTotalPaid:    accountTotalPaid,
+      accountBalanceDue:   accountBalanceDue,
     );
   }
 }

@@ -1,6 +1,8 @@
 {
     "short_name": "SnapKhata",
     "name": "SnapKhata: Smart Digital Munim",
+    "id": "/",
+    "scope": "/",
     "icons": [
         {
             "src": "/snapkhata-icon-192.png",

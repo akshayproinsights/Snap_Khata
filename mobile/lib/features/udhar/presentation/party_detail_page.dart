@@ -1,5 +1,6 @@
 import "package:mobile/core/theme/context_extension.dart";
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -2681,6 +2682,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         status: txStatus,
         customTerms: customTerms,
         documentType: tx.isManualEntry ? 'bill' : 'order',
+        // Account-level summary — shown in the banner at the bottom of the PDF
+        // so the customer can see their full outstanding balance, not just this bill.
+        accountTotalBilled: totalBilledOnLedger > 0 ? totalBilledOnLedger : null,
+        accountTotalPaid: totalPaidOnLedger,
+        accountBalanceDue: totalBilledOnLedger > 0
+            ? (totalBilledOnLedger - totalPaidOnLedger).clamp(0.0, double.infinity)
+            : null,
       );
 
       final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);
@@ -2721,22 +2729,62 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           ? '${shopPart}_Tax_${receiptPart}_$datePart.pdf'
           : '${shopPart}_${receiptPart}_$datePart.pdf';
 
-      // Open native OS share sheet with the PDF file.
-      // On Android Chrome / iOS Safari: pops up the system share chooser
-      // (WhatsApp, Gmail, Drive, etc.) — exactly like top apps do.
-      // On desktop browsers: falls back to a direct file download.
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile.fromData(
-              pdfBytes,
-              mimeType: 'application/pdf',
-              name: fileName,
-            ),
-          ],
-          text: '${invoiceData.shopName} — Invoice PDF',
-        ),
-      );
+      if (kIsWeb) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => AlertDialog(
+            title: const Text('PDF Ready', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: const Text('Your invoice PDF has been generated successfully.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await SharePlus.instance.share(
+                    ShareParams(
+                      files: [
+                        XFile.fromData(
+                          pdfBytes,
+                          mimeType: 'application/pdf',
+                          name: fileName,
+                        ),
+                      ],
+                      text: '${invoiceData.shopName} — Invoice PDF',
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('SHARE / DOWNLOAD'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Open native OS share sheet with the PDF file.
+        // On Android Chrome / iOS Safari: pops up the system share chooser
+        // (WhatsApp, Gmail, Drive, etc.) — exactly like top apps do.
+        // On desktop browsers: falls back to a direct file download.
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [
+              XFile.fromData(
+                pdfBytes,
+                mimeType: 'application/pdf',
+                name: fileName,
+              ),
+            ],
+            text: '${invoiceData.shopName} — Invoice PDF',
+          ),
+        );
+      }
 
     } catch (e) {
       if (!mounted) return;
