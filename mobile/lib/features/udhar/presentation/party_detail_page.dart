@@ -22,7 +22,8 @@ import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
 import 'package:mobile/core/utils/invoice_pdf_generator.dart';
-import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+
 
 
 class PartyDetailPage extends ConsumerStatefulWidget {
@@ -1711,7 +1712,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
     final partyStatementLink =
-        'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
+        'https://snapkhata.com/statement.html?party=${ledger.id}$usernameParam';
 
     // Collect ALL credit transactions (invoices + manual entries) for the picker.
     // Manual entries without a receipt image or number are now included so they
@@ -2002,7 +2003,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                       style: TextStyle(fontSize: 12),
                                     ),
                                     icon: Icon(
-                                      LucideIcons.fileText,
+                                      LucideIcons.link,
                                       size: 15,
                                     ),
                                   ),
@@ -2337,7 +2338,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (shareMode != 'receiptPhoto')
+                        if (shareMode == 'accountStatement' && selectedTx != null)
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -2373,7 +2374,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               Navigator.pop(ctx);
                               if (!context.mounted) return;
                               await _sharePdfForTransaction(
-                                tx: shareMode == 'accountStatement' ? null : capturedTx,
+                                tx: capturedTx!,
                                 ledger: ledger,
                                 shopName: shopName,
                                 shopAddress: capturedShopProfile.address
@@ -2400,7 +2401,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             },
                           ),
                         ),
-                        if (shareMode != 'receiptPhoto')
+                        if (shareMode == 'accountStatement' && selectedTx != null)
                           const SizedBox(height: 10),
                         // ── Cancel + WhatsApp row ───────────────────────────
                         Row(
@@ -2549,7 +2550,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   // Generates a professional invoice PDF for [tx] (or a simple balance PDF
   // if [tx] is null) and opens the native OS share sheet.
   Future<void> _sharePdfForTransaction({
-    required LedgerTransaction? tx,
+    required LedgerTransaction tx,
     required CustomerLedger ledger,
     required String shopName,
     String? shopAddress,
@@ -2587,209 +2588,108 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     try {
       final InvoiceData invoiceData;
 
-      if (tx != null) {
-        // ── Authoritative payment amounts from ledger ──────────────────────
-        final double txTotal = tx.amount;
+      // ── Authoritative payment amounts from ledger ──────────────────────
+      final double txTotal = tx.amount;
 
-        // Sum ALL payments on this customer ledger — not just ones tagged with
-        // this receipt number. Standalone "Record Payment" entries get their own
-        // sequential receipt numbers and would be missed by a receipt_number filter.
-        final allTxs = _transactions ?? [];
-        final totalPaidOnLedger = allTxs
-            .where((t) => t.transactionType == 'PAYMENT')
-            .fold(0.0, (s, t) => s + t.amount);
-        final totalBilledOnLedger = allTxs
-            .where((t) => t.transactionType == 'INVOICE' || t.transactionType == 'MANUAL_CREDIT')
-            .fold(0.0, (s, t) => s + t.amount);
+      // Sum ALL payments on this customer ledger — not just ones tagged with
+      // this receipt number. Standalone "Record Payment" entries get their own
+      // sequential receipt numbers and would be missed by a receipt_number filter.
+      final allTxs = _transactions ?? [];
+      final totalPaidOnLedger = (_backendSummary['total_paid'] ?? 0.0) > 0
+          ? _backendSummary['total_paid']!
+          : allTxs
+              .where((t) => t.transactionType == 'PAYMENT')
+              .fold(0.0, (s, t) => s + t.amount);
+      final totalBilledOnLedger = (_backendSummary['total_billed'] ?? 0.0) > 0
+          ? _backendSummary['total_billed']!
+          : allTxs
+              .where((t) =>
+                  t.transactionType == 'INVOICE' ||
+                  t.transactionType == 'MANUAL_CREDIT')
+              .fold(0.0, (s, t) => s + t.amount);
 
-        // Proportionally attribute payments to this specific receipt's share
-        final double txPaid;
-        if (totalBilledOnLedger > 0 && totalPaidOnLedger > 0) {
-          final receiptShare = txTotal / totalBilledOnLedger;
-          txPaid = (totalPaidOnLedger * receiptShare).clamp(0.0, txTotal);
-        } else {
-          // Fallback: use receivedAmount stored on the transaction itself
-          txPaid = tx.receivedAmount ?? 0.0;
-        }
-        final double txBalance = (txTotal - txPaid).clamp(0.0, double.infinity);
-        final String txStatus = txBalance <= 0
-            ? 'PAID'
-            : (txPaid > 0 ? 'PARTIAL' : 'UNPAID');
-
-        // ── Items: prefer local, fall back to verified_invoices API ────────
-        // Manual/catalogue entries store items directly on the transaction.
-        // AI-processed invoice receipts store items in verified_invoices
-        // (one row per line item, keyed by receipt_number).
-        List<Map<String, dynamic>> rawItems = tx.items;
-        String gstMode = 'none';
-        String? vehicleNumber;
-        String? odometerReading;
-
-        if (rawItems.isEmpty && tx.receiptNumber != null && tx.receiptNumber!.isNotEmpty) {
-          // Fetch the verified invoice rows for this receipt
-          try {
-            final repo = ref.read(verifiedRepositoryProvider);
-            final records = await repo.getVerifiedInvoices(
-              receiptNumber: tx.receiptNumber,
-            );
-
-            if (records.isNotEmpty) {
-              final first = records.first;
-              gstMode = first.gstMode ?? 'none';
-              vehicleNumber = first.extraFields['vehicle_number']?.toString() ??
-                  first.extraFields['car_number']?.toString();
-              odometerReading = first.extraFields['odometer']?.toString() ??
-                  first.extraFields['odometer_reading']?.toString();
-
-              // Each VerifiedInvoice record = one line item
-              rawItems = records.map((r) => <String, dynamic>{
-                'name': r.description.isNotEmpty ? r.description : 'Item',
-                'qty': r.quantity,
-                'rate': r.rate,
-                'amount': r.amount,
-                'type': r.type.toLowerCase(), // 'part', 'labour', 'service'
-              }).toList();
-            }
-          } catch (_) {
-            // If API fetch fails, still generate PDF with amounts (no items)
-          }
-        }
-
-        invoiceData = InvoicePdfGenerator.fromLocalTransaction(
-          shopName: shopName,
-          shopAddress: shopAddress,
-          shopPhone: shopPhone,
-          shopGst: shopGst,
-          shopLogoUrl: shopLogoUrl,
-          customerName: ledger.customerName.isNotEmpty
-              ? ledger.customerName
-              : 'Customer',
-          customerPhone: ledger.customerPhone,
-          vehicleNumber: vehicleNumber,
-          odometerReading: odometerReading,
-          receiptNumber: tx.receiptNumber ?? ledger.id.toString(),
-          date: tx.createdAt,
-          totalAmount: txTotal,
-          receivedAmount: txPaid > 0 ? txPaid : null,
-          balanceDue: txBalance > 0 ? txBalance : 0,
-          rawItems: rawItems,
-          gstMode: gstMode,
-          industry: shopType,
-          status: txStatus,
-          customTerms: customTerms,
-          documentType: tx.isManualEntry ? 'bill' : 'order',
-        );
+      // Proportionally attribute payments to this specific receipt's share
+      final double txPaid;
+      if (totalBilledOnLedger > 0 && totalPaidOnLedger > 0) {
+        final receiptShare = txTotal / totalBilledOnLedger;
+        txPaid = (totalPaidOnLedger * receiptShare).clamp(0.0, txTotal);
       } else {
-        // No specific tx selected — generate a full account-statement PDF.
-        // For INVOICE transactions, expand their line items so the customer
-        // can see exactly what they were charged for (critical for SMB trust).
-        final allTxs = _transactions ?? [];
-        final repo = ref.read(verifiedRepositoryProvider);
-
-        final ledgerItems = <Map<String, dynamic>>[];
-
-        for (final t in allTxs) {
-          final isPayment = t.transactionType == 'PAYMENT';
-
-          if (!isPayment && t.transactionType == 'INVOICE' &&
-              (t.receiptNumber ?? '').isNotEmpty) {
-            // ── Try to get line items for this invoice ──────────────────────
-            List<Map<String, dynamic>> invoiceLineItems = [];
-
-            // 1. Check if items are stored directly on the transaction
-            if (t.items.isNotEmpty) {
-              invoiceLineItems = t.items;
-            } else {
-              // 2. Fall back to verified_invoices API
-              try {
-                final records = await repo.getVerifiedInvoices(
-                  receiptNumber: t.receiptNumber,
-                );
-                if (records.isNotEmpty) {
-                  invoiceLineItems = records.map((r) => <String, dynamic>{
-                    'name': r.description.isNotEmpty ? r.description : 'Item',
-                    'qty': r.quantity,
-                    'rate': r.rate,
-                    'amount': r.amount,
-                    'type': r.type.toLowerCase(),
-                  }).toList();
-                }
-              } catch (_) {
-                // API fetch failed — fall through to summary row
-              }
-            }
-
-            if (invoiceLineItems.isNotEmpty) {
-              // Add a header row for this invoice
-              ledgerItems.add({
-                'name': 'Invoice #${t.receiptNumber} — ${DateFormat("dd MMM yyyy").format(t.createdAt.toLocal())}',
-                'qty': 0.0,
-                'rate': 0.0,
-                'amount': t.amount,
-                'type': 'invoice_header',
-                'date': t.createdAt.toIso8601String(),
-              });
-              // Expand each line item under this invoice
-              for (final item in invoiceLineItems) {
-                ledgerItems.add({
-                  'name': '  • ${item['name'] ?? 'Item'}',
-                  'qty': item['qty'] ?? 1.0,
-                  'rate': item['rate'] ?? 0.0,
-                  'amount': item['amount'] ?? 0.0,
-                  'type': 'invoice_item',
-                  'date': t.createdAt.toIso8601String(),
-                });
-              }
-            } else {
-              // No line items available — show summary row
-              ledgerItems.add({
-                'name': 'Invoice #${t.receiptNumber}',
-                'qty': 1.0,
-                'rate': t.amount,
-                'amount': t.amount,
-                'type': t.transactionType.toLowerCase(),
-                'date': t.createdAt.toIso8601String(),
-              });
-            }
-          } else {
-            // Payment or other transaction type — show as summary
-            final name = isPayment
-                ? 'Payment Received'
-                : t.transactionType.replaceAll('_', ' ').toLowerCase().split(' ')
-                    .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
-                    .join(' ');
-            ledgerItems.add({
-              'name': name,
-              'qty': 1.0,
-              'rate': isPayment ? 0.0 : t.amount,
-              'amount': t.amount,
-              'type': t.transactionType.toLowerCase(),
-              'date': t.createdAt.toIso8601String(),
-            });
-          }
-        }
-
-        invoiceData = InvoicePdfGenerator.fromLocalTransaction(
-          shopName: shopName,
-          shopAddress: shopAddress,
-          shopPhone: shopPhone,
-          shopGst: shopGst,
-          shopLogoUrl: shopLogoUrl,
-          customerName: ledger.customerName.isNotEmpty
-              ? ledger.customerName
-              : 'Customer',
-          customerPhone: ledger.customerPhone,
-          receiptNumber: ledger.id.toString(),
-          date: DateTime.now(),
-          totalAmount: _totalInvoiced,
-          receivedAmount: _totalPaid > 0 ? _totalPaid : null,
-          balanceDue: _computedBalance,
-          rawItems: ledgerItems,
-          status: _computedBalance <= 0 ? 'PAID' : 'UNPAID',
-          customTerms: customTerms,
-          documentType: 'ledger',
-        );
+        // Fallback: use receivedAmount stored on the transaction itself
+        txPaid = tx.receivedAmount ?? 0.0;
       }
+      final double txBalance = (txTotal - txPaid).clamp(0.0, double.infinity);
+      final String txStatus = txBalance <= 0
+          ? 'PAID'
+          : (txPaid > 0 ? 'PARTIAL' : 'UNPAID');
+
+      // ── Items: prefer local, fall back to verified_invoices API ────────
+      // Manual/catalogue entries store items directly on the transaction.
+      // AI-processed invoice receipts store items in verified_invoices
+      // (one row per line item, keyed by receipt_number).
+      List<Map<String, dynamic>> rawItems = tx.items;
+      String gstMode = 'none';
+      String? vehicleNumber;
+      String? odometerReading;
+
+      if (rawItems.isEmpty &&
+          tx.receiptNumber != null &&
+          tx.receiptNumber!.isNotEmpty) {
+        // Fetch the verified invoice rows for this receipt
+        try {
+          final repo = ref.read(verifiedRepositoryProvider);
+          final records = await repo.getVerifiedInvoices(
+            receiptNumber: tx.receiptNumber,
+          );
+
+          if (records.isNotEmpty) {
+            final first = records.first;
+            gstMode = first.gstMode ?? 'none';
+            vehicleNumber = first.extraFields['vehicle_number']?.toString() ??
+                first.extraFields['car_number']?.toString();
+            odometerReading = first.extraFields['odometer']?.toString() ??
+                first.extraFields['odometer_reading']?.toString();
+
+            // Each VerifiedInvoice record = one line item
+            rawItems = records
+                .map((r) => <String, dynamic>{
+                      'name': r.description.isNotEmpty ? r.description : 'Item',
+                      'qty': r.quantity,
+                      'rate': r.rate,
+                      'amount': r.amount,
+                      'type':
+                          r.type.toLowerCase(), // 'part', 'labour', 'service'
+                    })
+                .toList();
+          }
+        } catch (_) {
+          // If API fetch fails, still generate PDF with amounts (no items)
+        }
+      }
+
+      invoiceData = InvoicePdfGenerator.fromLocalTransaction(
+        shopName: shopName,
+        shopAddress: shopAddress,
+        shopPhone: shopPhone,
+        shopGst: shopGst,
+        shopLogoUrl: shopLogoUrl,
+        customerName: ledger.customerName.isNotEmpty
+            ? ledger.customerName
+            : 'Customer',
+        customerPhone: ledger.customerPhone,
+        vehicleNumber: vehicleNumber,
+        odometerReading: odometerReading,
+        receiptNumber: tx.receiptNumber ?? ledger.id.toString(),
+        date: tx.createdAt,
+        totalAmount: txTotal,
+        receivedAmount: txPaid > 0 ? txPaid : null,
+        balanceDue: txBalance > 0 ? txBalance : 0,
+        rawItems: rawItems,
+        gstMode: gstMode,
+        industry: shopType,
+        status: txStatus,
+        customTerms: customTerms,
+        documentType: tx.isManualEntry ? 'bill' : 'order',
+      );
 
       final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);
 
@@ -2810,9 +2710,18 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         return slug.isEmpty ? 'Shop' : slug;
       }
 
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       final txDate = invoiceData.date.toLocal();
-      final datePart = '${txDate.day.toString().padLeft(2,'0')}-${months[txDate.month-1]}-${txDate.year}';
+      // Use ddMMyyHHmmss format (e.g. 080626120743) so every download gets a
+      // unique filename — prevents the browser from showing "Download again?"
+      // and ensures fresh downloads even for the same bill.
+      final now = DateTime.now();
+      final dd = txDate.day.toString().padLeft(2, '0');
+      final mm = txDate.month.toString().padLeft(2, '0');
+      final yy = (txDate.year % 100).toString().padLeft(2, '0');
+      final hh = now.hour.toString().padLeft(2, '0');
+      final mi = now.minute.toString().padLeft(2, '0');
+      final ss = now.second.toString().padLeft(2, '0');
+      final datePart = '$dd$mm$yy$hh$mi$ss';
       final shopPart = slugifyPdf(invoiceData.shopName);
       final receiptPart = slugifyPdf(invoiceData.receiptNumber);
       final isGst = invoiceData.gstMode != 'none';
@@ -2820,10 +2729,23 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           ? '${shopPart}_Tax_${receiptPart}_$datePart.pdf'
           : '${shopPart}_${receiptPart}_$datePart.pdf';
 
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: fileName,
+      // Open native OS share sheet with the PDF file.
+      // On Android Chrome / iOS Safari: pops up the system share chooser
+      // (WhatsApp, Gmail, Drive, etc.) — exactly like top apps do.
+      // On desktop browsers: falls back to a direct file download.
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              pdfBytes,
+              mimeType: 'application/pdf',
+              name: fileName,
+            ),
+          ],
+          text: '${invoiceData.shopName} — Invoice PDF',
+        ),
       );
+
     } catch (e) {
       if (!mounted) return;
       messenger.hideCurrentSnackBar();

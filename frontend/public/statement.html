@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <!-- Force desktop view on mobile (CamScanner style) -->
+    <meta name="viewport" content="width=850" />
+    <title id="pageTitle">Account Statement • SnapKhata</title>
+
+    <!-- Open Graph -->
+    <meta property="og:title" id="ogTitle" content="Account Statement • SnapKhata" />
+    <meta property="og:description" content="View your complete account statement and transaction history." />
+    <meta property="og:type" content="website" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans:wght@400;600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #f0f4f8;
+            --white: #ffffff;
+            --border: #c8cdd4;
+            --border-strong: #1e293b;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --accent: #1e3a5f;
+            --accent-light: #e8f0fe;
+            --green: #15803d;
+            --green-bg: #dcfce7;
+            --green-border: #86efac;
+            --amber: #92400e;
+            --amber-bg: #fef3c7;
+            --amber-border: #fcd34d;
+            --red: #991b1b;
+            --red-bg: #fee2e2;
+            --red-border: #fca5a5;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* ── Loader ── */
+        .loader-wrap {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: var(--bg);
+        }
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .loader-sub {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* ── Error ── */
+        .error-wrap {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .error-icon { font-size: 52px; margin-bottom: 16px; }
+        .error-title { font-size: 22px; font-weight: 800; color: var(--red); margin-bottom: 8px; }
+        .error-desc { color: var(--text-secondary); max-width: 380px; margin-bottom: 24px; }
+
+        .btn-retry {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* ── Content wrapper ── */
+        #content-wrap {
+            display: none;
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        /* ── Desktop Container ── */
+        .scaled-container {
+            width: 850px;
+            margin: 0 auto;
+            padding: 32px 0 80px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* ─────────────────────────────────────────────────────
+           DOCUMENT STYLES
+        ───────────────────────────────────────────────────── */
+        .inv-page {
+            width: 100%;
+            margin: 0 auto;
+            color: var(--text-primary);
+        }
+
+        .inv-doc-title {
+            text-align: center;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .inv-doc {
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.06);
+            overflow: hidden;
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .inv-doc-inner {
+            position: relative;
+        }
+
+        /* ── Clean professional header ── */
+        .inv-header-bar {
+            background: #ffffff;
+            border-bottom: 1px solid var(--border);
+            padding: 20px 24px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .inv-shop-left {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            flex: 1;
+        }
+
+        .inv-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .inv-logo-initials {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: #334155;
+            flex-shrink: 0;
+            letter-spacing: -1px;
+        }
+
+        .inv-shop-info {
+            flex: 1;
+        }
+
+        .inv-shop-name {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.2px;
+            line-height: 1.25;
+            margin-bottom: 5px;
+        }
+
+        .inv-shop-address {
+            font-size: 12.5px;
+            color: #475569;
+            line-height: 1.5;
+            margin-bottom: 2px;
+        }
+
+        .inv-shop-phone {
+            font-size: 12.5px;
+            color: #475569;
+            line-height: 1.5;
+        }
+
+        .inv-shop-gst {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
+        .inv-header-right {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .inv-type-label {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .inv-type-sub {
+            font-size: 11px;
+            color: #64748b;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+        }
+
+        /* ── Customer / Details Strip ── */
+        .inv-meta-strip {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            align-items: stretch;
+            border-bottom: 1px solid var(--border);
+            background: #ffffff;
+        }
+
+        .inv-bill-to,
+        .inv-invoice-details {
+            padding: 14px 24px;
+            align-self: stretch;
+        }
+
+        .inv-bill-to {
+            border-right: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+
+        .inv-meta-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .inv-customer-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .inv-customer-detail {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .inv-detail-row {
+            display: flex;
+            gap: 6px;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            margin-bottom: 3px;
+            align-items: baseline;
+        }
+
+        .inv-detail-row strong {
+            color: var(--text-primary);
+            font-weight: 600;
+            min-width: 50px;
+        }
+
+        /* ── Status badge ── */
+        .inv-status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        .status-paid { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+        .status-unpaid { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+        .status-partial { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+
+        /* ── Table ── */
+        .inv-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            border: none;
+        }
+
+        .inv-table thead tr {
+            background: #f8fafc;
+        }
+
+        .inv-table th {
+            padding: 10px 12px;
+            font-weight: 700;
+            color: #0f172a;
+            text-align: left;
+            font-size: 12px;
+            letter-spacing: 0.3px;
+            border: none;
+            border-bottom: 2px solid #cbd5e1;
+        }
+
+        .inv-table th:last-child,
+        .inv-table td:last-child {
+            text-align: right;
+        }
+
+        .inv-table th.center,
+        .inv-table td.center {
+            text-align: center;
+        }
+
+        .inv-table td {
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            border: none;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+        .inv-table th:first-child,
+        .inv-table td:first-child {
+            border-left: none;
+            padding-left: 16px;
+        }
+
+        .inv-table th:last-child,
+        .inv-table td:last-child {
+            border-right: none;
+            padding-right: 16px;
+        }
+
+        .inv-table tbody tr.tx-row:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .inv-table tbody tr.tx-row:hover {
+            background: #f0f7ff;
+        }
+
+        /* ── Sub-item rendering for expanded items ── */
+        .inv-sub-item-row td {
+            padding-top: 4px !important;
+            padding-bottom: 4px !important;
+            border-bottom: none !important;
+            font-size: 12px !important;
+            color: var(--text-muted) !important;
+        }
+
+        .inv-sub-item-indent {
+            padding-left: 20px;
+            font-style: italic;
+        }
+
+        /* ── Summary Grid ── */
+        .inv-summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            align-items: stretch;
+            border-top: 1px solid var(--border);
+        }
+
+        .inv-summary-left {
+            padding: 16px 24px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-self: stretch;
+            box-sizing: border-box;
+            min-height: 100%;
+        }
+
+        .inv-totals-panel {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .inv-totals-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 13px;
+        }
+
+        .inv-totals-row:last-child {
+            border-bottom: none;
+        }
+
+        .inv-totals-row .lbl {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .inv-totals-row .val {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .inv-totals-row.paid-row .lbl { color: var(--green); font-weight: 600; }
+        .inv-totals-row.paid-row .val { color: var(--green); }
+
+        .inv-totals-row.balance-due-row {
+            background: #fff5f5;
+            border-top: 2px solid #fca5a5;
+            border-bottom: 2px solid #fca5a5;
+            padding: 12px 20px;
+        }
+        .inv-totals-row.balance-due-row .lbl {
+            color: var(--red);
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 0.2px;
+        }
+        .inv-totals-row.balance-due-row .val {
+            color: var(--red);
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .inv-totals-row.balance-due-row.fully-paid {
+            background: #f0fdf4;
+            border-top-color: #86efac;
+            border-bottom-color: #86efac;
+        }
+        .inv-totals-row.balance-due-row.fully-paid .lbl,
+        .inv-totals-row.balance-due-row.fully-paid .val { color: var(--green); }
+
+        .inv-amount-words {
+            padding: 10px 20px;
+            border-top: 1px solid #f1f5f9;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-style: italic;
+            line-height: 1.5;
+        }
+
+        /* ── Terms / Notes ── */
+        .inv-terms {
+            border-top: 1px solid var(--border);
+            padding: 14px 24px;
+            background: #fafbfc;
+        }
+
+        .inv-terms-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .inv-terms-text {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ── Footer ── */
+        .inv-footer {
+            border-top: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: 1fr 200px;
+        }
+
+        .inv-footer-left {
+            padding: 16px 24px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .inv-footer-note {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .inv-footer-brand {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .inv-footer-brand span {
+            color: #2563eb;
+        }
+
+        .inv-sign-block {
+            padding: 16px 24px;
+            padding-top: 56px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .inv-sign-line {
+            width: 140px;
+            height: 1px;
+            background: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .inv-sign-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* Watermark stamp */
+        .inv-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: rgba(21, 128, 61, 0.08);
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 0;
+        }
+
+        /* ── FAB Print ── */
+        .fab-print {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            z-index: 50;
+        }
+
+        .fab-print button {
+            border: none;
+            padding: 14px 26px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #1e3a5f;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fab-print button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(37, 99, 235, 0.5);
+        }
+
+        @page {
+            size: A4;
+            margin: 10mm 8mm;
+        }
+
+        @media print {
+            body { background: #fff; }
+
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .scaled-container {
+                padding: 0 !important;
+                width: 100% !important;
+                margin: 0 !important;
+            }
+
+            .inv-page {
+                padding: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+
+            .inv-doc {
+                box-shadow: none !important;
+                border: 1px solid #000 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .inv-logo,
+            .inv-logo-initials {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+
+            .inv-logo {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .fab-print { display: none !important; }
+
+            .inv-table tr { page-break-inside: avoid; }
+            .inv-doc { page-break-inside: auto; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Loader -->
+    <div id="loader" class="loader-wrap">
+        <div class="spinner"></div>
+        <div class="loader-text">Loading account statement…</div>
+        <div class="loader-sub">Fetching your transaction history securely</div>
+    </div>
+
+    <!-- Error -->
+    <div id="error-screen" class="error-wrap">
+        <div class="error-icon">⚠️</div>
+        <h2 class="error-title" id="error-title">Statement Not Found</h2>
+        <p class="error-desc" id="error-message">The statement link is invalid or data is unavailable.</p>
+        <button class="btn-retry" onclick="window.location.reload()">Try Again</button>
+    </div>
+
+    <!-- Main content (injected by JS) -->
+    <div id="content-wrap"></div>
+
+    <!-- FAB: Download PDF -->
+    <div class="fab-print" id="fabPrint" style="display:none;">
+        <button type="button" onclick="printWithFilename()" title="Download PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PDF
+        </button>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : 'https://api.snapkhata.com';
+
+        window._pdfFilename = 'Account_Statement';
+
+        function slugify(str) {
+            return String(str || '')
+                .trim()
+                .replace(/[^\w\s\-]/g, '')
+                .replace(/\s+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/g, '');
+        }
+
+        function fmtDateForFilename(raw) {
+            if (!raw) return '';
+            try {
+                let d;
+                if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+                    const [dd, mm, yyyy] = raw.split('-');
+                    d = new Date(`${yyyy}-${mm}-${dd}`);
+                } else {
+                    d = new Date(raw);
+                }
+                if (isNaN(d)) return '';
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `${String(d.getDate()).padStart(2,'0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
+            } catch { return ''; }
+        }
+
+        function printWithFilename() {
+            const original = document.title;
+            document.title = window._pdfFilename || original;
+            window.print();
+            window.addEventListener('afterprint', function restore() {
+                document.title = original;
+                window.removeEventListener('afterprint', restore);
+            });
+        }
+
+        const $ = id => document.getElementById(id);
+        const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
+        const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
+
+        const fmtMoney = v => {
+            const num = Number(v || 0);
+            return '₹\u00a0' + (num % 1 === 0 
+                ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
+                : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        };
+        const fmtQty   = v => {
+            const num = Number(v || 0);
+            return num % 1 === 0 
+                ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
+                : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+        const fmtDate  = raw => {
+            if (!raw) return '—';
+            try {
+                let d;
+                if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+                    const [dd, mm, yyyy] = raw.split('-');
+                    d = new Date(`${yyyy}-${mm}-${dd}`);
+                } else {
+                    d = new Date(raw);
+                }
+                if (isNaN(d)) return raw;
+                return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            } catch { return raw; }
+        };
+
+        function showError(title, msg) {
+            hide('loader');
+            const el = $('error-screen');
+            if (el) { el.style.display = 'flex'; }
+            if (title) $('error-title').textContent = title;
+            if (msg)   $('error-message').textContent = msg;
+        }
+
+        function numberToWords(n) {
+            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
+                'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+            if (n === 0) return 'Zero';
+            function below1000(num) {
+                if (num < 20) return ones[num];
+                if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '');
+                return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + below1000(num % 100) : '');
+            }
+            let result = '';
+            const crore    = Math.floor(n / 10000000); n %= 10000000;
+            const lakh     = Math.floor(n / 100000);   n %= 100000;
+            const thousand = Math.floor(n / 1000);     n %= 1000;
+            const rest     = n;
+            if (crore)    result += below1000(crore)    + ' Crore ';
+            if (lakh)     result += below1000(lakh)     + ' Lakh ';
+            if (thousand) result += below1000(thousand) + ' Thousand ';
+            if (rest)     result += below1000(rest);
+            return result.trim();
+        }
+
+        function buildLogoHtml(logoUrl, shopName, username) {
+            if (logoUrl) {
+                const proxiedUrl = username
+                    ? `${API_BASE}/api/public/shop-logo?u=${encodeURIComponent(username)}`
+                    : logoUrl;
+                const initials = getInitials(shopName);
+                return `<img src="${proxiedUrl}" class="inv-logo" alt="${shopName} logo"
+                    onerror="this.outerHTML='<div class=\\'inv-logo-initials\\'>${initials}</div>'" />`;
+            }
+            // No logo configured — return empty (no space reserved)
+            return '';
+        }
+
+        function getInitials(name) {
+            if (!name) return 'S';
+            return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        }
+
+        // ── ACCOUNT STATEMENT renderer ──
+        function renderAccountStatement(data) {
+            document.title = `Account Statement - ${data.customer_name || 'Customer'} • SnapKhata`;
+
+            // Shop / Customer filename segment
+            const _shop     = slugify(data.shop_name || 'Shop');
+            const _customer = slugify(data.customer_name || 'Customer');
+            const _date     = fmtDateForFilename(new Date().toISOString());
+            window._pdfFilename = [_shop, _customer, 'Statement', _date].filter(Boolean).join('_');
+
+            const items        = Array.isArray(data.items) ? data.items : [];
+            const grandTotal   = Number(data.balance_due) || 0;
+            const wordsTotal   = numberToWords(Math.round(Math.abs(grandTotal)));
+            const shopName     = data.shop_name || 'Our Shop';
+            const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
+            const shopMeta        = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
+            const customTerms  = data.custom_terms || '';
+
+            const totalBilled = data.total_billed !== undefined && data.total_billed !== null ? Number(data.total_billed) : 0;
+            const totalPaid = data.total_paid !== undefined && data.total_paid !== null ? Number(data.total_paid) : 0;
+
+            // Sort oldest-first for running balance logic
+            const orderedItems = [...items].reverse();
+
+            // Calculate running balance
+            let runningBal = 0;
+            orderedItems.forEach(item => {
+                const isPayment = item.type === 'PAYMENT';
+                const amt = Number(item.amount || 0);
+                if (isPayment) {
+                    runningBal -= amt;
+                } else {
+                    runningBal += amt;
+                }
+                item.runningBalance = runningBal;
+            });
+
+            // Re-reverse back to newest-first (or keep oldest-first)?
+            // The instructions say: "Transactions sorted oldest-first (the API returns newest-first, so reverse in JS)"
+            // Yes, so we keep them ordered oldest-first in the passbook!
+
+            let itemsHtml = '';
+            orderedItems.forEach((item, idx) => {
+                const amount = Number(item.amount || 0);
+                const isPayment = item.type === 'PAYMENT';
+                
+                // Determine if we need to remove bottom border from parent row (if line items follow)
+                const hasLineItems = item.type === 'INVOICE' && Array.isArray(item.line_items) && item.line_items.length > 0;
+                const parentRowStyle = hasLineItems ? 'style="border-bottom: none !important;"' : '';
+
+                itemsHtml += `
+                <tr class="tx-row" ${parentRowStyle}>
+                    <td class="center">${fmtDate(item.date)}</td>
+                    <td>
+                        <div style="font-weight:700;color:#1e293b;">${item.name || 'Transaction'}</div>
+                    </td>
+                    <td style="text-align:right;font-weight:600;color:var(--text-primary)">
+                        ${!isPayment ? fmtMoney(amount) : '—'}
+                    </td>
+                    <td style="text-align:right;font-weight:600;color:var(--green)">
+                        ${isPayment ? fmtMoney(amount) : '—'}
+                    </td>
+                    <td style="text-align:right;font-weight:700;color:${item.runningBalance <= 0 ? 'var(--green)' : 'var(--text-primary)'}">
+                        ${fmtMoney(item.runningBalance)}
+                    </td>
+                </tr>`;
+
+                // If invoice items are loaded, expand them
+                if (hasLineItems) {
+                    item.line_items.forEach((li, lIdx) => {
+                        const liQty = li.qty || li.quantity || 1;
+                        const liRate = li.rate || (li.amount / liQty) || 0;
+                        const isLastLi = lIdx === item.line_items.length - 1;
+                        const liRowStyle = isLastLi ? 'style="border-bottom: 1px solid #f1f5f9 !important;"' : '';
+
+                        itemsHtml += `
+                        <tr class="inv-sub-item-row" ${liRowStyle}>
+                            <td></td>
+                            <td>
+                                <div class="inv-sub-item-indent">
+                                    ${li.name || 'Item'} (${fmtQty(liQty)} × ${fmtMoney(liRate)})
+                                </div>
+                            </td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>`;
+                    });
+                }
+            });
+
+            const watermark = grandTotal <= 0
+                ? '<div class="inv-watermark">PAID</div>'
+                : '';
+
+            const html = `
+            <div class="scaled-container">
+                <div class="inv-page">
+                    <div class="inv-doc-title">Account Statement</div>
+                    <div class="inv-doc">
+                        <div class="inv-doc-inner">
+                            ${watermark}
+
+                            <!-- Header bar -->
+                            <div class="inv-header-bar">
+                                <div class="inv-shop-left">
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
+                                    <div class="inv-shop-info">
+                                        <div class="inv-shop-name">${shopName}</div>
+                                        ${shopMeta.addr ? `<div class="inv-shop-address">${shopMeta.addr}</div>` : ''}
+                                        ${shopMeta.phone ? `<div class="inv-shop-phone">${shopMeta.phone}</div>` : ''}
+                                        ${shopMeta.gst ? `<div class="inv-shop-gst">${shopMeta.gst}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="inv-header-right">
+                                    <div class="inv-type-label">ACCOUNT</div>
+                                    <div class="inv-type-sub">STATEMENT</div>
+                                </div>
+                            </div>
+
+                            <!-- Customer / Details Strip -->
+                            <div class="inv-meta-strip">
+                                <div class="inv-bill-to">
+                                    <div class="inv-meta-label">Customer Details</div>
+                                    <div class="inv-customer-name">${data.customer_name || 'Customer'}</div>
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">Phone: +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
+                                </div>
+                                <div class="inv-invoice-details">
+                                    <div class="inv-meta-label">Statement Info</div>
+                                    <div class="inv-detail-row"><strong>Date:</strong> ${fmtDate(new Date().toISOString())}</div>
+                                    <div class="inv-detail-row" style="margin-top:6px;">
+                                        <span class="inv-status-badge ${grandTotal <= 0 ? 'status-paid' : (totalPaid > 0 ? 'status-partial' : 'status-unpaid')}">
+                                            ${grandTotal <= 0 ? 'PAID' : (totalPaid > 0 ? 'PARTIAL' : 'UNPAID')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 5-column Passbook Table -->
+                            <table class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th class="center" style="width:15%">Date</th>
+                                        <th style="width:45%">Transaction Details</th>
+                                        <th style="width:13%;text-align:right">Debit (₹)</th>
+                                        <th style="width:13%;text-align:right">Credit (₹)</th>
+                                        <th style="width:14%;text-align:right">Balance (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
+
+                            <!-- Summary grid -->
+                            <div class="inv-summary-grid">
+                                <div class="inv-summary-left"></div>
+                                <div class="inv-totals-panel">
+                                    <div class="inv-totals-row">
+                                        <span class="lbl">Total Billed</span>
+                                        <span class="val">${fmtMoney(totalBilled)}</span>
+                                    </div>
+                                    ${totalPaid > 0 ? `
+                                    <div class="inv-totals-row paid-row">
+                                        <span class="lbl">✅ Amount Paid</span>
+                                        <span class="val">− ${fmtMoney(totalPaid)}</span>
+                                    </div>
+                                    ` : ''}
+                                    <div class="inv-totals-row balance-due-row ${grandTotal <= 0 ? 'fully-paid' : ''}">
+                                        <span class="lbl">${grandTotal <= 0 ? '✓ Net Balance (Paid)' : '⚡ Net Balance (Due)'}</span>
+                                        <span class="val">${fmtMoney(Math.abs(grandTotal))}</span>
+                                    </div>
+                                    <div class="inv-amount-words">${wordsTotal} Rupees ${grandTotal > 0 ? 'Payable' : 'Credit Balance'}</div>
+                                </div>
+                            </div>
+
+                            <!-- Terms -->
+                            ${buildTermsSection(customTerms)}
+
+                            <!-- Footer -->
+                            <div class="inv-footer">
+                                <div class="inv-footer-left">
+                                    <div class="inv-footer-note">This is an automated account statement summarizing your transaction history.</div>
+                                    <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
+                                </div>
+                                <div class="inv-sign-block">
+                                    <div class="inv-sign-line"></div>
+                                    <div class="inv-sign-label">For ${shopName}<br>Authorised Signature</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+            $('content-wrap').innerHTML = html;
+            $('content-wrap').style.display = 'block';
+            $('fabPrint').style.display = 'block';
+            hide('loader');
+        }
+
+        function buildShopMetaLines(addr, phone, gst) {
+            const parts = [];
+            if (addr)  parts.push(addr);
+            if (phone) parts.push('Phone: +91 ' + String(phone).replace('+91','').trim());
+            if (gst)   parts.push('GSTIN: ' + gst);
+            return { addr: addr || '', phone: phone ? 'Phone: +91 ' + String(phone).replace('+91','').trim() : '', gst: gst ? 'GSTIN: ' + gst : '' };
+        }
+
+        function buildTermsSection(terms) {
+            if (!terms) return '';
+            return `
+            <div class="inv-terms">
+                <div class="inv-terms-title">Terms &amp; Conditions</div>
+                <div class="inv-terms-text">${terms.replace(/\n/g, '<br>')}</div>
+            </div>`;
+        }
+
+        async function fetchAndRender() {
+            const params = new URLSearchParams(window.location.search);
+
+            let partyId = params.get('party') || params.get('id') || params.get('i');
+            if (!partyId) {
+                const m = window.location.search.match(/[?&](?:party|id|i)(?:=|%3D)([^&]+)/i);
+                if (m) partyId = decodeURIComponent(m[1]);
+            }
+            if (!partyId) { showError('Invalid Link', 'No party or ledger ID found in URL.'); return; }
+
+            const uParam = params.get('u');
+            const signedToken = params.get('st');
+            const expiresAt = params.get('exp');
+
+            try {
+                let apiUrl = `${API_BASE}/api/public/receipts/${partyId}`;
+                if (uParam) apiUrl += `?u=${encodeURIComponent(uParam)}`;
+                if (signedToken) apiUrl += `${apiUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(signedToken)}`;
+                if (expiresAt) apiUrl += `${apiUrl.includes('?') ? '&' : '?'}exp=${encodeURIComponent(expiresAt)}`;
+
+                const resp = await fetch(apiUrl);
+                if (!resp.ok) {
+                    if (resp.status === 404) throw new Error('not_found');
+                    if (resp.status === 401 || resp.status === 403) throw new Error('unauthorized');
+                    throw new Error('server_error');
+                }
+                const data = await resp.json();
+
+                if (data.type !== 'ledger') {
+                    showError('Invalid Link Type', 'The link type does not match an account statement.');
+                    return;
+                }
+
+                // Fetch line items for each invoice transaction
+                const items = Array.isArray(data.items) ? data.items : [];
+                const invoicePromises = items.map(async (item) => {
+                    if (item.type === 'INVOICE') {
+                        try {
+                            const receiptNo = item.name.replace('Invoice #', '').trim();
+                            let invoiceUrl = `${API_BASE}/api/public/receipts/${encodeURIComponent(receiptNo)}`;
+                            if (uParam) invoiceUrl += `?u=${encodeURIComponent(uParam)}`;
+                            if (signedToken) invoiceUrl += `${invoiceUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(signedToken)}`;
+                            if (expiresAt) invoiceUrl += `${invoiceUrl.includes('?') ? '&' : '?'}exp=${encodeURIComponent(expiresAt)}`;
+
+                            const invResp = await fetch(invoiceUrl);
+                            if (invResp.ok) {
+                                const invData = await invResp.json();
+                                item.line_items = invData.items || [];
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch invoice details for", item.name, e);
+                        }
+                    }
+                });
+
+                await Promise.all(invoicePromises);
+                renderAccountStatement(data);
+
+            } catch (err) {
+                if (err.message === 'not_found')    showError('Statement Not Found', 'We could not locate this statement.');
+                else if (err.message === 'unauthorized') showError('Link Expired', 'This statement link is invalid or has expired.');
+                else showError('Unable to Load', 'Please check your connection and try again.');
+            }
+        }
+
+        async function init() {
+            await fetchAndRender();
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>

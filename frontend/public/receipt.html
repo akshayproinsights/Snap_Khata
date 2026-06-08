@@ -165,46 +165,47 @@
             margin-bottom: 24px;
         }
 
-        /* ── Accent header bar ── */
+        /* ── Clean professional header ── */
         .inv-header-bar {
-            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
-            padding: 24px 28px;
+            background: #ffffff;
+            border-bottom: 1px solid var(--border);
+            padding: 20px 24px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             gap: 20px;
         }
 
         .inv-shop-left {
             display: flex;
-            align-items: center;
-            gap: 16px;
+            align-items: flex-start;
+            gap: 14px;
             flex: 1;
         }
 
         /* Logo / initials avatar */
         .inv-logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 10px;
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
             object-fit: cover;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
+            background: #f1f5f9;
+            border: 1px solid var(--border);
             flex-shrink: 0;
         }
 
         .inv-logo-initials {
-            width: 60px;
-            height: 60px;
-            border-radius: 10px;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 800;
-            color: #fff;
+            color: #334155;
             flex-shrink: 0;
             letter-spacing: -1px;
         }
@@ -214,18 +215,31 @@
         }
 
         .inv-shop-name {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 800;
-            color: #fff;
-            letter-spacing: -0.3px;
-            line-height: 1.2;
-            margin-bottom: 4px;
+            color: #0f172a;
+            letter-spacing: -0.2px;
+            line-height: 1.25;
+            margin-bottom: 5px;
         }
 
-        .inv-shop-meta {
+        .inv-shop-address {
+            font-size: 12.5px;
+            color: #475569;
+            line-height: 1.5;
+            margin-bottom: 2px;
+        }
+
+        .inv-shop-phone {
+            font-size: 12.5px;
+            color: #475569;
+            line-height: 1.5;
+        }
+
+        .inv-shop-gst {
             font-size: 12px;
-            color: rgba(255,255,255,0.75);
-            line-height: 1.6;
+            color: #64748b;
+            margin-top: 3px;
         }
 
         .inv-header-right {
@@ -234,19 +248,19 @@
         }
 
         .inv-type-label {
-            font-size: 28px;
-            font-weight: 900;
-            color: rgba(255,255,255,0.95);
-            letter-spacing: -1px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
             line-height: 1;
             text-transform: uppercase;
         }
 
         .inv-type-sub {
             font-size: 11px;
-            color: rgba(255,255,255,0.6);
+            color: #64748b;
             letter-spacing: 0.5px;
-            margin-top: 4px;
+            margin-top: 3px;
         }
 
         /* ── Bill To / Invoice Details row ── */
@@ -255,12 +269,12 @@
             grid-template-columns: 1fr 1fr;
             align-items: stretch;
             border-bottom: 1px solid var(--border);
-            background: #fafbfc;
+            background: #ffffff;
         }
 
         .inv-bill-to,
         .inv-invoice-details {
-            padding: 16px 24px;
+            padding: 14px 24px;
             align-self: stretch;
         }
 
@@ -270,12 +284,12 @@
         }
 
         .inv-meta-label {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 1.2px;
+            letter-spacing: 0.5px;
             text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 8px;
+            color: #0f172a;
+            margin-bottom: 6px;
         }
 
         .inv-customer-name {
@@ -307,11 +321,9 @@
 
         /* ── Status badge ── */
         .inv-status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            border-radius: 999px;
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 3px;
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.5px;
@@ -319,30 +331,30 @@
             margin-top: 6px;
         }
 
-        .status-paid { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
-        .status-partial { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
-        .status-unpaid { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+        .status-paid    { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+        .status-partial { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+        .status-unpaid  { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border);   }
 
         /* ── Items table ── */
         .inv-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            border: none; /* Remove all outer table borders */
+            border: 1px solid var(--border);
         }
 
         .inv-table thead tr {
-            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            background: #f8fafc;
         }
 
         .inv-table th {
             padding: 10px 12px;
-            font-weight: 600;
-            color: #fff;
+            font-weight: 700;
+            color: #0f172a;
             text-align: left;
             font-size: 12px;
             letter-spacing: 0.3px;
-            border: none; /* Clean header cells — no borders */
+            border: 1px solid var(--border);
         }
 
         .inv-table th:last-child,
@@ -358,22 +370,19 @@
         .inv-table td {
             padding: 10px 12px;
             color: var(--text-secondary);
-            border: none; /* Reset all borders */
-            border-bottom: 1px solid #f1f5f9; /* Only bottom separator */
+            border: 1px solid #e2e8f0;
             vertical-align: middle;
         }
 
-        /* First column: no left outer border (removes checkbox look) */
+        /* First column: no left outer border */
         .inv-table th:first-child,
         .inv-table td:first-child {
-            border-left: none;
-            padding-left: 16px;
+            padding-left: 12px;
         }
 
-        /* Last column: no right outer border (keeps symmetry) */
+        /* Last column: no right outer border */
         .inv-table th:last-child,
         .inv-table td:last-child {
-            border-right: none;
             padding-right: 16px;
         }
 
@@ -459,18 +468,20 @@
         }
 
         .inv-totals-row.grand {
-            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            background: #f1f5f9;
+            border-top: 2px solid #cbd5e1;
+            border-bottom: 1px solid #e2e8f0;
             padding: 14px 20px;
         }
 
         .inv-totals-row.grand .lbl {
-            color: rgba(255,255,255,0.85);
+            color: #334155;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .inv-totals-row.grand .val {
-            color: #fff;
+            color: #0f172a;
             font-size: 20px;
             font-weight: 800;
             letter-spacing: -0.5px;
@@ -893,7 +904,7 @@
             return result.trim();
         }
 
-        /** Build the shop logo/initials block */
+        /** Build the shop logo/initials block — only shown if shop has a logo URL */
         function buildLogoHtml(logoUrl, shopName, username) {
             if (logoUrl) {
                 // Route through our backend proxy so the image always loads from
@@ -905,7 +916,8 @@
                 return `<img src="${proxiedUrl}" class="inv-logo" alt="${shopName} logo"
                     onerror="this.outerHTML='<div class=\\'inv-logo-initials\\'>${initials}</div>'" />`;
             }
-            return `<div class="inv-logo-initials">${getInitials(shopName)}</div>`;
+            // No logo configured — return empty (no space reserved)
+            return '';
         }
 
         function getInitials(name) {
@@ -916,12 +928,12 @@
         /** Status badge */
         function buildStatusBadge(status) {
             const map = {
-                'PAID':    ['status-paid',    '✓', 'PAID'],
-                'PARTIAL': ['status-partial', '◑', 'PARTIALLY PAID'],
-                'UNPAID':  ['status-unpaid',  '!', 'PAYMENT DUE'],
+                'PAID':    ['status-paid',    'PAID'],
+                'PARTIAL': ['status-partial', 'PARTIAL'],
+                'UNPAID':  ['status-unpaid',  'UNPAID'],
             };
-            const [cls, icon, label] = map[status] || map['UNPAID'];
-            return `<span class="inv-status-badge ${cls}">${icon} ${label}</span>`;
+            const [cls, label] = map[status] || map['UNPAID'];
+            return `<span class="inv-status-badge ${cls}">${label}</span>`;
         }
 
         /** UPI Scan-to-Pay section */
@@ -967,13 +979,13 @@
             </div>`;
         }
 
-        /** Shop header info lines */
+        /** Shop header info lines - returns object with separate parts */
         function buildShopMetaLines(address, phone, gst) {
-            const lines = [];
-            if (address) lines.push(address);
-            if (phone)   lines.push('📞 ' + String(phone).replace('+91', '').trim());
-            if (gst)     lines.push('GSTIN: ' + gst);
-            return lines.join(' &nbsp;·&nbsp; ');
+            return {
+                addr:  address || '',
+                phone: phone  ? 'Phone: +91 ' + String(phone).replace('+91', '').trim() : '',
+                gst:   gst    ? 'GSTIN: ' + gst : ''
+            };
         }
 
         /** Totals panel rows
@@ -1324,7 +1336,9 @@
                                     ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
                                     <div class="inv-shop-info">
                                         <div class="inv-shop-name">${shopName}</div>
-                                        ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
+                                        ${shopMetaLines.addr  ? `<div class="inv-shop-address">${shopMetaLines.addr}</div>` : ''}
+                                        ${shopMetaLines.phone ? `<div class="inv-shop-phone">${shopMetaLines.phone}</div>` : ''}
+                                        ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
                                     </div>
                                 </div>
                                 <div class="inv-header-right">
@@ -1338,9 +1352,9 @@
                                 <div class="inv-bill-to">
                                     <div class="inv-meta-label">Bill To</div>
                                     <div class="inv-customer-name">${data.customer_name || 'Walk-in Customer'}</div>
-                                    ${data.customer_phone ? `<div class="inv-customer-detail">📞 +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
-                                    ${data.vehicle_number ? `<div class="inv-customer-detail">🚗 ${data.vehicle_number}</div>` : ''}
-                                    ${data.odometer_reading ? `<div class="inv-customer-detail">📏 ${data.odometer_reading} km</div>` : ''}
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">Ph: +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
+                                    ${data.vehicle_number ? `<div class="inv-customer-detail">Vehicle: ${data.vehicle_number}</div>` : ''}
+                                    ${data.odometer_reading ? `<div class="inv-customer-detail">Odometer: ${data.odometer_reading} km</div>` : ''}
                                 </div>
                                 <div class="inv-invoice-details">
                                     <div class="inv-meta-label">Order Details</div>
@@ -1370,10 +1384,10 @@
                                 <thead>
                                     <tr>
                                         <th class="center" style="width:5%">#</th>
-                                        <th style="width:45%">Item Name</th>
-                                        <th class="center" style="width:12%">Qty</th>
-                                        <th style="width:18%;text-align:right">Rate (₹)</th>
-                                        <th style="width:20%">Amount (₹)</th>
+                                        <th style="width:43%">Item Name</th>
+                                        <th class="center" style="width:14%">Quantity</th>
+                                        <th style="width:18%;text-align:right">Price/ Unit (₹)</th>
+                                        <th style="width:20%;text-align:right">Amount(₹)</th>
                                     </tr>
                                 </thead>
                                 <tbody>${itemsHtml}</tbody>
@@ -1549,7 +1563,9 @@
                                     ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
                                     <div class="inv-shop-info">
                                         <div class="inv-shop-name">${shopName}</div>
-                                        ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
+                                        ${shopMetaLines.addr  ? `<div class="inv-shop-address">${shopMetaLines.addr}</div>` : ''}
+                                        ${shopMetaLines.phone ? `<div class="inv-shop-phone">${shopMetaLines.phone}</div>` : ''}
+                                        ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
                                     </div>
                                 </div>
                                 <div class="inv-header-right">
@@ -1563,9 +1579,9 @@
                                 <div class="inv-bill-to">
                                     <div class="inv-meta-label">Bill To</div>
                                     <div class="inv-customer-name">${data.customer_name || 'Walk-in Customer'}</div>
-                                    ${data.customer_phone ? `<div class="inv-customer-detail">📞 +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
-                                    ${data.vehicle_number ? `<div class="inv-customer-detail">🚗 ${data.vehicle_number}</div>` : ''}
-                                    ${data.odometer_reading ? `<div class="inv-customer-detail">📏 ${data.odometer_reading} km</div>` : ''}
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">Ph: +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
+                                    ${data.vehicle_number ? `<div class="inv-customer-detail">Vehicle: ${data.vehicle_number}</div>` : ''}
+                                    ${data.odometer_reading ? `<div class="inv-customer-detail">Odometer: ${data.odometer_reading} km</div>` : ''}
                                 </div>
                                 <div class="inv-invoice-details">
                                     <div class="inv-meta-label">Invoice Details</div>
@@ -1597,10 +1613,10 @@
                                     <tr>
                                         <th class="center" style="width:5%">#</th>
                                         <th style="width:33%">Item Name</th>
-                                        <th class="center" style="width:10%">Qty</th>
-                                        <th style="width:16%;text-align:right">Rate (₹)</th>
+                                        <th class="center" style="width:10%">Quantity</th>
+                                        <th style="width:16%;text-align:right">Price/ Unit (₹)</th>
                                         <th style="width:16%;text-align:right">GST (₹)</th>
-                                        <th style="width:20%">Amount (₹)</th>
+                                        <th style="width:20%;text-align:right">Amount(₹)</th>
                                     </tr>
                                 </thead>
                                 <tbody>${itemsHtml}</tbody>
