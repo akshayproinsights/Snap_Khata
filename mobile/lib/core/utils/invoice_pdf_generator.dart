@@ -100,17 +100,22 @@ class InvoicePdfGenerator {
   // Devanagari fallback fonts (Marathi / Hindi support)
   static pw.Font? _cachedDevanagariRegular;
   static pw.Font? _cachedDevanagariBold;
-  static pw.Font? _cachedDevanagariMedium;
 
   static Future<void> _ensureFonts() async {
-    // Primary: NotoSans (Latin, numbers, ₹ symbol)
-    _cachedRegular  ??= await PdfGoogleFonts.notoSansRegular();
-    _cachedBold     ??= await PdfGoogleFonts.notoSansBold();
-    _cachedSemiBold ??= await PdfGoogleFonts.notoSansMedium();
-    // Fallback: NotoSansDevanagari (Marathi, Hindi — Devanagari script)
-    _cachedDevanagariRegular ??= await PdfGoogleFonts.notoSansDevanagariRegular();
-    _cachedDevanagariBold    ??= await PdfGoogleFonts.notoSansDevanagariBold();
-    _cachedDevanagariMedium  ??= await PdfGoogleFonts.notoSansDevanagariMedium();
+    // Fetch all missing fonts concurrently to eliminate sequential network latency
+    final results = await Future.wait([
+      _cachedRegular != null ? Future.value(_cachedRegular!) : PdfGoogleFonts.notoSansRegular(),
+      _cachedBold != null ? Future.value(_cachedBold!) : PdfGoogleFonts.notoSansBold(),
+      _cachedSemiBold != null ? Future.value(_cachedSemiBold!) : PdfGoogleFonts.notoSansMedium(),
+      _cachedDevanagariRegular != null ? Future.value(_cachedDevanagariRegular!) : PdfGoogleFonts.notoSansDevanagariRegular(),
+      _cachedDevanagariBold != null ? Future.value(_cachedDevanagariBold!) : PdfGoogleFonts.notoSansDevanagariBold(),
+    ]);
+
+    _cachedRegular = results[0];
+    _cachedBold = results[1];
+    _cachedSemiBold = results[2];
+    _cachedDevanagariRegular = results[3];
+    _cachedDevanagariBold = results[4];
   }
 
   // ── Color palette ─────────────────────────────────────────────────────

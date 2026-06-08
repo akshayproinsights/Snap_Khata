@@ -387,15 +387,8 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
                 return;
             }
 
-            // Fetch full transaction history first
-            let fullTransactions: Transaction[] = [];
-            try {
-                const result = await udharAPI.getTransactions(ledger.id);
-                fullTransactions = result.data ?? [];
-            } catch (_) {
-                // If fetch fails, still generate a summary-only PDF
-                fullTransactions = transactions;
-            }
+            // Use already loaded transactions from state to prevent redundant API latency
+            const fullTransactions = transactions;
 
             // Note: printWindow was already opened synchronously at the start of the function.
 
