@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Light palette - Premium SaaS Indigo
@@ -47,6 +46,8 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      fontFamily: 'NotoSans',
+      fontFamilyFallback: const ['NotoSansDevanagari'],
       colorScheme: const ColorScheme.light(
         primary: primary,
         surface: surface,
@@ -60,9 +61,11 @@ class AppTheme {
         surfaceContainerHighest: Color(0xFFF1F5F9), // slate-100
       ),
       scaffoldBackgroundColor: background,
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: ThemeData.light().textTheme.apply(
         bodyColor: textPrimary,
         displayColor: textPrimary,
+        fontFamily: 'NotoSans',
+        fontFamilyFallback: const ['NotoSansDevanagari'],
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
@@ -122,6 +125,8 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      fontFamily: 'NotoSans',
+      fontFamilyFallback: const ['NotoSansDevanagari'],
       colorScheme: const ColorScheme.dark(
         primary: primary,
         surface: darkSurface,
@@ -135,10 +140,11 @@ class AppTheme {
         surfaceContainerHighest: Color(0xFF1E293B), // slate-800
       ),
       scaffoldBackgroundColor: darkBackground,
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
+      textTheme: ThemeData.dark().textTheme.apply(
         bodyColor: darkTextPrimary,
         displayColor: darkTextPrimary,
-        fontFamily: GoogleFonts.inter().fontFamily,
+        fontFamily: 'NotoSans',
+        fontFamilyFallback: const ['NotoSansDevanagari'],
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: darkBackground,

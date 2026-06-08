@@ -90,13 +90,28 @@ async def get_verified_invoices_route(
         raise HTTPException(status_code=400, detail="No username in token")
     
     try:
-        # Check if any filters are active
-        has_filters = bool(search or date_from or date_to or receipt_number or 
-                          customer_name or description)
-        
+        # ── Fast path: receipt_number-only lookup (PDF generation) ──────────────
+        # When the caller only wants rows for a specific receipt (e.g. mobile PDF
+        # generation), push the filter to the DB instead of loading all records.
+        only_receipt_filter = (
+            receipt_number and not search and not date_from
+            and not date_to and not customer_name and not description
+        )
+
+        if only_receipt_filter:
+            db_records = get_verified_invoices(
+                username, receipt_number=receipt_number
+            )
+            sanitized = sanitize_records(db_records)
+            for record in sanitized:
+                if record.get("receipt_link", "").startswith("r2://"):
+                    record["receipt_link"] = _resolve_receipt_link(record["receipt_link"])
+            return {"records": sanitized, "total": len(sanitized)}
+
+        # ── General path: load ALL records then filter in Python ─────────────────
         # Load ALL records to search across entire dataset
         initial_limit = None
-        
+
         # Get data from Supabase
         records = get_verified_invoices(username, limit=initial_limit)
         

@@ -52,6 +52,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   void initState() {
     super.initState();
     _loadTransactions();
+    // Pre-warm PDF fonts + logo as soon as the page opens so they're cached
+    // by the time the user taps "Share as PDF". Uses a post-frame callback so
+    // that the Riverpod ref (shopProvider) is readable.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final logoUrl = ref.read(shopProvider).logoUrl;
+      InvoicePdfGenerator.preWarm(logoUrl.isNotEmpty ? logoUrl : null);
+    });
   }
 
   Future<void> _loadTransactions() async {
@@ -2587,6 +2595,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
     try {
       final InvoiceData invoiceData;
+      final t0 = DateTime.now();
+      // ignore: avoid_print
+      print('[PDF] ⏱ START ${t0.toIso8601String()}');
 
       // ── Authoritative payment amounts from ledger ──────────────────────
       final double txTotal = tx.amount;
@@ -2636,10 +2647,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
           tx.receiptNumber!.isNotEmpty) {
         // Fetch the verified invoice rows for this receipt
         try {
+          // ignore: avoid_print
+          print('[PDF] ⏱ getVerifiedInvoices START +${DateTime.now().difference(t0).inMilliseconds}ms');
           final repo = ref.read(verifiedRepositoryProvider);
           final records = await repo.getVerifiedInvoices(
             receiptNumber: tx.receiptNumber,
           );
+          // ignore: avoid_print
+          print('[PDF] ⏱ getVerifiedInvoices END +${DateTime.now().difference(t0).inMilliseconds}ms (${records.length} rows)');
 
           if (records.isNotEmpty) {
             final first = records.first;
@@ -2708,7 +2723,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 : null),
       );
 
+      // ignore: avoid_print
+      print('[PDF] ⏱ generate() START +${DateTime.now().difference(t0).inMilliseconds}ms');
       final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);
+      // ignore: avoid_print
+      print('[PDF] ⏱ generate() DONE +${DateTime.now().difference(t0).inMilliseconds}ms (${pdfBytes.length} bytes)');
 
       if (!mounted) return;
       messenger.hideCurrentSnackBar();

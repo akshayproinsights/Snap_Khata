@@ -193,7 +193,11 @@ def get_all_inventory(username: str, limit: Optional[int] = None) -> List[Dict[s
         return []
 
 
-def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def get_verified_invoices(
+    username: str,
+    limit: Optional[int] = None,
+    receipt_number: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Get verified invoices for a user, sorted by upload_date descending.
     
@@ -203,23 +207,49 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
         username: Username for RLS filtering
         limit: If specified, return only this many most recent records (single query, fast).
                If None, fetch ALL records using pagination (slower, but gets everything).
+        receipt_number: If specified, filter to this exact receipt number at the DB level
+                        (fast indexed query — avoids loading all records into memory).
     
     Returns:
         List of verified invoice dictionaries
     """
     try:
         db = get_database_client()
-        
-        # If limit is specified and <= 1000, use simple query (fast path)
+
+        # ── Fast path: receipt_number exact match (used by PDF generation) ──────
+        # Fetch only the rows for this specific receipt — no full-table scan needed.
+        if receipt_number is not None:
+            logger.info(f"Fetching verified invoices for {username}, receipt={receipt_number} (DB-level filter)")
+            query = (
+                db.query('verified_invoices')
+                .eq('username', username)
+                .eq('receipt_number', str(receipt_number))
+                .order('upload_date', desc=True)
+                .order('row_id')
+            )
+            if limit is not None:
+                query = query.limit(limit)
+            result = query.execute()
+            records = result.data or []
+            logger.info(f"✅ Fetched {len(records)} rows for receipt {receipt_number}")
+            return flatten_extra_fields(records)
+
+        # ── Fast path: small limit (e.g. recent records for a list view) ─────────
         if limit is not None and limit <= 1000:
             logger.info(f"Fetching {limit} most recent verified invoices for {username}")
-            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True).order('receipt_number').order('row_id')
-            query = query.limit(limit)
+            query = (
+                db.query('verified_invoices')
+                .eq('username', username)
+                .order('upload_date', desc=True)
+                .order('receipt_number')
+                .order('row_id')
+                .limit(limit)
+            )
             result = query.execute()
             logger.info(f"✅ Fetched {len(result.data) if result.data else 0} verified invoice records")
             return flatten_extra_fields(result.data) if result.data else []
         
-        # Otherwise, fetch ALL records using pagination (for searches/filters)
+        # ── Slow path: fetch ALL records (paginated) for searches/exports ────────
         all_records = []
         batch_size = 1000  # Supabase's maximum per request
         current_offset = 0
@@ -227,8 +257,15 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
         logger.info(f"Fetching ALL verified invoice records for {username} (paginated, for filtering)")
         
         while True:
-            query = db.query('verified_invoices').eq('username', username).order('upload_date', desc=True).order('receipt_number').order('row_id')
-            query = query.limit(batch_size).offset(current_offset)
+            query = (
+                db.query('verified_invoices')
+                .eq('username', username)
+                .order('upload_date', desc=True)
+                .order('receipt_number')
+                .order('row_id')
+                .limit(batch_size)
+                .offset(current_offset)
+            )
             result = query.execute()
             
             if not result.data or len(result.data) == 0:
@@ -244,13 +281,11 @@ def get_verified_invoices(username: str, limit: Optional[int] = None) -> List[Di
             current_offset += batch_size
         
         logger.info(f"✅ Fetched {len(all_records)} total verified invoice records for {username}")
-        return all_records
+        return flatten_extra_fields(all_records)
     
     except Exception as e:
         logger.error(f"Error getting verified invoices for {username}: {e}")
         return []
-        
-    return flatten_extra_fields(all_records if limit is None else result.data)
 
 
 

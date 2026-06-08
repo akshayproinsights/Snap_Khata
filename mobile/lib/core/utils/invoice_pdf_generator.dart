@@ -101,8 +101,27 @@ class InvoicePdfGenerator {
   static pw.Font? _cachedDevanagariRegular;
   static pw.Font? _cachedDevanagariBold;
 
+  // Tracks an in-flight font load so concurrent callers share one request.
+  static Future<void>? _fontLoadFuture;
+
   static Future<void> _ensureFonts() async {
+    if (_cachedRegular != null &&
+        _cachedBold != null &&
+        _cachedSemiBold != null &&
+        _cachedDevanagariRegular != null &&
+        _cachedDevanagariBold != null) {
+      return; // All fonts already cached — instant return
+    }
+    // If a load is already in progress, wait for it rather than starting another
+    _fontLoadFuture ??= _loadAllFonts().whenComplete(() => _fontLoadFuture = null);
+    await _fontLoadFuture;
+  }
+
+  static Future<void> _loadAllFonts() async {
     // Fetch all missing fonts concurrently to eliminate sequential network latency
+    final t = DateTime.now();
+    // ignore: avoid_print
+    print('[PDF-fonts] ⏱ Font download START ${t.toIso8601String()}');
     final results = await Future.wait([
       _cachedRegular != null ? Future.value(_cachedRegular!) : PdfGoogleFonts.notoSansRegular(),
       _cachedBold != null ? Future.value(_cachedBold!) : PdfGoogleFonts.notoSansBold(),
@@ -110,12 +129,25 @@ class InvoicePdfGenerator {
       _cachedDevanagariRegular != null ? Future.value(_cachedDevanagariRegular!) : PdfGoogleFonts.notoSansDevanagariRegular(),
       _cachedDevanagariBold != null ? Future.value(_cachedDevanagariBold!) : PdfGoogleFonts.notoSansDevanagariBold(),
     ]);
-
-    _cachedRegular = results[0];
-    _cachedBold = results[1];
-    _cachedSemiBold = results[2];
+    // ignore: avoid_print
+    print('[PDF-fonts] ⏱ Font download DONE +${DateTime.now().difference(t).inMilliseconds}ms');
+    _cachedRegular        = results[0];
+    _cachedBold           = results[1];
+    _cachedSemiBold       = results[2];
     _cachedDevanagariRegular = results[3];
     _cachedDevanagariBold = results[4];
+  }
+
+  /// Call this as early as possible (e.g. when the party-detail page opens) so
+  /// fonts are already warm by the time the user taps "Share as PDF".
+  /// Safe to call multiple times — returns immediately if already cached.
+  static void preWarm([String? logoUrl]) {
+    // Start font download in the background without blocking
+    _ensureFonts().ignore();
+    // Optionally warm the logo too
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      _fetchLogoBytes(logoUrl).ignore();
+    }
   }
 
   // ── Color palette ─────────────────────────────────────────────────────
@@ -256,7 +288,17 @@ class InvoicePdfGenerator {
   }
 
   static Future<Uint8List> generate(InvoiceData data) async {
-    await _ensureFonts();
+    final tGen = DateTime.now();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ generate() called');
+    // Kick off fonts AND logo fetch in parallel — logo URL is known early enough
+    final logoFuture = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
+        ? _fetchLogoBytes(data.shopLogoUrl!)
+        : Future<Uint8List?>.value(null);
+
+    await _ensureFonts(); // Fast if already cached from preWarm(); slow only first time
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ _ensureFonts() done +${DateTime.now().difference(tGen).inMilliseconds}ms');
     final regular   = _cachedRegular!;
     final bold      = _cachedBold!;
     final semiBold  = _cachedSemiBold!;
@@ -708,13 +750,11 @@ class InvoicePdfGenerator {
     // KEY FIX: Each section is a top-level widget in MultiPage.build list.
     // The Table widget is natively pageable — MultiPage will split it across
     // pages automatically without leaving blank space.
-    // ── Pre-fetch logo bytes before entering the synchronous build: callback ──
+    // ── Await the already-in-flight logo fetch (started in parallel with fonts) ──
     // pw.MultiPage's build: callback is synchronous — await is not allowed inside it.
     // We resolve the image bytes here (in the async generate() body) then reference
     // the already-fetched Uint8List inside the widget tree.
-    final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
-        ? await _fetchLogoBytes(data.shopLogoUrl!)
-        : null;
+    final Uint8List? logoBytes = await logoFuture;
 
     doc.addPage(
       pw.MultiPage(
