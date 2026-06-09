@@ -90,33 +90,20 @@ class InvoiceLineItem {
 // PDF Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-Future<Uint8List> _buildPdf(InvoiceData data, Uint8List? logoBytes) async {
+// Accepts pre-fetched fonts to avoid re-downloading on every call.
+Future<Uint8List> _buildPdf(
+  InvoiceData data,
+  Uint8List? logoBytes, {
+  required pw.Font regular,
+  required pw.Font bold,
+  required pw.Font semiBold,
+  required pw.Font devanagariRegular,
+  required pw.Font devanagariBold,
+}) async {
   // ignore: avoid_print
   print('[PDF-gen] ⏱ _buildPdf() starting...');
-
-  // ── Fetch fonts directly via Google Fonts API ────────────────────────────
   // ignore: avoid_print
-  print('[PDF-gen] ⏱ fetching notoSansRegular...');
-  final regular          = await PdfGoogleFonts.notoSansRegular();
-  
-  // ignore: avoid_print
-  print('[PDF-gen] ⏱ fetching notoSansBold...');
-  final bold             = await PdfGoogleFonts.notoSansBold();
-  
-  // ignore: avoid_print
-  print('[PDF-gen] ⏱ fetching notoSansMedium...');
-  final semiBold         = await PdfGoogleFonts.notoSansMedium();
-  
-  // ignore: avoid_print
-  print('[PDF-gen] ⏱ fetching notoSansDevanagariRegular...');
-  final devanagariRegular = await PdfGoogleFonts.notoSansDevanagariRegular();
-  
-  // ignore: avoid_print
-  print('[PDF-gen] ⏱ fetching notoSansDevanagariBold...');
-  final devanagariBold   = await PdfGoogleFonts.notoSansDevanagariBold();
-  
-  // ignore: avoid_print
-  print('[PDF-gen] ⏱ fonts fetched successfully. Building layout...');
+  print('[PDF-gen] ⏱ fonts already loaded, building layout...');
 
   // ── Colour palette ───────────────────────────────────────────────────────
   const black         = PdfColor.fromInt(0xFF000000);
@@ -889,9 +876,41 @@ Future<Uint8List> _buildPdf(InvoiceData data, Uint8List? logoBytes) async {
 class InvoicePdfGenerator {
   InvoicePdfGenerator._();
 
+  // ── Font cache (prevents re-downloading large font files on every call) ──
+  static pw.Font? _cachedRegular;
+  static pw.Font? _cachedBold;
+  static pw.Font? _cachedSemiBold;
+  static pw.Font? _cachedDevanagariRegular;
+  static pw.Font? _cachedDevanagariBold;
+
+  /// Downloads all fonts from Google Fonts CDN and caches them statically.
+  /// Subsequent calls are instant (returns from cache immediately).
+  static Future<void> _ensureFonts() async {
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching notoSansRegular...');
+    _cachedRegular          ??= await PdfGoogleFonts.notoSansRegular();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching notoSansBold...');
+    _cachedBold             ??= await PdfGoogleFonts.notoSansBold();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching notoSansMedium...');
+    _cachedSemiBold         ??= await PdfGoogleFonts.notoSansMedium();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching notoSansDevanagariRegular...');
+    _cachedDevanagariRegular ??= await PdfGoogleFonts.notoSansDevanagariRegular();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching notoSansDevanagariBold...');
+    _cachedDevanagariBold   ??= await PdfGoogleFonts.notoSansDevanagariBold();
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fonts fetched successfully.');
+  }
+
+  /// Call this when the party detail page loads to pre-warm fonts + logo
+  /// so that the first PDF generation is instant.
   static void preWarm([String? logoUrl]) {
-    // Left as a no-op so external calls to preWarm() don't break.
-    // We could prewarm fonts here, but PdfGoogleFonts caches internally anyway.
+    // Pre-fetch fonts eagerly in the background.
+    _ensureFonts().ignore();
+    // Pre-fetch logo in parallel.
     if (logoUrl != null && logoUrl.isNotEmpty) {
       _fetchLogoBytes(logoUrl).ignore();
     }
@@ -933,21 +952,28 @@ class InvoicePdfGenerator {
     // ignore: avoid_print
     print('[PDF-gen] ⏱ generate() called using PdfGoogleFonts');
 
-    // Fetch the logo bytes if needed
+    // Fetch logo + ensure fonts in parallel for maximum speed.
     // ignore: avoid_print
     print('[PDF-gen] ⏱ fetching shop logo... URL: ${data.shopLogoUrl}');
-    final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
-        ? await _fetchLogoBytes(data.shopLogoUrl!)
-        : null;
-    
-    // ignore: avoid_print
-    print('[PDF-gen] ⏱ shop logo fetch complete.');
+    final logoFuture = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
+        ? _fetchLogoBytes(data.shopLogoUrl!)
+        : Future<Uint8List?>.value(null);
 
-    // Await the PDF generation directly on the main isolate.
-    // PdfGoogleFonts handles fetching from Google Fonts CDN and internal caching.
+    // _ensureFonts() is idempotent — if already cached, returns instantly.
+    await Future.wait([logoFuture, _ensureFonts()]);
+    final Uint8List? logoBytes = await logoFuture;
+
     // ignore: avoid_print
-    print('[PDF-gen] ⏱ invoking _buildPdf()...');
-    final pdfBytes = await _buildPdf(data, logoBytes);
+    print('[PDF-gen] ⏱ shop logo fetch complete. Invoking _buildPdf()...');
+    final pdfBytes = await _buildPdf(
+      data,
+      logoBytes,
+      regular: _cachedRegular!,
+      bold: _cachedBold!,
+      semiBold: _cachedSemiBold!,
+      devanagariRegular: _cachedDevanagariRegular!,
+      devanagariBold: _cachedDevanagariBold!,
+    );
 
     // ignore: avoid_print
     print('[PDF-gen] ⏱ generate() finished.');
