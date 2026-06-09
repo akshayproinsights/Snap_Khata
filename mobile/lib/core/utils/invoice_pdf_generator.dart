@@ -345,9 +345,13 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
 
   final String displayStatus;
   if (received != null) {
-    if (received >= grandTotal)  displayStatus = 'PAID';
-    else if (received > 0)       displayStatus = 'PARTIAL';
-    else                         displayStatus = 'UNPAID';
+    if (received >= grandTotal) {
+      displayStatus = 'PAID';
+    } else if (received > 0) {
+      displayStatus = 'PARTIAL';
+    } else {
+      displayStatus = 'UNPAID';
+    }
   } else {
     displayStatus = data.status;
   }
@@ -578,9 +582,13 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
 
   // ── Build document ───────────────────────────────────────────────────────
   final String docTitleMeta;
-  if (data.documentType == 'ledger') docTitleMeta = 'Account Statement - ${data.customerName}';
-  else if (data.documentType == 'bill') docTitleMeta = 'Order Details #${data.receiptNumber} - ${data.customerName}';
-  else docTitleMeta = isGst ? 'Tax Invoice #${data.receiptNumber}' : 'Order Details #${data.receiptNumber}';
+  if (data.documentType == 'ledger') {
+    docTitleMeta = 'Account Statement - ${data.customerName}';
+  } else if (data.documentType == 'bill') {
+    docTitleMeta = 'Order Details #${data.receiptNumber} - ${data.customerName}';
+  } else {
+    docTitleMeta = isGst ? 'Tax Invoice #${data.receiptNumber}' : 'Order Details #${data.receiptNumber}';
+  }
 
   final doc = pw.Document(title: docTitleMeta, author: 'SnapKhata', creator: 'SnapKhata');
 
