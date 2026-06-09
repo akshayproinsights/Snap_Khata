@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -1132,13 +1132,20 @@ class InvoicePdfGenerator {
     // ignore: avoid_print
     print('[PDF-gen] ⏱ spawning compute +${DateTime.now().difference(tGen).inMilliseconds}ms');
 
-    // ── compute() is the correct Flutter API for background work ─────────
-    // On Flutter Web:   runs in a real JS Web Worker (non-blocking).
-    // On native:        spawns a Dart isolate.
-    // This replaces the previous kIsWeb hack which ran synchronously on Web
-    // and froze the browser main thread.
+    // ── Platform-specific execution ─────────────────────────────────────
+    // On Flutter Web: compute() (Web Workers) cannot serialize custom Dart
+    // objects like _PdfPayload due to JS structured cloning limitations,
+    // which causes a silent hang. We instead yield to the event loop for 50ms
+    // so the "Preparing PDF..." snackbar renders, then run synchronously.
+    // On Native: We safely offload to a background Dart isolate.
     // ────────────────────────────────────────────────────────────────────
-    final pdfBytes = await compute(_buildPdfInIsolate, payload);
+    final Uint8List pdfBytes;
+    if (kIsWeb) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      pdfBytes = await _buildPdfInIsolate(payload);
+    } else {
+      pdfBytes = await compute(_buildPdfInIsolate, payload);
+    }
 
     // ignore: avoid_print
     print('[PDF-gen] ⏱ PDF done +${DateTime.now().difference(tGen).inMilliseconds}ms (${pdfBytes.length} bytes)');
