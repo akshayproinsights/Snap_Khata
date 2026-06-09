@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:mobile/core/theme/app_theme.dart';
@@ -12,6 +13,7 @@ import 'package:mobile/core/utils/whatsapp_helper.dart';
 import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:mobile/core/utils/file_download_helper.dart';
 
 // ─── Group-by options ────────────────────────────────────────────────────────
 
@@ -93,15 +95,25 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       if (_customerName.isNotEmpty) filters['customer_name'] = _customerName;
 
       final bytes = await repo.exportToExcel(filters);
-      final dir = await getTemporaryDirectory();
       final timestamp =
           DateTime.now().toIso8601String().replaceAll(RegExp(r'[:\.]'), '-');
-      final filePath = '${dir.path}/verified_invoices_$timestamp.xlsx';
-      await File(filePath).writeAsBytes(bytes as List<int>);
+      final fileName = 'verified_invoices_$timestamp.xlsx';
 
-      await SharePlus.instance.share(
-        ShareParams(uri: Uri.file(filePath)),
-      );
+      if (kIsWeb) {
+        FileDownloadHelper.downloadFile(
+          bytes as List<int>,
+          fileName,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+      } else {
+        final dir = await getTemporaryDirectory();
+        final filePath = '${dir.path}/$fileName';
+        await File(filePath).writeAsBytes(bytes as List<int>);
+
+        await SharePlus.instance.share(
+          ShareParams(uri: Uri.file(filePath)),
+        );
+      }
     } catch (e) {
       if (mounted) {
         AppToast.showError(context, 'Export failed: ${e.toString()}');

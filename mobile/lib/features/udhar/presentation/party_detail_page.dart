@@ -22,6 +22,7 @@ import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
 import 'package:mobile/core/utils/invoice_pdf_generator.dart';
+import 'package:mobile/core/utils/file_download_helper.dart';
 import 'package:share_plus/share_plus.dart';
 
 
@@ -2779,26 +2780,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 child: const Text('CANCEL'),
               ),
               ElevatedButton(
-                onPressed: () async {
+                onPressed: () {
                   Navigator.pop(ctx);
-                  await SharePlus.instance.share(
-                    ShareParams(
-                      files: [
-                        XFile.fromData(
-                          pdfBytes,
-                          mimeType: 'application/pdf',
-                          name: fileName,
-                        ),
-                      ],
-                      text: '${invoiceData.shopName} — Invoice PDF',
-                    ),
-                  );
+                  FileDownloadHelper.downloadFile(pdfBytes, fileName, 'application/pdf');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6366F1),
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('SHARE / DOWNLOAD'),
+                child: const Text('DOWNLOAD'),
               ),
             ],
           ),
