@@ -1,10 +1,9 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show compute, kIsWeb;
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model passed to the generator
@@ -88,123 +87,16 @@ class InvoiceLineItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Isolate payload — all primitive/byte data that can cross an isolate boundary.
+// PDF Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PdfPayload {
-  final Uint8List regularBytes;
-  final Uint8List boldBytes;
-  final Uint8List semiBoldBytes;
-  final Uint8List devanagariRegularBytes;
-  final Uint8List devanagariBoldBytes;
-  final Uint8List? logoBytes;
-
-  // Serialised InvoiceData fields (all primitives — safe to transfer)
-  final String shopName;
-  final String? shopAddress;
-  final String? shopPhone;
-  final String? shopGst;
-  final String customerName;
-  final String? customerPhone;
-  final String? vehicleNumber;
-  final String? odometerReading;
-  final String receiptNumber;
-  final int dateMs; // DateTime.millisecondsSinceEpoch
-  final String status;
-  final List<Map<String, dynamic>> items;
-  final double totalAmount;
-  final double? receivedAmount;
-  final double? balanceDue;
-  final String gstMode;
-  final String industry;
-  final String documentType;
-  final String? customTerms;
-  final double? accountTotalBilled;
-  final double? accountTotalPaid;
-  final double? accountBalanceDue;
-
-  const _PdfPayload({
-    required this.regularBytes,
-    required this.boldBytes,
-    required this.semiBoldBytes,
-    required this.devanagariRegularBytes,
-    required this.devanagariBoldBytes,
-    this.logoBytes,
-    required this.shopName,
-    this.shopAddress,
-    this.shopPhone,
-    this.shopGst,
-    required this.customerName,
-    this.customerPhone,
-    this.vehicleNumber,
-    this.odometerReading,
-    required this.receiptNumber,
-    required this.dateMs,
-    required this.status,
-    required this.items,
-    required this.totalAmount,
-    this.receivedAmount,
-    this.balanceDue,
-    required this.gstMode,
-    required this.industry,
-    required this.documentType,
-    this.customTerms,
-    this.accountTotalBilled,
-    this.accountTotalPaid,
-    this.accountBalanceDue,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TOP-LEVEL isolate entry point
-//
-// MUST be a top-level (or static) function so that Isolate.run() /
-// compute() can send it to a web worker. This is where all the heavy
-// CPU work (glyph layout, font subsetting, PDF serialisation) happens —
-// completely off the Flutter UI thread so the app never freezes.
-// ─────────────────────────────────────────────────────────────────────────────
-
-Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
-  // ── Reconstruct fonts from raw bytes ────────────────────────────────────
-  final regular          = pw.Font.ttf(ByteData.sublistView(p.regularBytes));
-  final bold             = pw.Font.ttf(ByteData.sublistView(p.boldBytes));
-  final semiBold         = pw.Font.ttf(ByteData.sublistView(p.semiBoldBytes));
-  final devanagariRegular = pw.Font.ttf(ByteData.sublistView(p.devanagariRegularBytes));
-  final devanagariBold   = pw.Font.ttf(ByteData.sublistView(p.devanagariBoldBytes));
-
-  // ── Deserialise InvoiceData ──────────────────────────────────────────────
-  final items = p.items.map((m) => InvoiceLineItem(
-    name:   m['name']?.toString() ?? 'Item',
-    qty:    (m['qty']  as num? ?? 1).toDouble(),
-    rate:   (m['rate'] as num? ?? 0).toDouble(),
-    amount: (m['amount'] as num? ?? 0).toDouble(),
-    type:   m['type']?.toString() ?? 'part',
-  )).toList();
-
-  final data = InvoiceData(
-    shopName:          p.shopName,
-    shopAddress:       p.shopAddress,
-    shopPhone:         p.shopPhone,
-    shopGst:           p.shopGst,
-    customerName:      p.customerName,
-    customerPhone:     p.customerPhone,
-    vehicleNumber:     p.vehicleNumber,
-    odometerReading:   p.odometerReading,
-    receiptNumber:     p.receiptNumber,
-    date:              DateTime.fromMillisecondsSinceEpoch(p.dateMs),
-    status:            p.status,
-    items:             items,
-    totalAmount:       p.totalAmount,
-    receivedAmount:    p.receivedAmount,
-    balanceDue:        p.balanceDue,
-    gstMode:           p.gstMode,
-    industry:          p.industry,
-    documentType:      p.documentType,
-    customTerms:       p.customTerms,
-    accountTotalBilled:  p.accountTotalBilled,
-    accountTotalPaid:    p.accountTotalPaid,
-    accountBalanceDue:   p.accountBalanceDue,
-  );
+Future<Uint8List> _buildPdf(InvoiceData data, Uint8List? logoBytes) async {
+  // ── Fetch fonts directly via Google Fonts API ────────────────────────────
+  final regular          = await PdfGoogleFonts.notoSansRegular();
+  final bold             = await PdfGoogleFonts.notoSansBold();
+  final semiBold         = await PdfGoogleFonts.notoSansMedium();
+  final devanagariRegular = await PdfGoogleFonts.notoSansDevanagariRegular();
+  final devanagariBold   = await PdfGoogleFonts.notoSansDevanagariBold();
 
   // ── Colour palette ───────────────────────────────────────────────────────
   const black         = PdfColor.fromInt(0xFF000000);
@@ -308,11 +200,11 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
   final isAutomobile = data.industry == 'automobile';
 
   final nonLedgerItems = isLedger
-      ? items.where((i) {
+      ? data.items.where((i) {
           final t = i.type.toLowerCase();
           return t != 'invoice_header' && t != 'invoice_item' && t != 'payment';
         }).toList()
-      : items;
+      : data.items;
 
   final taxableItems = nonLedgerItems.where((i) => !i.isLabor).toList();
   final laborItems   = nonLedgerItems.where((i) =>  i.isLabor).toList();
@@ -410,7 +302,7 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
     }
     for (var i = 0; i < rowItems.length; i++) {
       final item = rowItems[i];
-      final srNo = items.indexOf(item) + 1;
+      final srNo = data.items.indexOf(item) + 1;
 
       if (isLedger) {
         final typeStr         = item.type.toLowerCase();
@@ -532,13 +424,13 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
     if (taxableItems.isNotEmpty) addItemRows(taxableItems);
     if (laborItems.isNotEmpty)   addItemRows(laborItems, label: 'LABOUR & SERVICES');
   } else {
-    addItemRows(items);
+    addItemRows(data.items);
   }
 
   // Total/summary footer row
-  if (items.isNotEmpty) {
+  if (data.items.isNotEmpty) {
     if (isLedger) {
-      final totalBilled = items.fold<double>(0, (s, item) =>
+      final totalBilled = data.items.fold<double>(0, (s, item) =>
           item.type.toLowerCase() == 'invoice_header' ? s + item.amount : s);
       tableRows.add(pw.TableRow(
         decoration: const pw.BoxDecoration(color: lightGray),
@@ -555,7 +447,7 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
         ],
       ));
     } else {
-      final totalQty = items.fold<double>(0, (s, i) => s + i.qty);
+      final totalQty = data.items.fold<double>(0, (s, i) => s + i.qty);
       tableRows.add(pw.TableRow(
         decoration: const pw.BoxDecoration(color: lightGray),
         children: [
@@ -596,8 +488,6 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
     bold: bold,
     fontFallback: [devanagariRegular, devanagariBold],
   );
-
-  final Uint8List? logoBytes = p.logoBytes;
 
   doc.addPage(
     pw.MultiPage(
@@ -972,69 +862,9 @@ Future<Uint8List> _buildPdfInIsolate(_PdfPayload p) async {
 class InvoicePdfGenerator {
   InvoicePdfGenerator._();
 
-  // ── Font bytes cache ─────────────────────────────────────────────────────
-  // We cache raw Uint8List bytes (not pw.Font objects) so they can be passed
-  // across isolate boundaries without serialisation issues.
-  static Uint8List? _cachedRegularBytes;
-  static Uint8List? _cachedBoldBytes;
-  static Uint8List? _cachedSemiBoldBytes;
-  static Uint8List? _cachedDevanagariRegularBytes;
-  static Uint8List? _cachedDevanagariBoldBytes;
-
-  // Tracks an in-flight font load so concurrent callers share one request.
-  static Future<void>? _fontLoadFuture;
-
-  static Future<void> _ensureFonts() async {
-    if (_cachedRegularBytes != null &&
-        _cachedBoldBytes != null &&
-        _cachedSemiBoldBytes != null &&
-        _cachedDevanagariRegularBytes != null &&
-        _cachedDevanagariBoldBytes != null) {
-      return; // All fonts already cached — instant return
-    }
-    _fontLoadFuture ??= _loadAllFonts().whenComplete(() => _fontLoadFuture = null);
-    await _fontLoadFuture;
-  }
-
-  /// Load fonts from the app bundle (assets) rather than from Google CDN.
-  /// This is faster, works offline, and gives us raw Uint8List bytes that can
-  /// be transferred to background isolates / web workers.
-  static Future<void> _loadAllFonts() async {
-    final t = DateTime.now();
-    // ignore: avoid_print
-    print('[PDF-fonts] ⏱ Font load START ${t.toIso8601String()}');
-    final results = await Future.wait([
-      _cachedRegularBytes != null
-          ? Future.value(_cachedRegularBytes!)
-          : rootBundle.load('fonts/NotoSans-Regular.ttf').then((bd) => bd.buffer.asUint8List()),
-      _cachedBoldBytes != null
-          ? Future.value(_cachedBoldBytes!)
-          : rootBundle.load('fonts/NotoSans-Bold.ttf').then((bd) => bd.buffer.asUint8List()),
-      // No Medium variant bundled — use Regular as semiBold fallback
-      _cachedSemiBoldBytes != null
-          ? Future.value(_cachedSemiBoldBytes!)
-          : rootBundle.load('fonts/NotoSans-Regular.ttf').then((bd) => bd.buffer.asUint8List()),
-      _cachedDevanagariRegularBytes != null
-          ? Future.value(_cachedDevanagariRegularBytes!)
-          : rootBundle.load('fonts/NotoSansDevanagari-Regular.ttf').then((bd) => bd.buffer.asUint8List()),
-      _cachedDevanagariBoldBytes != null
-          ? Future.value(_cachedDevanagariBoldBytes!)
-          : rootBundle.load('fonts/NotoSansDevanagari-Bold.ttf').then((bd) => bd.buffer.asUint8List()),
-    ]);
-    // ignore: avoid_print
-    print('[PDF-fonts] ⏱ Font load DONE +${DateTime.now().difference(t).inMilliseconds}ms');
-    _cachedRegularBytes          = results[0];
-    _cachedBoldBytes             = results[1];
-    _cachedSemiBoldBytes         = results[2];
-    _cachedDevanagariRegularBytes = results[3];
-    _cachedDevanagariBoldBytes   = results[4];
-  }
-
-  /// Call this as early as possible (e.g. when the party-detail page opens) so
-  /// fonts are already warm by the time the user taps "Share as PDF".
-  /// Safe to call multiple times — returns immediately if already cached.
   static void preWarm([String? logoUrl]) {
-    _ensureFonts().ignore();
+    // Left as a no-op so external calls to preWarm() don't break.
+    // We could prewarm fonts here, but PdfGoogleFonts caches internally anyway.
     if (logoUrl != null && logoUrl.isNotEmpty) {
       _fetchLogoBytes(logoUrl).ignore();
     }
@@ -1073,82 +903,18 @@ class InvoicePdfGenerator {
   // ─────────────────────────────────────────────────────────────────────────
 
   static Future<Uint8List> generate(InvoiceData data) async {
-    final tGen = DateTime.now();
     // ignore: avoid_print
-    print('[PDF-gen] ⏱ generate() called');
+    print('[PDF-gen] ⏱ generate() called using PdfGoogleFonts');
 
-    // Kick off fonts AND logo fetch in parallel — logo URL is known early enough
-    final logoFuture = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
-        ? _fetchLogoBytes(data.shopLogoUrl!)
-        : Future<Uint8List?>.value(null);
+    // Fetch the logo bytes if needed
+    final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
+        ? await _fetchLogoBytes(data.shopLogoUrl!)
+        : null;
 
-    await _ensureFonts(); // Fast if already cached from preWarm(); reads bundle only first time
-    // ignore: avoid_print
-    print('[PDF-gen] ⏱ _ensureFonts() done +${DateTime.now().difference(tGen).inMilliseconds}ms');
+    // Await the PDF generation directly on the main isolate.
+    // PdfGoogleFonts handles fetching from Google Fonts CDN and internal caching.
+    final pdfBytes = await _buildPdf(data, logoBytes);
 
-    final Uint8List? logoBytes = await logoFuture;
-
-    // Serialise invoice items to plain maps (safe to send across isolates)
-    final serialisedItems = data.items.map((i) => <String, dynamic>{
-      'name': i.name,
-      'qty': i.qty,
-      'rate': i.rate,
-      'amount': i.amount,
-      'type': i.type,
-    }).toList();
-
-    // Build the payload — all fields are primitives or Uint8List (isolate-safe)
-    final payload = _PdfPayload(
-      regularBytes:             _cachedRegularBytes!,
-      boldBytes:                _cachedBoldBytes!,
-      semiBoldBytes:            _cachedSemiBoldBytes!,
-      devanagariRegularBytes:   _cachedDevanagariRegularBytes!,
-      devanagariBoldBytes:      _cachedDevanagariBoldBytes!,
-      logoBytes:                logoBytes,
-      shopName:          data.shopName,
-      shopAddress:       data.shopAddress,
-      shopPhone:         data.shopPhone,
-      shopGst:           data.shopGst,
-      customerName:      data.customerName,
-      customerPhone:     data.customerPhone,
-      vehicleNumber:     data.vehicleNumber,
-      odometerReading:   data.odometerReading,
-      receiptNumber:     data.receiptNumber,
-      dateMs:            data.date.millisecondsSinceEpoch,
-      status:            data.status,
-      items:             serialisedItems,
-      totalAmount:       data.totalAmount,
-      receivedAmount:    data.receivedAmount,
-      balanceDue:        data.balanceDue,
-      gstMode:           data.gstMode,
-      industry:          data.industry,
-      documentType:      data.documentType,
-      customTerms:       data.customTerms,
-      accountTotalBilled:  data.accountTotalBilled,
-      accountTotalPaid:    data.accountTotalPaid,
-      accountBalanceDue:   data.accountBalanceDue,
-    );
-
-    // ignore: avoid_print
-    print('[PDF-gen] ⏱ spawning compute +${DateTime.now().difference(tGen).inMilliseconds}ms');
-
-    // ── Platform-specific execution ─────────────────────────────────────
-    // On Flutter Web: compute() (Web Workers) cannot serialize custom Dart
-    // objects like _PdfPayload due to JS structured cloning limitations,
-    // which causes a silent hang. We instead yield to the event loop for 50ms
-    // so the "Preparing PDF..." snackbar renders, then run synchronously.
-    // On Native: We safely offload to a background Dart isolate.
-    // ────────────────────────────────────────────────────────────────────
-    final Uint8List pdfBytes;
-    if (kIsWeb) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      pdfBytes = await _buildPdfInIsolate(payload);
-    } else {
-      pdfBytes = await compute(_buildPdfInIsolate, payload);
-    }
-
-    // ignore: avoid_print
-    print('[PDF-gen] ⏱ PDF done +${DateTime.now().difference(tGen).inMilliseconds}ms (${pdfBytes.length} bytes)');
     return pdfBytes;
   }
 
