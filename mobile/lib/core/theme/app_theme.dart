@@ -60,10 +60,10 @@ class AppTheme {
         surfaceContainerHighest: Color(0xFFF1F5F9), // slate-100
       ),
       scaffoldBackgroundColor: background,
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: _withFallback(GoogleFonts.interTextTheme().apply(
         bodyColor: textPrimary,
         displayColor: textPrimary,
-      ),
+      )),
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
         elevation: 0,
@@ -74,6 +74,7 @@ class AppTheme {
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
+          fontFamilyFallback: ['NotoSansDevanagari', 'NotoSans'],
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -85,7 +86,10 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontFamilyFallback: ['NotoSansDevanagari', 'NotoSans'],
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -135,11 +139,11 @@ class AppTheme {
         surfaceContainerHighest: Color(0xFF1E293B), // slate-800
       ),
       scaffoldBackgroundColor: darkBackground,
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
+      textTheme: _withFallback(GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
         bodyColor: darkTextPrimary,
         displayColor: darkTextPrimary,
         fontFamily: GoogleFonts.inter().fontFamily,
-      ),
+      )),
       appBarTheme: const AppBarTheme(
         backgroundColor: darkBackground,
         elevation: 0,
@@ -150,6 +154,7 @@ class AppTheme {
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
+          fontFamilyFallback: ['NotoSansDevanagari', 'NotoSans'],
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -161,7 +166,10 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontFamilyFallback: ['NotoSansDevanagari', 'NotoSans'],
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -191,6 +199,27 @@ class AppTheme {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
       ),
+    );
+  }
+
+  static TextTheme _withFallback(TextTheme baseTheme) {
+    const fallbacks = ['NotoSansDevanagari', 'NotoSans'];
+    return baseTheme.copyWith(
+      displayLarge: baseTheme.displayLarge?.copyWith(fontFamilyFallback: fallbacks),
+      displayMedium: baseTheme.displayMedium?.copyWith(fontFamilyFallback: fallbacks),
+      displaySmall: baseTheme.displaySmall?.copyWith(fontFamilyFallback: fallbacks),
+      headlineLarge: baseTheme.headlineLarge?.copyWith(fontFamilyFallback: fallbacks),
+      headlineMedium: baseTheme.headlineMedium?.copyWith(fontFamilyFallback: fallbacks),
+      headlineSmall: baseTheme.headlineSmall?.copyWith(fontFamilyFallback: fallbacks),
+      titleLarge: baseTheme.titleLarge?.copyWith(fontFamilyFallback: fallbacks),
+      titleMedium: baseTheme.titleMedium?.copyWith(fontFamilyFallback: fallbacks),
+      titleSmall: baseTheme.titleSmall?.copyWith(fontFamilyFallback: fallbacks),
+      bodyLarge: baseTheme.bodyLarge?.copyWith(fontFamilyFallback: fallbacks),
+      bodyMedium: baseTheme.bodyMedium?.copyWith(fontFamilyFallback: fallbacks),
+      bodySmall: baseTheme.bodySmall?.copyWith(fontFamilyFallback: fallbacks),
+      labelLarge: baseTheme.labelLarge?.copyWith(fontFamilyFallback: fallbacks),
+      labelMedium: baseTheme.labelMedium?.copyWith(fontFamilyFallback: fallbacks),
+      labelSmall: baseTheme.labelSmall?.copyWith(fontFamilyFallback: fallbacks),
     );
   }
 }

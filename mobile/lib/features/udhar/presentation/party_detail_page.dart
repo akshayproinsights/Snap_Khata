@@ -210,7 +210,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   style: TextStyle(
                     fontSize: 13,
                     color: context.textSecondaryColor,
-                    fontFamily: 'Outfit',
+                    fontFamilyFallback: const ['NotoSansDevanagari', 'NotoSans'],
                   ),
                   children: [
                     const TextSpan(text: 'Choose a billing method for '),
