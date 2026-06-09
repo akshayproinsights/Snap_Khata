@@ -858,14 +858,19 @@ Future<Uint8List> _buildPdf(
     ),
   );
 
-  // ── Heavy operation: encode PDF bytes (runs entirely in this isolate) ────
+  // ── Heavy operation: encode PDF bytes ──────────────────────────────────
+  // On Flutter Web there is only one JS thread. doc.save() is pure CPU work
+  // and will block the event loop (freezing the spinner) if called without
+  // enableEventLoopBalancing. With it set to true, the pdf library periodically
+  // yields control back to the browser during the xref output phase so the UI
+  // stays alive. (Dart VM uses a background isolate, so this flag is a no-op there.)
   // ignore: avoid_print
-  print('[PDF-gen] ⏱ generating byte stream (CPU intensive)...');
-  final resultBytes = await doc.save();
-  
+  print('[PDF-gen] ⏱ generating byte stream (event-loop balanced)...');
+  final resultBytes = await doc.save(enableEventLoopBalancing: true);
+
   // ignore: avoid_print
   print('[PDF-gen] ⏱ document saved successfully! Size: ${resultBytes.length} bytes.');
-  
+
   return resultBytes;
 }
 
