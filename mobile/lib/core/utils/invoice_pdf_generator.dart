@@ -910,11 +910,57 @@ class InvoicePdfGenerator {
     print('[PDF-gen] ⏱ fonts fetched successfully.');
   }
 
+  // ── Tracks whether font TTF tables have been parsed (one-time, expensive) ──
+  static bool _fontsParsed = false;
+
+  /// Forces all 5 font files to run their TtfParser table-parse eagerly.
+  ///
+  /// Inside doc.save(), PdfTtfFont calls TtfParser(bytes) which synchronously
+  /// parses the full TTF file (_parseCMap + _parseIndexes + _parseGlyphs).
+  /// For 5 large NotoSans variants this can block the Flutter Web JS thread
+  /// for 3-8 seconds, freezing the UI. Running a tiny 1-word dummy PDF during
+  /// preWarm forces this parsing to happen in the background so the real PDF
+  /// generates instantly.
+  static Future<void> _preParseFonts() async {
+    if (_fontsParsed) return;
+    _fontsParsed = true;
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ pre-parsing TTF tables (background warm-up)...');
+    try {
+      final dummy = pw.Document();
+      final theme = pw.ThemeData.withFont(
+        base: _cachedRegular!,
+        bold: _cachedBold!,
+        fontFallback: [_cachedDevanagariRegular!, _cachedDevanagariBold!],
+      );
+      // Reference all 5 fonts explicitly so every TtfParser call is forced now.
+      dummy.addPage(pw.Page(
+        pageTheme: pw.PageTheme(theme: theme),
+        build: (ctx) => pw.Column(children: [
+          pw.Text('a', style: pw.TextStyle(font: _cachedRegular)),
+          pw.Text('b', style: pw.TextStyle(font: _cachedBold)),
+          pw.Text('c', style: pw.TextStyle(font: _cachedSemiBold)),
+        ]),
+      ));
+      // This triggers TtfParser for all fonts in the theme — the slow one-time work.
+      await dummy.save(enableEventLoopBalancing: true);
+      // ignore: avoid_print
+      print('[PDF-gen] ⏱ TTF tables pre-parsed — future PDFs will be instant.');
+    } catch (e) {
+      // Non-fatal: real PDF will still work, just might be slow on first call
+      _fontsParsed = false;
+      // ignore: avoid_print
+      print('[PDF-gen] ⚠ pre-parse warm-up failed: $e');
+    }
+  }
+
   /// Call this when the party detail page loads to pre-warm fonts + logo
   /// so that the first PDF generation is instant.
   static void preWarm([String? logoUrl]) {
-    // Pre-fetch fonts eagerly in the background.
-    _ensureFonts().ignore();
+    // 1. Download fonts eagerly in the background.
+    // 2. Once fonts are downloaded, trigger dummy PDF to pre-parse TTF tables.
+    //    This moves the expensive TtfParser() work off the download button tap.
+    _ensureFonts().then((_) => _preParseFonts().ignore()).ignore();
     // Pre-fetch logo in parallel.
     if (logoUrl != null && logoUrl.isNotEmpty) {
       _fetchLogoBytes(logoUrl).ignore();
