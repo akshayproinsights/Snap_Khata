@@ -203,7 +203,7 @@ class _PendingReceiptsPageState extends ConsumerState<PendingReceiptsPage> {
     if (!mounted) return;
     final state = ref.read(reviewProvider);
     if (state.error == null) {
-      AppToast.showSuccess(context, 'Syncing receipts in background…',
+      AppToast.showSuccess(context, 'Syncing receipts in background...',
           title: 'Saved ✔');
       ref.read(uploadProvider.notifier).clearFiles();
       context.go('/');

@@ -54,7 +54,7 @@ class _SyncingReceiptsBanner extends StatelessWidget {
     final msg = progress?.message;
     final displayMsg = (msg != null && msg.isNotEmpty)
         ? msg
-        : (pct > 0 ? 'Saving receipts… $pct%' : 'Saving receipts to database…');
+        : (pct > 0 ? 'Saving receipts... $pct%' : 'Saving receipts to database...');
 
     return Column(
       mainAxisSize: MainAxisSize.min,

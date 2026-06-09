@@ -369,7 +369,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                             ),
                             decoration: InputDecoration(
                               labelText: 'Item Name',
-                              hintText: 'e.g. Sugar, Rice, Engine Oil…',
+                              hintText: 'e.g. Sugar, Rice, Engine Oil...',
                               labelStyle: TextStyle(
                                   color: context.textSecondaryColor),
                               hintStyle:
@@ -1083,7 +1083,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                 controller: _searchController,
                 style: TextStyle(color: context.textColor, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Search items…',
+                  hintText: 'Search items...',
                   hintStyle: TextStyle(
                     color: context.textSecondaryColor,
                     fontSize: 14,
@@ -1231,7 +1231,7 @@ class _ItemCataloguePageState extends ConsumerState<ItemCataloguePage>
                       )
                     : const Icon(LucideIcons.sparkles, size: 16),
                 label: Text(
-                  _isSyncing ? 'Syncing…' : 'Auto-Import from My Bills',
+                  _isSyncing ? 'Syncing...' : 'Auto-Import from My Bills',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 style: OutlinedButton.styleFrom(

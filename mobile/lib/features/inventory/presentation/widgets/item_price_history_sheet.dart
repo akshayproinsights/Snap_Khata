@@ -343,7 +343,7 @@ class ItemPriceHistorySheet extends ConsumerWidget {
         content: Row(children: [
           SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
           SizedBox(width: 12),
-          Text('Loading invoice…'),
+          Text('Loading invoice...'),
         ]),
         duration: Duration(seconds: 10),
       ),

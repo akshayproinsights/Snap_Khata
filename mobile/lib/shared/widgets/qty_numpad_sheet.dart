@@ -387,7 +387,7 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
                         children: [
                           _digits.isEmpty
                               ? Text(
-                                  _isListening ? 'Speak quantity…' : '0',
+                                  _isListening ? 'Speak quantity...' : '0',
                                   style: TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.w900,
@@ -495,7 +495,7 @@ class _QtyNumpadSheetState extends State<QtyNumpadSheet>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Listening… say e.g., "ten" or "two point five"',
+                        'Listening... say e.g., "ten" or "two point five"',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.red.withValues(alpha: 0.8),

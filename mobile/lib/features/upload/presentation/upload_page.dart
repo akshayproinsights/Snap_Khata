@@ -307,7 +307,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
               ),
               SizedBox(height: 20),
               Text(
-                'Checking for active orders…',
+                'Checking for active orders...',
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 15,
@@ -764,7 +764,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
                         color: Colors.white),
                 label: Text(
                   state.isActive
-                      ? 'Processing…'
+                      ? 'Processing...'
                       : 'Upload ${state.fileItems.length} Order${state.fileItems.length > 1 ? 's' : ''}',
                   style: const TextStyle(
                     fontSize: 18,
@@ -1605,7 +1605,7 @@ class _LoadingOverlayState extends ConsumerState<_LoadingOverlay>
 
     final stepLabel = isUploading
         ? 'Step 1 of 2'
-        : isLastStep ? 'Finalizing…' : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
+        : isLastStep ? 'Finalizing...' : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
 
     final barValue = isUploading ? uploadProgress : procStepProgress;
     final percent = (barValue * 100).toInt();

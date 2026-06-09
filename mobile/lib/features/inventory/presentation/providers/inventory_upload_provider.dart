@@ -522,7 +522,7 @@ class InventoryUploadNotifier extends Notifier<InventoryUploadState> {
   }
 
   void _startPolling(String taskId, {DateTime? taskStartTime}) {
-    _backgroundTask.startTask('Processing your inventory…');
+    _backgroundTask.startTask('Processing your inventory...');
     _consecutivePollingErrors = 0;
     _isPaused = false;
     _pausedTaskId = null;

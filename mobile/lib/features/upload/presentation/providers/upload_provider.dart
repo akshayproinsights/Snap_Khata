@@ -621,7 +621,7 @@ class UploadNotifier extends Notifier<UploadState> {
   }
 
   void _startPolling(String taskId) {
-    _backgroundTask.startTask('Processing your orders…');
+    _backgroundTask.startTask('Processing your orders...');
     _consecutivePollingErrors = 0;
     _isPaused = false;
     _pausedTaskId = null;

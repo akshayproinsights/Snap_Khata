@@ -48,7 +48,7 @@ class _ItemsPageState extends ConsumerState<ItemsPage> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: 'Search by vendor, invoice ID or item…',
+          hintText: 'Search by vendor, invoice ID or item...',
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13.5),
           prefixIcon:
               Icon(LucideIcons.search, size: 18, color: Colors.grey.shade400),

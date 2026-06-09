@@ -1055,7 +1055,7 @@ class _LoadMoreFooter extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            'Scroll to load $remaining more…',
+            'Scroll to load $remaining more...',
             style: TextStyle(
               color: context.textSecondaryColor,
               fontSize: 13,
@@ -1093,23 +1093,23 @@ class _SyncingBannerState extends State<_SyncingBanner>
   static String _stageLabel(String stage) {
     switch (stage) {
       case 'reading':
-        return 'Reading your receipts…';
+        return 'Reading your receipts...';
       case 'correcting':
-        return 'Applying corrections…';
+        return 'Applying corrections...';
       case 'saving_invoices':
-        return 'Saving invoices…';
+        return 'Saving invoices...';
       case 'building_verified':
-        return 'Building verified ledger…';
+        return 'Building verified ledger...';
       case 'saving_verified':
-        return 'Saving to ledger…';
+        return 'Saving to ledger...';
       case 'cleanup':
-        return 'Cleaning up…';
+        return 'Cleaning up...';
       case 'complete':
         return 'All done! ✓';
       case 'working':
-        return 'Processing…';
+        return 'Processing...';
       default:
-        return 'Syncing receipts…';
+        return 'Syncing receipts...';
     }
   }
 

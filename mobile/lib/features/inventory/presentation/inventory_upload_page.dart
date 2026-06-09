@@ -134,7 +134,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
 
       // CRITICAL: If no active task was found, also clear the provider's
       // isRestoringState (which defaults to true). Without this, the camera
-      // screen is blocked forever by the "Checking for active uploads…" guard.
+      // screen is blocked forever by the "Checking for active uploads..." guard.
       if (!foundActiveTask) {
         final currentState = ref.read(inventoryUploadProvider);
         if (currentState.isRestoringState) {
@@ -307,7 +307,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
               ),
               SizedBox(height: 20),
               Text(
-                'Checking for active uploads…',
+                'Checking for active uploads...',
                 style: TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 15,
@@ -664,7 +664,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
                         color: Colors.white),
                 label: Text(
                   state.isActive
-                      ? 'Processing…'
+                      ? 'Processing...'
                       : 'Upload ${state.fileItems.length} Invoice${state.fileItems.length > 1 ? 's' : ''}',
                   style: const TextStyle(
                     fontSize: 18,
@@ -1045,7 +1045,7 @@ class _InventoryUploadPageState extends ConsumerState<InventoryUploadPage>
           const SizedBox(height: 16),
           Center(
             child: Text(
-              'Redirecting automatically in a few seconds…',
+              'Redirecting automatically in a few seconds...',
               style: TextStyle(
                   fontSize: 12,
                   color: AppTheme.textSecondary.withValues(alpha: 0.6)),
@@ -1599,7 +1599,7 @@ class _InventoryLoadingOverlayState
 
     final stepLabel = isUploading
         ? 'Step 1 of 2'
-        : isLastStep ? 'Finalizing…' : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
+        : isLastStep ? 'Finalizing...' : 'Step 2: ${stepIndex + 1} of ${_processingSteps.length}';
 
     final barValue = isUploading ? uploadProgress : procStepProgress;
     final percent = (barValue * 100).toInt();

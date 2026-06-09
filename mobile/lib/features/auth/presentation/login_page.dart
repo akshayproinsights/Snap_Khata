@@ -315,7 +315,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               decoration: BoxDecoration(
                                   color: context.borderColor, shape: BoxShape.circle)),
                           const SizedBox(width: 8),
-                          Text('🇮🇳 Made in India',
+                          Text('Made in India',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 11, color: context.textColor)),
                         ],

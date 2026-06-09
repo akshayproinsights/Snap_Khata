@@ -428,7 +428,7 @@ class _InventoryMainPageState extends ConsumerState<InventoryMainPage>
           fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
-          hintText: 'Search by vendor, invoice ID or item…',
+          hintText: 'Search by vendor, invoice ID or item...',
           hintStyle: TextStyle(
             color: context.textSecondaryColor,
             fontSize: 13.5,

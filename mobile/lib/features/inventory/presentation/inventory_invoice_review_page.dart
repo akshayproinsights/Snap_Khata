@@ -424,7 +424,7 @@ class _InventoryInvoiceReviewPageState
         // while the widget is still in the tree (same pattern as ReceiptReviewPage).
         AppToast.showSuccess(
           context,
-          'Syncing inventory in background…',
+          'Syncing inventory in background...',
           title: 'Saved ✔',
         );
         context.go('/');

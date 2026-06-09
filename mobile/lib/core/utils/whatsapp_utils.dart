@@ -639,7 +639,7 @@ class WhatsAppUtils {
                 ),
               ),
               SizedBox(width: 14),
-              Text('Preparing receipt image…'),
+              Text('Preparing receipt image...'),
             ],
           ),
           duration: Duration(seconds: 30),
@@ -773,7 +773,7 @@ class WhatsAppUtils {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('📤 Opening WhatsApp with receipt link…'),
+          content: Text('Opening WhatsApp with receipt link...'),
           backgroundColor: Color(0xFF25D366),
           behavior: SnackBarBehavior.floating,
           duration: Duration(seconds: 3),

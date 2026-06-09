@@ -2077,7 +2077,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _isItemListening ? 'Listening…' : 'or speak items',
+                            _isItemListening ? 'Listening...' : 'or speak items',
                             style: TextStyle(
                               fontSize: 12,
                               color: _isItemListening
@@ -2172,7 +2172,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
-                                'Listening… say items like: "2 kg atta, 5 litre oil, 3 soap"',
+                                'Listening... say items like: "2 kg atta, 5 litre oil, 3 soap"',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFFFF5722),

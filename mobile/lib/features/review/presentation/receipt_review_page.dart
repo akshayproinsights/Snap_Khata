@@ -777,7 +777,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
       AppToast.showSuccess(
         context,
-        'Syncing your receipts in background…',
+        'Syncing your receipts in background...',
         title: 'Saved ✔',
       );
       context.go('/');
@@ -1821,7 +1821,7 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
                       child: Text(
                         _heardNameText.isNotEmpty
                             ? _heardNameText
-                            : 'Bol do customer ka naam…',
+                            : 'Bol do customer ka naam...',
                         style: TextStyle(
                           fontSize: 12,
                           color: _heardNameText.isNotEmpty

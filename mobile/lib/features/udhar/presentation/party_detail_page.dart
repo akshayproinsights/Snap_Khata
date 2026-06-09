@@ -542,7 +542,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Payment recorded! 🎉'),
+                                    content: Text('Payment recorded!'),
                                   ),
                                 );
                               } else {
@@ -765,7 +765,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('⚠️', style: TextStyle(fontSize: 18)),
+                            const Icon(Icons.warning, size: 18, color: Colors.orange),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -810,7 +810,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         ),
                         child: const Row(
                           children: [
-                            Text('❌', style: TextStyle(fontSize: 16)),
+                            Icon(Icons.close, size: 16, color: Colors.red),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -929,7 +929,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     SnackBar(
                                       content: const Row(
                                         children: [
-                                          Text('✅ ', style: TextStyle(fontSize: 16)),
+                                          Icon(Icons.check, size: 16, color: Colors.green),
                                           Text(
                                             'Customer details saved!',
                                             style: TextStyle(fontWeight: FontWeight.w700),
@@ -2586,7 +2586,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
               ),
             ),
             SizedBox(width: 14),
-            Text('Preparing PDF…'),
+            Text('Preparing PDF...'),
           ],
         ),
         duration: Duration(seconds: 30),

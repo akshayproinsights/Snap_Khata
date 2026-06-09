@@ -91,12 +91,32 @@ class InvoiceLineItem {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<Uint8List> _buildPdf(InvoiceData data, Uint8List? logoBytes) async {
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ _buildPdf() starting...');
+
   // ── Fetch fonts directly via Google Fonts API ────────────────────────────
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fetching notoSansRegular...');
   final regular          = await PdfGoogleFonts.notoSansRegular();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fetching notoSansBold...');
   final bold             = await PdfGoogleFonts.notoSansBold();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fetching notoSansMedium...');
   final semiBold         = await PdfGoogleFonts.notoSansMedium();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fetching notoSansDevanagariRegular...');
   final devanagariRegular = await PdfGoogleFonts.notoSansDevanagariRegular();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fetching notoSansDevanagariBold...');
   final devanagariBold   = await PdfGoogleFonts.notoSansDevanagariBold();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ fonts fetched successfully. Building layout...');
 
   // ── Colour palette ───────────────────────────────────────────────────────
   const black         = PdfColor.fromInt(0xFF000000);
@@ -852,7 +872,14 @@ Future<Uint8List> _buildPdf(InvoiceData data, Uint8List? logoBytes) async {
   );
 
   // ── Heavy operation: encode PDF bytes (runs entirely in this isolate) ────
-  return doc.save();
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ generating byte stream (CPU intensive)...');
+  final resultBytes = await doc.save();
+  
+  // ignore: avoid_print
+  print('[PDF-gen] ⏱ document saved successfully! Size: ${resultBytes.length} bytes.');
+  
+  return resultBytes;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -907,14 +934,23 @@ class InvoicePdfGenerator {
     print('[PDF-gen] ⏱ generate() called using PdfGoogleFonts');
 
     // Fetch the logo bytes if needed
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ fetching shop logo... URL: ${data.shopLogoUrl}');
     final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
         ? await _fetchLogoBytes(data.shopLogoUrl!)
         : null;
+    
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ shop logo fetch complete.');
 
     // Await the PDF generation directly on the main isolate.
     // PdfGoogleFonts handles fetching from Google Fonts CDN and internal caching.
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ invoking _buildPdf()...');
     final pdfBytes = await _buildPdf(data, logoBytes);
 
+    // ignore: avoid_print
+    print('[PDF-gen] ⏱ generate() finished.');
     return pdfBytes;
   }
 
