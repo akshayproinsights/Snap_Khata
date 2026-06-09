@@ -126,13 +126,13 @@ flutter:
   fonts:
     - family: NotoSans
       fonts:
-        - asset: assets/fonts/NotoSans-Regular.ttf
-        - asset: assets/fonts/NotoSans-Bold.ttf
+        - asset: fonts/NotoSans-Regular.ttf
+        - asset: fonts/NotoSans-Bold.ttf
           weight: 700
     - family: NotoSansDevanagari
       fonts:
-        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf
-        - asset: assets/fonts/NotoSansDevanagari-Bold.ttf
+        - asset: fonts/NotoSansDevanagari-Regular.ttf
+        - asset: fonts/NotoSansDevanagari-Bold.ttf
           weight: 700
   #   - images/a_dot_ham.jpeg
 
