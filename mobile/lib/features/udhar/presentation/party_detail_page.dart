@@ -2337,7 +2337,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (shareMode == 'accountStatement' || selectedTx != null) ...[
+                        if (selectedTx != null) ...[
                           SizedBox(
                             width: double.infinity,
                             height: 50,
@@ -2347,11 +2347,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 size: 18,
                                 color: Color(0xFF6366F1),
                               ),
-                              label: Text(
-                                shareMode == 'accountStatement'
-                                    ? 'Share Statement as PDF'
-                                    : 'Share Bill as PDF',
-                                style: const TextStyle(
+                              label: const Text(
+                                'Share as PDF',
+                                style: TextStyle(
                                   color: Color(0xFF6366F1),
                                   fontWeight: FontWeight.w800,
                                   fontSize: 14,
@@ -2369,17 +2367,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     .withValues(alpha: 0.06),
                               ),
                               onPressed: () async {
+                                if (selectedTx?.receiptNumber == null) return;
                                 final username = authState.user?.username;
                                 final usernameParam = username != null
                                     ? '&u=${Uri.encodeComponent(username)}'
                                     : '';
-                                final String url;
-                                if (shareMode == 'accountStatement') {
-                                  url = 'https://snapkhata.com/statement.html?party=${ledger.id}$usernameParam&pdf=1';
-                                } else {
-                                  if (selectedTx?.receiptNumber == null) return;
-                                  url = 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
-                                }
+                                final url = 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
 
                                 final uri = Uri.parse(url);
                                 Navigator.pop(ctx);
