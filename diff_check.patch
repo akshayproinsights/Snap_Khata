@@ -1,0 +1,1968 @@
+diff --git a/mobile/lib/core/utils/invoice_pdf_generator.dart b/mobile/lib/core/utils/invoice_pdf_generator.dart
+index 2752df39..21d660f5 100644
+--- a/mobile/lib/core/utils/invoice_pdf_generator.dart
++++ b/mobile/lib/core/utils/invoice_pdf_generator.dart
+@@ -87,1129 +87,954 @@ class InvoiceLineItem {
+ }
+ 
+ // ─────────────────────────────────────────────────────────────────────────────
+-// Generator
++// PDF Builder
+ // ─────────────────────────────────────────────────────────────────────────────
+ 
+-class InvoicePdfGenerator {
+-  InvoicePdfGenerator._();
+-
+-  // ── Font cache (prevents re-downloading large font files every call) ─────
+-  static pw.Font? _cachedRegular;
+-  static pw.Font? _cachedBold;
+-  static pw.Font? _cachedSemiBold;
+-  // Devanagari fallback fonts (Marathi / Hindi support)
+-  static pw.Font? _cachedDevanagariRegular;
+-  static pw.Font? _cachedDevanagariBold;
+-  static pw.Font? _cachedDevanagariMedium;
+-
+-  static Future<void> _ensureFonts() async {
+-    // Primary: NotoSans (Latin, numbers, ₹ symbol)
+-    _cachedRegular  ??= await PdfGoogleFonts.notoSansRegular();
+-    _cachedBold     ??= await PdfGoogleFonts.notoSansBold();
+-    _cachedSemiBold ??= await PdfGoogleFonts.notoSansMedium();
+-    // Fallback: NotoSansDevanagari (Marathi, Hindi — Devanagari script)
+-    _cachedDevanagariRegular ??= await PdfGoogleFonts.notoSansDevanagariRegular();
+-    _cachedDevanagariBold    ??= await PdfGoogleFonts.notoSansDevanagariBold();
+-    _cachedDevanagariMedium  ??= await PdfGoogleFonts.notoSansDevanagariMedium();
+-  }
+-
+-  // ── Color palette ─────────────────────────────────────────────────────
+-  static const _black        = PdfColor.fromInt(0xFF000000);
+-  static const _headerNavy  = PdfColor.fromInt(0xFF1a2744); // kept for potential future use
+-  static const _darkSlate   = PdfColor.fromInt(0xFF1e293b);
+-  static const _midSlate    = PdfColor.fromInt(0xFF475569);
+-  static const _lightGray   = PdfColor.fromInt(0xFFf1f5f9);
+-  static const _tableHeaderBg = PdfColor.fromInt(0xFFdde3ed);
+-  static const _rowAlt      = PdfColor.fromInt(0xFFf4f6f8);
+-
+-  static const _white       = PdfColor.fromInt(0xFFFFFFFF);
+-  static const _green       = PdfColor.fromInt(0xFF16a34a);
+-  static const _greenBg     = PdfColor.fromInt(0xFFdcfce7);
+-  static const _orange      = PdfColor.fromInt(0xFFd97706);
+-  static const _orangeBg    = PdfColor.fromInt(0xFFfef3c7);
+-  static const _red         = PdfColor.fromInt(0xFFb91c1c);
+-  static const _snapBlue    = PdfColor.fromInt(0xFF4F46E5);
+-
+-  // ── Number formatting ─────────────────────────────────────────────────────
+-
+-  static String _fmtMoney(double v) {
++// Accepts pre-fetched fonts to avoid re-downloading on every call.
++Future<Uint8List> _buildPdf(
++  InvoiceData data,
++  Uint8List? logoBytes, {
++  required pw.Font regular,
++  required pw.Font bold,
++  required pw.Font semiBold,
++  required pw.Font devanagariRegular,
++  required pw.Font devanagariBold,
++}) async {
++  // ignore: avoid_print
++  print('[PDF-gen] ⏱ _buildPdf() starting...');
++  // ignore: avoid_print
++  print('[PDF-gen] ⏱ fonts already loaded, building layout...');
++
++  // ── Colour palette ───────────────────────────────────────────────────────
++  const black         = PdfColor.fromInt(0xFF000000);
++  const headerNavy    = PdfColor.fromInt(0xFF1a2744);
++  const darkSlate     = PdfColor.fromInt(0xFF1e293b);
++  const midSlate      = PdfColor.fromInt(0xFF475569);
++  const lightGray     = PdfColor.fromInt(0xFFf1f5f9);
++  const tableHeaderBg = PdfColor.fromInt(0xFFdde3ed);
++  const rowAlt        = PdfColor.fromInt(0xFFf4f6f8);
++  const white         = PdfColor.fromInt(0xFFFFFFFF);
++  const green         = PdfColor.fromInt(0xFF16a34a);
++  const greenBg       = PdfColor.fromInt(0xFFdcfce7);
++  const orange        = PdfColor.fromInt(0xFFd97706);
++  const orangeBg      = PdfColor.fromInt(0xFFfef3c7);
++  const red           = PdfColor.fromInt(0xFFb91c1c);
++  const snapBlue      = PdfColor.fromInt(0xFF4F46E5);
++
++  // ── Helpers ──────────────────────────────────────────────────────────────
++  String fmtIndian(double v) {
+     final abs = v.abs();
+-    return '₹ ${_formatIndianNumber(abs)}';
+-  }
+-
+-  static String _formatIndianNumber(double v) {
+-    // Show decimals only when there are actual paise (non-zero cents)
+-    final isWholeNumber = v == v.truncateToDouble();
+-    final str = isWholeNumber ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+-    if (isWholeNumber) {
+-      // Format whole number with Indian grouping: e.g. 42450 → 42,450
++    final isWhole = abs == abs.truncateToDouble();
++    final str = isWhole ? abs.toStringAsFixed(0) : abs.toStringAsFixed(2);
++    if (isWhole) {
+       if (str.length <= 3) return str;
+       final last3 = str.substring(str.length - 3);
+-      final rest = str.substring(0, str.length - 3);
+-      final buf = StringBuffer();
+-      var count = 0;
++      final rest  = str.substring(0, str.length - 3);
++      final buf = StringBuffer(); var c = 0;
+       for (var i = rest.length - 1; i >= 0; i--) {
+-        if (count > 0 && count % 2 == 0) buf.write(',');
+-        buf.write(rest[i]);
+-        count++;
++        if (c > 0 && c % 2 == 0) buf.write(',');
++        buf.write(rest[i]); c++;
+       }
+-      final reversedRest = buf.toString().split('').reversed.join();
+-      return '$reversedRest,$last3';
++      return '${buf.toString().split('').reversed.join()},$last3';
+     }
+-    // Has paise — show with 2 decimal places
+-    final parts = str.split('.');
++    final parts   = str.split('.');
+     final intPart = parts[0];
+     final decPart = parts.length > 1 ? parts[1] : '00';
+     if (intPart.length <= 3) return '$intPart.$decPart';
+     final last3 = intPart.substring(intPart.length - 3);
+-    final rest = intPart.substring(0, intPart.length - 3);
+-    final buf = StringBuffer();
+-    var count = 0;
++    final rest  = intPart.substring(0, intPart.length - 3);
++    final buf = StringBuffer(); var c = 0;
+     for (var i = rest.length - 1; i >= 0; i--) {
+-      if (count > 0 && count % 2 == 0) buf.write(',');
+-      buf.write(rest[i]);
+-      count++;
++      if (c > 0 && c % 2 == 0) buf.write(',');
++      buf.write(rest[i]); c++;
+     }
+-    final reversedRest = buf.toString().split('').reversed.join();
+-    return '$reversedRest,$last3.$decPart';
++    return '${buf.toString().split('').reversed.join()},$last3.$decPart';
+   }
+ 
+-  static String _fmtQty(double v) {
+-    if (v == v.truncateToDouble()) return v.truncate().toString();
+-    return v.toStringAsFixed(2);
+-  }
++  String fmtMoney(double v)  => '₹ ${fmtIndian(v)}';
++  String fmtQty(double v)    => v == v.truncateToDouble() ? v.truncate().toString() : v.toStringAsFixed(2);
+ 
+-  static String _fmtDate(DateTime d) {
+-    const months = [
+-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+-    ];
+-    return '${d.day.toString().padLeft(2, '0')}-${months[d.month]}-${d.year}';
++  String fmtDate(DateTime d) {
++    const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
++    return '${d.day.toString().padLeft(2,'0')}-${months[d.month]}-${d.year}';
+   }
+ 
+-  static String _numberToWords(int n) {
++  String numToWords(int n) {
+     if (n == 0) return 'Zero';
+-    const ones = [
+-      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight',
+-      'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen',
+-      'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
+-    ];
+-    const tens = [
+-      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
+-      'Sixty', 'Seventy', 'Eighty', 'Ninety',
+-    ];
+-
++    const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
++    const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+     String below1000(int num) {
+       if (num < 20) return ones[num];
+-      if (num < 100) {
+-        return tens[num ~/ 10] + (num % 10 != 0 ? ' ${ones[num % 10]}' : '');
+-      }
++      if (num < 100) return tens[num ~/ 10] + (num % 10 != 0 ? ' ${ones[num % 10]}' : '');
+       return '${ones[num ~/ 100]} Hundred${num % 100 != 0 ? ' ${below1000(num % 100)}' : ''}';
+     }
+-
+     final parts = <String>[];
+-    final crore = n ~/ 10000000; n %= 10000000;
+-    final lakh = n ~/ 100000; n %= 100000;
+-    final thousand = n ~/ 1000; n %= 1000;
+-    if (crore > 0) parts.add('${below1000(crore)} Crore');
+-    if (lakh > 0) parts.add('${below1000(lakh)} Lakh');
++    final crore    = n ~/ 10000000; n %= 10000000;
++    final lakh     = n ~/ 100000;   n %= 100000;
++    final thousand = n ~/ 1000;     n %= 1000;
++    if (crore    > 0) parts.add('${below1000(crore)} Crore');
++    if (lakh     > 0) parts.add('${below1000(lakh)} Lakh');
+     if (thousand > 0) parts.add('${below1000(thousand)} Thousand');
+-    if (n > 0) parts.add(below1000(n));
++    if (n        > 0) parts.add(below1000(n));
+     return parts.join(' ');
+   }
+ 
+-  // ─────────────────────────────────────────────────────────────────────────
+-  // Main public API
+-  // ─────────────────────────────────────────────────────────────────────────
+-
+-  // ── Logo image cache (avoids re-downloading within a session) ───────────
+-  static final Map<String, Uint8List> _logoCache = {};
+-
+-  /// Downloads [url] and returns the raw bytes, or null on any error.
+-  static Future<Uint8List?> _fetchLogoBytes(String url) async {
+-    if (url.isEmpty) return null;
+-    if (_logoCache.containsKey(url)) return _logoCache[url];
+-    try {
+-      final dio = Dio();
+-      final response = await dio.get<List<int>>(
+-        url,
+-        options: Options(
+-          responseType: ResponseType.bytes,
+-          sendTimeout: const Duration(seconds: 8),
+-          receiveTimeout: const Duration(seconds: 8),
++  // Amount row helper
++  pw.Widget amtRow(String label, String value, {
++    bool isBold = false, PdfColor? valueColor,
++  }) {
++    return pw.Row(children: [
++      pw.Expanded(
++        child: pw.Text(label, style: pw.TextStyle(
++          font: isBold ? bold : regular, fontSize: 8.5, color: midSlate)),
++      ),
++      pw.Text(':', style: pw.TextStyle(font: regular, fontSize: 8.5, color: midSlate)),
++      pw.SizedBox(width: 4),
++      pw.SizedBox(width: 95, child: pw.Text(value,
++        textAlign: pw.TextAlign.right,
++        style: pw.TextStyle(
++          font: isBold ? bold : semiBold,
++          fontSize: isBold ? 9.5 : 8.5,
++          color: valueColor ?? darkSlate,
+         ),
+-      );
+-      if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
+-        final bytes = Uint8List.fromList(response.data!);
+-        _logoCache[url] = bytes;
+-        return bytes;
+-      }
+-    } catch (_) {
+-      // Network error or timeout — logo will be skipped
+-    }
+-    return null;
++      )),
++    ]);
+   }
+ 
+-  static Future<Uint8List> generate(InvoiceData data) async {
+-    await _ensureFonts();
+-    final regular   = _cachedRegular!;
+-    final bold      = _cachedBold!;
+-    final semiBold  = _cachedSemiBold!;
+-
+-    final doc = pw.Document(
+-      title: _docTitle(data),
+-      author: 'SnapKhata',
+-      creator: 'SnapKhata',
+-    );
+-
+-    final theme = pw.ThemeData.withFont(
+-      base: regular,
+-      bold: bold,
+-      // Allow Devanagari glyphs (Marathi/Hindi) to render correctly in all text
+-      fontFallback: [_cachedDevanagariRegular!, _cachedDevanagariBold!],
+-    );
+-
+-    // ── Ledger totals use authoritative amounts from call-site ────────────
+-    // Items now include invoice_header + invoice_item rows (same amounts),
+-    // so we must NOT sum items for ledger — use data.totalAmount instead.
+-    final items     = data.items;
+-    final isLedger  = data.documentType == 'ledger';
+-
+-    final nonLedgerItems = isLedger
+-        ? items.where((i) {
+-            final t = i.type.toLowerCase();
+-            return t != 'invoice_header' && t != 'invoice_item' && t != 'payment';
+-          }).toList()
+-        : items;
+-
+-    final taxableItems = nonLedgerItems.where((i) => !i.isLabor).toList();
+-    final laborItems   = nonLedgerItems.where((i) => i.isLabor).toList();
+-    final isGst        = data.gstMode != 'none';
+-    final isAutomobile = data.industry == 'automobile';
+-
+-    final partsSubtotal = taxableItems.fold<double>(0, (s, i) => s + i.amount);
+-    final laborSubtotal = laborItems.fold<double>(0, (s, i) => s + i.amount);
+-    final subtotal      = partsSubtotal + laborSubtotal;
+-
+-    double gstAmt = 0;
+-    double grandTotal;
+-
+-    if (isLedger) {
+-      // Ledger: use authoritative totalAmount (= _totalInvoiced from call site)
+-      grandTotal = data.totalAmount;
+-    } else if (isGst) {
+-      if (data.gstMode == 'included') {
+-        gstAmt     = subtotal * 18 / 118;
+-        grandTotal = nonLedgerItems.isNotEmpty ? subtotal : data.totalAmount;
+-      } else {
+-        gstAmt     = subtotal * 0.18;
+-        grandTotal = nonLedgerItems.isNotEmpty ? (subtotal + gstAmt) : data.totalAmount;
+-      }
+-    } else {
++  // ── Calculations ─────────────────────────────────────────────────────────
++  final isLedger   = data.documentType == 'ledger';
++  final isGst      = data.gstMode != 'none';
++  final isAutomobile = data.industry == 'automobile';
++
++  final nonLedgerItems = isLedger
++      ? data.items.where((i) {
++          final t = i.type.toLowerCase();
++          return t != 'invoice_header' && t != 'invoice_item' && t != 'payment';
++        }).toList()
++      : data.items;
++
++  final taxableItems = nonLedgerItems.where((i) => !i.isLabor).toList();
++  final laborItems   = nonLedgerItems.where((i) =>  i.isLabor).toList();
++
++  final partsSubtotal = taxableItems.fold<double>(0, (s, i) => s + i.amount);
++  final laborSubtotal = laborItems.fold<double>(0,   (s, i) => s + i.amount);
++  final subtotal      = partsSubtotal + laborSubtotal;
++
++  double gstAmt = 0;
++  double grandTotal;
++  if (isLedger) {
++    grandTotal = data.totalAmount;
++  } else if (isGst) {
++    if (data.gstMode == 'included') {
++      gstAmt     = subtotal * 18 / 118;
+       grandTotal = nonLedgerItems.isNotEmpty ? subtotal : data.totalAmount;
+-    }
+-
+-    final received = data.receivedAmount;
+-    final balance  = received != null
+-        ? max(0.0, grandTotal - received)
+-        : (data.balanceDue ?? 0.0);
+-
+-    final String displayStatus;
+-    if (received != null) {
+-      if (received >= grandTotal) {
+-        displayStatus = 'PAID';
+-      } else if (received > 0) {
+-        displayStatus = 'PARTIAL';
+-      } else {
+-        displayStatus = 'UNPAID';
+-      }
+     } else {
+-      displayStatus = data.status;
++      gstAmt     = subtotal * 0.18;
++      grandTotal = nonLedgerItems.isNotEmpty ? (subtotal + gstAmt) : data.totalAmount;
+     }
++  } else {
++    grandTotal = nonLedgerItems.isNotEmpty ? subtotal : data.totalAmount;
++  }
+ 
+-    final isPaid        = displayStatus == 'PAID';
+-    final statusColor   = isPaid ? _green  : _orange;
+-    final statusBgColor = isPaid ? _greenBg : _orangeBg;
+-    final wordsTotal    = _numberToWords(grandTotal.round());
+-    final docTitle      = isGst
+-        ? 'Tax Invoice'
+-        : (data.documentType == 'ledger'
+-            ? 'Account Statement'
+-            : 'Order Details');
+-
+-    // ── Column widths for items table ─────────────────────────────────────
+-    final List<String> headers;
+-    final List<double> widths;
+-    if (isLedger) {
+-      headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
+-      widths  = [0.05, 0.45, 0.10, 0.20, 0.20];
+-    } else if (isGst) {
+-      headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'GST (₹)', 'Amount (₹)'];
+-      widths  = [0.05, 0.33, 0.10, 0.17, 0.17, 0.18];
++  final received = data.receivedAmount;
++  final balance  = received != null
++      ? max(0.0, grandTotal - received)
++      : (data.balanceDue ?? 0.0);
++
++  final String displayStatus;
++  if (received != null) {
++    if (received >= grandTotal) {
++      displayStatus = 'PAID';
++    } else if (received > 0) {
++      displayStatus = 'PARTIAL';
+     } else {
+-      headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
+-      widths  = [0.05, 0.45, 0.10, 0.20, 0.20];
+-    }
+-    final columnWidths = <int, pw.TableColumnWidth>{};
+-    for (var i = 0; i < widths.length; i++) {
+-      columnWidths[i] = pw.FlexColumnWidth(widths[i]);
++      displayStatus = 'UNPAID';
+     }
++  } else {
++    displayStatus = data.status;
++  }
++
++  final isPaid        = displayStatus == 'PAID';
++  final statusColor   = isPaid ? green  : orange;
++  final statusBgColor = isPaid ? greenBg : orangeBg;
++  final wordsTotal    = numToWords(grandTotal.round());
++  final docTitle      = isGst
++      ? 'Tax Invoice'
++      : (data.documentType == 'ledger' ? 'Account Statement' : 'Order Details');
++
++  // ── Column widths ────────────────────────────────────────────────────────
++  final List<String> headers;
++  final List<double> widths;
++  if (isLedger) {
++    headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
++    widths  = [0.05, 0.45, 0.10, 0.20, 0.20];
++  } else if (isGst) {
++    headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'GST (₹)', 'Amount (₹)'];
++    widths  = [0.05, 0.33, 0.10, 0.17, 0.17, 0.18];
++  } else {
++    headers = ['#', 'Item Name', 'Qty', 'Price/Unit (₹)', 'Amount (₹)'];
++    widths  = [0.05, 0.45, 0.10, 0.20, 0.20];
++  }
++  final columnWidths = <int, pw.TableColumnWidth>{};
++  for (var i = 0; i < widths.length; i++) {
++    columnWidths[i] = pw.FlexColumnWidth(widths[i]);
++  }
+ 
+-    // ── Build all table rows (header + items + totals row) ────────────────
+-    final tableRows = <pw.TableRow>[];
+-
+-    // Header row
+-    tableRows.add(pw.TableRow(
+-      decoration: const pw.BoxDecoration(color: _tableHeaderBg),
+-      children: List.generate(headers.length, (idx) {
+-        return pw.Padding(
+-          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-          child: pw.Text(
+-            headers[idx],
+-            textAlign: idx >= 3
+-                ? pw.TextAlign.right
+-                : (idx == 2 ? pw.TextAlign.center : pw.TextAlign.left),
+-            style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
++  // ── Table rows ───────────────────────────────────────────────────────────
++  final tableRows = <pw.TableRow>[];
++
++  // Header row
++  tableRows.add(pw.TableRow(
++    decoration: const pw.BoxDecoration(color: tableHeaderBg),
++    children: List.generate(headers.length, (idx) => pw.Padding(
++      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++      child: pw.Text(headers[idx],
++        textAlign: idx >= 3 ? pw.TextAlign.right : (idx == 2 ? pw.TextAlign.center : pw.TextAlign.left),
++        style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++    )),
++  ));
++
++  void addItemRows(List<InvoiceLineItem> rowItems, {String? label}) {
++    if (label != null) {
++      tableRows.add(pw.TableRow(
++        decoration: const pw.BoxDecoration(color: lightGray),
++        children: [
++          pw.Padding(
++            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text(label, style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
+           ),
+-        );
+-      }),
+-    ));
++          ...List.filled(headers.length - 1, pw.SizedBox()),
++        ],
++      ));
++    }
++    for (var i = 0; i < rowItems.length; i++) {
++      final item = rowItems[i];
++      final srNo = data.items.indexOf(item) + 1;
+ 
+-    // Item rows helper
+-    void addItemRows(List<InvoiceLineItem> rowItems, {String? label}) {
+-      if (label != null) {
+-        tableRows.add(pw.TableRow(
+-          decoration: const pw.BoxDecoration(color: _lightGray),
+-          children: [
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text(label, style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-            ),
+-            ...List.filled(headers.length - 1, pw.SizedBox()),
+-          ],
+-        ));
+-      }
+-      for (var i = 0; i < rowItems.length; i++) {
+-        final item = rowItems[i];
+-        final srNo = items.indexOf(item) + 1;
+-
+-        if (isLedger) {
+-          // ── Account Statement rows — 5 columns matching standard invoice ──
+-          // Columns: # | Item Name | Qty | Price/Unit (₹) | Amount (₹)
+-          final typeStr         = item.type.toLowerCase();
+-          final isPayment       = typeStr == 'payment';
+-          final isInvoiceHeader = typeStr == 'invoice_header';
+-          final isInvoiceItem   = typeStr == 'invoice_item';
+-
+-          if (isInvoiceHeader) {
+-            // ── Invoice section header — Invoice #N — DD MMM YYYY ─────────
+-            tableRows.add(pw.TableRow(
+-              decoration: const pw.BoxDecoration(
+-                color: _tableHeaderBg,
+-                border: pw.Border(top: pw.BorderSide(color: _darkSlate, width: 0.5)),
+-              ),
+-              children: [
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                  child: pw.Text(item.name,
+-                    style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                  child: pw.Text(_fmtMoney(item.amount),
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-                ),
+-              ],
+-            ));
+-          } else if (isInvoiceItem) {
+-            // ── Invoice line item — Qty + Rate + Amount like standard invoice
+-            final qty  = item.qty;
+-            final rate = item.rate > 0 ? item.rate : (qty > 0 ? item.amount / qty : item.amount);
+-            tableRows.add(pw.TableRow(
+-              decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
+-              children: [
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.fromLTRB(12, 4, 6, 4),
+-                  child: pw.Text(item.name,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(_fmtQty(qty),
+-                    textAlign: pw.TextAlign.center,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(_fmtMoney(rate),
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(_fmtMoney(item.amount),
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-              ],
+-            ));
+-          } else if (isPayment) {
+-            // ── Payment received — shown in green with minus sign ─────────
+-            tableRows.add(pw.TableRow(
+-              decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
+-              children: [
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text('$srNo',
+-                    textAlign: pw.TextAlign.center,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(item.name,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _green)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text('− ${_fmtMoney(item.amount)}',
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: bold, fontSize: 7.5, color: _green)),
+-                ),
+-              ],
+-            ));
+-          } else {
+-            // ── Fallback: invoice summary row when no items available ──────
+-            tableRows.add(pw.TableRow(
+-              decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
+-              children: [
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text('$srNo',
+-                    textAlign: pw.TextAlign.center,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(item.name,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _darkSlate)),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.SizedBox(),
+-                ),
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(_fmtMoney(item.amount),
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _darkSlate)),
+-                ),
+-              ],
+-            ));
+-          }
++      if (isLedger) {
++        final typeStr         = item.type.toLowerCase();
++        final isPayment       = typeStr == 'payment';
++        final isInvoiceHeader = typeStr == 'invoice_header';
++        final isInvoiceItem   = typeStr == 'invoice_item';
+ 
++        if (isInvoiceHeader) {
++          tableRows.add(pw.TableRow(
++            decoration: const pw.BoxDecoration(
++              color: tableHeaderBg,
++              border: pw.Border(top: pw.BorderSide(color: darkSlate, width: 0.5)),
++            ),
++            children: [
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++                child: pw.Text(item.name, style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++                child: pw.Text(fmtMoney(item.amount), textAlign: pw.TextAlign.right,
++                  style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate))),
++            ],
++          ));
++        } else if (isInvoiceItem) {
++          final qty  = item.qty;
++          final rate = item.rate > 0 ? item.rate : (qty > 0 ? item.amount / qty : item.amount);
++          tableRows.add(pw.TableRow(
++            decoration: i.isOdd ? const pw.BoxDecoration(color: rowAlt) : null,
++            children: [
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.fromLTRB(12, 4, 6, 4),
++                child: pw.Text(item.name, style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(fmtQty(qty), textAlign: pw.TextAlign.center,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(fmtMoney(rate), textAlign: pw.TextAlign.right,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(fmtMoney(item.amount), textAlign: pw.TextAlign.right,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++            ],
++          ));
++        } else if (isPayment) {
++          tableRows.add(pw.TableRow(
++            decoration: i.isOdd ? const pw.BoxDecoration(color: rowAlt) : null,
++            children: [
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text('$srNo', textAlign: pw.TextAlign.center,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(item.name, style: pw.TextStyle(font: regular, fontSize: 7.5, color: green))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text('− ${fmtMoney(item.amount)}', textAlign: pw.TextAlign.right,
++                  style: pw.TextStyle(font: bold, fontSize: 7.5, color: green))),
++            ],
++          ));
+         } else {
+-          // ── Standard invoice row ──────────────────────────────────────────
+-          final qty     = item.qty;
+-          final baseAmt = isGst && data.gstMode == 'included'
+-              ? item.amount * 100 / 118
+-              : item.amount;
+-          final baseRate = item.rate > 0
+-              ? (isGst && data.gstMode == 'included' ? item.rate * 100 / 118 : item.rate)
+-              : baseAmt / (qty > 0 ? qty : 1);
+-          final itemGst   = item.isLabor ? 0.0 : baseAmt * 0.18;
+-          final itemTotal = isGst ? (item.isLabor ? baseAmt : baseAmt + itemGst) : item.amount;
+-
+           tableRows.add(pw.TableRow(
+-            decoration: i.isOdd ? const pw.BoxDecoration(color: _rowAlt) : null,
++            decoration: i.isOdd ? const pw.BoxDecoration(color: rowAlt) : null,
+             children: [
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                child: pw.Text('$srNo',
+-                  textAlign: pw.TextAlign.center,
+-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-              ),
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                child: pw.Text(item.name,
+-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-              ),
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                child: pw.Text(_fmtQty(qty),
+-                  textAlign: pw.TextAlign.center,
+-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-              ),
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                child: pw.Text(_fmtMoney(baseRate),
+-                  textAlign: pw.TextAlign.right,
+-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-              ),
+-              if (isGst)
+-                pw.Padding(
+-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                  child: pw.Text(
+-                    item.isLabor ? '—' : '${_fmtMoney(itemGst)} (18%)',
+-                    textAlign: pw.TextAlign.right,
+-                    style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-                ),
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+-                child: pw.Text(_fmtMoney(itemTotal),
+-                  textAlign: pw.TextAlign.right,
+-                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate)),
+-              ),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text('$srNo', textAlign: pw.TextAlign.center,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(item.name, style: pw.TextStyle(font: regular, fontSize: 7.5, color: darkSlate))),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: pw.SizedBox()),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(fmtMoney(item.amount), textAlign: pw.TextAlign.right,
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: darkSlate))),
+             ],
+           ));
+         }
+-      }
+-    }
+-
+-    if (isAutomobile && (taxableItems.isNotEmpty || laborItems.isNotEmpty)) {
+-      if (taxableItems.isNotEmpty) {
+-        addItemRows(taxableItems); // no section label for spare parts
+-      }
+-      if (laborItems.isNotEmpty) {
+-        addItemRows(laborItems, label: 'LABOUR & SERVICES');
+-      }
+-    } else {
+-      addItemRows(items);
+-    }
+-
+-    // Total / summary row at the bottom of the table
+-    if (items.isNotEmpty) {
+-      if (isLedger) {
+-        // Ledger: show Total Billed | — | Net Balance in a 4-col footer
+-        // Sum only invoice_header rows — each one holds the full invoice total.
+-        // invoice_item rows are the individual line items that make up the same
+-        // total, so including them too would double-count every invoice.
+-        final totalBilled = items.fold<double>(0, (s, item) =>
+-            item.type.toLowerCase() == 'invoice_header' ? s + item.amount : s);
+-        tableRows.add(pw.TableRow(
+-          decoration: const pw.BoxDecoration(
+-            color: _lightGray,
+-          ),
+-          children: [
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.SizedBox(),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text('Total Billed',
+-                textAlign: pw.TextAlign.right,
+-                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate)),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.SizedBox(),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.SizedBox(),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text(_fmtMoney(totalBilled),
+-                textAlign: pw.TextAlign.right,
+-                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate)),
+-            ),
+-          ],
+-        ));
+       } else {
+-        final totalQty = items.fold<double>(0, (s, i) => s + i.qty);
++        // Standard invoice row
++        final qty     = item.qty;
++        final baseAmt = isGst && data.gstMode == 'included'
++            ? item.amount * 100 / 118
++            : item.amount;
++        final baseRate = item.rate > 0
++            ? (isGst && data.gstMode == 'included' ? item.rate * 100 / 118 : item.rate)
++            : baseAmt / (qty > 0 ? qty : 1);
++        final itemGst   = item.isLabor ? 0.0 : baseAmt * 0.18;
++        final itemTotal = isGst ? (item.isLabor ? baseAmt : baseAmt + itemGst) : item.amount;
++
+         tableRows.add(pw.TableRow(
+-          decoration: const pw.BoxDecoration(
+-            color: _lightGray,
+-          ),
++          decoration: i.isOdd ? const pw.BoxDecoration(color: rowAlt) : null,
+           children: [
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.SizedBox(),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text(
+-                'Total',
+-                textAlign: pw.TextAlign.right,
+-                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+-              ),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text(
+-                _fmtQty(totalQty),
+-                textAlign: pw.TextAlign.center,
+-                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+-              ),
+-            ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.SizedBox(),
+-            ),
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++              child: pw.Text('$srNo', textAlign: pw.TextAlign.center,
++                style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++              child: pw.Text(item.name, style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++              child: pw.Text(fmtQty(qty), textAlign: pw.TextAlign.center,
++                style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++              child: pw.Text(fmtMoney(baseRate), textAlign: pw.TextAlign.right,
++                style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
+             if (isGst)
+-              pw.Padding(
+-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-                child: pw.Text(
+-                  _fmtMoney(gstAmt),
++              pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++                child: pw.Text(item.isLabor ? '—' : '${fmtMoney(itemGst)} (18%)',
+                   textAlign: pw.TextAlign.right,
+-                  style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+-                ),
+-              ),
+-            pw.Padding(
+-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+-              child: pw.Text(
+-                _fmtMoney(grandTotal),
+-                textAlign: pw.TextAlign.right,
+-                style: pw.TextStyle(font: bold, fontSize: 8.5, color: _darkSlate),
+-              ),
+-            ),
++                  style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
++              child: pw.Text(fmtMoney(itemTotal), textAlign: pw.TextAlign.right,
++                style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate))),
+           ],
+         ));
+       }
+     }
++  }
+ 
++  if (isAutomobile && (taxableItems.isNotEmpty || laborItems.isNotEmpty)) {
++    if (taxableItems.isNotEmpty) addItemRows(taxableItems);
++    if (laborItems.isNotEmpty)   addItemRows(laborItems, label: 'LABOUR & SERVICES');
++  } else {
++    addItemRows(data.items);
++  }
+ 
+-    // ── Assemble all MultiPage widgets ────────────────────────────────────
+-    // KEY FIX: Each section is a top-level widget in MultiPage.build list.
+-    // The Table widget is natively pageable — MultiPage will split it across
+-    // pages automatically without leaving blank space.
+-    // ── Pre-fetch logo bytes before entering the synchronous build: callback ──
+-    // pw.MultiPage's build: callback is synchronous — await is not allowed inside it.
+-    // We resolve the image bytes here (in the async generate() body) then reference
+-    // the already-fetched Uint8List inside the widget tree.
+-    final Uint8List? logoBytes = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
+-        ? await _fetchLogoBytes(data.shopLogoUrl!)
+-        : null;
+-
+-    doc.addPage(
+-      pw.MultiPage(
+-        pageTheme: pw.PageTheme(
+-          pageFormat: PdfPageFormat.a4,
+-          theme: theme,
+-          margin: const pw.EdgeInsets.symmetric(
+-            horizontal: 14 * PdfPageFormat.mm,
+-            vertical: 14 * PdfPageFormat.mm,
+-          ),
++  // Total/summary footer row
++  if (data.items.isNotEmpty) {
++    if (isLedger) {
++      final totalBilled = data.items.fold<double>(0, (s, item) =>
++          item.type.toLowerCase() == 'invoice_header' ? s + item.amount : s);
++      tableRows.add(pw.TableRow(
++        decoration: const pw.BoxDecoration(color: lightGray),
++        children: [
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text('Total Billed', textAlign: pw.TextAlign.right,
++              style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text(fmtMoney(totalBilled), textAlign: pw.TextAlign.right,
++              style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++        ],
++      ));
++    } else {
++      final totalQty = data.items.fold<double>(0, (s, i) => s + i.qty);
++      tableRows.add(pw.TableRow(
++        decoration: const pw.BoxDecoration(color: lightGray),
++        children: [
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text('Total', textAlign: pw.TextAlign.right,
++              style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text(fmtQty(totalQty), textAlign: pw.TextAlign.center,
++              style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.SizedBox()),
++          if (isGst)
++            pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++              child: pw.Text(fmtMoney(gstAmt), textAlign: pw.TextAlign.right,
++                style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++          pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
++            child: pw.Text(fmtMoney(grandTotal), textAlign: pw.TextAlign.right,
++              style: pw.TextStyle(font: bold, fontSize: 8.5, color: darkSlate))),
++        ],
++      ));
++    }
++  }
++
++  // ── Build document ───────────────────────────────────────────────────────
++  final String docTitleMeta;
++  if (data.documentType == 'ledger') {
++    docTitleMeta = 'Account Statement - ${data.customerName}';
++  } else if (data.documentType == 'bill') {
++    docTitleMeta = 'Order Details #${data.receiptNumber} - ${data.customerName}';
++  } else {
++    docTitleMeta = isGst ? 'Tax Invoice #${data.receiptNumber}' : 'Order Details #${data.receiptNumber}';
++  }
++
++  final doc = pw.Document(title: docTitleMeta, author: 'SnapKhata', creator: 'SnapKhata');
++
++  final theme = pw.ThemeData.withFont(
++    base: regular,
++    bold: bold,
++    fontFallback: [devanagariRegular, devanagariBold],
++  );
++
++  doc.addPage(
++    pw.MultiPage(
++      pageTheme: pw.PageTheme(
++        pageFormat: PdfPageFormat.a4,
++        theme: theme,
++        margin: const pw.EdgeInsets.symmetric(
++          horizontal: 14 * PdfPageFormat.mm,
++          vertical: 14 * PdfPageFormat.mm,
+         ),
+-        footer: (context) => _buildFooter(context, regular),
+-        build: (context) => [
+-          // ── Document title ───────────────────────────────────────────
+-          pw.Center(
+-            child: pw.Text(
+-              docTitle,
+-              style: pw.TextStyle(
+-                font: bold,
+-                fontSize: 15,
+-                color: _headerNavy,
+-                letterSpacing: 0.3,
+-              ),
+-            ),
+-          ),
+-          pw.SizedBox(height: 8),
++      ),
++      footer: (context) => pw.Container(
++        margin: const pw.EdgeInsets.only(top: 8),
++        child: pw.Row(
++          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
++          children: [
++            pw.Text('snapkhata.com', style: pw.TextStyle(font: regular, fontSize: 7.5, color: snapBlue)),
++            pw.Text('Page ${context.pageNumber} of ${context.pagesCount}',
++              style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate)),
++          ],
++        ),
++      ),
++      build: (context) => [
++        // ── Document title ───────────────────────────────────────────
++        pw.Center(
++          child: pw.Text(docTitle, style: pw.TextStyle(
++            font: bold, fontSize: 15, color: headerNavy, letterSpacing: 0.3)),
++        ),
++        pw.SizedBox(height: 8),
+ 
+-          // ── Header + Bill To — ALL in ONE container (no gap between sections) ──
+-          pw.Container(
+-            width: double.infinity,
+-            decoration: const pw.BoxDecoration(
+-              color: _white,
+-              border: pw.Border(
+-                left:   pw.BorderSide(color: _black, width: 1.2),
+-                right:  pw.BorderSide(color: _black, width: 1.2),
+-                top:    pw.BorderSide(color: _black, width: 1.2),
+-                bottom: pw.BorderSide(color: _black, width: 1.2),
+-              ),
++        // ── Header + Bill To ─────────────────────────────────────────
++        pw.Container(
++          width: double.infinity,
++          decoration: const pw.BoxDecoration(
++            color: white,
++            border: pw.Border(
++              left: pw.BorderSide(color: black, width: 1.2),
++              right: pw.BorderSide(color: black, width: 1.2),
++              top: pw.BorderSide(color: black, width: 1.2),
++              bottom: pw.BorderSide(color: black, width: 1.2),
+             ),
+-            child: pw.Column(
+-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+-              children: [
+-
+-                // ─ Shop name + logo row ────────────────────────────
+-                pw.Container(
+-                  width: double.infinity,
+-                  padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
+-                  child: pw.Row(
+-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+-                    children: [
+-                      if (logoBytes != null && logoBytes.isNotEmpty) ...[
+-                        pw.Container(
+-                          width: 44,
+-                          height: 44,
+-                          margin: const pw.EdgeInsets.only(right: 10),
+-                          decoration: pw.BoxDecoration(
+-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+-                            border: pw.Border.all(color: _tableHeaderBg, width: 1),
+-                          ),
+-                          child: pw.ClipRRect(
+-                            horizontalRadius: 4,
+-                            verticalRadius: 4,
+-                            child: pw.Image(
+-                              pw.MemoryImage(logoBytes),
+-                              fit: pw.BoxFit.cover,
+-                              width: 44,
+-                              height: 44,
+-                            ),
+-                          ),
++          ),
++          child: pw.Column(
++            crossAxisAlignment: pw.CrossAxisAlignment.start,
++            children: [
++              // Shop name + logo row
++              pw.Container(
++                width: double.infinity,
++                padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
++                child: pw.Row(
++                  crossAxisAlignment: pw.CrossAxisAlignment.center,
++                  children: [
++                    if (logoBytes != null && logoBytes.isNotEmpty) ...[
++                      pw.Container(
++                        width: 44, height: 44,
++                        margin: const pw.EdgeInsets.only(right: 10),
++                        decoration: pw.BoxDecoration(
++                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
++                          border: pw.Border.all(color: tableHeaderBg, width: 1),
+                         ),
+-                      ],
+-                      pw.Expanded(
+-                        child: pw.Column(
+-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                          children: [
+-                            pw.Text(
+-                              data.shopName.toUpperCase(),
+-                              style: pw.TextStyle(
+-                                font: bold,
+-                                fontSize: 14,
+-                                color: _darkSlate,
+-                                letterSpacing: 0.6,
+-                              ),
+-                            ),
+-                            if (data.shopAddress != null && data.shopAddress!.isNotEmpty) ...[
+-                              pw.SizedBox(height: 3),
+-                              pw.Text(
+-                                data.shopAddress!,
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                            ],
+-                            if (data.shopPhone != null && data.shopPhone!.isNotEmpty) ...[
+-                              pw.SizedBox(height: 2),
+-                              pw.Text(
+-                                'Phone: +91 ${data.shopPhone!.replaceAll('+91', '').trim()}',
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                            ],
+-                          ],
++                        child: pw.ClipRRect(
++                          horizontalRadius: 4, verticalRadius: 4,
++                          child: pw.Image(pw.MemoryImage(logoBytes),
++                            fit: pw.BoxFit.cover, width: 44, height: 44),
+                         ),
+                       ),
+-                      if (data.shopGst != null && data.shopGst!.isNotEmpty)
+-                        pw.Container(
+-                          padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+-                          decoration: pw.BoxDecoration(
+-                            color: _tableHeaderBg,
+-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+-                          ),
+-                          child: pw.Text(
+-                            'GSTIN: ${data.shopGst}',
+-                            style: pw.TextStyle(font: semiBold, fontSize: 7.5, color: _darkSlate),
+-                          ),
+-                        ),
+                     ],
+-                  ),
+-                ),
+-
+-                // ─ Divider line between header and Bill To ────────────
+-                pw.Container(height: 1.2, color: _black),
+-
+-                // ─ Bill To / Invoice Details row ────────────────────
+-                pw.Row(
+-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+-                  children: [
+-                    // Bill To
+                     pw.Expanded(
+-                      child: pw.Container(
+-                        padding: const pw.EdgeInsets.all(9),
+-                        decoration: const pw.BoxDecoration(
+-                          border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
+-                        ),
+-                        child: pw.Column(
+-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                          children: [
+-                            pw.Text(
+-                              data.documentType == 'ledger' ? 'Customer Details:' : 'Bill To:',
+-                              style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+-                            ),
+-                            pw.SizedBox(height: 4),
+-                            pw.Text(
+-                              data.customerName,
+-                              style: pw.TextStyle(font: bold, fontSize: 10, color: _darkSlate),
+-                            ),
+-                            if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[  
+-                              pw.SizedBox(height: 2),
+-                              pw.Text(
+-                                'Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                            ],
+-                            if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[  
+-                              pw.SizedBox(height: 2),
+-                              pw.Text(
+-                                'Vehicle: ${data.vehicleNumber}',
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                            ],
+-                            if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[  
+-                              pw.SizedBox(height: 2),
+-                              pw.Text(
+-                                'Odometer: ${data.odometerReading} km',
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                            ],
++                      child: pw.Column(
++                        crossAxisAlignment: pw.CrossAxisAlignment.start,
++                        children: [
++                          pw.Text(data.shopName.toUpperCase(), style: pw.TextStyle(
++                            font: bold, fontSize: 14, color: darkSlate, letterSpacing: 0.6)),
++                          if (data.shopAddress != null && data.shopAddress!.isNotEmpty) ...[
++                            pw.SizedBox(height: 3),
++                            pw.Text(data.shopAddress!, style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
+                           ],
+-                        ),
++                          if (data.shopPhone != null && data.shopPhone!.isNotEmpty) ...[
++                            pw.SizedBox(height: 2),
++                            pw.Text('Phone: +91 ${data.shopPhone!.replaceAll('+91', '').trim()}',
++                              style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                          ],
++                        ],
+                       ),
+                     ),
+-                    // Order / Invoice Details (right panel)
+-                    pw.SizedBox(
+-                      width: 206,
+-                      child: pw.Padding(
+-                        padding: const pw.EdgeInsets.all(9),
+-                        child: pw.Column(
+-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                          children: [
+-                            pw.Text(
+-                              isGst
+-                                  ? 'Invoice Details:'
+-                                  : (data.documentType == 'ledger'
+-                                      ? 'Statement Info:'
+-                                      : 'Order Details:'),
+-                              style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+-                            ),
+-                            pw.SizedBox(height: 4),
+-                            if (data.documentType != 'ledger') ...[  
+-                              pw.Text(
+-                                'No: ${data.receiptNumber}',
+-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                              ),
+-                              pw.SizedBox(height: 2),
+-                            ],
+-                            pw.Text(
+-                              'Date: ${_fmtDate(data.date)}',
+-                              style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                            ),
+-                            pw.SizedBox(height: 5),
+-                            pw.Container(
+-                              padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+-                              decoration: pw.BoxDecoration(
+-                                color: statusBgColor,
+-                                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+-                              ),
+-                              child: pw.Text(
+-                                displayStatus,
+-                                style: pw.TextStyle(font: bold, fontSize: 8, color: statusColor),
+-                              ),
+-                            ),
+-                          ],
++                    if (data.shopGst != null && data.shopGst!.isNotEmpty)
++                      pw.Container(
++                        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
++                        decoration: pw.BoxDecoration(
++                          color: tableHeaderBg,
++                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                         ),
++                        child: pw.Text('GSTIN: ${data.shopGst}',
++                          style: pw.TextStyle(font: semiBold, fontSize: 7.5, color: darkSlate)),
+                       ),
+-                    ),
+                   ],
+                 ),
+-
+-              ],
+-            ),
+-          ),
+-
+-          // ── Items table (natively pageable by MultiPage) ─────────────
+-          pw.Table(
+-            columnWidths: columnWidths,
+-            border: const pw.TableBorder(
+-              left: pw.BorderSide(color: _black, width: 1.2),
+-              right: pw.BorderSide(color: _black, width: 1.2),
+-              bottom: pw.BorderSide(color: _black, width: 1.2),
+-              horizontalInside: pw.BorderSide(color: _darkSlate, width: 0.7),
+-              verticalInside: pw.BorderSide(color: _darkSlate, width: 0.7),
+-            ),
+-            children: tableRows,
+-          ),
+-
+-          // ── Totals section ───────────────────────────────────────────
+-          pw.Container(
+-            decoration: const pw.BoxDecoration(
+-              border: pw.Border(
+-                left:   pw.BorderSide(color: _black, width: 1.2),
+-                right:  pw.BorderSide(color: _black, width: 1.2),
+-                bottom: pw.BorderSide(color: _black, width: 1.2),
+               ),
+-            ),
+-            child: pw.Row(
+-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+-              children: [
+-                // Left: automobile parts/labour breakdown (or empty spacer)
+-                pw.Expanded(
+-                  child: pw.Container(
+-                    padding: const pw.EdgeInsets.all(9),
+-                    decoration: const pw.BoxDecoration(
+-                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
++              // Divider
++              pw.Container(height: 1.2, color: black),
++              // Bill To / Invoice Details row
++              pw.Row(
++                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
++                children: [
++                  pw.Expanded(
++                    child: pw.Container(
++                      padding: const pw.EdgeInsets.all(9),
++                      decoration: const pw.BoxDecoration(
++                        border: pw.Border(right: pw.BorderSide(color: black, width: 1.2)),
++                      ),
++                      child: pw.Column(
++                        crossAxisAlignment: pw.CrossAxisAlignment.start,
++                        children: [
++                          pw.Text(data.documentType == 'ledger' ? 'Customer Details:' : 'Bill To:',
++                            style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++                          pw.SizedBox(height: 4),
++                          pw.Text(data.customerName,
++                            style: pw.TextStyle(font: bold, fontSize: 10, color: darkSlate)),
++                          if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[
++                            pw.SizedBox(height: 2),
++                            pw.Text('Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
++                              style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                          ],
++                          if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[
++                            pw.SizedBox(height: 2),
++                            pw.Text('Vehicle: ${data.vehicleNumber}',
++                              style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                          ],
++                          if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[
++                            pw.SizedBox(height: 2),
++                            pw.Text('Odometer: ${data.odometerReading} km',
++                              style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                          ],
++                        ],
++                      ),
+                     ),
+-                    child: isAutomobile && laborSubtotal > 0 && !isLedger
+-                        ? pw.Column(
+-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                            children: [
+-                              pw.Row(children: [
+-                                pw.Text('Labour: ', style: pw.TextStyle(font: bold, fontSize: 9, color: _darkSlate)),
+-                                pw.Text(_fmtMoney(laborSubtotal), style: pw.TextStyle(font: regular, fontSize: 9, color: _midSlate)),
+-                              ]),
+-                            ],
+-                          )
+-                        : pw.SizedBox(),
+                   ),
+-                ),
+-                // Right: amounts panel — fully boxed with left border separator
+-                pw.SizedBox(
+-                  width: 206,
+-                  child: pw.Container(
+-                    padding: const pw.EdgeInsets.all(9),
+-                    child: pw.Column(
+-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                      children: [
+-                        if (isLedger) ...[
+-                          // ── Account Statement summary ──────────────────
+-                          _amtRow('Total Billed', _fmtMoney(grandTotal), isBold: true, regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.SizedBox(height: 3),
+-                          _amtRow('Amount Paid', received != null && received > 0 ? '- ${_fmtMoney(received)}' : '₹ 0', valueColor: _green, regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.SizedBox(height: 3),
+-                          _amtRow('Net Balance', _fmtMoney(balance), isBold: true, valueColor: balance > 0 ? _red : _green, regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+-                          pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-                          pw.SizedBox(height: 2),
+-                          pw.Text(
+-                            '${_numberToWords(balance.round())} Rupees ${balance > 0 ? 'Payable' : 'Credit Balance'}',
+-                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                          ),
+-                        ] else ...[
+-                          // ── Standard invoice summary ───────────────────
+-                          if (isGst) ...[
+-                            _amtRow('Total GST (18%)', _fmtMoney(gstAmt), regular: regular, semiBold: semiBold, bold: bold),
+-                            pw.SizedBox(height: 3),
++                  pw.SizedBox(width: 206,
++                    child: pw.Padding(
++                      padding: const pw.EdgeInsets.all(9),
++                      child: pw.Column(
++                        crossAxisAlignment: pw.CrossAxisAlignment.start,
++                        children: [
++                          pw.Text(isGst ? 'Invoice Details:'
++                              : (data.documentType == 'ledger' ? 'Statement Info:' : 'Order Details:'),
++                            style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++                          pw.SizedBox(height: 4),
++                          if (data.documentType != 'ledger') ...[
++                            pw.Text('No: ${data.receiptNumber}',
++                              style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                            pw.SizedBox(height: 2),
+                           ],
+-                          _amtRow('Total Billed', _fmtMoney(grandTotal), isBold: true, regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.SizedBox(height: 3),
+-                          _amtRow('Amount Paid', received != null && received > 0 ? '- ${_fmtMoney(received)}' : '₹ 0', regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.SizedBox(height: 3),
+-                          _amtRow('Balance Due', _fmtMoney(balance), isBold: true, valueColor: balance > 0 ? _red : _green, regular: regular, semiBold: semiBold, bold: bold),
+-                          pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+-                          pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-                          pw.SizedBox(height: 2),
+-                          pw.Text(
+-                            '$wordsTotal Rupees only',
+-                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
++                          pw.Text('Date: ${fmtDate(data.date)}',
++                            style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                          pw.SizedBox(height: 5),
++                          pw.Container(
++                            padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
++                            decoration: pw.BoxDecoration(
++                              color: statusBgColor,
++                              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
++                            ),
++                            child: pw.Text(displayStatus,
++                              style: pw.TextStyle(font: bold, fontSize: 8, color: statusColor)),
+                           ),
+-                          if (!isLedger && data.accountTotalBilled != null && data.accountBalanceDue != null) ...[
+-                            pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
+-                            pw.Text('Account Summary:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
+-                            pw.SizedBox(height: 3),
+-                            _amtRow('Total Billed', _fmtMoney(data.accountTotalBilled!), regular: regular, semiBold: semiBold, bold: bold),
+-                            pw.SizedBox(height: 3),
+-                            _amtRow('Total Paid', _fmtMoney(data.accountTotalPaid ?? 0.0), valueColor: _green, regular: regular, semiBold: semiBold, bold: bold),
+-                            pw.SizedBox(height: 3),
+-                            _amtRow('Total Due', _fmtMoney(data.accountBalanceDue!), isBold: true, valueColor: data.accountBalanceDue! > 0 ? _red : _green, regular: regular, semiBold: semiBold, bold: bold),
+-                          ],
+                         ],
+-                      ],
++                      ),
+                     ),
+                   ),
+-                ),
+-              ],
+-            ),
++                ],
++              ),
++            ],
+           ),
++        ),
+ 
+-          // ── Terms & Conditions ───────────────────────────────────────
+-          pw.Container(
+-            width: double.infinity,
+-            padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+-            decoration: const pw.BoxDecoration(
+-              border: pw.Border(
+-                left:   pw.BorderSide(color: _black, width: 1.2),
+-                right:  pw.BorderSide(color: _black, width: 1.2),
+-                bottom: pw.BorderSide(color: _black, width: 1.2),
+-              ),
+-              color: _lightGray,
+-            ),
+-            child: pw.Column(
+-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+-              children: [
+-                pw.Text(
+-                  'Terms And Conditions:',
+-                  style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+-                ),
+-                pw.SizedBox(height: 2),
+-                pw.Text(
+-                  (data.customTerms != null && data.customTerms!.trim().isNotEmpty)
+-                      ? data.customTerms!.trim()
+-                      : 'Thank you for doing business with us.',
+-                  style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+-                ),
+-              ],
+-            ),
++        // ── Items table (natively pageable by MultiPage) ─────────────
++        pw.Table(
++          columnWidths: columnWidths,
++          border: const pw.TableBorder(
++            left: pw.BorderSide(color: black, width: 1.2),
++            right: pw.BorderSide(color: black, width: 1.2),
++            bottom: pw.BorderSide(color: black, width: 1.2),
++            horizontalInside: pw.BorderSide(color: darkSlate, width: 0.7),
++            verticalInside: pw.BorderSide(color: darkSlate, width: 0.7),
+           ),
++          children: tableRows,
++        ),
+ 
+-          // ── Signature section ────────────────────────────────────────
+-          pw.Container(
+-            decoration: const pw.BoxDecoration(
+-              border: pw.Border(
+-                left:   pw.BorderSide(color: _black, width: 1.2),
+-                right:  pw.BorderSide(color: _black, width: 1.2),
+-                bottom: pw.BorderSide(color: _black, width: 1.2),
+-              ),
++        // ── Totals section ───────────────────────────────────────────
++        pw.Container(
++          decoration: const pw.BoxDecoration(
++            border: pw.Border(
++              left: pw.BorderSide(color: black, width: 1.2),
++              right: pw.BorderSide(color: black, width: 1.2),
++              bottom: pw.BorderSide(color: black, width: 1.2),
+             ),
+-            child: pw.Row(
+-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+-              children: [
+-                pw.Expanded(
+-                  child: pw.Container(
+-                    padding: const pw.EdgeInsets.all(10),
+-                    decoration: const pw.BoxDecoration(
+-                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
+-                    ),
+-                    child: pw.Column(
+-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+-                      mainAxisAlignment: pw.MainAxisAlignment.end,
+-                      children: [
+-                        pw.Text(
+-                          'This is a computer-generated document.',
+-                          style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+-                        ),
+-                        pw.SizedBox(height: 3),
+-                        pw.Row(
++          ),
++          child: pw.Row(
++            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
++            children: [
++              pw.Expanded(
++                child: pw.Container(
++                  padding: const pw.EdgeInsets.all(9),
++                  decoration: const pw.BoxDecoration(
++                    border: pw.Border(right: pw.BorderSide(color: black, width: 1.2)),
++                  ),
++                  child: isAutomobile && laborSubtotal > 0 && !isLedger
++                      ? pw.Column(
++                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                           children: [
+-                            pw.Text(
+-                              'Powered by ',
+-                              style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+-                            ),
+-                            pw.Text(
+-                              'SnapKhata',
+-                              style: pw.TextStyle(font: bold, fontSize: 7.5, color: _snapBlue),
+-                            ),
++                            pw.Row(children: [
++                              pw.Text('Labour: ', style: pw.TextStyle(font: bold, fontSize: 9, color: darkSlate)),
++                              pw.Text(fmtMoney(laborSubtotal), style: pw.TextStyle(font: regular, fontSize: 9, color: midSlate)),
++                            ]),
+                           ],
+-                        ),
+-                      ],
+-                    ),
+-                  ),
++                        )
++                      : pw.SizedBox(),
+                 ),
+-                pw.SizedBox(
+-                  width: 206,
+-                  child: pw.Container(
+-                    padding: const pw.EdgeInsets.fromLTRB(12, 44, 12, 10),
+-                    child: pw.Column(
+-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
+-                      children: [
+-                        pw.Container(height: 1.0, color: _darkSlate, width: 150),
+-                        pw.SizedBox(height: 4),
+-                        pw.Text(
+-                          'For ${data.shopName.toUpperCase()}',
+-                          style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+-                        ),
++              ),
++              pw.SizedBox(
++                width: 206,
++                child: pw.Container(
++                  padding: const pw.EdgeInsets.all(9),
++                  child: pw.Column(
++                    crossAxisAlignment: pw.CrossAxisAlignment.start,
++                    children: [
++                      if (isLedger) ...[
++                        amtRow('Total Billed', fmtMoney(grandTotal), isBold: true),
++                        pw.SizedBox(height: 3),
++                        amtRow('Amount Paid',
++                          received != null && received > 0 ? '- ${fmtMoney(received)}' : '₹ 0',
++                          valueColor: green),
++                        pw.SizedBox(height: 3),
++                        amtRow('Net Balance', fmtMoney(balance),
++                          isBold: true, valueColor: balance > 0 ? red : green),
++                        pw.Divider(color: darkSlate, height: 10, thickness: 0.5),
++                        pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
+                         pw.SizedBox(height: 2),
+                         pw.Text(
+-                          'Authorised Signatory',
+-                          style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+-                        ),
++                          '${numToWords(balance.round())} Rupees ${balance > 0 ? 'Payable' : 'Credit Balance'}',
++                          style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                      ] else ...[
++                        if (isGst) ...[
++                          amtRow('Total GST (18%)', fmtMoney(gstAmt)),
++                          pw.SizedBox(height: 3),
++                        ],
++                        amtRow('Total Billed', fmtMoney(grandTotal), isBold: true),
++                        pw.SizedBox(height: 3),
++                        amtRow('Amount Paid',
++                          received != null && received > 0 ? '- ${fmtMoney(received)}' : '₹ 0'),
++                        pw.SizedBox(height: 3),
++                        amtRow('Balance Due', fmtMoney(balance),
++                          isBold: true, valueColor: balance > 0 ? red : green),
++                        pw.Divider(color: darkSlate, height: 10, thickness: 0.5),
++                        pw.Text('Amount In Words:', style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++                        pw.SizedBox(height: 2),
++                        pw.Text('$wordsTotal Rupees only',
++                          style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++                        if (!isLedger && data.accountTotalBilled != null && data.accountBalanceDue != null) ...[
++                          pw.Divider(color: darkSlate, height: 10, thickness: 0.5),
++                          pw.Text('Account Summary:', style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++                          pw.SizedBox(height: 3),
++                          amtRow('Total Billed', fmtMoney(data.accountTotalBilled!)),
++                          pw.SizedBox(height: 3),
++                          amtRow('Total Paid', fmtMoney(data.accountTotalPaid ?? 0.0), valueColor: green),
++                          pw.SizedBox(height: 3),
++                          amtRow('Total Due', fmtMoney(data.accountBalanceDue!),
++                            isBold: true,
++                            valueColor: data.accountBalanceDue! > 0 ? red : green),
++                        ],
+                       ],
+-                    ),
++                    ],
+                   ),
+                 ),
+-              ],
+-            ),
++              ),
++            ],
+           ),
+-        ],
+-      ),
+-    );
++        ),
+ 
+-    return doc.save();
+-  }
+-  // ── Amount row helper ─────────────────────────────────────────────────────
+-
+-  static pw.Widget _amtRow(
+-    String label,
+-    String value, {
+-    bool isBold = false,
+-    PdfColor? valueColor,
+-    required pw.Font regular,
+-    required pw.Font semiBold,
+-    required pw.Font bold,
+-  }) {
+-    return pw.Row(
+-      children: [
+-        pw.Expanded(
+-          child: pw.Text(
+-            label,
+-            style: pw.TextStyle(
+-              font: isBold ? bold : regular,
+-              fontSize: 8.5,
+-              color: _midSlate,
++        // ── Terms & Conditions ───────────────────────────────────────
++        pw.Container(
++          width: double.infinity,
++          padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
++          decoration: const pw.BoxDecoration(
++            border: pw.Border(
++              left: pw.BorderSide(color: black, width: 1.2),
++              right: pw.BorderSide(color: black, width: 1.2),
++              bottom: pw.BorderSide(color: black, width: 1.2),
+             ),
++            color: lightGray,
++          ),
++          child: pw.Column(
++            crossAxisAlignment: pw.CrossAxisAlignment.start,
++            children: [
++              pw.Text('Terms And Conditions:',
++                style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++              pw.SizedBox(height: 2),
++              pw.Text(
++                (data.customTerms != null && data.customTerms!.trim().isNotEmpty)
++                    ? data.customTerms!.trim()
++                    : 'Thank you for doing business with us.',
++                style: pw.TextStyle(font: regular, fontSize: 8, color: midSlate)),
++            ],
+           ),
+         ),
+-        pw.Text(':', style: pw.TextStyle(font: regular, fontSize: 8.5, color: _midSlate)),
+-        pw.SizedBox(width: 4),
+-        pw.SizedBox(
+-          width: 95,
+-          child: pw.Text(
+-            value,
+-            textAlign: pw.TextAlign.right,
+-            style: pw.TextStyle(
+-              font: isBold ? bold : semiBold,
+-              fontSize: isBold ? 9.5 : 8.5,
+-              color: valueColor ?? _darkSlate,
++
++        // ── Signature section ────────────────────────────────────────
++        pw.Container(
++          decoration: const pw.BoxDecoration(
++            border: pw.Border(
++              left: pw.BorderSide(color: black, width: 1.2),
++              right: pw.BorderSide(color: black, width: 1.2),
++              bottom: pw.BorderSide(color: black, width: 1.2),
+             ),
+           ),
++          child: pw.Row(
++            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
++            children: [
++              pw.Expanded(
++                child: pw.Container(
++                  padding: const pw.EdgeInsets.all(10),
++                  decoration: const pw.BoxDecoration(
++                    border: pw.Border(right: pw.BorderSide(color: black, width: 1.2)),
++                  ),
++                  child: pw.Column(
++                    crossAxisAlignment: pw.CrossAxisAlignment.start,
++                    mainAxisAlignment: pw.MainAxisAlignment.end,
++                    children: [
++                      pw.Text('This is a computer-generated document.',
++                        style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate)),
++                      pw.SizedBox(height: 3),
++                      pw.Row(children: [
++                        pw.Text('Powered by ', style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate)),
++                        pw.Text('SnapKhata', style: pw.TextStyle(font: bold, fontSize: 7.5, color: snapBlue)),
++                      ]),
++                    ],
++                  ),
++                ),
++              ),
++              pw.SizedBox(
++                width: 206,
++                child: pw.Container(
++                  padding: const pw.EdgeInsets.fromLTRB(12, 44, 12, 10),
++                  child: pw.Column(
++                    crossAxisAlignment: pw.CrossAxisAlignment.center,
++                    children: [
++                      pw.Container(height: 1.0, color: darkSlate, width: 150),
++                      pw.SizedBox(height: 4),
++                      pw.Text('For ${data.shopName.toUpperCase()}',
++                        style: pw.TextStyle(font: bold, fontSize: 8, color: darkSlate)),
++                      pw.SizedBox(height: 2),
++                      pw.Text('Authorised Signatory',
++                        style: pw.TextStyle(font: regular, fontSize: 7.5, color: midSlate)),
++                    ],
++                  ),
++                ),
++              ),
++            ],
++          ),
+         ),
+       ],
+-    );
++    ),
++  );
++
++  // ── Heavy operation: encode PDF bytes ──────────────────────────────────
++  // On Flutter Web there is only one JS thread. doc.save() is pure CPU work
++  // and will block the event loop (freezing the spinner) if called without
++  // enableEventLoopBalancing. With it set to true, the pdf library periodically
++  // yields control back to the browser during the xref output phase so the UI
++  // stays alive. (Dart VM uses a background isolate, so this flag is a no-op there.)
++  // ignore: avoid_print
++  print('[PDF-gen] ⏱ generating byte stream (event-loop balanced)...');
++  final resultBytes = await doc.save(enableEventLoopBalancing: true);
++
++  // ignore: avoid_print
++  print('[PDF-gen] ⏱ document saved successfully! Size: ${resultBytes.length} bytes.');
++
++  return resultBytes;
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// Generator
++// ─────────────────────────────────────────────────────────────────────────────
++
++class InvoicePdfGenerator {
++  InvoicePdfGenerator._();
++
++  // ── Font cache (prevents re-downloading large font files on every call) ──
++  static pw.Font? _cachedRegular;
++  static pw.Font? _cachedBold;
++  static pw.Font? _cachedSemiBold;
++  static pw.Font? _cachedDevanagariRegular;
++  static pw.Font? _cachedDevanagariBold;
++
++  /// Downloads all fonts from Google Fonts CDN and caches them statically.
++  /// Subsequent calls are instant (returns from cache immediately).
++  static Future<void> _ensureFonts() async {
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching notoSansRegular...');
++    _cachedRegular          ??= await PdfGoogleFonts.notoSansRegular();
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching notoSansBold...');
++    _cachedBold             ??= await PdfGoogleFonts.notoSansBold();
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching notoSansMedium...');
++    _cachedSemiBold         ??= await PdfGoogleFonts.notoSansMedium();
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching notoSansDevanagariRegular...');
++    _cachedDevanagariRegular ??= await PdfGoogleFonts.notoSansDevanagariRegular();
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching notoSansDevanagariBold...');
++    _cachedDevanagariBold   ??= await PdfGoogleFonts.notoSansDevanagariBold();
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fonts fetched successfully.');
+   }
+ 
+-  // ── Page footer ───────────────────────────────────────────────────────────
++  // ── Tracks whether font TTF tables have been parsed (one-time, expensive) ──
++  static bool _fontsParsed = false;
++
++  /// Forces all 5 font files to run their TtfParser table-parse eagerly.
++  ///
++  /// Inside doc.save(), PdfTtfFont calls TtfParser(bytes) which synchronously
++  /// parses the full TTF file (_parseCMap + _parseIndexes + _parseGlyphs).
++  /// For 5 large NotoSans variants this can block the Flutter Web JS thread
++  /// for 3-8 seconds, freezing the UI. Running a tiny 1-word dummy PDF during
++  /// preWarm forces this parsing to happen in the background so the real PDF
++  /// generates instantly.
++  static Future<void> _preParseFonts() async {
++    if (_fontsParsed) return;
++    _fontsParsed = true;
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ pre-parsing TTF tables (background warm-up)...');
++    try {
++      final dummy = pw.Document();
++      final theme = pw.ThemeData.withFont(
++        base: _cachedRegular!,
++        bold: _cachedBold!,
++        fontFallback: [_cachedDevanagariRegular!, _cachedDevanagariBold!],
++      );
++      // Reference all 5 fonts explicitly so every TtfParser call is forced now.
++      dummy.addPage(pw.Page(
++        pageTheme: pw.PageTheme(theme: theme),
++        build: (ctx) => pw.Column(children: [
++          pw.Text('a', style: pw.TextStyle(font: _cachedRegular)),
++          pw.Text('b', style: pw.TextStyle(font: _cachedBold)),
++          pw.Text('c', style: pw.TextStyle(font: _cachedSemiBold)),
++        ]),
++      ));
++      // This triggers TtfParser for all fonts in the theme — the slow one-time work.
++      await dummy.save(enableEventLoopBalancing: true);
++      // ignore: avoid_print
++      print('[PDF-gen] ⏱ TTF tables pre-parsed — future PDFs will be instant.');
++    } catch (e) {
++      // Non-fatal: real PDF will still work, just might be slow on first call
++      _fontsParsed = false;
++      // ignore: avoid_print
++      print('[PDF-gen] ⚠ pre-parse warm-up failed: $e');
++    }
++  }
+ 
+-  static pw.Widget _buildFooter(pw.Context context, pw.Font regular) {
+-    return pw.Container(
+-      margin: const pw.EdgeInsets.only(top: 8),
+-      child: pw.Row(
+-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+-        children: [
+-          pw.Text(
+-            'snapkhata.com',
+-            style: pw.TextStyle(font: regular, fontSize: 7.5, color: _snapBlue),
+-          ),
+-          pw.Text(
+-            'Page ${context.pageNumber} of ${context.pagesCount}',
+-            style: pw.TextStyle(font: regular, fontSize: 7.5, color: _midSlate),
+-          ),
+-        ],
+-      ),
+-    );
++  /// Call this when the party detail page loads to pre-warm fonts + logo
++  /// so that the first PDF generation is instant.
++  static void preWarm([String? logoUrl]) {
++    // 1. Download fonts eagerly in the background.
++    // 2. Once fonts are downloaded, trigger dummy PDF to pre-parse TTF tables.
++    //    This moves the expensive TtfParser() work off the download button tap.
++    _ensureFonts().then((_) => _preParseFonts().ignore()).ignore();
++    // Pre-fetch logo in parallel.
++    if (logoUrl != null && logoUrl.isNotEmpty) {
++      _fetchLogoBytes(logoUrl).ignore();
++    }
++  }
++
++  // ── Logo image cache (avoids re-downloading within a session) ───────────
++  static final Map<String, Uint8List> _logoCache = {};
++
++  /// Downloads [url] and returns the raw bytes, or null on any error.
++  static Future<Uint8List?> _fetchLogoBytes(String url) async {
++    if (url.isEmpty) return null;
++    if (_logoCache.containsKey(url)) return _logoCache[url];
++    try {
++      final dio = Dio();
++      final response = await dio.get<List<int>>(
++        url,
++        options: Options(
++          responseType: ResponseType.bytes,
++          sendTimeout: const Duration(seconds: 8),
++          receiveTimeout: const Duration(seconds: 8),
++        ),
++      );
++      if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
++        final bytes = Uint8List.fromList(response.data!);
++        _logoCache[url] = bytes;
++        return bytes;
++      }
++    } catch (_) {
++      // Network error or timeout — logo will be skipped
++    }
++    return null;
+   }
+ 
+   // ─────────────────────────────────────────────────────────────────────────
+-  // Data builder helpers
++  // Main public API
+   // ─────────────────────────────────────────────────────────────────────────
+ 
+-  static String _docTitle(InvoiceData data) {
+-    final isGst = data.gstMode != 'none';
+-    if (data.documentType == 'ledger') return 'Account Statement - ${data.customerName}';
+-    if (data.documentType == 'bill') return 'Order Details #${data.receiptNumber} - ${data.customerName}';
+-    return isGst ? 'Tax Invoice #${data.receiptNumber}' : 'Order Details #${data.receiptNumber}';
++  static Future<Uint8List> generate(InvoiceData data) async {
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ generate() called using PdfGoogleFonts');
++
++    // Fetch logo + ensure fonts in parallel for maximum speed.
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ fetching shop logo... URL: ${data.shopLogoUrl}');
++    final logoFuture = (data.shopLogoUrl != null && data.shopLogoUrl!.isNotEmpty)
++        ? _fetchLogoBytes(data.shopLogoUrl!)
++        : Future<Uint8List?>.value(null);
++
++    // _ensureFonts() is idempotent — if already cached, returns instantly.
++    await Future.wait([logoFuture, _ensureFonts()]);
++    final Uint8List? logoBytes = await logoFuture;
++
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ shop logo fetch complete. Invoking _buildPdf()...');
++    final pdfBytes = await _buildPdf(
++      data,
++      logoBytes,
++      regular: _cachedRegular!,
++      bold: _cachedBold!,
++      semiBold: _cachedSemiBold!,
++      devanagariRegular: _cachedDevanagariRegular!,
++      devanagariBold: _cachedDevanagariBold!,
++    );
++
++    // ignore: avoid_print
++    print('[PDF-gen] ⏱ generate() finished.');
++    return pdfBytes;
+   }
+ 
++  // ─────────────────────────────────────────────────────────────────────────
++  // Data builder helpers
++  // ─────────────────────────────────────────────────────────────────────────
++
+   /// Builds [InvoiceData] from the `/api/public/receipts/{id}` JSON response.
+   static InvoiceData fromApiJson(Map<String, dynamic> json) {
+     final rawItems = json['items'] as List<dynamic>? ?? [];
