@@ -387,7 +387,13 @@ new_os = """function renderOrderSummary(data) {
                                     </tr>
                                     ` : ''}
                                 </table>
-                            </div>
+                             </div>
+                             ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
+                             <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                                 <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
+                                 <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>
+                             </div>
+                             ` : ''}
                         </div>
                         
                         <div class="inv-terms">
@@ -588,6 +594,12 @@ new_os = """function renderGstInvoice(data, gstMode) {
                                     ` : ''}
                                 </table>
                             </div>
+                            ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
+                            <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                                <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
+                                <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>
+                            </div>
+                            ` : ''}
                         </div>
                         
                         <div class="inv-terms">

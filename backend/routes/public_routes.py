@@ -695,6 +695,48 @@ async def get_public_receipt(
         final_received = cumulative_received if cumulative_received is not None else (header.get("received_amount") if not is_ledger else None)
         final_balance_due = cumulative_balance_due if cumulative_balance_due is not None else header.get("balance_due")
 
+        # Get overall ledger balance due
+        ledger_balance_due = None
+        if not is_ledger and username:
+            try:
+                resolved_lid = None
+                if 'ledger_id_for_receipt' in locals() and ledger_id_for_receipt:
+                    resolved_lid = ledger_id_for_receipt
+                else:
+                    invoice_tx_resp = db.client.from_("ledger_transactions") \
+                        .select("ledger_id") \
+                        .eq("receipt_number", receipt_number) \
+                        .eq("username", username) \
+                        .limit(1) \
+                        .execute()
+                    if invoice_tx_resp.data:
+                        resolved_lid = invoice_tx_resp.data[0].get("ledger_id")
+
+                if resolved_lid:
+                    ledg_resp = db.client.from_("customer_ledgers") \
+                        .select("balance_due") \
+                        .eq("id", resolved_lid) \
+                        .limit(1) \
+                        .execute()
+                    if ledg_resp.data:
+                        ledger_balance_due = float(ledg_resp.data[0].get("balance_due") or 0)
+
+                if ledger_balance_due is None and header.get("customer_phone"):
+                    import re
+                    phone_str = str(header.get("customer_phone")).replace("+91", "").strip()
+                    clean_phone = re.sub(r"\D", "", phone_str)
+                    if clean_phone:
+                        ledg_resp = db.client.from_("customer_ledgers") \
+                            .select("balance_due") \
+                            .eq("customer_phone", clean_phone) \
+                            .eq("username", username) \
+                            .limit(1) \
+                            .execute()
+                        if ledg_resp.data:
+                            ledger_balance_due = float(ledg_resp.data[0].get("balance_due") or 0)
+            except Exception as e:
+                logger.warning(f"Error querying overall ledger balance: {e}")
+
         # ── Final Response ────────────────────────────────────────────────────────
         return {
             "id": receipt_number,
@@ -721,6 +763,7 @@ async def get_public_receipt(
             "total_billed": ledger_total_billed if is_ledger else None,
             "total_paid": ledger_total_paid if is_ledger else None,
             "balance_due": final_balance_due,
+            "ledger_balance_due": ledger_balance_due,
             "industry": header.get("industry") or "general",
             "gst_mode": header.get("gst_mode") or "none",
             "receipt_link": header.get("receipt_link") or "",
