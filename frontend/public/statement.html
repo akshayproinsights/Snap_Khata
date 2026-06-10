@@ -1158,6 +1158,16 @@
 
         async function init() {
             await fetchAndRender();
+
+            // ── Auto-print mode (?pdf=1 or ?autoprint=1) ─────────────────────────
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.get('pdf') === '1' || searchParams.get('autoprint') === '1') {
+                const fab = document.getElementById('fabPrint');
+                if (fab) fab.style.display = 'none';
+                setTimeout(function() {
+                    printWithFilename();
+                }, 1200);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', init);

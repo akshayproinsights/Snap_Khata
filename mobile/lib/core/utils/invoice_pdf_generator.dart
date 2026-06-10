@@ -737,11 +737,10 @@ class InvoicePdfGenerator {
           ),
           pw.SizedBox(height: 8),
 
-          // ── Header + Bill To — ALL in ONE container (no gap between sections) ──
+          // ── Shop header (TOP section — full 4-side border) ───────────
           pw.Container(
             width: double.infinity,
             decoration: const pw.BoxDecoration(
-              color: _white,
               border: pw.Border(
                 left:   pw.BorderSide(color: _black, width: 1.2),
                 right:  pw.BorderSide(color: _black, width: 1.2),
@@ -752,15 +751,17 @@ class InvoicePdfGenerator {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-
-                // ─ Shop name + logo row ────────────────────────────
+                // White shop name bar with black text
                 pw.Container(
                   width: double.infinity,
-                  padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  color: _white,
                   child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
-                      if (logoBytes != null && logoBytes.isNotEmpty) ...[
+                      // ── Logo + shop name ──────────────────────────────────
+                      if (logoBytes != null && logoBytes.isNotEmpty)
                         pw.Container(
                           width: 44,
                           height: 44,
@@ -780,35 +781,15 @@ class InvoicePdfGenerator {
                             ),
                           ),
                         ),
-                      ],
                       pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              data.shopName.toUpperCase(),
-                              style: pw.TextStyle(
-                                font: bold,
-                                fontSize: 14,
-                                color: _darkSlate,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
-                            if (data.shopAddress != null && data.shopAddress!.isNotEmpty) ...[
-                              pw.SizedBox(height: 3),
-                              pw.Text(
-                                data.shopAddress!,
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                            ],
-                            if (data.shopPhone != null && data.shopPhone!.isNotEmpty) ...[
-                              pw.SizedBox(height: 2),
-                              pw.Text(
-                                'Phone: +91 ${data.shopPhone!.replaceAll('+91', '').trim()}',
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                            ],
-                          ],
+                        child: pw.Text(
+                          data.shopName.toUpperCase(),
+                          style: pw.TextStyle(
+                            font: bold,
+                            fontSize: 14,
+                            color: _darkSlate,
+                            letterSpacing: 0.8,
+                          ),
                         ),
                       ),
                       if (data.shopGst != null && data.shopGst!.isNotEmpty)
@@ -826,105 +807,138 @@ class InvoicePdfGenerator {
                     ],
                   ),
                 ),
-
-                // ─ Divider line between header and Bill To ────────────
-                pw.Container(height: 1.2, color: _black),
-
-                // ─ Bill To / Invoice Details row ────────────────────
-                pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: [
-                    // Bill To
-                    pw.Expanded(
-                      child: pw.Container(
-                        padding: const pw.EdgeInsets.all(9),
-                        decoration: const pw.BoxDecoration(
-                          border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
-                        ),
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              data.documentType == 'ledger' ? 'Customer Details:' : 'Bill To:',
-                              style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
-                            ),
-                            pw.SizedBox(height: 4),
-                            pw.Text(
-                              data.customerName,
-                              style: pw.TextStyle(font: bold, fontSize: 10, color: _darkSlate),
-                            ),
-                            if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[  
-                              pw.SizedBox(height: 2),
-                              pw.Text(
-                                'Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                            ],
-                            if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[  
-                              pw.SizedBox(height: 2),
-                              pw.Text(
-                                'Vehicle: ${data.vehicleNumber}',
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                            ],
-                            if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[  
-                              pw.SizedBox(height: 2),
-                              pw.Text(
-                                'Odometer: ${data.odometerReading} km',
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                // Address + phone sub-bar
+                if ((data.shopAddress != null && data.shopAddress!.isNotEmpty) ||
+                    (data.shopPhone != null && data.shopPhone!.isNotEmpty))
+                  pw.Container(
+                    width: double.infinity,
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: const pw.BoxDecoration(
+                      color: _lightGray,
+                      border: pw.Border(top: pw.BorderSide(color: _tableHeaderBg, width: 1)),
                     ),
-                    // Order / Invoice Details (right panel)
-                    pw.SizedBox(
-                      width: 206,
-                      child: pw.Padding(
-                        padding: const pw.EdgeInsets.all(9),
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              isGst
-                                  ? 'Invoice Details:'
-                                  : (data.documentType == 'ledger'
-                                      ? 'Statement Info:'
-                                      : 'Order Details:'),
-                              style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
-                            ),
-                            pw.SizedBox(height: 4),
-                            if (data.documentType != 'ledger') ...[  
-                              pw.Text(
-                                'No: ${data.receiptNumber}',
-                                style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
-                              ),
-                              pw.SizedBox(height: 2),
-                            ],
-                            pw.Text(
-                              'Date: ${_fmtDate(data.date)}',
+                    child: pw.Row(
+                      children: [
+                        if (data.shopAddress != null && data.shopAddress!.isNotEmpty)
+                          pw.Expanded(
+                            child: pw.Text(
+                              data.shopAddress!,
                               style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                             ),
-                            pw.SizedBox(height: 5),
-                            pw.Container(
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: pw.BoxDecoration(
-                                color: statusBgColor,
-                                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
-                              ),
-                              child: pw.Text(
-                                displayStatus,
-                                style: pw.TextStyle(font: bold, fontSize: 8, color: statusColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        if (data.shopPhone != null && data.shopPhone!.isNotEmpty)
+                          pw.Text(
+                            'Ph: ${data.shopPhone!.replaceAll('+91', '').trim()}',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                          ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+              ],
+            ),
+          ),
 
+          // ── Bill To / Invoice Details ────────────────────────────────
+          // No top border — shared with bottom border of section above
+          pw.Container(
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                left:   pw.BorderSide(color: _black, width: 1.2),
+                right:  pw.BorderSide(color: _black, width: 1.2),
+                bottom: pw.BorderSide(color: _black, width: 1.2),
+              ),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Bill To
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(9),
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          data.documentType == 'ledger' ? 'Customer Details:' : 'Bill To:',
+                          style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          data.customerName,
+                          style: pw.TextStyle(font: bold, fontSize: 10, color: _darkSlate),
+                        ),
+                        if (data.customerPhone != null && data.customerPhone!.isNotEmpty) ...[  
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Contact No: ${data.customerPhone!.replaceAll('+91', '').trim()}',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                          ),
+                        ],
+                        if (data.vehicleNumber != null && data.vehicleNumber!.isNotEmpty) ...[  
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Vehicle: ${data.vehicleNumber}',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                          ),
+                        ],
+                        if (data.odometerReading != null && data.odometerReading!.isNotEmpty) ...[  
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Odometer: ${data.odometerReading} km',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                // Invoice / Order Details (right panel, fixed width)
+                pw.SizedBox(
+                  width: 170,
+                  child: pw.Padding(
+                    padding: const pw.EdgeInsets.all(9),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          isGst
+                              ? 'Invoice Details:'
+                              : (data.documentType == 'ledger'
+                                  ? 'Statement Info:'
+                                  : 'Order Details:'),
+                          style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate),
+                        ),
+                        pw.SizedBox(height: 4),
+                        if (data.documentType != 'ledger') ...[  
+                          pw.Text(
+                            'No: ${data.receiptNumber}',
+                            style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                          ),
+                          pw.SizedBox(height: 2),
+                        ],
+                        pw.Text(
+                          'Date: ${_fmtDate(data.date)}',
+                          style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: pw.BoxDecoration(
+                            color: statusBgColor,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                          ),
+                          child: pw.Text(
+                            displayStatus,
+                            style: pw.TextStyle(font: bold, fontSize: 8, color: statusColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -952,14 +966,14 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 // Left: automobile parts/labour breakdown (or empty spacer)
                 pw.Expanded(
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(9),
                     decoration: const pw.BoxDecoration(
-                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
+                      border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
                     ),
                     child: isAutomobile && laborSubtotal > 0 && !isLedger
                         ? pw.Column(
@@ -976,8 +990,13 @@ class InvoicePdfGenerator {
                 ),
                 // Right: amounts panel — fully boxed with left border separator
                 pw.SizedBox(
-                  width: 206,
+                  width: 205,
                   child: pw.Container(
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(
+                        left: pw.BorderSide(color: _darkSlate, width: 0.7),
+                      ),
+                    ),
                     padding: const pw.EdgeInsets.all(9),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1014,6 +1033,17 @@ class InvoicePdfGenerator {
                             '$wordsTotal Rupees only',
                             style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
                           ),
+                          if (received != null && received > 0) ...[
+                            pw.SizedBox(height: 2),
+                            pw.Text(
+                              'Received  : ${_fmtMoney(received)}',
+                              style: pw.TextStyle(font: regular, fontSize: 8, color: _midSlate),
+                            ),
+                            pw.Text(
+                              'Balance   : ${_fmtMoney(balance)}',
+                              style: pw.TextStyle(font: regular, fontSize: 8, color: balance > 0 ? _red : _green),
+                            ),
+                          ],
                           if (!isLedger && data.accountTotalBilled != null && data.accountBalanceDue != null) ...[
                             pw.Divider(color: _darkSlate, height: 10, thickness: 0.5),
                             pw.Text('Account Summary:', style: pw.TextStyle(font: bold, fontSize: 8, color: _darkSlate)),
@@ -1073,13 +1103,13 @@ class InvoicePdfGenerator {
               ),
             ),
             child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Expanded(
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(10),
                     decoration: const pw.BoxDecoration(
-                      border: pw.Border(right: pw.BorderSide(color: _black, width: 1.2)),
+                      border: pw.Border(right: pw.BorderSide(color: _darkSlate, width: 0.7)),
                     ),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1107,13 +1137,13 @@ class InvoicePdfGenerator {
                   ),
                 ),
                 pw.SizedBox(
-                  width: 206,
+                  width: 170,
                   child: pw.Container(
                     padding: const pw.EdgeInsets.fromLTRB(12, 44, 12, 10),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
-                        pw.Container(height: 1.0, color: _darkSlate, width: 150),
+                        pw.Container(height: 1.0, color: _darkSlate, width: 130),
                         pw.SizedBox(height: 4),
                         pw.Text(
                           'For ${data.shopName.toUpperCase()}',

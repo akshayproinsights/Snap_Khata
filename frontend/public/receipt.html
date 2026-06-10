@@ -1860,6 +1860,23 @@
 
         async function init() {
             await fetchAndRender();
+
+            // ── Auto-print mode (?pdf=1 or ?autoprint=1) ─────────────────────────
+            // When the receipt page is opened from the app with ?pdf=1, we
+            // automatically trigger the browser print/save-as-PDF dialog once the
+            // content has fully rendered (including fonts and QR code).
+            // On Android Chrome / iOS Safari this opens the native "Save as PDF" sheet.
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.get('pdf') === '1' || searchParams.get('autoprint') === '1') {
+                // Hide the FAB so it doesn't appear in the printed PDF
+                const fab = document.getElementById('fabPrint');
+                if (fab) fab.style.display = 'none';
+                // Give fonts, QR code and images time to load before printing
+                // 1200ms covers QR code (100ms timeout) + network font load
+                setTimeout(function() {
+                    printWithFilename();
+                }, 1200);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', init);

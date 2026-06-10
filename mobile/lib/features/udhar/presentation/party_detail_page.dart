@@ -21,9 +21,7 @@ import 'package:mobile/core/utils/contact_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
-import 'package:mobile/core/utils/invoice_pdf_generator.dart';
-import 'package:mobile/core/utils/file_download_helper.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 
 
@@ -53,7 +51,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   void initState() {
     super.initState();
     _loadTransactions();
-
   }
 
   Future<void> _loadTransactions() async {
@@ -203,7 +200,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                   style: TextStyle(
                     fontSize: 13,
                     color: context.textSecondaryColor,
-                    fontFamilyFallback: const ['NotoSansDevanagari', 'NotoSans'],
+                    fontFamily: 'Outfit',
                   ),
                   children: [
                     const TextSpan(text: 'Choose a billing method for '),
@@ -535,7 +532,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Payment recorded!'),
+                                    content: Text('Payment recorded! 🎉'),
                                   ),
                                 );
                               } else {
@@ -758,7 +755,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.warning, size: 18, color: Colors.orange),
+                            const Text('⚠️', style: TextStyle(fontSize: 18)),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -803,7 +800,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.close, size: 16, color: Colors.red),
+                            Text('❌', style: TextStyle(fontSize: 16)),
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -922,7 +919,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     SnackBar(
                                       content: const Row(
                                         children: [
-                                          Icon(Icons.check, size: 16, color: Colors.green),
+                                          Text('✅ ', style: TextStyle(fontSize: 16)),
                                           Text(
                                             'Customer details saved!',
                                             style: TextStyle(fontWeight: FontWeight.w700),
@@ -1713,6 +1710,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     final usernameParam = authState.user?.username != null
         ? '&u=${Uri.encodeComponent(authState.user!.username)}'
         : '';
+    final partyStatementLink =
+        'https://snapkhata.com/statement.html?party=${ledger.id}$usernameParam';
 
     // Collect ALL credit transactions (invoices + manual entries) for the picker.
     // Manual entries without a receipt image or number are now included so they
@@ -1786,15 +1785,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
         return StatefulBuilder(
           builder: (ctx, setSheet) {
-            // Dynamically generate receipt link for chosen bill, falling back to party statement in receipt.html
-            final String activeShareLink;
-            final selectedReceiptNumber = selectedTx?.receiptNumber;
-            if (selectedReceiptNumber != null && selectedReceiptNumber.isNotEmpty) {
-              activeShareLink = 'https://snapkhata.com/receipt.html?i=$selectedReceiptNumber$usernameParam';
-            } else {
-              activeShareLink = 'https://snapkhata.com/receipt.html?party=${ledger.id}$usernameParam';
-            }
-
             // Build the correct preview message depending on shareMode
             final String message;
             if (shareMode == 'manualBill' && selectedTx != null) {
@@ -1821,7 +1811,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 totalBilled: _totalInvoiced,
                 totalPaid: _totalPaid,
                 balanceDue: _computedBalance,
-                statementLink: activeShareLink,
+                statementLink: partyStatementLink,
                 upiId: upiId,
                 useReceiptPhoto: shareMode == 'receiptPhoto',
                 receiptPhotoUrl: selectedTx?.receiptLink,
@@ -2347,71 +2337,73 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (shareMode == 'accountStatement' && selectedTx != null)
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(
-                              LucideIcons.fileDown,
-                              size: 18,
-                              color: Color(0xFF6366F1),
-                            ),
-                            label: const Text(
-                              'Share as PDF',
-                              style: TextStyle(
+                        if (shareMode == 'accountStatement' || selectedTx != null) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(
+                                LucideIcons.fileDown,
+                                size: 18,
                                 color: Color(0xFF6366F1),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
                               ),
+                              label: Text(
+                                shareMode == 'accountStatement'
+                                    ? 'Share Statement as PDF'
+                                    : 'Share Bill as PDF',
+                                style: const TextStyle(
+                                  color: Color(0xFF6366F1),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                  color: Color(0xFF6366F1),
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                backgroundColor: const Color(0xFF6366F1)
+                                    .withValues(alpha: 0.06),
+                              ),
+                              onPressed: () async {
+                                final username = authState.user?.username;
+                                final usernameParam = username != null
+                                    ? '&u=${Uri.encodeComponent(username)}'
+                                    : '';
+                                final String url;
+                                if (shareMode == 'accountStatement') {
+                                  url = 'https://snapkhata.com/statement.html?party=${ledger.id}$usernameParam&pdf=1';
+                                } else {
+                                  if (selectedTx?.receiptNumber == null) return;
+                                  url = 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
+                                }
+
+                                final uri = Uri.parse(url);
+                                Navigator.pop(ctx);
+                                try {
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Could not open PDF viewer.'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error launching PDF link: $e');
+                                }
+                              },
                             ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(
-                                color: Color(0xFF6366F1),
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              backgroundColor: const Color(0xFF6366F1)
-                                  .withValues(alpha: 0.06),
-                            ),
-                            onPressed: () async {
-                              // Capture before pop
-                              final capturedTx = selectedTx;
-                              final capturedShopProfile = shopProfile;
-                              Navigator.pop(ctx);
-                              if (!context.mounted) return;
-                              await _sharePdfForTransaction(
-                                tx: capturedTx!,
-                                ledger: ledger,
-                                shopName: shopName,
-                                shopAddress: capturedShopProfile.address
-                                    .isNotEmpty
-                                    ? capturedShopProfile.address
-                                    : null,
-                                shopPhone: capturedShopProfile.phone
-                                    .isNotEmpty
-                                    ? capturedShopProfile.phone
-                                    : null,
-                                shopGst: capturedShopProfile.gst
-                                    .isNotEmpty
-                                    ? capturedShopProfile.gst
-                                    : null,
-                                shopType: capturedShopProfile.shopType,
-                                shopLogoUrl: capturedShopProfile.logoUrl.isNotEmpty
-                                    ? capturedShopProfile.logoUrl
-                                    : null,
-                                customTerms: capturedShopProfile.customTerms
-                                    .isNotEmpty
-                                    ? capturedShopProfile.customTerms
-                                    : null,
-                              );
-                            },
                           ),
-                        ),
-                        if (shareMode == 'accountStatement' && selectedTx != null)
                           const SizedBox(height: 10),
+                        ],
                         // ── Cancel + WhatsApp row ───────────────────────────
                         Row(
                           children: [
@@ -2489,7 +2481,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                           totalBilled: _totalInvoiced,
                                           totalPaid: _totalPaid,
                                           balanceDue: _computedBalance,
-                                          statementLink: activeShareLink,
+                                          statementLink: partyStatementLink,
                                           upiId: upiId,
                                           useReceiptPhoto: false,
                                           receiptPhotoUrl: null,
@@ -2548,275 +2540,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
     );
   }
 
-  // ── PDF Share helper ─────────────────────────────────────────────────────
-  // Generates a professional invoice PDF for [tx] (or a simple balance PDF
-  // if [tx] is null) and opens the native OS share sheet.
-  Future<void> _sharePdfForTransaction({
-    required LedgerTransaction tx,
-    required CustomerLedger ledger,
-    required String shopName,
-    String? shopAddress,
-    String? shopPhone,
-    String? shopGst,
-    String shopType = 'general',
-    String? shopLogoUrl,
-    String? customTerms,
-  }) async {
-    // Show loading snackbar
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(width: 14),
-            Text('Preparing PDF...'),
-          ],
-        ),
-        duration: Duration(seconds: 30),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-
-    try {
-      final InvoiceData invoiceData;
-      final t0 = DateTime.now();
-      // ignore: avoid_print
-      print('[PDF] ⏱ START ${t0.toIso8601String()}');
-
-      // ── Authoritative payment amounts from ledger ──────────────────────
-      final double txTotal = tx.amount;
-
-      // Sum ALL payments on this customer ledger — not just ones tagged with
-      // this receipt number. Standalone "Record Payment" entries get their own
-      // sequential receipt numbers and would be missed by a receipt_number filter.
-      final allTxs = _transactions ?? [];
-      final totalPaidOnLedger = (_backendSummary['total_paid'] ?? 0.0) > 0
-          ? _backendSummary['total_paid']!
-          : allTxs
-              .where((t) => t.transactionType == 'PAYMENT')
-              .fold(0.0, (s, t) => s + t.amount);
-      final totalBilledOnLedger = (_backendSummary['total_billed'] ?? 0.0) > 0
-          ? _backendSummary['total_billed']!
-          : allTxs
-              .where((t) =>
-                  t.transactionType == 'INVOICE' ||
-                  t.transactionType == 'MANUAL_CREDIT')
-              .fold(0.0, (s, t) => s + t.amount);
-
-      // Proportionally attribute payments to this specific receipt's share
-      final double txPaid;
-      if (totalBilledOnLedger > 0 && totalPaidOnLedger > 0) {
-        final receiptShare = txTotal / totalBilledOnLedger;
-        txPaid = (totalPaidOnLedger * receiptShare).clamp(0.0, txTotal);
-      } else {
-        // Fallback: use receivedAmount stored on the transaction itself
-        txPaid = tx.receivedAmount ?? 0.0;
-      }
-      final double txBalance = (txTotal - txPaid).clamp(0.0, double.infinity);
-      final String txStatus = txBalance <= 0
-          ? 'PAID'
-          : (txPaid > 0 ? 'PARTIAL' : 'UNPAID');
-
-      // ── Items: prefer local, fall back to verified_invoices API ────────
-      // Manual/catalogue entries store items directly on the transaction.
-      // AI-processed invoice receipts store items in verified_invoices
-      // (one row per line item, keyed by receipt_number).
-      List<Map<String, dynamic>> rawItems = tx.items;
-      String gstMode = 'none';
-      String? vehicleNumber;
-      String? odometerReading;
-
-      if (rawItems.isEmpty &&
-          tx.receiptNumber != null &&
-          tx.receiptNumber!.isNotEmpty) {
-        // Fetch the verified invoice rows for this receipt
-        try {
-          // ignore: avoid_print
-          print('[PDF] ⏱ getVerifiedInvoices START +${DateTime.now().difference(t0).inMilliseconds}ms');
-          final repo = ref.read(verifiedRepositoryProvider);
-          final records = await repo.getVerifiedInvoices(
-            receiptNumber: tx.receiptNumber,
-          );
-          // ignore: avoid_print
-          print('[PDF] ⏱ getVerifiedInvoices END +${DateTime.now().difference(t0).inMilliseconds}ms (${records.length} rows)');
-
-          if (records.isNotEmpty) {
-            final first = records.first;
-            gstMode = first.gstMode ?? 'none';
-            vehicleNumber = first.extraFields['vehicle_number']?.toString() ??
-                first.extraFields['car_number']?.toString();
-            odometerReading = first.extraFields['odometer']?.toString() ??
-                first.extraFields['odometer_reading']?.toString();
-
-            // Each VerifiedInvoice record = one line item
-            rawItems = records
-                .map((r) => <String, dynamic>{
-                      'name': r.description.isNotEmpty ? r.description : 'Item',
-                      'qty': r.quantity,
-                      'rate': r.rate,
-                      'amount': r.amount,
-                      'type':
-                          r.type.toLowerCase(), // 'part', 'labour', 'service'
-                    })
-                .toList();
-          }
-        } catch (_) {
-          // If API fetch fails, still generate PDF with amounts (no items)
-        }
-      }
-
-      final invoices = allTxs.where((t) =>
-          t.transactionType == 'INVOICE' ||
-          t.transactionType == 'MANUAL_CREDIT');
-      final payments = allTxs.where((t) => t.transactionType == 'PAYMENT');
-      final bool hideAccountSummary = invoices.length <= 1 && payments.length <= 1;
-
-      invoiceData = InvoicePdfGenerator.fromLocalTransaction(
-        shopName: shopName,
-        shopAddress: shopAddress,
-        shopPhone: shopPhone,
-        shopGst: shopGst,
-        shopLogoUrl: shopLogoUrl,
-        customerName: ledger.customerName.isNotEmpty
-            ? ledger.customerName
-            : 'Customer',
-        customerPhone: ledger.customerPhone,
-        vehicleNumber: vehicleNumber,
-        odometerReading: odometerReading,
-        receiptNumber: tx.receiptNumber ?? ledger.id.toString(),
-        date: tx.createdAt,
-        totalAmount: txTotal,
-        receivedAmount: txPaid > 0 ? txPaid : null,
-        balanceDue: txBalance > 0 ? txBalance : 0,
-        rawItems: rawItems,
-        gstMode: gstMode,
-        industry: shopType,
-        status: txStatus,
-        customTerms: customTerms,
-        documentType: tx.isManualEntry ? 'bill' : 'order',
-        // Account-level summary — shown in the banner at the bottom of the PDF
-        // only when there are multiple receipts/payments. If there is only one
-        // receipt and at most one payment, we hide the Account Summary to keep
-        // the PDF clean and avoid redundant totals.
-        accountTotalBilled: hideAccountSummary ? null : (totalBilledOnLedger > 0 ? totalBilledOnLedger : null),
-        accountTotalPaid: hideAccountSummary ? null : totalPaidOnLedger,
-        accountBalanceDue: hideAccountSummary
-            ? null
-            : (totalBilledOnLedger > 0
-                ? (totalBilledOnLedger - totalPaidOnLedger).clamp(0.0, double.infinity)
-                : null),
-      );
-
-      // ignore: avoid_print
-      print('[PDF] ⏱ generate() START +${DateTime.now().difference(t0).inMilliseconds}ms');
-      final pdfBytes = await InvoicePdfGenerator.generate(invoiceData);
-      // ignore: avoid_print
-      print('[PDF] ⏱ generate() DONE +${DateTime.now().difference(t0).inMilliseconds}ms (${pdfBytes.length} bytes)');
-
-      if (!mounted) return;
-      messenger.hideCurrentSnackBar();
-
-      // Build filename: ShopName_ReceiptNo_Date.pdf
-      // Handles Marathi/Hindi Devanagari shop names by keeping Unicode letters
-      // e.g. जाधव_1586_07-Jun-2026.pdf  or  AK_Shop_1586_07-Jun-2026.pdf
-      String slugifyPdf(String s) {
-        // Strip control chars and filesystem-unsafe characters, keep Unicode letters/digits
-        final cleaned = s.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '');
-        // Collapse whitespace → underscore
-        final spaced = cleaned.replaceAll(RegExp(r'\s+'), '_');
-        // Remove leading/trailing underscores
-        final slug = spaced.replaceAll(RegExp(r'^_+|_+$'), '');
-        // If entirely empty (shouldn't happen), return 'Shop'
-        return slug.isEmpty ? 'Shop' : slug;
-      }
-
-      final txDate = invoiceData.date.toLocal();
-      // Use ddMMyyHHmmss format (e.g. 080626120743) so every download gets a
-      // unique filename — prevents the browser from showing "Download again?"
-      // and ensures fresh downloads even for the same bill.
-      final now = DateTime.now();
-      final dd = txDate.day.toString().padLeft(2, '0');
-      final mm = txDate.month.toString().padLeft(2, '0');
-      final yy = (txDate.year % 100).toString().padLeft(2, '0');
-      final hh = now.hour.toString().padLeft(2, '0');
-      final mi = now.minute.toString().padLeft(2, '0');
-      final ss = now.second.toString().padLeft(2, '0');
-      final datePart = '$dd$mm$yy$hh$mi$ss';
-      final shopPart = slugifyPdf(invoiceData.shopName);
-      final receiptPart = slugifyPdf(invoiceData.receiptNumber);
-      final isGst = invoiceData.gstMode != 'none';
-      final fileName = isGst
-          ? '${shopPart}_Tax_${receiptPart}_$datePart.pdf'
-          : '${shopPart}_${receiptPart}_$datePart.pdf';
-
-      if (kIsWeb) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (ctx) => AlertDialog(
-            title: const Text('PDF Ready', style: TextStyle(fontWeight: FontWeight.bold)),
-            content: const Text('Your invoice PDF has been generated successfully.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('CANCEL'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  FileDownloadHelper.downloadFile(pdfBytes, fileName, 'application/pdf');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('DOWNLOAD'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        // Open native OS share sheet with the PDF file.
-        // On Android Chrome / iOS Safari: pops up the system share chooser
-        // (WhatsApp, Gmail, Drive, etc.) — exactly like top apps do.
-        // On desktop browsers: falls back to a direct file download.
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [
-              XFile.fromData(
-                pdfBytes,
-                mimeType: 'application/pdf',
-                name: fileName,
-              ),
-            ],
-            text: '${invoiceData.shopName} — Invoice PDF',
-          ),
-        );
-      }
-
-    } catch (e) {
-      if (!mounted) return;
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Could not generate PDF: ${e.toString()}'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
 
   Future<void> _confirmDeleteTransaction(LedgerTransaction tx) async {
     final confirmed = await showDialog<bool>(
