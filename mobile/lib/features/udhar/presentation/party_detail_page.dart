@@ -53,14 +53,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   void initState() {
     super.initState();
     _loadTransactions();
-    // Pre-warm PDF fonts + logo as soon as the page opens so they're cached
-    // by the time the user taps "Share as PDF". Uses a post-frame callback so
-    // that the Riverpod ref (shopProvider) is readable.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final logoUrl = ref.read(shopProvider).logoUrl;
-      InvoicePdfGenerator.preWarm(logoUrl.isNotEmpty ? logoUrl : null);
-    });
+
   }
 
   Future<void> _loadTransactions() async {

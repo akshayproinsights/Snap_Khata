@@ -250,9 +250,7 @@ class InvoicePdfGenerator {
     return null;
   }
 
-    static Future<void> preWarm([String? logoUrl]) async { await _ensureFonts(); if (logoUrl != null) _fetchLogoBytes(logoUrl); }
-
-static Future<Uint8List> generate(InvoiceData data) async {
+  static Future<Uint8List> generate(InvoiceData data) async {
     await _ensureFonts();
     final regular   = _cachedRegular!;
     final bold      = _cachedBold!;
