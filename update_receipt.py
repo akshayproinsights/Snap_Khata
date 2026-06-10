@@ -365,10 +365,6 @@ new_os = """function renderOrderSummary(data) {
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
                                     <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(subtotal)}</td>
-                                    </tr>
-                                    <tr>
                                         <td class="label-col">Total</td>
                                         <td class="amount-col">${fmtMoney(grandTotal)}</td>
                                     </tr>
@@ -568,10 +564,6 @@ new_os = """function renderGstInvoice(data, gstMode) {
                             </div>
                             <div class="inv-totals-wrap">
                                 <table class="inv-totals-table">
-                                    <tr>
-                                        <td class="label-col">Sub Total</td>
-                                        <td class="amount-col">${fmtMoney(grandTotal)}</td>
-                                    </tr>
                                     <tr>
                                         <td class="label-col">Total</td>
                                         <td class="amount-col">${fmtMoney(grandTotal)}</td>

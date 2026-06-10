@@ -692,8 +692,8 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ ledger, onClose }) => {
 
                 {/* Action Buttons */}
                 <div className="px-6 pb-6 pt-4 border-t border-gray-100 space-y-3">
-                    {/* Share as PDF — for Account Statement & Manual Bill */}
-                    {shareMode !== 'receiptPhoto' && (
+                    {/* Share as PDF — only for Account Statement */}
+                    {shareMode === 'accountStatement' && (
                         <button
                             onClick={handleSharePdf}
                             disabled={isPdfLoading}

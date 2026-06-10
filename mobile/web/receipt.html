@@ -422,20 +422,24 @@
             bottom: 28px;
             right: 28px;
             z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-end;
         }
 
         .fab-print button {
             border: none;
-            padding: 14px 26px;
+            padding: 12px 20px;
             border-radius: 999px;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             background: var(--accent);
             color: #fff;
-            font-size: 14px;
+            font-size: 13.5px;
             font-weight: 600;
-            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
             cursor: pointer;
             font-family: 'Inter', sans-serif;
             transition: transform 0.2s, box-shadow 0.2s;
@@ -443,7 +447,16 @@
 
         .fab-print button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 28px rgba(79, 70, 229, 0.5);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
+        }
+
+        .fab-print .btn-share-pdf {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .fab-print .btn-share-pdf:hover {
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.4);
         }
 
         @page {
@@ -516,6 +529,17 @@
 
     <!-- FAB -->
     <div class="fab-print" id="fabPrint" style="display:none;">
+        <button type="button" class="btn-share-pdf" id="btnSharePdf" onclick="shareAsPdf()" title="Share PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/>
+                <circle cx="6" cy="12" r="3"/>
+                <circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            Share PDF
+        </button>
         <button type="button" onclick="printWithFilename()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -523,7 +547,7 @@
                 <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                 <rect x="6" y="14" width="12" height="8" />
             </svg>
-            Download / Print
+            Print / Save
         </button>
     </div>
 
@@ -571,6 +595,79 @@
                 document.title = original;
                 window.removeEventListener('afterprint', restore);
             });
+        }
+
+        function loadScript(url) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function shareAsPdf() {
+            const btn = document.getElementById('btnSharePdf') || event.currentTarget;
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `
+                <svg class="spinner-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation: spin 1s linear infinite; margin-right: 4px; display: inline-block; vertical-align: middle;">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"></circle>
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor"></path>
+                </svg>
+                <span>Preparing…</span>
+            `;
+            btn.disabled = true;
+
+            try {
+                if (typeof html2pdf === 'undefined') {
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+                }
+
+                if (!document.getElementById('spin-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spin-style';
+                    style.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
+                    document.head.appendChild(style);
+                }
+
+                const element = document.querySelector('.scaled-container') || document.getElementById('content-wrap');
+                const filename = (window._pdfFilename || 'receipt') + '.pdf';
+
+                const opt = {
+                    margin:       [10, 10, 10, 10],
+                    filename:     filename,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                const pdfBlob = await html2pdf().from(element).set(opt).outputPdf('blob');
+                const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: window._pdfFilename || 'Receipt',
+                        text: 'Sharing Receipt PDF'
+                    });
+                } else {
+                    const objUrl = URL.createObjectURL(pdfBlob);
+                    const a = document.createElement('a');
+                    a.href = objUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(objUrl);
+                }
+            } catch (err) {
+                console.error('Failed to share PDF:', err);
+                alert('Could not generate PDF. Please try Print instead.');
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
         }
 
         // ── helpers ──────────────────────────────────────────────────────────
@@ -839,11 +936,9 @@
                         ontouchend="this.style.opacity='1'"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
+                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                         </svg>
-                        Save Image
+                        Share / Save Image
                     </button>
                     <div style="text-align: right; flex-shrink: 0;">
                         <div style="font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 0.4px;">Powered by</div>
@@ -866,19 +961,30 @@
         async function downloadReceipt(url) {
             const btn = event.currentTarget;
             const original = btn.innerHTML;
-            btn.innerHTML = '<span style="opacity:0.7">Saving…</span>';
+            btn.innerHTML = '<span style="opacity:0.7">Preparing…</span>';
             btn.disabled = true;
             try {
                 const resp = await fetch(url);
                 const blob = await resp.blob();
-                const objUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = objUrl;
-                a.download = 'receipt.jpg';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(objUrl);
+                const filename = 'receipt.jpg';
+                const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Receipt Photo',
+                        text: 'Sharing Receipt Photo'
+                    });
+                } else {
+                    const objUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = objUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(objUrl);
+                }
             } catch (err) {
                 // Fallback: open image in new tab so user can long-press save
                 window.open(url, '_blank');
@@ -1060,11 +1166,6 @@
                             <div class="inv-totals-wrap">
                                 <div style="padding: 10px 12px;">
                                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Sub Total</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(subtotal)}</td>
-                                        </tr>
                                         <tr>
                                             <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px;">Total</td>
                                             <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: center; width: 20px;">:</td>
@@ -1321,11 +1422,6 @@
                             <div class="inv-totals-wrap">
                                 <div style="padding: 10px 12px;">
                                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Sub Total</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(totalSubtotal)}</td>
-                                        </tr>
                                         <tr>
                                             <td style="padding: 4px 0; font-weight: 600; color: #334155;">Total GST</td>
                                             <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>

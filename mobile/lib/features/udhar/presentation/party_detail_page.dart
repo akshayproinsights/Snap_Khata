@@ -2337,7 +2337,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (selectedTx != null) ...[
+                        if (selectedTx != null && shareMode == 'accountStatement') ...[
                           SizedBox(
                             width: double.infinity,
                             height: 50,
