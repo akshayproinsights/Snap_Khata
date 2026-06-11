@@ -18,27 +18,29 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans:wght@400;600;700&display=swap"
         rel="stylesheet">
 
+    <!-- QR Code library for UPI Scan-to-Pay -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <style>
         :root {
-            --bg: #eceff1;
+            --bg: #f0f4f8;
             --white: #ffffff;
-            --border: #cccccc;
-            --border-strong: #000000;
-            --text-primary: #000000;
-            --text-secondary: #333333;
-            --text-muted: #555555;
-            --accent: #000000;
-            --accent-dark: #000000;
-            --accent-light: #f5f5f5;
-            --green: #000000;
-            --green-bg: #ffffff;
-            --green-border: #cccccc;
-            --amber: #000000;
-            --amber-bg: #ffffff;
-            --amber-border: #cccccc;
-            --red: #000000;
-            --invoice-bg: #ffffff;
-            --invoice-border: #000000;
+            --border: #d1d9e0;
+            --border-strong: #1e293b;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+            --accent: #1e3a5f;
+            --accent-light: #e8f0fe;
+            --green: #15803d;
+            --green-bg: #dcfce7;
+            --green-border: #86efac;
+            --amber: #92400e;
+            --amber-bg: #fef3c7;
+            --amber-border: #fcd34d;
+            --red: #991b1b;
+            --red-bg: #fee2e2;
+            --red-border: #fca5a5;
         }
 
         * {
@@ -76,9 +78,7 @@
         }
 
         @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+            to { transform: rotate(360deg); }
         }
 
         .loader-text {
@@ -103,23 +103,9 @@
             text-align: center;
         }
 
-        .error-icon {
-            font-size: 52px;
-            margin-bottom: 16px;
-        }
-
-        .error-title {
-            font-size: 22px;
-            font-weight: 800;
-            color: var(--red);
-            margin-bottom: 8px;
-        }
-
-        .error-desc {
-            color: var(--text-secondary);
-            max-width: 380px;
-            margin-bottom: 24px;
-        }
+        .error-icon { font-size: 52px; margin-bottom: 16px; }
+        .error-title { font-size: 22px; font-weight: 800; color: var(--red); margin-bottom: 8px; }
+        .error-desc { color: var(--text-secondary); max-width: 380px; margin-bottom: 24px; }
 
         .btn-retry {
             background: var(--accent);
@@ -139,19 +125,18 @@
             width: 100%;
             overflow-x: hidden;
         }
- 
-        
+
         /* ── Desktop Container ── */
         .scaled-container {
             width: 850px;
             margin: 0 auto;
-            padding: 40px 0 80px;
+            padding: 32px 0 80px;
             display: flex;
             justify-content: center;
         }
 
         /* ─────────────────────────────────────────────────────
-           TABULAR DOCUMENT STYLES
+           INVOICE DOCUMENT STYLES
         ───────────────────────────────────────────────────── */
         .inv-page {
             width: 100%;
@@ -159,245 +144,497 @@
             color: var(--text-primary);
         }
 
+        /* ── Document title ── */
         .inv-doc-title {
             text-align: center;
-            font-size: 24px;
+            font-size: 13px;
             font-weight: 700;
-            margin-bottom: 20px;
-            color: #334155;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
         }
 
+        /* ── The invoice "paper" ── */
         .inv-doc {
             background: #fff;
-            border: 1px solid var(--border-strong);
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.06);
+            overflow: hidden;
             width: 100%;
             margin-bottom: 24px;
-            box-sizing: border-box;
-            overflow: hidden;
         }
 
-        .inv-header-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            border-bottom: 1px solid var(--border-strong);
-            width: 100%;
+        /* ── Clean professional header ── */
+        .inv-header-bar {
+            background: #ffffff;
+            border-bottom: 1px solid var(--border);
+            padding: 20px 24px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .inv-shop-left {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            flex: 1;
+        }
+
+        /* Logo / initials avatar */
+        .inv-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .inv-logo-initials {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: #334155;
+            flex-shrink: 0;
+            letter-spacing: -1px;
         }
 
         .inv-shop-info {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-strong);
+            flex: 1;
         }
 
         .inv-shop-name {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1e293b;
-            text-transform: uppercase;
-            margin-bottom: 8px;
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.2px;
+            line-height: 1.25;
+            margin-bottom: 5px;
         }
 
-        .inv-shop-detail, .inv-gst-number {
-            font-size: 13px;
-            color: #334155;
+        .inv-shop-address {
+            font-size: 12.5px;
+            color: #475569;
+            line-height: 1.5;
+            margin-bottom: 2px;
         }
 
-        .inv-meta-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            align-items: stretch;
-        }
-
-        .inv-bill-to {
-            padding: 12px 16px;
-            border-right: 1px solid var(--border-strong);
-            align-self: stretch;
-            box-sizing: border-box;
-        }
-
-        .inv-invoice-details {
-            padding: 12px 16px;
-            align-self: stretch;
-        }
-
-        .inv-col-label {
-            font-size: 13px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 8px;
-        }
-
-        .inv-col-val {
-            font-size: 13px;
-            color: #334155;
+        .inv-shop-phone {
+            font-size: 12.5px;
+            color: #475569;
             line-height: 1.5;
         }
 
-        .inv-col-val strong {
-            font-weight: 600;
-            color: #1e293b;
+        .inv-shop-gst {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
         }
 
+        .inv-header-right {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .inv-type-label {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .inv-type-sub {
+            font-size: 11px;
+            color: #64748b;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+        }
+
+        /* ── Bill To / Invoice Details row ── */
+        .inv-meta-strip {
+            display: grid;
+            grid-template-columns: 1fr 38%;
+            align-items: stretch;
+            border-bottom: 1px solid var(--border);
+            background: #ffffff;
+        }
+
+        .inv-bill-to,
+        .inv-invoice-details {
+            padding: 14px 24px;
+            align-self: stretch;
+        }
+
+        .inv-bill-to {
+            border-right: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+
+        .inv-meta-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .inv-customer-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .inv-customer-detail {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .inv-detail-row {
+            display: flex;
+            gap: 6px;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .inv-detail-row strong {
+            color: var(--text-primary);
+            font-weight: 600;
+            min-width: 60px;
+        }
+
+        /* ── Status badge ── */
+        .inv-status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        .status-paid    { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+        .status-partial { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+        .status-unpaid  { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border);   }
+
+        /* ── Items table ── */
         .inv-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            border-bottom: 1px solid var(--border-strong);
-            border-left: 0;
-            border-right: 0;
-            border-top: 0;
+            border: 1px solid var(--border);
+        }
+
+        .inv-table thead tr {
+            background: #f8fafc;
         }
 
         .inv-table th {
-            padding: 8px 12px;
+            padding: 10px 12px;
             font-weight: 700;
-            color: #1e293b;
-            border-bottom: 1px solid var(--border-strong);
-            border-right: 1px solid var(--border-strong);
-            border-left: none;
+            color: #0f172a;
             text-align: left;
+            font-size: 12px;
+            letter-spacing: 0.3px;
+            border: 1px solid var(--border);
         }
 
-        .inv-table th:last-child {
-            border-right: none;
+        .inv-table th:last-child,
+        .inv-table td:last-child {
+            text-align: right;
         }
 
-        .inv-table th:first-child {
-            border-left: none;
-            padding-left: 16px;
+        .inv-table th.center,
+        .inv-table td.center {
+            text-align: center;
         }
 
         .inv-table td {
-            padding: 8px 12px;
-            color: #334155;
-            border-right: 1px solid var(--border-strong);
-            border-bottom: 1px solid var(--border-strong);
-            border-left: none;
-            vertical-align: top;
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
         }
 
-        .inv-table td:last-child {
-            border-right: none;
-        }
-
+        /* First column: no left outer border */
+        .inv-table th:first-child,
         .inv-table td:first-child {
-            border-left: none;
-            padding-left: 16px;
+            padding-left: 12px;
         }
 
-        .inv-table .right { text-align: right; }
-        .inv-table .center { text-align: center; }
+        /* Last column: no right outer border */
+        .inv-table th:last-child,
+        .inv-table td:last-child {
+            padding-right: 16px;
+        }
 
+        .inv-table tbody tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .inv-table tbody tr:hover {
+            background: #f0f7ff;
+        }
+
+        /* Section sub-header (Parts / Labor) */
+        .inv-section-row td {
+            background: #f1f5f9 !important;
+            padding: 6px 16px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.8px !important;
+            text-transform: uppercase;
+            color: #475569 !important;
+            border-bottom: 1px solid var(--border) !important;
+            border-left: none !important;
+            border-right: none !important;
+        }
+
+        /* Total row */
+        .inv-total-row td {
+            background: #f8fafc;
+            font-weight: 700;
+            color: var(--text-primary);
+            border-top: 2px solid var(--border-strong) !important;
+            border-bottom: 2px solid var(--border-strong) !important;
+            border-left: 1px solid var(--border) !important;
+            border-right: 1px solid var(--border) !important;
+        }
+
+        /* ── Summary grid: notes left, totals right ── */
         .inv-summary-grid {
             display: grid;
-            grid-template-columns: 1fr 320px;
-            align-items: stretch;
-            border-bottom: 1px solid var(--border-strong);
+            grid-template-columns: 1fr 38%;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
 
-        .inv-empty-left {
-            padding: 12px 16px;
-            border-right: 1px solid var(--border-strong);
-            align-self: stretch;
+        .inv-summary-left {
+            padding: 16px 24px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             box-sizing: border-box;
-            min-height: 100%;
         }
 
-        .inv-totals-wrap {
+        .inv-totals-panel {
             padding: 0;
-            border-left: 1px solid var(--border-strong);
             display: flex;
             flex-direction: column;
         }
 
-        .inv-totals-table {
-            width: 100%;
-            border-collapse: collapse;
+        .inv-totals-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 20px;
+            border-bottom: 1px solid var(--border);
             font-size: 13px;
         }
 
-        .inv-totals-table td {
-            padding: 6px 12px;
-            color: #334155;
-            border-bottom: 1px solid var(--border-strong);
-        }
-
-        .inv-totals-table tr:last-child td {
-            border-bottom: none; /* Let the container border handle it */
-        }
-
-        .inv-totals-table td.label-col {
-            border-right: 1px solid var(--border-strong);
-            font-weight: 600;
-            width: 55%;
-        }
-        
-        .inv-totals-table td.amount-col {
-            text-align: right;
-            font-weight: 600;
-            color: #1e293b;
-            width: 45%;
-        }
-
-        /* Amount in Words row: keep middle divider visible */
-        .inv-totals-table tr.words-row td {
+        .inv-totals-row:last-child {
             border-bottom: none;
-            padding: 10px 12px;
         }
-        
-        .inv-amount-words-title {
+
+        .inv-totals-row .lbl {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .inv-totals-row .val {
             font-weight: 600;
-            color: #1e293b;
+            color: var(--text-primary);
         }
 
-        .inv-amount-words {
+        .inv-totals-row.grand {
+            background: #f1f5f9;
+            border-top: 2px solid #cbd5e1;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 14px 20px;
+        }
+
+        .inv-totals-row.grand .lbl {
             color: #334155;
-            margin-top: 4px;
-        }
-
-        .inv-terms {
-            padding: 8px 16px;
-            border-bottom: 1px solid var(--border-strong);
             font-size: 13px;
-            color: #334155;
+            font-weight: 700;
         }
 
-        .inv-terms-title {
+        .inv-totals-row.grand .val {
+            color: #0f172a;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        /* Balance Due row — prominent red highlight */
+        .inv-totals-row.balance-due-row {
+            background: #fff5f5;
+            border-top: 1px solid #fca5a5;
+            border-bottom: 1px solid #fca5a5;
+            padding: 12px 20px;
+        }
+        .inv-totals-row.balance-due-row .lbl {
+            color: var(--red);
             font-weight: 700;
-            color: #1e293b;
+            font-size: 13px;
+            letter-spacing: 0.2px;
+        }
+        .inv-totals-row.balance-due-row .val {
+            color: var(--red);
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        /* Fully paid — balance due row turns green */
+        .inv-totals-row.balance-due-row.fully-paid {
+            background: #f0fdf4;
+            border-top-color: #86efac;
+            border-bottom-color: #86efac;
+        }
+        .inv-totals-row.balance-due-row.fully-paid .lbl,
+        .inv-totals-row.balance-due-row.fully-paid .val { color: var(--green); }
+
+        .inv-totals-row.paid-row .lbl { color: var(--green); font-weight: 600; }
+        .inv-totals-row.paid-row .val { color: var(--green); }
+        .inv-totals-row.due-row .val { color: var(--red); }
+        .inv-totals-row.gst-row .lbl, .inv-totals-row.gst-row .val { color: #d97706; }
+
+        /* Amount in words */
+        .inv-amount-words {
+            padding: 10px 20px;
+            border-top: 1px solid var(--border);
+            background: #fafbfc;
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            line-height: 1.5;
+        }
+
+        /* ── UPI / Scan to Pay section ── */
+        .inv-upi-section {
+            border-top: 1px solid var(--border);
+            padding: 20px 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            background: #fafbfc;
+        }
+
+        .inv-upi-qr {
+            flex-shrink: 0;
+        }
+
+        .inv-upi-qr canvas,
+        .inv-upi-qr img {
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .inv-upi-info {
+            flex: 1;
+        }
+
+        .inv-upi-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
-        .inv-footer-grid {
+        .inv-upi-id {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            background: #f1f5f9;
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            margin-bottom: 6px;
+        }
+
+        .inv-upi-note {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── Terms section ── */
+        .inv-terms {
+            border-top: 1px solid var(--border);
+            padding: 14px 24px;
+            background: #fafbfc;
+        }
+
+        .inv-terms-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .inv-terms-text {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ── Footer ── */
+        .inv-footer {
+            border-top: 1px solid var(--border);
             display: grid;
-            grid-template-columns: 1fr 320px;
-            border-top: 1px solid var(--border-strong);
+            grid-template-columns: 1fr 38%;
+            background: #fafbfc;
         }
 
         .inv-footer-left {
-            padding: 16px;
-            border-right: 1px solid var(--border-strong);
+            padding: 16px 24px;
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
         }
 
         .inv-footer-note {
-            font-size: 12px;
-            color: var(--text-secondary);
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
         }
 
         .inv-footer-brand {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--text-muted);
-            margin-top: 8px;
         }
 
-        .inv-footer-brand span { color: var(--accent); }
+        .inv-footer-brand span {
+            color: #2563eb;
+        }
 
         .inv-sign-block {
-            padding: 16px;
-            padding-top: 64px; /* Space for signature */
+            padding: 16px 24px;
+            padding-top: 56px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -405,15 +642,39 @@
         }
 
         .inv-sign-line {
-            width: 160px;
+            width: 140px;
             height: 1px;
             background: var(--text-muted);
-            margin: 0 0 8px 0;
+            margin-bottom: 6px;
         }
 
         .inv-sign-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* ── PAID / PARTIAL watermark stamp ── */
+        .inv-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: rgba(21, 128, 61, 0.08);
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 0;
+        }
+        .inv-watermark.partial {
+            color: rgba(217, 119, 6, 0.08);
+            font-size: 52px;
+        }
+
+        .inv-doc-inner {
+            position: relative;
         }
 
         /* ── FAB Print ── */
@@ -435,11 +696,11 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: var(--accent);
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
             color: #fff;
             font-size: 13.5px;
             font-weight: 600;
-            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
             cursor: pointer;
             font-family: 'Inter', sans-serif;
             transition: transform 0.2s, box-shadow 0.2s;
@@ -447,7 +708,7 @@
 
         .fab-print button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.4);
         }
 
         .fab-print .btn-share-pdf {
@@ -465,8 +726,12 @@
         }
 
         @media print {
-            body {
-                background: #fff;
+            body { background: #fff; }
+
+            /* Ensure backgrounds, gradients and images print correctly */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .scaled-container {
@@ -475,36 +740,194 @@
                 margin: 0 !important;
             }
 
-            .os-page,
             .inv-page {
                 padding: 0 !important;
                 max-width: 100% !important;
                 width: 100% !important;
             }
 
-            .os-card,
-            .inv-doc,
-            .premium-card {
+            .inv-doc {
                 box-shadow: none !important;
-                border: 1px solid #000 !important;
+                border: 1.2px solid #000000 !important;
                 margin: 0 !important;
                 width: 100% !important;
                 max-width: 100% !important;
             }
 
-            .fab-print {
-                display: none !important;
+            .inv-header-bar {
+                border-bottom: 1.2px solid #000000 !important;
             }
 
-            .inv-table tr {
-                page-break-inside: avoid;
+            .inv-meta-strip {
+                border-bottom: 1.2px solid #000000 !important;
             }
-            .inv-doc {
-                page-break-inside: auto;
+
+            .inv-bill-to {
+                border-right: 1.2px solid #000000 !important;
             }
+
+            .inv-table {
+                border: 1.2px solid #000000 !important;
+            }
+
+            .inv-table th {
+                border-bottom: 1.2px solid #000000 !important;
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-table td {
+                border-bottom: 1.2px solid #000000 !important;
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-summary-grid {
+                border-top: 1.2px solid #000000 !important;
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-summary-left {
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            .inv-totals-row {
+                border-bottom: 1.2px solid #000000 !important;
+            }
+
+            .inv-amount-words {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-upi-section {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-terms {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-footer {
+                border-top: 1.2px solid #000000 !important;
+            }
+
+            .inv-footer-left {
+                border-right: 1.2px solid #000000 !important;
+            }
+
+            /* Logo must be visible when printing */
+            .inv-logo,
+            .inv-logo-initials {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+
+            .inv-logo {
+                /* Force image to render even in print mode */
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .fab-print { display: none !important; }
+
+            .inv-table tr { page-break-inside: avoid; }
+            .inv-doc { page-break-inside: auto; }
         }
 
-        /* Removed media max-width 640px to enable proper scaled preview */
+        /* ── Auto Print Overlay ── */
+        .print-overlay-wrap {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .print-overlay-card {
+            background: #ffffff;
+            padding: 36px 32px;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            text-align: center;
+            max-width: 360px;
+            width: 88%;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(16px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .print-icon {
+            font-size: 54px;
+            margin-bottom: 18px;
+        }
+
+        .print-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+
+        .print-desc {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 28px;
+            line-height: 1.55;
+        }
+
+        .btn-print-now {
+            background: #4f46e5;
+            color: #ffffff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+            transition: all 0.2s;
+        }
+
+        .btn-print-now:hover {
+            background: #4338ca;
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(79, 70, 229, 0.4);
+        }
+
+        .btn-share-now {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-share-now:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(16, 185, 129, 0.4);
+        }
     </style>
 </head>
 
@@ -527,7 +950,30 @@
     <!-- Main content (injected by JS) -->
     <div id="content-wrap"></div>
 
-    <!-- FAB -->
+    <!-- Auto Print Overlay -->
+    <div id="print-overlay" class="print-overlay-wrap" style="display:none;">
+        <div class="print-overlay-card">
+            <div class="print-icon">📄</div>
+            <h2 class="print-title">Receipt PDF Ready</h2>
+            <p class="print-desc">Choose an action below to share or download/print your PDF receipt.</p>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="btn-share-now" onclick="triggerShareFromOverlay()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="18" cy="5" r="3"/>
+                        <circle cx="6" cy="12" r="3"/>
+                        <circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                    </svg>
+                    Share PDF
+                </button>
+                <button class="btn-print-now" onclick="triggerPrintFromOverlay()">Download / Print PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAB: Download PDF -->
     <div class="fab-print" id="fabPrint" style="display:none;">
         <button type="button" class="btn-share-pdf" id="btnSharePdf" onclick="shareAsPdf()" title="Share PDF">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -540,12 +986,12 @@
             </svg>
             Share PDF
         </button>
-        <button type="button" onclick="printWithFilename()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        <button type="button" onclick="printWithFilename()" title="Download PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                 stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             Print / Save
         </button>
@@ -559,14 +1005,14 @@
         // Filename stored by each renderer: ShopName_ReceiptNo_Date
         window._pdfFilename = 'Receipt';
 
-        /** Convert a string to a safe filename segment */
+        /** Convert a string to a safe filename segment (no special chars, spaces → _) */
         function slugify(str) {
             return String(str || '')
                 .trim()
-                .replace(/[^\w\s\-]/g, '')
-                .replace(/\s+/g, '_')
-                .replace(/_+/g, '_')
-                .replace(/^_|_$/g, '');
+                .replace(/[^\w\s\-]/g, '')   // remove non-alphanumeric except dash
+                .replace(/\s+/g, '_')         // spaces → underscore
+                .replace(/_+/g, '_')          // collapse multiple underscores
+                .replace(/^_|_$/g, '');       // trim leading/trailing underscores
         }
 
         /** Format date as DD-Mon-YYYY for the filename (e.g. 28-Mar-2026) */
@@ -586,11 +1032,12 @@
             } catch { return ''; }
         }
 
-        /** Print with descriptive filename (browsers use document.title as PDF name) */
+        /** Print with a descriptive filename (browsers use document.title as PDF name) */
         function printWithFilename() {
             const original = document.title;
             document.title = window._pdfFilename || original;
             window.print();
+            // Restore title after the print dialog closes
             window.addEventListener('afterprint', function restore() {
                 document.title = original;
                 window.removeEventListener('afterprint', restore);
@@ -677,17 +1124,17 @@
 
         const fmtMoney = v => {
             const num = Number(v || 0);
-            return '₹ ' + (num % 1 === 0 
+            return '₹\u00a0' + (num % 1 === 0 
                 ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
                 : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         };
-        const fmtQty = v => {
+        const fmtQty   = v => {
             const num = Number(v || 0);
             return num % 1 === 0 
                 ? num.toLocaleString('en-IN', { maximumFractionDigits: 0 }) 
                 : num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         };
-        const fmtDate = raw => {
+        const fmtDate  = raw => {
             if (!raw) return '—';
             try {
                 let d;
@@ -707,7 +1154,7 @@
             const el = $('error-screen');
             if (el) { el.style.display = 'flex'; }
             if (title) $('error-title').textContent = title;
-            if (msg) $('error-message').textContent = msg;
+            if (msg)   $('error-message').textContent = msg;
         }
 
         function numberToWords(n) {
@@ -721,22 +1168,169 @@
                 return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + below1000(num % 100) : '');
             }
             let result = '';
-            const crore = Math.floor(n / 10000000); n %= 10000000;
-            const lakh = Math.floor(n / 100000); n %= 100000;
-            const thousand = Math.floor(n / 1000); n %= 1000;
-            const rest = n;
-            if (crore) result += below1000(crore) + ' Crore ';
-            if (lakh) result += below1000(lakh) + ' Lakh ';
+            const crore    = Math.floor(n / 10000000); n %= 10000000;
+            const lakh     = Math.floor(n / 100000);   n %= 100000;
+            const thousand = Math.floor(n / 1000);     n %= 1000;
+            const rest     = n;
+            if (crore)    result += below1000(crore)    + ' Crore ';
+            if (lakh)     result += below1000(lakh)     + ' Lakh ';
             if (thousand) result += below1000(thousand) + ' Thousand ';
-            if (rest) result += below1000(rest);
+            if (rest)     result += below1000(rest);
             return result.trim();
+        }
+
+        /** Build the shop logo/initials block — only shown if shop has a logo URL */
+        function buildLogoHtml(logoUrl, shopName, username) {
+            if (logoUrl) {
+                // Route through our backend proxy so the image always loads from
+                // snapkhata.com, bypassing any R2 CORS / public-access restrictions.
+                const proxiedUrl = username
+                    ? `${API_BASE}/api/public/shop-logo?u=${encodeURIComponent(username)}`
+                    : logoUrl;
+                const initials = getInitials(shopName);
+                return `<img src="${proxiedUrl}" class="inv-logo" alt="${shopName} logo"
+                    onerror="this.outerHTML='<div class=\\'inv-logo-initials\\'>${initials}</div>'" />`;
+            }
+            // No logo configured — return empty (no space reserved)
+            return '';
+        }
+
+        function getInitials(name) {
+            if (!name) return 'S';
+            return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        }
+
+        /** Status badge */
+        function buildStatusBadge(status) {
+            const map = {
+                'PAID':    ['status-paid',    'PAID'],
+                'PARTIAL': ['status-partial', 'PARTIAL'],
+                'UNPAID':  ['status-unpaid',  'UNPAID'],
+            };
+            const [cls, label] = map[status] || map['UNPAID'];
+            return `<span class="inv-status-badge ${cls}">${label}</span>`;
+        }
+
+        /** UPI Scan-to-Pay section */
+        function buildUpiSection(upiId, amount) {
+            if (!upiId) return '';
+            const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${amount}&cu=INR`;
+            const qrContainerId = 'upi-qr-' + Math.random().toString(36).slice(2, 7);
+            // Render QR after DOM is inserted
+            setTimeout(() => {
+                const el = document.getElementById(qrContainerId);
+                if (el && typeof QRCode !== 'undefined') {
+                    new QRCode(el, {
+                        text: upiString,
+                        width: 96,
+                        height: 96,
+                        colorDark: '#1e3a5f',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                }
+            }, 100);
+
+            return `
+            <div class="inv-upi-section">
+                <div class="inv-upi-qr" id="${qrContainerId}"></div>
+                <div class="inv-upi-info">
+                    <div class="inv-upi-title">📲 Scan to Pay Instantly</div>
+                    <div class="inv-upi-id">${upiId}</div>
+                    <div class="inv-upi-note">Works with Google Pay, PhonePe, Paytm &amp; all UPI apps</div>
+                </div>
+            </div>`;
+        }
+
+        /** Terms & Conditions section */
+        function buildTermsSection(customTerms) {
+            const text = customTerms && customTerms.trim()
+                ? customTerms.trim()
+                : 'Thank you for doing business with us.';
+            return `
+            <div class="inv-terms">
+                <div class="inv-terms-title">Terms &amp; Conditions</div>
+                <div class="inv-terms-text">${text}</div>
+            </div>`;
+        }
+
+        /** Shop header info lines - returns object with separate parts */
+        function buildShopMetaLines(address, phone, gst) {
+            return {
+                addr:  address || '',
+                phone: phone  ? 'Phone: +91 ' + String(phone).replace('+91', '').trim() : '',
+                gst:   gst    ? 'GSTIN: ' + gst : ''
+            };
+        }
+
+        /** Totals panel rows
+         *  Standard 3-line payment summary:
+         *  1. Total (of all items) — always shown
+         *  2. Amount Paid          — shown in green only when payment > 0
+         *  3. Balance Due          — always shown, red if outstanding, green if cleared
+         */
+        function buildTotalsPanel(subtotal, gstAmt, gstLabel, grandTotal, receivedAmount, balanceDue, wordsTotal, ledgerBalanceDue, ledgerTxCount) {
+            let html = '';
+
+            // GST line (only for GST invoices)
+            if (gstAmt !== null) {
+                html += `<div class="inv-totals-row gst-row">
+                    <span class="lbl">${gstLabel}</span>
+                    <span class="val">${fmtMoney(gstAmt)}</span>
+                </div>`;
+            }
+
+            // 1. Total of all items
+            html += `<div class="inv-totals-row grand">
+                <span class="lbl">Total</span>
+                <span class="val">${fmtMoney(grandTotal)}</span>
+            </div>`;
+
+            // 2. Amount Paid — only when a payment has been made
+            if (receivedAmount !== null && receivedAmount > 0) {
+                html += `<div class="inv-totals-row paid-row">
+                    <span class="lbl">Amount Paid</span>
+                    <span class="val">&minus; ${fmtMoney(receivedAmount)}</span>
+                </div>`;
+            }
+
+            // 3. Balance Due — prominent, always shown when we have enough info
+            if (balanceDue !== null) {
+                const isCleared = balanceDue <= 0;
+                const dueClass  = isCleared ? 'balance-due-row fully-paid' : 'balance-due-row';
+                const dueLabel  = isCleared ? 'Fully Paid' : 'Balance Due';
+                html += `<div class="inv-totals-row ${dueClass}">
+                    <span class="lbl">${dueLabel}</span>
+                    <span class="val">${fmtMoney(Math.abs(balanceDue))}</span>
+                </div>`;
+            } else if (receivedAmount === null) {
+                // No payment info at all — show grand total as balance due
+                html += `<div class="inv-totals-row balance-due-row">
+                    <span class="lbl">Balance Due</span>
+                    <span class="val">${fmtMoney(grandTotal)}</span>
+                </div>`;
+            }
+
+            // Overall ledger outstanding balance box
+            if (ledgerBalanceDue !== undefined && ledgerBalanceDue !== null && (ledgerTxCount === undefined || ledgerTxCount === null || ledgerTxCount > 1)) {
+                const isLgCleared = ledgerBalanceDue <= 0;
+                html += `<div class="inv-totals-row" style="margin: 8px 12px; border: 1.5px dashed ${isLgCleared ? '#86efac' : '#fca5a5'}; background: ${isLgCleared ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                    <span style="font-weight: 700; color: ${isLgCleared ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
+                    <span style="font-weight: 800; font-size: 15px; color: ${isLgCleared ? '#15803d' : '#b91c1c'};">${fmtMoney(ledgerBalanceDue)}</span>
+                </div>`;
+            }
+
+            // Amount in words — use balance due if outstanding, else grand total
+            const amountForWords = (balanceDue !== null && balanceDue > 0) ? balanceDue : grandTotal;
+            const wordsForDue = numberToWords(Math.round(amountForWords));
+            html += `<div class="inv-amount-words">${wordsForDue} Rupees ${balanceDue !== null && balanceDue <= 0 ? 'only' : 'Due'}</div>`;
+            return html;
         }
 
         // ── main ─────────────────────────────────────────────────────────────
         async function fetchAndRender() {
             const params = new URLSearchParams(window.location.search);
-            
-            // Support 'i', 'id' or 'party' for orderId
+
             let orderId = params.get('i') || params.get('id') || params.get('party');
             if (!orderId) {
                 const m = window.location.search.match(/[?&](?:id|i|party)(?:=|%3D)([^&]+)/i);
@@ -744,21 +1338,16 @@
             }
             if (!orderId) { showError('Invalid Link', 'No receipt or party ID found in URL.'); return; }
 
-            const uParam = params.get('u'); // username
+            const uParam = params.get('u');
             const signedToken = params.get('st');
             const expiresAt = params.get('exp');
 
             try {
                 let apiUrl = `${API_BASE}/api/public/receipts/${orderId}`;
-                if (uParam) {
-                    apiUrl += `?u=${encodeURIComponent(uParam)}`;
-                }
-                if (signedToken) {
-                    apiUrl += `${apiUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(signedToken)}`;
-                }
-                if (expiresAt) {
-                    apiUrl += `${apiUrl.includes('?') ? '&' : '?'}exp=${encodeURIComponent(expiresAt)}`;
-                }
+                if (uParam) apiUrl += `?u=${encodeURIComponent(uParam)}`;
+                if (signedToken) apiUrl += `${apiUrl.includes('?') ? '&' : '?'}st=${encodeURIComponent(signedToken)}`;
+                if (expiresAt) apiUrl += `${apiUrl.includes('?') ? '&' : '?'}exp=${encodeURIComponent(expiresAt)}`;
+
                 const resp = await fetch(apiUrl);
                 if (!resp.ok) {
                     if (resp.status === 404) throw new Error('not_found');
@@ -767,29 +1356,20 @@
                 }
                 const data = await resp.json();
 
-                // ── Photo view mode: show only the receipt image ──────────────────
+                // ── Photo view mode ───────────────────────────────────────────
                 const viewMode = params.get('view');
-                if (viewMode === 'photo') {
-                    renderPhotoView(data);
-                    return;
-                }
+                if (viewMode === 'photo') { renderPhotoView(data); return; }
 
-                // Support 'g' or 'gst_mode' - prioritize backend but allow URL override for backward compatibility
                 let gstMode = data.gst_mode && data.gst_mode !== 'none' ? data.gst_mode : 'none';
-                if (params.has('g')) gstMode = params.get('g');
+                if (params.has('g'))        gstMode = params.get('g');
                 else if (params.has('gst_mode')) gstMode = params.get('gst_mode');
 
-                // Support 'p' or 'pm' for payment_mode
-                if (params.has('p')) data.payment_mode = params.get('p');
-                else if (params.has('pm')) data.payment_mode = params.get('pm');
-
-                // Support 'r' or 'ra' for received_amount
-                if (params.has('r')) data.received_amount = Number(params.get('r'));
-                else if (params.has('ra')) data.received_amount = Number(params.get('ra'));
-
-                // Support 'b' or 'bd' for balance_due
-                if (params.has('b')) data.balance_due = Number(params.get('b'));
-                else if (params.has('bd')) data.balance_due = Number(params.get('bd'));
+                if (params.has('p'))  data.payment_mode    = params.get('p');
+                if (params.has('pm')) data.payment_mode    = params.get('pm');
+                if (params.has('r'))  data.received_amount = Number(params.get('r'));
+                if (params.has('ra')) data.received_amount = Number(params.get('ra'));
+                if (params.has('b'))  data.balance_due     = Number(params.get('b'));
+                if (params.has('bd')) data.balance_due     = Number(params.get('bd'));
 
                 if (data.type === 'ledger') {
                     renderAccountStatement(data);
@@ -799,7 +1379,7 @@
                     renderGstInvoice(data, gstMode);
                 }
             } catch (err) {
-                if (err.message === 'not_found') showError('Receipt Not Found', 'We could not locate this receipt.');
+                if (err.message === 'not_found')    showError('Receipt Not Found', 'We could not locate this receipt.');
                 else if (err.message === 'unauthorized') showError('Link Expired', 'This receipt link is invalid or has expired.');
                 else showError('Unable to Load', 'Please check your connection and try again.');
             }
@@ -807,7 +1387,6 @@
 
         // ── PHOTO VIEW renderer ───────────────────────────────────────────────────
         function renderPhotoView(data) {
-            // Switch to mobile-friendly viewport for full-screen photo experience
             const viewportMeta = document.querySelector('meta[name="viewport"]');
             if (viewportMeta) viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=5');
 
@@ -820,49 +1399,26 @@
             const shopName = data.shop_name || 'Our Shop';
             document.title = `Receipt • ${shopName}`;
 
+            const setMeta = (property, content) => {
+                let el = document.querySelector(`meta[property="${property}"]`);
+                if (!el) { el = document.createElement('meta'); el.setAttribute('property', property); document.head.appendChild(el); }
+                el.setAttribute('content', content);
+            };
+            setMeta('og:image', receiptLink);
+            setMeta('og:image:width', '600');
+            setMeta('og:image:height', '800');
+            setMeta('og:title', `Receipt from ${shopName}`);
+            setMeta('og:description', 'Tap to view your full receipt photo.');
+            setMeta('og:url', window.location.href);
+
             const html = `
-            <div style="
-                height: 100dvh;
-                background: #0d0d0d;
-                display: flex;
-                flex-direction: column;
-                font-family: 'Inter', -apple-system, sans-serif;
-                overflow: hidden;
-            ">
-                <!-- Header: shop name only, no SnapKhata badge -->
-                <div style="
-                    background: #111111;
-                    border-bottom: 1px solid #1f1f1f;
-                    padding: 12px 18px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    flex-shrink: 0;
-                ">
+            <div style="height:100dvh;background:#0d0d0d;display:flex;flex-direction:column;font-family:'Inter',-apple-system,sans-serif;overflow:hidden;">
+                <div style="background:#111111;border-bottom:1px solid #1f1f1f;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
                     <div>
-                        <div style="
-                            font-size: 15px;
-                            font-weight: 700;
-                            color: #f1f1f1;
-                            letter-spacing: -0.2px;
-                            line-height: 1.2;
-                        ">${shopName}</div>
-                        <div style="
-                            font-size: 11px;
-                            color: #666;
-                            margin-top: 2px;
-                            letter-spacing: 0.3px;
-                            text-transform: uppercase;
-                        ">Receipt Photo</div>
+                        <div style="font-size:15px;font-weight:700;color:#f1f1f1;letter-spacing:-0.2px;line-height:1.2;">${shopName}</div>
+                        <div style="font-size:11px;color:#666;margin-top:2px;letter-spacing:0.3px;text-transform:uppercase;">Receipt Photo</div>
                     </div>
-                    <!-- Pinch to zoom hint -->
-                    <div style="
-                        font-size: 11px;
-                        color: #555;
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                    ">
+                    <div style="font-size:11px;color:#555;display:flex;align-items:center;gap:4px;">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                             <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
@@ -870,83 +1426,27 @@
                         Pinch to zoom
                     </div>
                 </div>
-
-                <!-- Image area: fills remaining space, no scroll -->
-                <div style="
-                    flex: 1;
-                    min-height: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 12px;
-                    background: #0d0d0d;
-                    touch-action: pinch-zoom;
-                ">
-                    <img
-                        src="${receiptLink}"
-                        alt="Receipt from ${shopName}"
-                        style="
-                            max-width: 100%;
-                            max-height: 100%;
-                            width: auto;
-                            height: auto;
-                            object-fit: contain;
-                            border-radius: 8px;
-                            box-shadow: 0 4px 32px rgba(0,0,0,0.7);
-                            display: block;
-                        "
-                        onerror="this.parentNode.innerHTML='<div style=\'text-align:center;color:#666;padding:40px;\'>\u26a0\ufe0f Could not load receipt image</div>';"
-                    />
+                <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px;background:#0d0d0d;touch-action:pinch-zoom;">
+                    <img src="${receiptLink}" alt="Receipt from ${shopName}"
+                        style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:8px;box-shadow:0 4px 32px rgba(0,0,0,0.7);display:block;"
+                        onerror="this.parentNode.innerHTML='<div style=\\'text-align:center;color:#666;padding:40px;\\'>⚠️ Could not load receipt image</div>';" />
                 </div>
-
-                <!-- Footer: Save button + single SnapKhata credit -->
-                <div style="
-                    background: #111111;
-                    border-top: 1px solid #1f1f1f;
-                    padding: 12px 18px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    flex-shrink: 0;
-                    gap: 12px;
-                ">
-                    <button
-                        onclick="downloadReceipt('${receiptLink}')"
-                        style="
-                            background: #25D366;
-                            color: #ffffff;
-                            border: none;
-                            border-radius: 10px;
-                            padding: 11px 24px;
-                            font-size: 14px;
-                            font-weight: 700;
-                            font-family: 'Inter', -apple-system, sans-serif;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            flex: 1;
-                            justify-content: center;
-                            transition: opacity 0.15s;
-                            max-width: 280px;
-                        "
-                        onmousedown="this.style.opacity='0.75'"
-                        onmouseup="this.style.opacity='1'"
-                        ontouchstart="this.style.opacity='0.75'"
-                        ontouchend="this.style.opacity='1'"
-                    >
+                <div style="background:#111111;border-top:1px solid #1f1f1f;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;">
+                    <button onclick="downloadReceipt('${receiptLink}')"
+                        style="background:#25D366;color:#ffffff;border:none;border-radius:10px;padding:11px 24px;font-size:14px;font-weight:700;font-family:'Inter',-apple-system,sans-serif;cursor:pointer;display:flex;align-items:center;gap:8px;flex:1;justify-content:center;transition:opacity 0.15s;max-width:280px;"
+                        onmousedown="this.style.opacity='0.75'" onmouseup="this.style.opacity='1'"
+                        ontouchstart="this.style.opacity='0.75'" ontouchend="this.style.opacity='1'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                         </svg>
                         Share / Save Image
                     </button>
-                    <div style="text-align: right; flex-shrink: 0;">
-                        <div style="font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 0.4px;">Powered by</div>
-                        <div style="font-size: 13px; font-weight: 700; color: #25D366; letter-spacing: -0.2px;">SnapKhata</div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:10px;color:#444;text-transform:uppercase;letter-spacing:0.4px;">Powered by</div>
+                        <div style="font-size:13px;font-weight:700;color:#25D366;letter-spacing:-0.2px;">SnapKhata</div>
                     </div>
                 </div>
             </div>`;
-
 
             hide('loader');
             hide('fabPrint');
@@ -956,8 +1456,6 @@
         }
 
         // ── Download helper for photo view ────────────────────────────────────
-        // Must fetch as blob first because <a download> on a cross-origin URL
-        // is blocked by browsers — they open the URL instead of downloading it.
         async function downloadReceipt(url) {
             const btn = event.currentTarget;
             const original = btn.innerHTML;
@@ -986,7 +1484,6 @@
                     URL.revokeObjectURL(objUrl);
                 }
             } catch (err) {
-                // Fallback: open image in new tab so user can long-press save
                 window.open(url, '_blank');
             } finally {
                 btn.innerHTML = original;
@@ -1006,213 +1503,215 @@
             const _date = fmtDateForFilename(data.created_at);
             window._pdfFilename = [_shop, _no, _date].filter(Boolean).join('_');
 
-            const items = Array.isArray(data.items) ? data.items : [];
-            const isPaid = data.status === 'PAID';
+            const items        = Array.isArray(data.items) ? data.items : [];
             const isAutomobile = data.industry === 'automobile';
+            const shopName     = data.shop_name || 'Our Shop';
+            const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
+            const upiId        = data.shop_upi_id || '';
+            const customTerms  = data.custom_terms || '';
 
-            const taxableItems = items.filter(i => {
-                const t = String(i.type || '').toLowerCase();
-                return t !== 'labor' && t !== 'labour' && t !== 'service';
-            });
-            const nonTaxableItems = items.filter(i => {
-                const t = String(i.type || '').toLowerCase();
-                return t === 'labor' || t === 'labour' || t === 'service';
-            });
+            const taxableItems    = items.filter(i => !['labor','labour','service'].includes(String(i.type||'').toLowerCase()));
+            const nonTaxableItems = items.filter(i =>  ['labor','labour','service'].includes(String(i.type||'').toLowerCase()));
 
-            const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+            const partsSubtotal = taxableItems.reduce((s, i)    => s + Number(i.amount || 0), 0);
             const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
-            const subtotal = partsSubtotal + laborSubtotal;
-            // Always dynamically calculate total from items if they exist to ensure mathematical consistency
-            const grandTotal = items.length > 0 ? subtotal : (Number(data.total_amount) || subtotal);
+            const subtotal      = partsSubtotal + laborSubtotal;
+            const grandTotal    = items.length > 0 ? subtotal : (Number(data.total_amount) || subtotal);
 
-            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
-            const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
+            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null)
+                ? Number(data.received_amount) : null;
+            const balanceDue = receivedAmount !== null
+                ? Math.max(0, grandTotal - receivedAmount)
+                : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
 
-            let displayStatus = data.status || 'UNPAID';
+            let displayStatus = 'UNPAID';
             if (receivedAmount !== null) {
                 if (receivedAmount >= grandTotal) displayStatus = 'PAID';
-                else if (receivedAmount > 0) displayStatus = 'PARTIAL';
-                else displayStatus = 'UNPAID';
+                else if (receivedAmount > 0)      displayStatus = 'PARTIAL';
             } else if (balanceDue !== null) {
-                if (balanceDue <= 0) displayStatus = 'PAID';
+                if (balanceDue <= 0)              displayStatus = 'PAID';
                 else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
-                else displayStatus = 'UNPAID';
             }
-            displayStatus = displayStatus.toUpperCase();
+            // Recalculate receivedAmount from balanceDue if only balance_due is given
+            const effectiveReceived = receivedAmount !== null
+                ? receivedAmount
+                : (balanceDue !== null ? Math.max(0, grandTotal - balanceDue) : null);
+            const effectivePaid = effectiveReceived !== null && effectiveReceived > 0 ? effectiveReceived : null;
 
+            // Build items HTML
             let itemsHtml = '';
-            
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
-                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                    taxableItems.forEach((item) => {
-                        const qty = Number(item.qty || 1);
-                        const rate = Number(item.rate || 0);
+                    taxableItems.forEach(item => {
+                        const qty    = Number(item.qty || 1);
+                        const rate   = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
-                        // Use original receipt serial number (position in unfiltered items array)
-                        const srNo = items.indexOf(item) + 1;
-                        itemsHtml += `
-                        <tr>
+                        const srNo   = items.indexOf(item) + 1;
+                        itemsHtml += `<tr>
                             <td class="center">${srNo}</td>
-                            <td>${item.name || 'Spare Part'}</td>
+                            <td>${item.name || 'Item'}</td>
                             <td class="center">${fmtQty(qty)}</td>
-                            <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                            <td class="right">${fmtMoney(amount)}</td>
+                            <td style="text-align:right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                            <td>${fmtMoney(amount)}</td>
                         </tr>`;
                     });
                 }
-
                 if (nonTaxableItems.length > 0) {
-                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                    nonTaxableItems.forEach((item) => {
-                        const qty = Number(item.qty || 1);
-                        const rate = Number(item.rate || 0);
+                    itemsHtml += `<tr class="inv-section-row"><td colspan="5">🔧 Labour &amp; Services</td></tr>`;
+                    nonTaxableItems.forEach(item => {
+                        const qty    = Number(item.qty || 1);
+                        const rate   = Number(item.rate || 0);
                         const amount = Number(item.amount || 0);
-                        // Use original receipt serial number (position in unfiltered items array)
-                        const srNo = items.indexOf(item) + 1;
-                        itemsHtml += `
-                        <tr>
+                        const srNo   = items.indexOf(item) + 1;
+                        itemsHtml += `<tr>
                             <td class="center">${srNo}</td>
                             <td>${item.name || 'Servicing'}</td>
                             <td class="center">${fmtQty(qty)}</td>
-                            <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                            <td class="right">${fmtMoney(amount)}</td>
+                            <td style="text-align:right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                            <td>${fmtMoney(amount)}</td>
                         </tr>`;
                     });
                 }
             } else {
                 items.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
-                    const rate = Number(item.rate || 0);
+                    const qty    = Number(item.qty || 1);
+                    const rate   = Number(item.rate || 0);
                     const amount = Number(item.amount || 0);
-                    itemsHtml += `
-                    <tr>
+                    itemsHtml += `<tr>
                         <td class="center">${idx + 1}</td>
                         <td>${item.name || 'Item'}</td>
                         <td class="center">${fmtQty(qty)}</td>
-                        <td class="right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
-                        <td class="right">${fmtMoney(amount)}</td>
+                        <td style="text-align:right">${fmtMoney(rate > 0 ? rate : amount / qty)}</td>
+                        <td>${fmtMoney(amount)}</td>
                     </tr>`;
                 });
             }
-            
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+
+            // Total row
+            const totalQty = items.reduce((s, i) => s + Number(i.qty || 1), 0);
             if (items.length > 0) {
-                itemsHtml += `
-                <tr>
-                   <td></td>
-                   <td class="right" style="font-weight:700;">Total</td>
-                   <td class="center" style="font-weight:700;">${fmtQty(totalQty)}</td>
-                   <td></td>
-                   <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
+                itemsHtml += `<tr class="inv-total-row">
+                    <td></td>
+                    <td><strong>TOTAL</strong></td>
+                    <td class="center"><strong>${fmtQty(totalQty)}</strong></td>
+                    <td></td>
+                    <td><strong>${fmtMoney(grandTotal)}</strong></td>
                 </tr>`;
             }
 
-            const wordsTotal = numberToWords(Math.round(grandTotal));
+            const wordsTotal    = numberToWords(Math.round(grandTotal));
+            const watermark     = displayStatus === 'PAID'
+                ? '<div class="inv-watermark">PAID</div>'
+                : displayStatus === 'PARTIAL'
+                ? '<div class="inv-watermark partial">PARTIALLY PAID</div>'
+                : '';
+            const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
+            const totalsPanel   = buildTotalsPanel(subtotal, null, null, grandTotal, effectivePaid, balanceDue, wordsTotal, data.ledger_balance_due, data.ledger_transaction_count);
+
+            // Summary left (labor breakdown if automobile)
+            let summaryLeft = '';
+            if (isAutomobile) {
+                if (laborSubtotal > 0) summaryLeft += `<div style="font-size:12.5px;"><span style="font-weight:600;color:#334155;">Labour:</span> ${fmtMoney(laborSubtotal)}</div>`;
+            }
 
             const html = `
             <div class="scaled-container">
                 <div class="inv-page">
                     <div class="inv-doc-title">Order Summary</div>
                     <div class="inv-doc">
-                        <div class="inv-header-grid">
-                            <div class="inv-shop-info">
-                                <div class="inv-shop-name">${data.shop_name || 'Our Shop'}</div>
-                                <div class="inv-shop-detail">
-                                    ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
-                                    ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
+                        <div class="inv-doc-inner">
+                            ${watermark}
+
+                            <!-- Header bar -->
+                            <div class="inv-header-bar">
+                                <div class="inv-shop-left">
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
+                                    <div class="inv-shop-info">
+                                        <div class="inv-shop-name">${shopName}</div>
+                                        ${shopMetaLines.addr  ? `<div class="inv-shop-address">${shopMetaLines.addr}</div>` : ''}
+                                        ${shopMetaLines.phone ? `<div class="inv-shop-phone">${shopMetaLines.phone}</div>` : ''}
+                                        ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="inv-header-right">
+                                    <div class="inv-type-label">ORDER</div>
+                                    <div class="inv-type-sub">SUMMARY</div>
                                 </div>
                             </div>
-                            <div class="inv-meta-grid">
+
+                            <!-- Bill To / Invoice Details -->
+                            <div class="inv-meta-strip">
                                 <div class="inv-bill-to">
-                                    <div class="inv-col-label">Bill To:</div>
-                                    <div class="inv-col-val">
-                                        <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
-                                        ${data.customer_phone ? `<div>Contact No: +91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
-                                        ${data.vehicle_number ? `<div style="margin-top:4px;">Vehicle: ${data.vehicle_number}</div>` : ''}
-                                        ${data.odometer_reading ? `<div>Odometer: ${data.odometer_reading} km</div>` : ''}
-                                    </div>
+                                    <div class="inv-meta-label">Bill To</div>
+                                    <div class="inv-customer-name">${data.customer_name || 'Walk-in Customer'}</div>
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">Ph: +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
+                                    ${data.vehicle_number ? `<div class="inv-customer-detail">Vehicle: ${data.vehicle_number}</div>` : ''}
+                                    ${data.odometer_reading ? `<div class="inv-customer-detail">Odometer: ${data.odometer_reading} km</div>` : ''}
                                 </div>
                                 <div class="inv-invoice-details">
-                                    <div class="inv-col-label">Order Details:</div>
-                                    <div class="inv-col-val">
-                                        <div>No: ${data.id || '—'}</div>
-                                        <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${displayStatus === 'PAID' ? '#16a34a' : '#ea580c'}">${displayStatus}</div>
+                                    <div class="inv-meta-label">Order Details</div>
+                                    <div class="inv-detail-row"><strong>No.</strong> #${data.id || '—'}</div>
+                                    <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(data.created_at)}</div>
+                                    ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
+                                    ${(effectivePaid !== null && effectivePaid > 0) ? `
+                                    <div class="inv-detail-row" style="margin-top:6px;">
+                                        <strong style="color:#334155;">Gross</strong>
+                                        <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
                                     </div>
+                                    <div class="inv-detail-row">
+                                        <strong style="color:#15803d;">Paid</strong>
+                                        <span style="font-weight:600;color:#15803d;">${fmtMoney(effectivePaid)}</span>
+                                    </div>
+                                    ${balanceDue > 0 ? `<div class="inv-detail-row">
+                                        <strong style="color:#991b1b;">Due</strong>
+                                        <span style="font-weight:700;color:#991b1b;">${fmtMoney(balanceDue)}</span>
+                                    </div>` : '<div class="inv-detail-row"><strong style="color:#15803d;">Due</strong><span style="font-weight:700;color:#15803d;">₹ 0</span></div>'}
+                                    ` : ''}
+                                    ${buildStatusBadge(displayStatus)}
                                 </div>
                             </div>
-                        </div>
 
-                        <table class="inv-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:5%">#</th>
-                                    <th style="width:45%">Item Name</th>
-                                    <th class="center" style="width:10%">Quantity</th>
-                                    <th class="right" style="width:20%">Price/ Unit (₹)</th>
-                                    <th class="right" style="width:20%">Amount(₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
+                            <!-- Items table -->
+                            <table class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th class="center" style="width:5%">#</th>
+                                        <th style="width:43%">Item Name</th>
+                                        <th class="center" style="width:14%">Quantity</th>
+                                        <th style="width:18%;text-align:right">Price/ Unit (₹)</th>
+                                        <th style="width:20%;text-align:right">Amount(₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
 
-                        <div class="inv-summary-grid">
-                            <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
-                                <!-- split empty left side under totals -->
-                                ${isAutomobile && partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
-                            </div>
-                            <div class="inv-totals-wrap">
-                                <div style="padding: 10px 12px;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px;">Total</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: right;">${fmtMoney(grandTotal)}</td>
-                                        </tr>
-                                        ${receivedAmount !== null ? `
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Amount Paid</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: right;">-${fmtMoney(receivedAmount)}</td>
-                                        </tr>
-                                        ` : ''}
-                                        ${balanceDue !== null ? `
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'};">Balance Due</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: right;">${fmtMoney(balanceDue)}</td>
-                                        </tr>
-                                        ` : ''}
-                                    </table>
+                            <!-- Summary grid -->
+                            <div class="inv-summary-grid">
+                                <div class="inv-summary-left">
+                                    ${summaryLeft}
                                 </div>
-                                ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
-                                <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
-                                    <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
-                                    <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>
-                                </div>
-                                ` : ''}
-                                <div style="padding: 10px 12px; border-top: 1px solid var(--border-strong);">
-                                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px; font-size: 13px;">Amount in Words :</div>
-                                    <div style="color: #334155; font-size: 13px;">${wordsTotal} Rupees only</div>
+                                <div class="inv-totals-panel">
+                                    ${totalsPanel}
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="inv-terms">
-                            <div class="inv-terms-title">Terms And Conditions:</div>
-                            <div>Thank you for doing business with us.</div>
-                        </div>
 
-                        <div class="inv-footer-grid">
-                            <div class="inv-footer-left">
-                                <div class="inv-footer-note">This is a digital order summary and does not require a signature.</div>
-                                <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
-                            </div>
-                            <div class="inv-sign-block">
-                                <div class="inv-sign-line"></div>
-                                <div class="inv-sign-label">Authorised Signature</div>
+                            <!-- UPI section -->
+                            ${buildUpiSection(upiId, grandTotal)}
+
+                            <!-- Terms -->
+                            ${buildTermsSection(customTerms)}
+
+                            <!-- Footer -->
+                            <div class="inv-footer">
+                                <div class="inv-footer-left">
+                                    <div class="inv-footer-note">This is a digital order summary.</div>
+                                    <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
+                                </div>
+                                <div class="inv-sign-block">
+                                    <div class="inv-sign-line"></div>
+                                    <div class="inv-sign-label">For ${shopName}<br>Authorised Signature</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1237,249 +1736,209 @@
             const _date = fmtDateForFilename(data.created_at);
             window._pdfFilename = [_shop, _no, _date].filter(Boolean).join('_');
 
-            const items = Array.isArray(data.items) ? data.items : [];
-            const isPaid = data.status === 'PAID';
+            const items        = Array.isArray(data.items) ? data.items : [];
             const isAutomobile = data.industry === 'automobile';
+            const shopName     = data.shop_name || 'Our Shop';
+            const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
+            const upiId        = data.shop_upi_id || '';
+            const customTerms  = data.custom_terms || '';
 
-            const taxableItems = items.filter(i => {
-                const t = String(i.type || '').toLowerCase();
-                return t !== 'labor' && t !== 'labour' && t !== 'service';
-            });
-            const nonTaxableItems = items.filter(i => {
-                const t = String(i.type || '').toLowerCase();
-                return t === 'labor' || t === 'labour' || t === 'service';
-            });
+            const taxableItems    = items.filter(i => !['labor','labour','service'].includes(String(i.type||'').toLowerCase()));
+            const nonTaxableItems = items.filter(i =>  ['labor','labour','service'].includes(String(i.type||'').toLowerCase()));
 
-            const partsSubtotal = taxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
-            const laborSubtotal = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
-
-            const totalSubtotal = partsSubtotal + laborSubtotal;
+            const partsSubtotal   = taxableItems.reduce((s, i)    => s + Number(i.amount || 0), 0);
+            const laborSubtotal   = nonTaxableItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+            const totalSubtotal   = partsSubtotal + laborSubtotal;
 
             let gstAmt, grandTotal;
             if (gstMode === 'included') {
-                gstAmt = totalSubtotal * 18 / 118;
+                gstAmt     = totalSubtotal * 18 / 118;
                 grandTotal = items.length > 0 ? totalSubtotal : (Number(data.total_amount) || totalSubtotal);
-            } else { // excluded
-                gstAmt = totalSubtotal * 0.18;
+            } else {
+                gstAmt     = totalSubtotal * 0.18;
                 grandTotal = items.length > 0 ? (totalSubtotal + gstAmt) : (Number(data.total_amount) || (totalSubtotal + gstAmt));
             }
 
-            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null) ? Number(data.received_amount) : null;
-            const balanceDue = receivedAmount !== null ? Math.max(0, grandTotal - receivedAmount) : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
+            const receivedAmount = (data.received_amount !== undefined && data.received_amount !== null)
+                ? Number(data.received_amount) : null;
+            const balanceDue = receivedAmount !== null
+                ? Math.max(0, grandTotal - receivedAmount)
+                : (data.balance_due !== undefined && data.balance_due !== null ? Number(data.balance_due) : null);
 
-            let displayStatus = data.status || 'UNPAID';
+            let displayStatus = 'UNPAID';
             if (receivedAmount !== null) {
                 if (receivedAmount >= grandTotal) displayStatus = 'PAID';
-                else if (receivedAmount > 0) displayStatus = 'PARTIAL';
-                else displayStatus = 'UNPAID';
+                else if (receivedAmount > 0)      displayStatus = 'PARTIAL';
             } else if (balanceDue !== null) {
-                if (balanceDue <= 0) displayStatus = 'PAID';
+                if (balanceDue <= 0)              displayStatus = 'PAID';
                 else if (balanceDue < grandTotal) displayStatus = 'PARTIAL';
-                else displayStatus = 'UNPAID';
             }
-            displayStatus = displayStatus.toUpperCase();
+            const gstEffectiveReceived = receivedAmount !== null
+                ? receivedAmount
+                : (balanceDue !== null ? Math.max(0, grandTotal - balanceDue) : null);
+            const gstEffectivePaid = gstEffectiveReceived !== null && gstEffectiveReceived > 0 ? gstEffectiveReceived : null;
 
-            const taxableValue = gstMode === 'included' ? totalSubtotal - gstAmt : totalSubtotal;
-
+            // Build items HTML
             let itemsHtml = '';
+
+            const renderGstRow = (item, srNo) => {
+                const qty          = Number(item.qty || 1);
+                const rate         = Number(item.rate || 0);
+                const amount       = Number(item.amount || 0);
+                const baseAmt      = gstMode === 'included' ? amount * 100 / 118 : amount;
+                const baseRate     = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
+                const gstForItem   = baseAmt * 0.18;
+                const totalForItem = baseAmt + gstForItem;
+                return `<tr>
+                    <td class="center">${srNo}</td>
+                    <td>${item.name || 'Item'}</td>
+                    <td class="center">${fmtQty(qty)}</td>
+                    <td style="text-align:right">${fmtMoney(baseRate)}</td>
+                    <td style="text-align:right;color:#d97706">${fmtMoney(gstForItem)} <span style="font-size:10px;opacity:0.7">(18%)</span></td>
+                    <td>${fmtMoney(totalForItem)}</td>
+                </tr>`;
+            };
 
             if (isAutomobile) {
                 if (taxableItems.length > 0) {
-                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Spare Parts & Consumables Section</td></tr>`;
-                    taxableItems.forEach((item) => {
-                        const qty = Number(item.qty || 1);
-                        const rate = Number(item.rate || 0);
-                        const amount = Number(item.amount || 0);
-                        const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                        const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
-                        const gstAmountForItem = baseAmt * 0.18;
-                        const totalForItem = baseAmt + gstAmountForItem;
-                        // Use original receipt serial number (position in unfiltered items array)
-                        const srNo = items.indexOf(item) + 1;
-
-                        itemsHtml += `
-                        <tr>
-                            <td class="center">${srNo}</td>
-                            <td>${item.name || 'Spare Part'}</td>
-                            <td class="center">${fmtQty(qty)}</td>
-                            <td class="right">${fmtMoney(baseRate)}</td>
-                            <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
-                            <td class="right">${fmtMoney(totalForItem)}</td>
-                        </tr>`;
-                    });
+                    taxableItems.forEach(item => { itemsHtml += renderGstRow(item, items.indexOf(item) + 1); });
                 }
-
                 if (nonTaxableItems.length > 0) {
-                    itemsHtml += `<tr style="background:#f8fafc;"><td colspan="6" style="font-weight:700;padding:8px;border-bottom:1px solid var(--border-strong);color:#1e293b;text-transform:uppercase;font-size:12px;letter-spacing:0.5px;">Labor & Services Section</td></tr>`;
-                    nonTaxableItems.forEach((item) => {
-                        const qty = Number(item.qty || 1);
-                        const rate = Number(item.rate || 0);
-                        const amount = Number(item.amount || 0);
-                        const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                        const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
-                        const gstAmountForItem = baseAmt * 0.18;
-                        const totalForItem = baseAmt + gstAmountForItem;
-                        // Use original receipt serial number (position in unfiltered items array)
-                        const srNo = items.indexOf(item) + 1;
-
-                        itemsHtml += `
-                        <tr>
-                            <td class="center">${srNo}</td>
-                            <td>${item.name || 'Servicing'}</td>
-                            <td class="center">${fmtQty(qty)}</td>
-                            <td class="right">${fmtMoney(baseRate)}</td>
-                            <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
-                            <td class="right">${fmtMoney(totalForItem)}</td>
-                        </tr>`;
-                    });
+                    itemsHtml += `<tr class="inv-section-row"><td colspan="6">🔧 Labour &amp; Services</td></tr>`;
+                    nonTaxableItems.forEach(item => { itemsHtml += renderGstRow(item, items.indexOf(item) + 1); });
                 }
             } else {
-                items.forEach((item, idx) => {
-                    const qty = Number(item.qty || 1);
-                    const rate = Number(item.rate || 0);
-                    const amount = Number(item.amount || 0);
-                    const baseAmt = gstMode === 'included' ? amount * 100 / 118 : amount;
-                    const baseRate = rate > 0 ? (gstMode === 'included' ? rate * 100 / 118 : rate) : baseAmt / qty;
-                    const gstAmountForItem = baseAmt * 0.18;
-                    const totalForItem = baseAmt + gstAmountForItem;
-
-                    itemsHtml += `
-                    <tr>
-                        <td class="center">${idx + 1}</td>
-                        <td>${item.name || 'Item'}</td>
-                        <td class="center">${fmtQty(qty)}</td>
-                        <td class="right">${fmtMoney(baseRate)}</td>
-                        <td class="right">${fmtMoney(gstAmountForItem)} (18.0%)</td>
-                        <td class="right">${fmtMoney(totalForItem)}</td>
-                    </tr>`;
-                });
+                items.forEach((item, idx) => { itemsHtml += renderGstRow(item, idx + 1); });
             }
-            
-            let totalQty = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+
+            // Total row
+            const totalQty = items.reduce((s, i) => s + Number(i.qty || 1), 0);
             if (items.length > 0) {
-                itemsHtml += `
-                <tr>
-                   <td></td>
-                   <td class="right" style="font-weight:700;">Total</td>
-                   <td class="center" style="font-weight:700;">${fmtQty(totalQty)}</td>
-                   <td></td>
-                   <td class="right" style="font-weight:700;">${fmtMoney(gstAmt)}</td>
-                   <td class="right" style="font-weight:700;">${fmtMoney(grandTotal)}</td>
+                itemsHtml += `<tr class="inv-total-row">
+                    <td></td>
+                    <td><strong>TOTAL</strong></td>
+                    <td class="center"><strong>${fmtQty(totalQty)}</strong></td>
+                    <td></td>
+                    <td style="text-align:right"><strong>${fmtMoney(gstAmt)}</strong></td>
+                    <td><strong>${fmtMoney(grandTotal)}</strong></td>
                 </tr>`;
             }
 
-            const wordsTotal = numberToWords(Math.round(grandTotal));
+            const wordsTotal    = numberToWords(Math.round(grandTotal));
+            const watermark     = displayStatus === 'PAID'
+                ? '<div class="inv-watermark">PAID</div>'
+                : displayStatus === 'PARTIAL'
+                ? '<div class="inv-watermark partial">PARTIALLY PAID</div>'
+                : '';
+            const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
+            const gstLabel      = gstMode === 'included' ? 'GST @18% (Included)' : 'GST @18% (Added)';
+            const totalsPanel   = buildTotalsPanel(totalSubtotal, gstAmt, gstLabel, grandTotal, gstEffectivePaid, balanceDue, wordsTotal, data.ledger_balance_due, data.ledger_transaction_count);
+
+            let summaryLeft = '';
+            if (isAutomobile) {
+                if (laborSubtotal > 0) summaryLeft += `<div style="font-size:12.5px;"><span style="font-weight:600;color:#334155;">Labour:</span> ${fmtMoney(laborSubtotal)}</div>`;
+            }
 
             const html = `
             <div class="scaled-container">
                 <div class="inv-page">
                     <div class="inv-doc-title">Tax Invoice</div>
                     <div class="inv-doc">
-                        <div class="inv-header-grid">
-                            <div class="inv-shop-info">
-                                <div class="inv-shop-name">${data.shop_name || 'Our Shop'}</div>
-                                <div class="inv-shop-detail">
-                                    ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
-                                    ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
-                                </div>
-                                ${data.shop_gst ? `<div class="inv-gst-number">GSTIN: ${data.shop_gst}</div>` : ''}
-                            </div>
-                            <div class="inv-meta-grid">
-                                <div class="inv-bill-to">
-                                    <div class="inv-col-label">Bill To:</div>
-                                    <div class="inv-col-val">
-                                        <div><strong>${data.customer_name || 'Walk-in Customer'}</strong></div>
-                                        ${data.customer_phone ? `<div>Contact No: +91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
-                                        ${data.vehicle_number ? `<div style="margin-top:4px;">Vehicle: ${data.vehicle_number}</div>` : ''}
-                                        ${data.odometer_reading ? `<div>Odometer: ${data.odometer_reading} km</div>` : ''}
+                        <div class="inv-doc-inner">
+                            ${watermark}
+
+                            <!-- Header bar -->
+                            <div class="inv-header-bar">
+                                <div class="inv-shop-left">
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
+                                    <div class="inv-shop-info">
+                                        <div class="inv-shop-name">${shopName}</div>
+                                        ${shopMetaLines.addr  ? `<div class="inv-shop-address">${shopMetaLines.addr}</div>` : ''}
+                                        ${shopMetaLines.phone ? `<div class="inv-shop-phone">${shopMetaLines.phone}</div>` : ''}
+                                        ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
                                     </div>
+                                </div>
+                                <div class="inv-header-right">
+                                    <div class="inv-type-label">TAX</div>
+                                    <div class="inv-type-sub">INVOICE</div>
+                                </div>
+                            </div>
+
+                            <!-- Bill To / Invoice Details -->
+                            <div class="inv-meta-strip">
+                                <div class="inv-bill-to">
+                                    <div class="inv-meta-label">Bill To</div>
+                                    <div class="inv-customer-name">${data.customer_name || 'Walk-in Customer'}</div>
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">Ph: +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
+                                    ${data.vehicle_number ? `<div class="inv-customer-detail">Vehicle: ${data.vehicle_number}</div>` : ''}
+                                    ${data.odometer_reading ? `<div class="inv-customer-detail">Odometer: ${data.odometer_reading} km</div>` : ''}
                                 </div>
                                 <div class="inv-invoice-details">
-                                    <div class="inv-col-label">Invoice Details:</div>
-                                    <div class="inv-col-val">
-                                        <div>No: ${data.id || '—'}</div>
-                                        <div>Date: ${fmtDate(data.created_at)}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${displayStatus === 'PAID' ? '#16a34a' : '#ea580c'}">${displayStatus}</div>
+                                    <div class="inv-meta-label">Invoice Details</div>
+                                    <div class="inv-detail-row"><strong>No.</strong> #${data.id || '—'}</div>
+                                    <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(data.created_at)}</div>
+                                    ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
+                                    <div class="inv-detail-row"><strong>GST</strong> 18% ${gstMode === 'included' ? '(incl.)' : '(excl.)'}</div>
+                                    ${(gstEffectivePaid !== null && gstEffectivePaid > 0) ? `
+                                    <div class="inv-detail-row" style="margin-top:6px;">
+                                        <strong style="color:#334155;">Gross</strong>
+                                        <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
                                     </div>
+                                    <div class="inv-detail-row">
+                                        <strong style="color:#15803d;">Paid</strong>
+                                        <span style="font-weight:600;color:#15803d;">${fmtMoney(gstEffectivePaid)}</span>
+                                    </div>
+                                    ${balanceDue > 0 ? `<div class="inv-detail-row">
+                                        <strong style="color:#991b1b;">Due</strong>
+                                        <span style="font-weight:700;color:#991b1b;">${fmtMoney(balanceDue)}</span>
+                                    </div>` : '<div class="inv-detail-row"><strong style="color:#15803d;">Due</strong><span style="font-weight:700;color:#15803d;">₹ 0</span></div>'}
+                                    ` : ''}
+                                    ${buildStatusBadge(displayStatus)}
                                 </div>
                             </div>
-                        </div>
 
-                        <table class="inv-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:5%">#</th>
-                                    <th style="width:31%">Item Name</th>
-                                    <th class="center" style="width:10%">Quantity</th>
-                                    <th class="right" style="width:16%">Price/ Unit (₹)</th>
-                                    <th class="right" style="width:18%">GST(₹)</th>
-                                    <th class="right" style="width:20%">Amount(₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
+                            <!-- Items table -->
+                            <table class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th class="center" style="width:5%">#</th>
+                                        <th style="width:33%">Item Name</th>
+                                        <th class="center" style="width:10%">Quantity</th>
+                                        <th style="width:16%;text-align:right">Price/ Unit (₹)</th>
+                                        <th style="width:16%;text-align:right">GST (₹)</th>
+                                        <th style="width:20%;text-align:right">Amount(₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
 
-                        <div class="inv-summary-grid">
-                            <div class="inv-empty-left" style="font-size:13px;color:#334155;line-height:1.6;">
-                                <!-- split empty left side under totals -->
-                                ${isAutomobile && partsSubtotal > 0 ? `<div style="margin-bottom:2px;"><span style="font-weight:600;color:#1e293b;">Spare Parts:</span> ${fmtMoney(partsSubtotal)}</div>` : ''}
-                                ${isAutomobile && laborSubtotal > 0 ? `<div><span style="font-weight:600;color:#1e293b;">Servicing:</span> ${fmtMoney(laborSubtotal)}</div>` : ''}
-                            </div>
-                            <div class="inv-totals-wrap">
-                                <div style="padding: 10px 12px;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Total GST</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #1e293b; text-align: right;">${fmtMoney(gstAmt)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px;">Total</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: #1e293b; font-size: 14px; text-align: right;">${fmtMoney(grandTotal)}</td>
-                                        </tr>
-                                        ${receivedAmount !== null ? `
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155;">Amount Paid</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 600; color: #334155; text-align: right;">-${fmtMoney(receivedAmount)}</td>
-                                        </tr>
-                                        ` : ''}
-                                        ${balanceDue !== null ? `
-                                        <tr>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'};">Balance Due</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 4px 0; font-weight: 700; color: ${balanceDue > 0 ? '#b95d5d' : '#15803d'}; text-align: right;">${fmtMoney(balanceDue)}</td>
-                                        </tr>
-                                        ` : ''}
-                                    </table>
+                            <!-- Summary grid -->
+                            <div class="inv-summary-grid">
+                                <div class="inv-summary-left">
+                                    ${summaryLeft}
                                 </div>
-                                ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
-                                <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
-                                    <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
-                                    <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>
-                                </div>
-                                ` : ''}
-                                <div style="padding: 10px 12px; border-top: 1px solid var(--border-strong);">
-                                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px; font-size: 13px;">Amount in Words :</div>
-                                    <div style="color: #334155; font-size: 13px;">${wordsTotal} Rupees only</div>
+                                <div class="inv-totals-panel">
+                                    ${totalsPanel}
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="inv-terms">
-                            <div class="inv-terms-title">Terms And Conditions:</div>
-                            <div>Thank you for doing business with us.</div>
-                        </div>
 
-                        <div class="inv-footer-grid">
-                            <div class="inv-footer-left">
-                                <div class="inv-footer-note">This is a computer-generated invoice and does not require a signature.</div>
-                                <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
-                            </div>
-                            <div class="inv-sign-block">
-                                <div class="inv-sign-line"></div>
-                                <div class="inv-sign-label">Authorised Signature</div>
+                            <!-- UPI section -->
+                            ${buildUpiSection(upiId, grandTotal)}
+
+                            <!-- Terms -->
+                            ${buildTermsSection(customTerms)}
+
+                            <!-- Footer -->
+                            <div class="inv-footer">
+                                <div class="inv-footer-left">
+                                    <div class="inv-footer-note">This is a computer-generated invoice and does not require a physical signature.</div>
+                                    <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
+                                </div>
+                                <div class="inv-sign-block">
+                                    <div class="inv-sign-line"></div>
+                                    <div class="inv-sign-label">For ${shopName}<br>Authorised Signature</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1504,24 +1963,36 @@
             const _date     = fmtDateForFilename(new Date().toISOString());
             window._pdfFilename = [_shop, _customer, _date].filter(Boolean).join('_');
 
-            const items = Array.isArray(data.items) ? data.items : [];
-            const grandTotal = Number(data.balance_due) || 0;
-            const wordsTotal = numberToWords(Math.round(Math.abs(grandTotal)));
+            const items        = Array.isArray(data.items) ? data.items : [];
+            const grandTotal   = Number(data.balance_due) || 0;
+            const wordsTotal   = numberToWords(Math.round(Math.abs(grandTotal)));
+            const shopName     = data.shop_name || 'Our Shop';
+            const shopLogoUrl  = data.shop_logo_url || '';
+            const shopUsername = data.username || '';
+            const shopMetaLines = buildShopMetaLines(data.shop_address, data.shop_phone, data.shop_gst);
+
+            const totalBilled = data.total_billed !== undefined && data.total_billed !== null ? Number(data.total_billed) : null;
+            const totalPaid = data.total_paid !== undefined && data.total_paid !== null ? Number(data.total_paid) : null;
 
             let itemsHtml = '';
             items.forEach((item, idx) => {
                 const amount = Number(item.amount || 0);
-                const date = fmtDate(item.date);
-                itemsHtml += `
-                <tr>
+                const isPayment = item.type === 'PAYMENT';
+                itemsHtml += `<tr>
                     <td class="center">${idx + 1}</td>
                     <td>
                         <div style="font-weight:600;color:#1e293b;">${item.name || 'Transaction'}</div>
-                        <div style="font-size:11px;color:#64748b;">${date}</div>
+                        <div style="font-size:11px;color:#64748b;">${fmtDate(item.date)}</div>
                     </td>
-                    <td class="center">${item.type || '—'}</td>
-                    <td class="right" style="color:${item.type === 'PAYMENT' ? '#16a34a' : '#1e293b'}">
-                        ${item.type === 'PAYMENT' ? '-' : ''}${fmtMoney(amount)}
+                    <td class="center">
+                        <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;
+                            background:${isPayment ? '#dcfce7' : '#fee2e2'};
+                            color:${isPayment ? '#15803d' : '#991b1b'};">
+                            ${isPayment ? 'PAYMENT' : 'INVOICE'}
+                        </span>
+                    </td>
+                    <td style="text-align:right;font-weight:600;color:${isPayment ? '#15803d' : '#1e293b'}">
+                        ${isPayment ? '−' : ''}${fmtMoney(amount)}
                     </td>
                 </tr>`;
             });
@@ -1531,70 +2002,86 @@
                 <div class="inv-page">
                     <div class="inv-doc-title">Account Statement</div>
                     <div class="inv-doc">
-                        <div class="inv-header-grid">
-                            <div class="inv-shop-info">
-                                <div class="inv-shop-name">${data.shop_name || 'Our Shop'}</div>
-                                <div class="inv-shop-detail">
-                                    ${data.shop_address ? `<div style="margin-bottom:2px;">${data.shop_address}</div>` : ''}
-                                    ${data.shop_phone ? `<div>Phone: +91 ${String(data.shop_phone).replace('+91', '').trim()}</div>` : ''}
+                        <div class="inv-doc-inner">
+
+                            <!-- Header bar -->
+                            <div class="inv-header-bar">
+                                <div class="inv-shop-left">
+                                    ${buildLogoHtml(shopLogoUrl, shopName, shopUsername)}
+                                    <div class="inv-shop-info">
+                                        <div class="inv-shop-name">${shopName}</div>
+                                        ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="inv-header-right">
+                                    <div class="inv-type-label">ACCOUNT</div>
+                                    <div class="inv-type-sub">STATEMENT</div>
                                 </div>
                             </div>
-                            <div class="inv-meta-grid">
+
+                            <!-- Customer / Statement Info -->
+                            <div class="inv-meta-strip">
                                 <div class="inv-bill-to">
-                                    <div class="inv-col-label">Customer Details:</div>
-                                    <div class="inv-col-val">
-                                        <div><strong>${data.customer_name || 'Customer'}</strong></div>
-                                        ${data.customer_phone ? `<div>Contact No: +91 ${String(data.customer_phone).replace('+91', '').trim()}</div>` : ''}
-                                        ${data.vehicle_number ? `<div style="margin-top:4px;">Vehicle: ${data.vehicle_number}</div>` : ''}
-                                    </div>
+                                    <div class="inv-meta-label">Customer Details</div>
+                                    <div class="inv-customer-name">${data.customer_name || 'Customer'}</div>
+                                    ${data.customer_phone ? `<div class="inv-customer-detail">📞 +91 ${String(data.customer_phone).replace('+91','').trim()}</div>` : ''}
                                 </div>
                                 <div class="inv-invoice-details">
-                                    <div class="inv-col-label">Statement Info:</div>
-                                    <div class="inv-col-val">
-                                        <div>Date: ${fmtDate(new Date().toISOString())}</div>
-                                        <div style="margin-top:6px;font-weight:700;color:${grandTotal <= 0 ? '#16a34a' : '#ea580c'}">
-                                            ${grandTotal <= 0 ? 'CLEARED' : 'OUTSTANDING'}
-                                        </div>
+                                    <div class="inv-meta-label">Statement Info</div>
+                                    <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(new Date().toISOString())}</div>
+                                    <div class="inv-detail-row" style="margin-top:8px;">
+                                        <span style="display:inline-block;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;
+                                            background:${grandTotal <= 0 ? '#dcfce7' : '#fee2e2'};
+                                            color:${grandTotal <= 0 ? '#15803d' : '#991b1b'};">
+                                            ${grandTotal <= 0 ? '✓ CLEARED' : '⚠ OUTSTANDING'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <table class="inv-table">
-                            <thead>
-                                <tr>
-                                    <th class="center" style="width:8%">#</th>
-                                    <th style="width:52%">Transaction Details</th>
-                                    <th class="center" style="width:20%">Type</th>
-                                    <th class="right" style="width:20%">Amount (₹)</th>
-                                </tr>
-                            </thead>
-                            <tbody>${itemsHtml}</tbody>
-                        </table>
+                            <!-- Transactions table -->
+                            <table class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th class="center" style="width:8%">#</th>
+                                        <th style="width:52%">Transaction Details</th>
+                                        <th class="center" style="width:20%">Type</th>
+                                        <th style="width:20%;text-align:right">Amount (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${itemsHtml}</tbody>
+                            </table>
 
-                        <div class="inv-summary-grid">
-                            <div class="inv-empty-left"></div>
-                            <div class="inv-totals-wrap">
-                                <div style="padding: 10px 12px;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                                        <tr>
-                                            <td style="padding: 8px 0; font-weight: 700; color: #334155; font-size: 16px;">Net Balance</td>
-                                            <td style="padding: 8px 0; font-weight: 700; color: #334155; font-size: 16px; text-align: center; width: 20px;">:</td>
-                                            <td style="padding: 8px 0; font-weight: 700; color: ${grandTotal > 0 ? '#ea580c' : '#16a34a'}; font-size: 16px; text-align: right;">${fmtMoney(grandTotal)}</td>
-                                        </tr>
-                                    </table>
-                                </div>
-                                <div style="padding: 10px 12px; border-top: 1px solid var(--border-strong);">
-                                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px; font-size: 13px;">In Words :</div>
-                                    <div style="color: #334155; font-size: 13px;">${wordsTotal} Rupees ${grandTotal > 0 ? 'Payable' : 'Credit Balance'}</div>
+                            <!-- Summary grid -->
+                            <div class="inv-summary-grid">
+                                <div class="inv-summary-left"></div>
+                                <div class="inv-totals-panel">
+                                    ${totalBilled !== null ? `
+                                    <div class="inv-totals-row">
+                                        <span class="lbl">Total Billed</span>
+                                        <span class="val">${fmtMoney(totalBilled)}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${totalPaid !== null && totalPaid > 0 ? `
+                                    <div class="inv-totals-row paid-row">
+                                        <span class="lbl">✅ Amount Paid</span>
+                                        <span class="val">− ${fmtMoney(totalPaid)}</span>
+                                    </div>
+                                    ` : ''}
+                                    <div class="inv-totals-row balance-due-row ${grandTotal <= 0 ? 'fully-paid' : ''}">
+                                        <span class="lbl">${grandTotal <= 0 ? '✓ Net Balance' : '⚡ Net Balance'}</span>
+                                        <span class="val">${fmtMoney(Math.abs(grandTotal))}</span>
+                                    </div>
+                                    <div class="inv-amount-words">${wordsTotal} Rupees ${grandTotal > 0 ? 'Payable' : 'Credit Balance'}</div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="inv-footer-grid">
-                            <div class="inv-footer-left">
-                                <div class="inv-footer-note">This is an automated account statement summarizing your transactions.</div>
-                                <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
+
+                            <!-- Footer -->
+                            <div class="inv-footer">
+                                <div class="inv-footer-left">
+                                    <div class="inv-footer-note">This is an automated account statement summarizing your transactions.</div>
+                                    <div class="inv-footer-brand">Powered by <span>SnapKhata</span></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1607,8 +2094,38 @@
             hide('loader');
         }
 
+        function triggerPrintFromOverlay() {
+            const overlay = document.getElementById('print-overlay');
+            if (overlay) overlay.style.display = 'none';
+            const fab = document.getElementById('fabPrint');
+            if (fab) fab.style.display = 'block';
+            printWithFilename();
+        }
+
+        async function triggerShareFromOverlay() {
+            const overlay = document.getElementById('print-overlay');
+            if (overlay) overlay.style.display = 'none';
+            const fab = document.getElementById('fabPrint');
+            if (fab) fab.style.display = 'block';
+            await shareAsPdf();
+        }
+
         async function init() {
             await fetchAndRender();
+
+            // ── Auto-print mode (?pdf=1 or ?autoprint=1) ─────────────────────────
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.get('pdf') === '1' || searchParams.get('autoprint') === '1') {
+                // Hide the FAB initially
+                const fab = document.getElementById('fabPrint');
+                if (fab) fab.style.display = 'none';
+                
+                // Show the print overlay so the print can be triggered via a direct user gesture
+                const overlay = document.getElementById('print-overlay');
+                if (overlay) {
+                    overlay.style.display = 'flex';
+                }
+            }
         }
 
         document.addEventListener('DOMContentLoaded', init);

@@ -388,7 +388,7 @@
         }
 
         .inv-table tbody tr.tx-row:nth-child(even) {
-            background: #f8fafc;
+            background: transparent;
         }
 
         .inv-table tbody tr.tx-row:hover {
@@ -461,7 +461,7 @@
         .inv-totals-row.paid-row .val { color: var(--green); }
 
         .inv-totals-row.balance-due-row {
-            background: #fff5f5;
+            background: transparent;
             border-top: 2px solid #fca5a5;
             border-bottom: 2px solid #fca5a5;
             padding: 12px 20px;
@@ -480,7 +480,7 @@
         }
 
         .inv-totals-row.balance-due-row.fully-paid {
-            background: #f0fdf4;
+            background: transparent;
             border-top-color: #86efac;
             border-bottom-color: #86efac;
         }
@@ -500,7 +500,7 @@
         .inv-terms {
             border-top: 1px solid var(--border);
             padding: 14px 24px;
-            background: #fafbfc;
+            background: transparent;
         }
 
         .inv-terms-title {
@@ -600,19 +600,24 @@
 
         .fab-print button {
             border: none;
-            padding: 12px 20px;
+            padding: 16px 32px;
             border-radius: 999px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            background: #1e3a5f;
+            gap: 12px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
             color: #fff;
-            font-size: 13.5px;
-            font-weight: 600;
-            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+            font-size: 16px;
+            font-weight: 700;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
             cursor: pointer;
             font-family: 'Inter', sans-serif;
             transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fab-print button svg {
+            width: 22px;
+            height: 22px;
         }
 
         .fab-print button:hover {
@@ -631,21 +636,28 @@
 
         @page {
             size: A4;
-            margin: 10mm 8mm;
+            margin: 0;
         }
 
         @media print {
-            body { background: #fff; }
+            body { 
+                background: #fff; 
+                margin: 0 !important;
+                padding: 10mm 12mm !important; 
+                box-sizing: border-box !important;
+            }
 
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                box-sizing: border-box !important;
             }
 
             .scaled-container {
                 padding: 0 !important;
                 width: 100% !important;
-                margin: 0 !important;
+                margin: 0 auto !important;
+                max-width: 100% !important;
             }
 
             .inv-page {
@@ -979,7 +991,15 @@
                     margin:       [10, 10, 10, 10],
                     filename:     filename,
                     image:        { type: 'jpeg', quality: 0.98 },
-                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    html2canvas:  { 
+                        scale: 2, 
+                        useCORS: true, 
+                        logging: false,
+                        width: 850,
+                        windowWidth: 850,
+                        scrollX: 0,
+                        scrollY: 0
+                    },
                     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
                 };
 
@@ -1251,12 +1271,10 @@
                                         <span class="lbl">Total Billed</span>
                                         <span class="val">${fmtMoney(totalBilled)}</span>
                                     </div>
-                                    ${totalPaid > 0 ? `
                                     <div class="inv-totals-row paid-row">
-                                        <span class="lbl">✅ Amount Paid</span>
+                                        <span class="lbl">✅ Received</span>
                                         <span class="val">− ${fmtMoney(totalPaid)}</span>
                                     </div>
-                                    ` : ''}
                                     <div class="inv-totals-row balance-due-row ${grandTotal <= 0 ? 'fully-paid' : ''}">
                                         <span class="lbl">${grandTotal <= 0 ? '✓ Net Balance (Paid)' : '⚡ Net Balance (Due)'}</span>
                                         <span class="val">${fmtMoney(Math.abs(grandTotal))}</span>

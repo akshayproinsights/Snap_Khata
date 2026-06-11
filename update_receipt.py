@@ -1,7 +1,7 @@
 import re
 
 with open('frontend/public/receipt.html', 'r', encoding='utf-8') as f:
-    content = f.read()
+    content = f.read().replace('\r\n', '\n')
 
 # Replace CSS
 css_start_marker = "/* ─────────────────────────────────────────────────────\n           PREMIUM DOCUMENT STYLES\n        ───────────────────────────────────────────────────── */"
@@ -244,6 +244,8 @@ if start_idx != -1 and end_idx != -1:
 # Replace renderOrderSummary
 os_start = content.find("function renderOrderSummary(data) {")
 os_end = content.find("        // ─────────────────────────────────────────────────────────────────────\n        // GST INVOICE renderer")
+if os_start == -1 or os_end == -1:
+    raise ValueError(f"Markers for renderOrderSummary not found! os_start={os_start}, os_end={os_end}")
 
 new_os = """function renderOrderSummary(data) {
             document.title = `Order Summary #${data.id || '—'} • SnapKhata`;
@@ -388,7 +390,7 @@ new_os = """function renderOrderSummary(data) {
                                     ` : ''}
                                 </table>
                              </div>
-                             ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
+                             ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null && (data.ledger_transaction_count === undefined || data.ledger_transaction_count === null || data.ledger_transaction_count > 1)) ? `
                              <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
                                  <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
                                  <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>
@@ -427,6 +429,8 @@ content = content[:os_start] + new_os + content[os_end:]
 # Replace renderGstInvoice
 os_start = content.find("function renderGstInvoice(data, gstMode) {")
 os_end = content.find("        async function init() {")
+if os_start == -1 or os_end == -1:
+    raise ValueError(f"Markers for renderGstInvoice not found! os_start={os_start}, os_end={os_end}")
 
 new_os = """function renderGstInvoice(data, gstMode) {
             document.title = `Tax Invoice #${data.id || '—'} • SnapKhata`;
@@ -594,7 +598,7 @@ new_os = """function renderGstInvoice(data, gstMode) {
                                     ` : ''}
                                 </table>
                             </div>
-                            ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null) ? `
+                            ${(data.ledger_balance_due !== undefined && data.ledger_balance_due !== null && (data.ledger_transaction_count === undefined || data.ledger_transaction_count === null || data.ledger_transaction_count > 1)) ? `
                             <div style="margin: 8px 12px; border: 1.5px dashed ${data.ledger_balance_due <= 0 ? '#86efac' : '#fca5a5'}; background: ${data.ledger_balance_due <= 0 ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
                                 <span style="font-weight: 700; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
                                 <span style="font-weight: 800; font-size: 15px; color: ${data.ledger_balance_due <= 0 ? '#15803d' : '#b91c1c'};">${fmtMoney(data.ledger_balance_due)}</span>

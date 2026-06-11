@@ -697,6 +697,7 @@ async def get_public_receipt(
 
         # Get overall ledger balance due
         ledger_balance_due = None
+        ledger_transaction_count = None
         if not is_ledger and username:
             try:
                 resolved_lid = None
@@ -727,13 +728,23 @@ async def get_public_receipt(
                     clean_phone = re.sub(r"\D", "", phone_str)
                     if clean_phone:
                         ledg_resp = db.client.from_("customer_ledgers") \
-                            .select("balance_due") \
+                            .select("id, balance_due") \
                             .eq("customer_phone", clean_phone) \
                             .eq("username", username) \
                             .limit(1) \
                             .execute()
                         if ledg_resp.data:
                             ledger_balance_due = float(ledg_resp.data[0].get("balance_due") or 0)
+                            resolved_lid = ledg_resp.data[0].get("id")
+
+                if resolved_lid:
+                    tx_count_resp = db.client.from_("ledger_transactions") \
+                        .select("id", count="exact") \
+                        .eq("ledger_id", resolved_lid) \
+                        .eq("username", username) \
+                        .execute()
+                    if tx_count_resp.count is not None:
+                        ledger_transaction_count = tx_count_resp.count
             except Exception as e:
                 logger.warning(f"Error querying overall ledger balance: {e}")
 
@@ -764,6 +775,7 @@ async def get_public_receipt(
             "total_paid": ledger_total_paid if is_ledger else None,
             "balance_due": final_balance_due,
             "ledger_balance_due": ledger_balance_due,
+            "ledger_transaction_count": ledger_transaction_count,
             "industry": header.get("industry") or "general",
             "gst_mode": header.get("gst_mode") or "none",
             "receipt_link": header.get("receipt_link") or "",
