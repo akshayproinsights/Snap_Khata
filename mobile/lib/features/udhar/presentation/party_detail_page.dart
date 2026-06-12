@@ -2403,7 +2403,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     ? '&u=${Uri.encodeComponent(username)}'
                                     : '';
                                 final url =
-                                    'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
+                                    'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam';
 
                                 final uri = Uri.parse(url);
                                 Navigator.pop(ctx);
