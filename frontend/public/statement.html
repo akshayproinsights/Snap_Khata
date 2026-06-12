@@ -1047,8 +1047,12 @@
                 document.body.appendChild(overlay);
                 await new Promise(r => setTimeout(r, 80));
 
-                // Force real DOM elements to A4 width (794px at 96dpi)
+                // ── Scale element to fit viewport ──
                 const PDF_WIDTH = 794;
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 375;
+                const needsScaling = viewportWidth < PDF_WIDTH;
+                const scaleFactor = needsScaling ? (viewportWidth / PDF_WIDTH) : 1;
+
                 const contentWrap = document.getElementById('content-wrap');
                 const scaledCont  = document.querySelector('.scaled-container');
                 const invPage     = document.querySelector('.inv-page');
@@ -1057,12 +1061,18 @@
 
                 document.body.classList.add('pdf-export');
 
-                // Force the viewport itself to be fully wide and visible
-                saveAndSet(document.documentElement, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
-                saveAndSet(document.body, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                if (needsScaling) {
+                    saveAndSet(document.documentElement, `width:100% !important; overflow:visible !important;`);
+                    saveAndSet(document.body, `width:100% !important; overflow:visible !important;`);
+                    saveAndSet(contentWrap, `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; overflow:visible; box-sizing:border-box;`);
+                    saveAndSet(scaledCont,  `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; margin:0; padding:0; display:block; overflow:visible; box-sizing:border-box; transform: scale(${scaleFactor}); transform-origin: top left;`);
+                } else {
+                    saveAndSet(document.documentElement, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                    saveAndSet(document.body, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                    saveAndSet(contentWrap, `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; overflow:visible; box-sizing:border-box;`);
+                    saveAndSet(scaledCont,  `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; margin:0; padding:0; display:block; overflow:visible; box-sizing:border-box; justify-content:flex-start;`);
+                }
 
-                saveAndSet(contentWrap, `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;overflow:visible;box-sizing:border-box;`);
-                saveAndSet(scaledCont,  `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;margin:0;padding:0;display:block;overflow:visible;box-sizing:border-box;justify-content:flex-start;`);
                 saveAndSet(invPage,     `width:100%;max-width:100%;padding:0;overflow:visible;box-sizing:border-box;`);
                 saveAndSet(invDoc,      `width:100%;max-width:100%;box-shadow:none;border:1.2px solid #000;border-radius:0;margin:0;overflow:visible;box-sizing:border-box;background:#fff;`);
                 if (invDocInner) saveAndSet(invDocInner, `width:100%;box-sizing:border-box;overflow:visible;`);
@@ -1077,7 +1087,7 @@
                     filename:    filename,
                     image:       { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
-                        scale:       2,
+                        scale:       needsScaling ? (2 / scaleFactor) : 2,
                         useCORS:     true,
                         logging:     false,
                         windowWidth: PDF_WIDTH,
