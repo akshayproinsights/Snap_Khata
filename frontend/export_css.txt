@@ -1,0 +1,88 @@
+
+        /* --- PDF Export Styles --- */
+        .pdf-export { background: #fff !important; }
+        box-sizing: border-box !important;
+        }
+        /* Ensure backgrounds, gradients and images print correctly */
+        .pdf-export * { 
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        box-sizing: border-box !important;
+        }
+        .pdf-export .scaled-container { 
+        padding: 0 !important;
+        
+        margin: 0 auto !important;
+        max-
+        }
+        .pdf-export .inv-page { 
+        padding: 0 !important;
+        max-
+        
+        }
+        .pdf-export .inv-doc { 
+        box-shadow: none !important;
+        border: 1.2px solid #000000 !important;
+        
+        max-
+        }
+        .pdf-export .inv-header-bar { 
+        border-bottom: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-meta-strip { 
+        border-bottom: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-bill-to { 
+        border-right: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-table { 
+        border: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-table th { 
+        border-bottom: 1.2px solid #000000 !important;
+        border-right: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-table td { 
+        border-bottom: 1.2px solid #000000 !important;
+        border-right: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-summary-grid { 
+        border-top: 1.2px solid #000000 !important;
+        border-bottom: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-summary-left { 
+        border-right: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-totals-row { 
+        border-bottom: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-amount-words { 
+        border-top: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-upi-section { 
+        border-top: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-terms { 
+        border-top: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-footer { 
+        border-top: 1.2px solid #000000 !important;
+        }
+        .pdf-export .inv-footer-left { 
+        border-right: 1.2px solid #000000 !important;
+        }
+        /* Logo must be visible when printing */
+        .inv-logo,
+        .pdf-export .inv-logo-initials { 
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        }
+        .pdf-export .inv-logo { 
+        /* Force image to render even in print mode */
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        }
+        .pdf-export .fab-print {  display: none !important; }
+        .pdf-export .inv-table tr {  page-break-inside: avoid; }
+        .pdf-export .inv-doc {  page-break-inside: auto; }

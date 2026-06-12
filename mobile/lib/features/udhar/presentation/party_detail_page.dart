@@ -23,8 +23,6 @@ import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
-
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
 
@@ -593,7 +591,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       text: currentLedger.customerPhone ?? '',
     );
     bool isSubmitting = false;
-    String? nameError; // null = no error, 'duplicate' = name taken, 'error' = generic
+    String?
+    nameError; // null = no error, 'duplicate' = name taken, 'error' = generic
 
     showModalBottomSheet(
       context: context,
@@ -707,7 +706,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                         filled: true,
                         fillColor: nameError != null
                             ? Colors.red.withValues(alpha: 0.05)
-                            : context.textSecondaryColor.withValues(alpha: 0.04),
+                            : context.textSecondaryColor.withValues(
+                                alpha: 0.04,
+                              ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide(
@@ -738,11 +739,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       autofocus: true,
                     ),
                     // Duplicate name error banner
-                    if (nameError == 'duplicate') ...[  
+                    if (nameError == 'duplicate') ...[
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12,
+                          horizontal: 14,
+                          vertical: 12,
                         ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFF3E0),
@@ -784,11 +786,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                           ],
                         ),
                       ),
-                    ] else if (nameError == 'error') ...[  
+                    ] else if (nameError == 'error') ...[
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12,
+                          horizontal: 14,
+                          vertical: 12,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
@@ -828,7 +831,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       decoration: InputDecoration(
                         labelText: 'Mobile Number',
                         hintText: 'e.g. 9876543210',
-                        labelStyle: TextStyle(color: context.textSecondaryColor),
+                        labelStyle: TextStyle(
+                          color: context.textSecondaryColor,
+                        ),
                         prefixIcon: Icon(
                           LucideIcons.smartphone,
                           color: context.primaryColor,
@@ -919,10 +924,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     SnackBar(
                                       content: const Row(
                                         children: [
-                                          Text('✅ ', style: TextStyle(fontSize: 16)),
+                                          Text(
+                                            '✅ ',
+                                            style: TextStyle(fontSize: 16),
+                                          ),
                                           Text(
                                             'Customer details saved!',
-                                            style: TextStyle(fontWeight: FontWeight.w700),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -1252,8 +1262,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: () =>
-                        _showEditCustomerSheet(context, currentLedger),
+                    onTap: () => _showEditCustomerSheet(context, currentLedger),
                     behavior: HitTestBehavior.opaque,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1281,8 +1290,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () =>
-                        _showEditCustomerSheet(context, currentLedger),
+                    onTap: () => _showEditCustomerSheet(context, currentLedger),
                     behavior: HitTestBehavior.opaque,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1803,6 +1811,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 deliveryDate: editableDeliveryDate ?? selectedTx!.deliveryDate,
               );
             } else {
+              final String linkToSend =
+                  (shareMode == 'accountStatement' &&
+                      selectedTx?.receiptNumber != null)
+                  ? 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam'
+                  : partyStatementLink;
+
               message = WhatsAppUtils.buildPartyReminderMessage(
                 customerName: ledger.customerName.isNotEmpty
                     ? ledger.customerName
@@ -1811,7 +1825,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 totalBilled: _totalInvoiced,
                 totalPaid: _totalPaid,
                 balanceDue: _computedBalance,
-                statementLink: partyStatementLink,
+                statementLink: linkToSend,
                 upiId: upiId,
                 useReceiptPhoto: shareMode == 'receiptPhoto',
                 receiptPhotoUrl: selectedTx?.receiptLink,
@@ -1995,13 +2009,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                         size: 15,
                                       ),
                                     ),
-                                  const ButtonSegment<String>(
+                                  ButtonSegment<String>(
                                     value: 'accountStatement',
                                     label: Text(
-                                      'Account Statement',
-                                      style: TextStyle(fontSize: 12),
+                                      selectedTx?.receiptNumber != null
+                                          ? 'Digital Receipt'
+                                          : 'Account Statement',
+                                      style: const TextStyle(fontSize: 12),
                                     ),
-                                    icon: Icon(
+                                    icon: const Icon(
                                       LucideIcons.link,
                                       size: 15,
                                     ),
@@ -2167,7 +2183,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                               onTap: () async {
                                 final picked = await showDatePicker(
                                   context: ctx,
-                                  initialDate: editableDeliveryDate ?? DateTime.now(),
+                                  initialDate:
+                                      editableDeliveryDate ?? DateTime.now(),
                                   firstDate: DateTime(2020),
                                   lastDate: DateTime(2035),
                                   helpText: 'Change Delivery Date',
@@ -2183,10 +2200,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                   vertical: 12,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.07),
+                                  color: const Color(
+                                    0xFF7C3AED,
+                                  ).withValues(alpha: 0.07),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                                    color: const Color(
+                                      0xFF7C3AED,
+                                    ).withValues(alpha: 0.3),
                                     width: 1,
                                   ),
                                 ),
@@ -2200,7 +2221,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           const Text(
                                             'DELIVERY DATE',
@@ -2214,7 +2236,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                           const SizedBox(height: 2),
                                           Text(
                                             editableDeliveryDate != null
-                                                ? DateFormat('dd MMM yyyy').format(editableDeliveryDate!)
+                                                ? DateFormat(
+                                                    'dd MMM yyyy',
+                                                  ).format(
+                                                    editableDeliveryDate!,
+                                                  )
                                                 : 'Tap to set',
                                             style: const TextStyle(
                                               fontSize: 14,
@@ -2337,7 +2363,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (selectedTx != null && shareMode == 'accountStatement') ...[
+                        if (selectedTx != null &&
+                            shareMode == 'accountStatement') ...[
                           SizedBox(
                             width: double.infinity,
                             height: 50,
@@ -2363,8 +2390,9 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
-                                backgroundColor: const Color(0xFF6366F1)
-                                    .withValues(alpha: 0.06),
+                                backgroundColor: const Color(
+                                  0xFF6366F1,
+                                ).withValues(alpha: 0.06),
                               ),
                               onPressed: () async {
                                 if (selectedTx?.receiptNumber == null) return;
@@ -2372,18 +2400,26 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 final usernameParam = username != null
                                     ? '&u=${Uri.encodeComponent(username)}'
                                     : '';
-                                final url = 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
+                                final url =
+                                    'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam&pdf=1';
 
                                 final uri = Uri.parse(url);
                                 Navigator.pop(ctx);
                                 try {
                                   if (await canLaunchUrl(uri)) {
-                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    await launchUrl(
+                                      uri,
+                                      mode: LaunchMode.externalApplication,
+                                    );
                                   } else {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Could not open PDF viewer.'),
+                                          content: Text(
+                                            'Could not open PDF viewer.',
+                                          ),
                                           backgroundColor: Colors.red,
                                         ),
                                       );
@@ -2458,12 +2494,15 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
                                   Navigator.pop(ctx);
 
-                                  // For Account Statement mode, always send the
-                                  // party-level statement.html link (full ledger).
-                                  // The receipt picker only controls which PDF is
-                                  // generated — the WhatsApp link must always point
-                                  // to the account statement, NOT receipt.html.
+                                  // For Account Statement mode (now acting as Digital Receipt when a bill is selected),
+                                  // send the receipt.html link if a specific bill is selected,
+                                  // otherwise default to the party-level statement.html link.
                                   if (capturedShareMode == 'accountStatement') {
+                                    final String finalLink =
+                                        (selectedTx?.receiptNumber != null)
+                                        ? 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam'
+                                        : partyStatementLink;
+
                                     capturedMessage =
                                         WhatsAppUtils.buildPartyReminderMessage(
                                           customerName:
@@ -2474,11 +2513,13 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                           totalBilled: _totalInvoiced,
                                           totalPaid: _totalPaid,
                                           balanceDue: _computedBalance,
-                                          statementLink: partyStatementLink,
+                                          statementLink: finalLink,
                                           upiId: upiId,
                                           useReceiptPhoto: false,
                                           receiptPhotoUrl: null,
-                                          receiptNumber: null,
+                                          receiptNumber: selectedTx
+                                              ?.receiptNumber
+                                              ?.toString(),
                                           whatsappCustomNote:
                                               shopProfile.whatsappCustomNote,
                                         );
@@ -2489,7 +2530,8 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                       capturedReceiptLink != null &&
                                       capturedReceiptLink.isNotEmpty &&
                                       capturedReceiptLink != 'null') {
-                                    final prefetchedBytes = await prefetchFuture;
+                                    final prefetchedBytes =
+                                        await prefetchFuture;
                                     if (!context.mounted) return;
                                     await WhatsAppUtils.shareActualImageOnWhatsApp(
                                       context: context,
@@ -2532,7 +2574,6 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       },
     );
   }
-
 
   Future<void> _confirmDeleteTransaction(LedgerTransaction tx) async {
     final confirmed = await showDialog<bool>(
@@ -2934,10 +2975,14 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF7C3AED).withValues(alpha: 0.07),
+                                color: const Color(
+                                  0xFF7C3AED,
+                                ).withValues(alpha: 0.07),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
+                                  color: const Color(
+                                    0xFF7C3AED,
+                                  ).withValues(alpha: 0.25),
                                   width: 0.8,
                                 ),
                               ),
@@ -3273,8 +3318,12 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                       final qtyStr = qty == qty.truncateToDouble()
                           ? qty.toInt().toString()
                           : qty.toStringAsFixed(1);
-                      final rawUnit = (item['unit']?.toString() ?? '').trim().toUpperCase();
-                      final unit = (rawUnit == 'NOS' || rawUnit.isEmpty) ? '' : rawUnit;
+                      final rawUnit = (item['unit']?.toString() ?? '')
+                          .trim()
+                          .toUpperCase();
+                      final unit = (rawUnit == 'NOS' || rawUnit.isEmpty)
+                          ? ''
+                          : rawUnit;
                       final showQty = qty != 1.0 || unit.isNotEmpty;
                       final qtyText = showQty
                           ? (unit.isNotEmpty ? '×$qtyStr $unit' : '×$qtyStr')
