@@ -726,6 +726,54 @@
             box-shadow: 0 10px 20px rgba(16, 185, 129, 0.4);
         }
 
+        /* ── PDF Mode Floating Button styling ── */
+        .pdf-mode #fabPrint {
+            position: fixed !important;
+            bottom: 24px !important;
+            left: 50% !important;
+            right: auto !important;
+            transform: translateX(-50%) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            width: 90% !important;
+            max-width: 440px !important;
+            padding: 0 16px !important;
+            box-sizing: border-box !important;
+        }
+
+        .pdf-mode #fabPrint button {
+            display: none !important;
+        }
+
+        .pdf-mode #fabPrint button.btn-share-pdf {
+            display: inline-flex !important;
+            width: 100% !important;
+            justify-content: center !important;
+            padding: 18px 36px !important;
+            font-size: 18px !important;
+            font-weight: 800 !important;
+            border-radius: 16px !important;
+            box-shadow: 0 12px 30px rgba(16, 185, 129, 0.45) !important;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        .pdf-mode #fabPrint button.btn-share-pdf svg {
+            width: 24px !important;
+            height: 24px !important;
+            stroke-width: 3 !important;
+        }
+
+        .pdf-mode #fabPrint button.btn-share-pdf:hover {
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow: 0 16px 36px rgba(16, 185, 129, 0.55) !important;
+        }
+
+        .pdf-mode #fabPrint button.btn-share-pdf:active {
+            transform: translateY(1px) scale(0.98) !important;
+        }
+
         @page {
             size: A4;
             margin: 0;
@@ -1200,7 +1248,7 @@
                     filename:    filename,
                     image:       { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
-                        scale:       needsScaling ? (2 / scaleFactor) : 2,
+                        scale:       2,
                         useCORS:     true,
                         logging:     false,
                         windowWidth: PDF_WIDTH,
@@ -1208,6 +1256,25 @@
                         scrollY:     0,
                         allowTaint:  true,
                         onclone:     (doc) => {
+                            // Reset viewport and styles inside the cloned document to A4 width
+                            const clonedHtml = doc.documentElement;
+                            const clonedBody = doc.body;
+                            const clonedContentWrap = doc.getElementById('content-wrap');
+                            const clonedScaledCont = doc.querySelector('.scaled-container');
+
+                            if (clonedHtml) {
+                                clonedHtml.style.cssText = `width: ${PDF_WIDTH}px !important; min-width: ${PDF_WIDTH}px !important; overflow: visible !important;`;
+                            }
+                            if (clonedBody) {
+                                clonedBody.style.cssText = `width: ${PDF_WIDTH}px !important; min-width: ${PDF_WIDTH}px !important; overflow: visible !important;`;
+                            }
+                            if (clonedContentWrap) {
+                                clonedContentWrap.style.cssText = `width: ${PDF_WIDTH}px !important; max-width: ${PDF_WIDTH}px !important; overflow: visible !important; box-sizing: border-box !important;`;
+                            }
+                            if (clonedScaledCont) {
+                                clonedScaledCont.style.cssText = `width: ${PDF_WIDTH}px !important; max-width: ${PDF_WIDTH}px !important; margin: 0 !important; padding: 0 !important; display: block !important; overflow: visible !important; box-sizing: border-box !important; transform: none !important; -webkit-transform: none !important;`;
+                            }
+
                             // Remove the overlay from the captured document clone
                             const ov = doc.querySelector('[style*="z-index:999999"]');
                             if (ov) ov.remove();
@@ -2221,14 +2288,17 @@
             // ── Auto-print mode (?pdf=1 or ?autoprint=1) ─────────────────────────
             const searchParams = new URLSearchParams(window.location.search);
             if (searchParams.get('pdf') === '1' || searchParams.get('autoprint') === '1') {
-                // Hide the FAB initially
-                const fab = document.getElementById('fabPrint');
-                if (fab) fab.style.display = 'none';
+                // Add class to body to trigger bottom-center floating big button layout
+                document.body.classList.add('pdf-mode');
                 
-                // Show the print overlay so the print can be triggered via a direct user gesture
+                // Show the FAB
+                const fab = document.getElementById('fabPrint');
+                if (fab) fab.style.display = 'flex';
+                
+                // Keep the print-overlay modal hidden
                 const overlay = document.getElementById('print-overlay');
                 if (overlay) {
-                    overlay.style.display = 'flex';
+                    overlay.style.display = 'none';
                 }
             }
         }
