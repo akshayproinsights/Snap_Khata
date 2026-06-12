@@ -413,8 +413,8 @@
             background: #f8fafc;
             font-weight: 700;
             color: var(--text-primary);
-            border-top: 2px solid var(--border-strong) !important;
-            border-bottom: 2px solid var(--border-strong) !important;
+            border-top: 1px solid var(--border) !important;
+            border-bottom: 1px solid var(--border) !important;
             border-left: 1px solid var(--border) !important;
             border-right: 1px solid var(--border) !important;
         }
@@ -423,7 +423,6 @@
         .inv-summary-grid {
             display: grid;
             grid-template-columns: 1fr 38%;
-            border-top: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
         }
 
@@ -467,7 +466,7 @@
 
         .inv-totals-row.grand {
             background: transparent;
-            border-top: 2px solid var(--border-strong);
+            border-top: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
             padding: 14px 20px;
         }
@@ -810,69 +809,10 @@
 
             .inv-doc {
                 box-shadow: none !important;
-                border: 1.2px solid #000000 !important;
+                border: 1px solid var(--border) !important;
                 margin: 0 !important;
                 width: 100% !important;
                 max-width: 100% !important;
-            }
-
-            .inv-header-bar {
-                border-bottom: 1.2px solid #000000 !important;
-            }
-
-            .inv-meta-strip {
-                border-bottom: 1.2px solid #000000 !important;
-            }
-
-            .inv-bill-to {
-                border-right: 1.2px solid #000000 !important;
-            }
-
-            .inv-table {
-                border: 1.2px solid #000000 !important;
-            }
-
-            .inv-table th {
-                border-bottom: 1.2px solid #000000 !important;
-                border-right: 1.2px solid #000000 !important;
-            }
-
-            .inv-table td {
-                border-bottom: 1.2px solid #000000 !important;
-                border-right: 1.2px solid #000000 !important;
-            }
-
-            .inv-summary-grid {
-                border-top: 1.2px solid #000000 !important;
-                border-bottom: 1.2px solid #000000 !important;
-            }
-
-            .inv-summary-left {
-                border-right: 1.2px solid #000000 !important;
-            }
-
-            .inv-totals-row {
-                border-bottom: 1.2px solid #000000 !important;
-            }
-
-            .inv-amount-words {
-                border-top: 1.2px solid #000000 !important;
-            }
-
-            .inv-upi-section {
-                border-top: 1.2px solid #000000 !important;
-            }
-
-            .inv-terms {
-                border-top: 1.2px solid #000000 !important;
-            }
-
-            .inv-footer {
-                border-top: 1.2px solid #000000 !important;
-            }
-
-            .inv-footer-left {
-                border-right: 1.2px solid #000000 !important;
             }
 
             /* Logo must be visible when printing */
@@ -889,7 +829,8 @@
                 print-color-adjust: exact !important;
             }
 
-            .fab-print { display: none !important; }
+            .fab-print, #fabPrint { display: none !important; }
+            .inv-doc-title { display: none !important; }
 
             .inv-table tr { page-break-inside: avoid; }
             .inv-doc { page-break-inside: auto; }
@@ -907,23 +848,10 @@
         body.pdf-export { background: #fff !important; }
         .pdf-export .scaled-container { padding: 0 !important; width: 794px !important; margin: 0 auto !important; box-sizing: border-box !important; }
         .pdf-export .inv-page { padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
-        .pdf-export .inv-doc { box-shadow: none !important; border: 1.2px solid #000000 !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
-        .pdf-export .inv-header-bar { border-bottom: 1.2px solid #000000 !important; }
-        .pdf-export .inv-meta-strip { border-bottom: 1.2px solid #000000 !important; }
-        .pdf-export .inv-bill-to { border-right: 1.2px solid #000000 !important; }
-        .pdf-export .inv-table { border: 1.2px solid #000000 !important; }
-        .pdf-export .inv-table th { border-bottom: 1.2px solid #000000 !important; border-right: 1.2px solid #000000 !important; }
-        .pdf-export .inv-table td { border-bottom: 1.2px solid #000000 !important; border-right: 1.2px solid #000000 !important; }
-        .pdf-export .inv-summary-grid { border-top: 1.2px solid #000000 !important; border-bottom: 1.2px solid #000000 !important; }
-        .pdf-export .inv-summary-left { border-right: 1.2px solid #000000 !important; }
-        .pdf-export .inv-totals-row { border-bottom: 1.2px solid #000000 !important; }
-        .pdf-export .inv-amount-words { border-top: 1.2px solid #000000 !important; }
-        .pdf-export .inv-upi-section { border-top: 1.2px solid #000000 !important; }
-        .pdf-export .inv-terms { border-top: 1.2px solid #000000 !important; }
-        .pdf-export .inv-footer { border-top: 1.2px solid #000000 !important; }
-        .pdf-export .inv-footer-left { border-right: 1.2px solid #000000 !important; }
+        .pdf-export .inv-doc { border: 1px solid var(--border) !important; box-shadow: none !important; border-radius: 4px !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
         .pdf-export .inv-logo, .pdf-export .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
-        .pdf-export .fab-print { display: none !important; }
+        .pdf-export .fab-print, .pdf-export #fabPrint { display: none !important; }
+        .pdf-export .inv-doc-title { display: none !important; }
         .pdf-export .inv-table tr { page-break-inside: avoid !important; }
         .pdf-export .inv-footer,
         .pdf-export .inv-upi-section,
@@ -1757,10 +1685,6 @@
                                         ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
                                     </div>
                                 </div>
-                                <div class="inv-header-right">
-                                    <div class="inv-type-label">ORDER</div>
-                                    <div class="inv-type-sub">SUMMARY</div>
-                                </div>
                             </div>
 
                             <!-- Bill To / Invoice Details -->
@@ -1968,10 +1892,6 @@
                                         ${shopMetaLines.gst   ? `<div class="inv-shop-gst">${shopMetaLines.gst}</div>` : ''}
                                     </div>
                                 </div>
-                                <div class="inv-header-right">
-                                    <div class="inv-type-label">TAX</div>
-                                    <div class="inv-type-sub">INVOICE</div>
-                                </div>
                             </div>
 
                             <!-- Bill To / Invoice Details -->
@@ -2107,10 +2027,6 @@
                                         ${shopMetaLines ? `<div class="inv-shop-meta">${shopMetaLines}</div>` : ''}
                                     </div>
                                 </div>
-                                <div class="inv-header-right">
-                                    <div class="inv-type-label">ACCOUNT</div>
-                                    <div class="inv-type-sub">STATEMENT</div>
-                                </div>
                             </div>
 
                             <!-- Customer / Statement Info -->
@@ -2210,6 +2126,7 @@
             if (searchParams.get('pdf') === '1' || searchParams.get('autoprint') === '1') {
                 // Add class to body to trigger bottom-center floating big button layout
                 document.body.classList.add('pdf-mode');
+                document.body.classList.add('pdf-export');
                 
                 // Show the FAB
                 const fab = document.getElementById('fabPrint');
