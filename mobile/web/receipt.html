@@ -677,56 +677,8 @@
             position: relative;
         }
 
-        /* ── FAB Print ── */
+        /* ── Centered Premium Floating Panel (1% SaaS Style) ── */
         .fab-print {
-            position: fixed;
-            bottom: 28px;
-            right: 28px;
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: flex-end;
-        }
-
-        .fab-print button {
-            border: none;
-            padding: 16px 32px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
-            color: #fff;
-            font-size: 16px;
-            font-weight: 700;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
-            cursor: pointer;
-            font-family: 'Inter', sans-serif;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .fab-print button svg {
-            width: 22px;
-            height: 22px;
-        }
-
-        .fab-print button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.4);
-        }
-
-        .fab-print .btn-share-pdf {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
-        }
-
-        .fab-print .btn-share-pdf:hover {
-            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.4);
-        }
-
-        /* ── PDF Mode Floating Button styling ── */
-        .pdf-mode #fabPrint {
             position: fixed !important;
             bottom: 24px !important;
             left: 50% !important;
@@ -736,41 +688,67 @@
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
+            gap: 12px !important;
             width: 90% !important;
-            max-width: 440px !important;
-            padding: 0 16px !important;
+            max-width: 480px !important;
+            padding: 8px 16px !important;
             box-sizing: border-box !important;
+            background: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(226, 232, 240, 0.8) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+            transition: transform 0.2s, opacity 0.2s !important;
         }
 
-        .pdf-mode #fabPrint button {
-            display: none !important;
-        }
-
-        .pdf-mode #fabPrint button.btn-share-pdf {
+        .fab-print button {
+            border: none !important;
+            padding: 14px 24px !important;
+            border-radius: 14px !important;
             display: inline-flex !important;
-            width: 100% !important;
+            align-items: center !important;
             justify-content: center !important;
-            padding: 18px 36px !important;
-            font-size: 18px !important;
-            font-weight: 800 !important;
-            border-radius: 16px !important;
-            box-shadow: 0 12px 30px rgba(16, 185, 129, 0.45) !important;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            gap: 10px !important;
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+            font-family: 'Inter', sans-serif !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            flex: 1 !important;
         }
 
-        .pdf-mode #fabPrint button.btn-share-pdf svg {
-            width: 24px !important;
-            height: 24px !important;
-            stroke-width: 3 !important;
+        .fab-print button svg {
+            width: 18px !important;
+            height: 18px !important;
         }
 
-        .pdf-mode #fabPrint button.btn-share-pdf:hover {
-            transform: translateY(-2px) scale(1.02) !important;
-            box-shadow: 0 16px 36px rgba(16, 185, 129, 0.55) !important;
+        /* Primary Action: Share PDF */
+        .fab-print button.btn-share-pdf {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
         }
 
-        .pdf-mode #fabPrint button.btn-share-pdf:active {
-            transform: translateY(1px) scale(0.98) !important;
+        .fab-print button.btn-share-pdf:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45) !important;
+        }
+
+        /* Secondary Action: Print / Save */
+        .fab-print button:not(.btn-share-pdf) {
+            background: #1e3a5f !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(30, 58, 95, 0.25) !important;
+        }
+
+        .fab-print button:not(.btn-share-pdf):hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 6px 20px rgba(30, 58, 95, 0.35) !important;
+        }
+
+        .fab-print button:active {
+            transform: translateY(1px) !important;
         }
 
         @page {
@@ -1095,6 +1073,37 @@
             });
         }
 
+        let pdfBlobPromise = null;
+
+        function startPrefetchPdf() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const receiptId = urlParams.get('i');
+                const username = urlParams.get('u');
+                if (!receiptId) return;
+
+                // Only prefetch if we're not already in PDF rendering mode
+                if (urlParams.get('pdf') === '1') return;
+
+                let pdfUrl = `${API_BASE}/api/public/receipts/${encodeURIComponent(receiptId)}/pdf`;
+                if (username) {
+                    pdfUrl += `?u=${encodeURIComponent(username)}`;
+                }
+
+                pdfBlobPromise = fetch(pdfUrl)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`Status: ${response.status}`);
+                        return response.blob();
+                    })
+                    .catch(err => {
+                        console.warn("Background PDF prefetch failed:", err);
+                        pdfBlobPromise = null; // reset to allow retry on click
+                    });
+            } catch (err) {
+                console.warn("Error starting background PDF prefetch:", err);
+            }
+        }
+
         async function shareAsPdf() {
             const btn = document.getElementById('btnSharePdf') || event.currentTarget;
             const originalContent = btn.innerHTML;
@@ -1122,40 +1131,46 @@
                 
                 if (!receiptId) throw new Error("No receipt ID found in URL");
 
-                // Build backend PDF URL
-                let pdfUrl = `${API_BASE}/api/public/receipts/${encodeURIComponent(receiptId)}/pdf`;
-                if (username) {
-                    pdfUrl += `?u=${encodeURIComponent(username)}`;
-                }
-
                 const filename = (window._pdfFilename || 'Receipt') + '.pdf';
 
-                // Fetch PDF from backend
-                const response = await fetch(pdfUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to generate PDF: ${response.status} ${response.statusText}`);
+                let pdfBlob;
+                if (pdfBlobPromise) {
+                    try {
+                        pdfBlob = await pdfBlobPromise;
+                    } catch (e) {
+                        console.warn("Error awaiting prefetch promise, fetching directly:", e);
+                    }
                 }
 
-                const pdfBlob = await response.blob();
+                // Fetch PDF from backend if prefetch wasn't ready or failed
+                if (!pdfBlob) {
+                    let pdfUrl = `${API_BASE}/api/public/receipts/${encodeURIComponent(receiptId)}/pdf`;
+                    if (username) {
+                        pdfUrl += `?u=${encodeURIComponent(username)}`;
+                    }
+                    const response = await fetch(pdfUrl);
+                    if (!response.ok) {
+                        throw new Error(`Failed to generate PDF: ${response.status} ${response.statusText}`);
+                    }
+                    pdfBlob = await response.blob();
+                }
+
                 const file = new File([pdfBlob], filename, { type: 'application/pdf' });
 
                 // Try Web Share API first
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: window._pdfFilename || 'Receipt',
-                        text:  'Order Summary from SnapKhata'
-                    });
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: window._pdfFilename || 'Receipt',
+                            text:  'Order Summary from SnapKhata'
+                        });
+                    } catch (shareErr) {
+                        console.warn('Native share blocked or failed, falling back to direct download:', shareErr);
+                        fallbackDownload(pdfBlob, filename);
+                    }
                 } else {
-                    // Fallback to download
-                    const objUrl = URL.createObjectURL(pdfBlob);
-                    const a = document.createElement('a');
-                    a.href = objUrl;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(objUrl);
+                    fallbackDownload(pdfBlob, filename);
                 }
             } catch (err) {
                 console.error('Failed to share PDF:', err);
@@ -1164,6 +1179,17 @@
                 btn.innerHTML = originalContent;
                 btn.disabled = false;
             }
+        }
+
+        function fallbackDownload(pdfBlob, filename) {
+            const objUrl = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(objUrl);
         }
 
 
@@ -1519,11 +1545,23 @@
                 const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
 
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Receipt Photo',
-                        text: 'Sharing Receipt Photo'
-                    });
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Receipt Photo',
+                            text: 'Sharing Receipt Photo'
+                        });
+                    } catch (shareErr) {
+                        console.warn('Native image share failed, falling back to direct download:', shareErr);
+                        const objUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = objUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(objUrl);
+                    }
                 } else {
                     const objUrl = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -1753,7 +1791,7 @@
 
             $('content-wrap').innerHTML = html;
             $('content-wrap').style.display = 'block';
-            $('fabPrint').style.display = 'block';
+            $('fabPrint').style.display = 'flex';
             hide('loader');
         }
 
@@ -1961,7 +1999,7 @@
 
             $('content-wrap').innerHTML = html;
             $('content-wrap').style.display = 'block';
-            $('fabPrint').style.display = 'block';
+            $('fabPrint').style.display = 'flex';
             hide('loader');
         }
 
@@ -2098,7 +2136,7 @@
 
             $('content-wrap').innerHTML = html;
             $('content-wrap').style.display = 'block';
-            $('fabPrint').style.display = 'block';
+            $('fabPrint').style.display = 'flex';
             hide('loader');
         }
 
@@ -2137,6 +2175,9 @@
                 if (overlay) {
                     overlay.style.display = 'none';
                 }
+            } else {
+                // Pre-fetch PDF blob to avoid Web Share API timeouts due to network latency
+                startPrefetchPdf();
             }
         }
 
