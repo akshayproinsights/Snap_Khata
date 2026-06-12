@@ -748,7 +748,7 @@
         /* ── PDF Export Styles (html2pdf share mode) ── */
         body.pdf-export { background: #fff !important; }
         .pdf-export .scaled-container { padding: 0 !important; width: 794px !important; margin: 0 auto !important; box-sizing: border-box !important; }
-        .pdf-export .inv-page { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .pdf-export .inv-page { padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
         .pdf-export .inv-doc { box-shadow: none !important; border: 1.2px solid #000000 !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
         .pdf-export .inv-header-bar { border-bottom: 1.2px solid #000000 !important; }
         .pdf-export .inv-meta-strip { border-bottom: 1.2px solid #000000 !important; }
@@ -1056,6 +1056,11 @@
                 const invDocInner = document.querySelector('.inv-doc-inner');
 
                 document.body.classList.add('pdf-export');
+
+                // Force the viewport itself to be fully wide and visible
+                saveAndSet(document.documentElement, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                saveAndSet(document.body, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+
                 saveAndSet(contentWrap, `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;overflow:visible;box-sizing:border-box;`);
                 saveAndSet(scaledCont,  `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;margin:0;padding:0;display:block;overflow:visible;box-sizing:border-box;justify-content:flex-start;`);
                 saveAndSet(invPage,     `width:100%;max-width:100%;padding:0;overflow:visible;box-sizing:border-box;`);
