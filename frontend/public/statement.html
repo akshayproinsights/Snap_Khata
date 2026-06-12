@@ -744,6 +744,28 @@
             .inv-doc { page-break-inside: auto; }
         }
 
+        /* ── PDF Export Styles (html2pdf share mode) ── */
+        body.pdf-export { background: #fff !important; }
+        .pdf-export .scaled-container { padding: 0 !important; width: 794px !important; margin: 0 auto !important; box-sizing: border-box !important; }
+        .pdf-export .inv-page { padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+        .pdf-export .inv-doc { box-shadow: none !important; border: 1.2px solid #000000 !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
+        .pdf-export .inv-header-bar { border-bottom: 1.2px solid #000000 !important; }
+        .pdf-export .inv-meta-strip { border-bottom: 1.2px solid #000000 !important; }
+        .pdf-export .inv-bill-to { border-right: 1.2px solid #000000 !important; }
+        .pdf-export .inv-table { border: 1.2px solid #000000 !important; }
+        .pdf-export .inv-table th { border-bottom: 2px solid #000000 !important; }
+        .pdf-export .inv-table td { border-bottom: 1px solid #000000 !important; }
+        .pdf-export .inv-summary-grid { border-top: 1.2px solid #000000 !important; }
+        .pdf-export .inv-summary-left { border-right: 1.2px solid #000000 !important; }
+        .pdf-export .inv-totals-row { border-bottom: 1.2px solid #000000 !important; }
+        .pdf-export .inv-amount-words { border-top: 1.2px solid #000000 !important; }
+        .pdf-export .inv-terms { border-top: 1.2px solid #000000 !important; }
+        .pdf-export .inv-footer { border-top: 1.2px solid #000000 !important; }
+        .pdf-export .inv-footer-left { border-right: 1.2px solid #000000 !important; }
+        .pdf-export .inv-logo, .pdf-export .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
+        .pdf-export .fab-print { display: none !important; }
+        .pdf-export .inv-table tr { page-break-inside: avoid !important; }
+
         /* ── Auto Print Overlay ── */
         .print-overlay-wrap {
             position: fixed;
@@ -984,26 +1006,35 @@
                     document.head.appendChild(style);
                 }
 
-                const element = document.querySelector('.scaled-container') || document.getElementById('content-wrap');
+                document.body.classList.add('pdf-export');
+                // Scroll to top so html2canvas captures from position 0
+                window.scrollTo(0, 0);
+                await new Promise(r => setTimeout(r, 150));
+
+                // Capture the invoice doc directly for pixel-perfect rendering
+                const element = document.querySelector('.inv-doc') || document.querySelector('.scaled-container') || document.getElementById('content-wrap');
                 const filename = (window._pdfFilename || 'statement') + '.pdf';
 
+                // A4 at 96dpi = 794px wide; margins [top, right, bottom, left] in mm
+                // Usable width = 210mm - 8mm - 8mm = 194mm ≈ 735px — wider than content, no clipping
                 const opt = {
-                    margin:       [10, 10, 10, 10],
+                    margin:       [6, 8, 6, 8],
                     filename:     filename,
                     image:        { type: 'jpeg', quality: 0.98 },
                     html2canvas:  { 
                         scale: 2, 
                         useCORS: true, 
                         logging: false,
-                        width: 850,
-                        windowWidth: 850,
+                        windowWidth: 794,
                         scrollX: 0,
-                        scrollY: 0
+                        scrollY: 0,
+                        allowTaint: true
                     },
-                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
                 };
 
                 const pdfBlob = await html2pdf().from(element).set(opt).outputPdf('blob');
+                document.body.classList.remove('pdf-export');
                 const file = new File([pdfBlob], filename, { type: 'application/pdf' });
 
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1024,6 +1055,7 @@
                 }
             } catch (err) {
                 console.error('Failed to share PDF:', err);
+                document.body.classList.remove('pdf-export');
                 alert('Could not generate PDF. Please try Print instead.');
             } finally {
                 btn.innerHTML = originalContent;

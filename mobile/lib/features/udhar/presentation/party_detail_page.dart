@@ -1811,9 +1811,11 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                 deliveryDate: editableDeliveryDate ?? selectedTx!.deliveryDate,
               );
             } else {
+              // Use receipt.html whenever a specific bill is selected (any mode),
+              // falling back to the party-level statement.html only when there is
+              // no receiptNumber (e.g. pure receipt-photo manual entry).
               final String linkToSend =
-                  (shareMode == 'accountStatement' &&
-                      selectedTx?.receiptNumber != null)
+                  selectedTx?.receiptNumber != null
                   ? 'https://snapkhata.com/receipt.html?i=${Uri.encodeComponent(selectedTx!.receiptNumber!)}$usernameParam'
                   : partyStatementLink;
 
