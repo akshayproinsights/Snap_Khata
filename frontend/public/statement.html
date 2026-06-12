@@ -1119,9 +1119,6 @@
 
                 // ── Scale element to fit viewport ──
                 const PDF_WIDTH = 794;
-                const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 375;
-                const needsScaling = viewportWidth < PDF_WIDTH;
-                const scaleFactor = needsScaling ? (viewportWidth / PDF_WIDTH) : 1;
 
                 const contentWrap = document.getElementById('content-wrap');
                 const scaledCont  = document.querySelector('.scaled-container');
@@ -1131,20 +1128,13 @@
 
                 document.body.classList.add('pdf-export');
 
-                if (needsScaling) {
-                    saveAndSet(document.documentElement, `width:100% !important; overflow:visible !important;`);
-                    saveAndSet(document.body, `width:100% !important; overflow:visible !important;`);
-                    saveAndSet(contentWrap, `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; overflow:visible; box-sizing:border-box;`);
-                    saveAndSet(scaledCont,  `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; margin:0; padding:0; display:block; overflow:visible; box-sizing:border-box; transform: scale(${scaleFactor}); transform-origin: top left;`);
-                } else {
-                    saveAndSet(document.documentElement, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
-                    saveAndSet(document.body, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
-                    saveAndSet(contentWrap, `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; overflow:visible; box-sizing:border-box;`);
-                    saveAndSet(scaledCont,  `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; margin:0; padding:0; display:block; overflow:visible; box-sizing:border-box; justify-content:flex-start;`);
-                }
+                saveAndSet(document.documentElement, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                saveAndSet(document.body, `width:${PDF_WIDTH}px !important; min-width:${PDF_WIDTH}px !important; overflow:visible !important;`);
+                if (contentWrap) saveAndSet(contentWrap, `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; overflow:visible; box-sizing:border-box;`);
+                if (scaledCont) saveAndSet(scaledCont,  `width:${PDF_WIDTH}px; max-width:${PDF_WIDTH}px; margin:0; padding:0; display:block; overflow:visible; box-sizing:border-box; transform:none !important; -webkit-transform:none !important;`);
 
-                saveAndSet(invPage,     `width:100%;max-width:100%;padding:0;overflow:visible;box-sizing:border-box;`);
-                saveAndSet(invDoc,      `width:100%;max-width:100%;box-shadow:none;border:1.2px solid #000;border-radius:0;margin:0;overflow:visible;box-sizing:border-box;background:#fff;`);
+                if (invPage) saveAndSet(invPage, `width:100%;max-width:100%;padding:0;overflow:visible;box-sizing:border-box;`);
+                if (invDoc) saveAndSet(invDoc, `width:100%;max-width:100%;box-shadow:none;border:1px solid #e2e8f0;border-radius:0;margin:0;overflow:visible;box-sizing:border-box;background:#fff;`);
                 if (invDocInner) saveAndSet(invDocInner, `width:100%;box-sizing:border-box;overflow:visible;`);
 
                 window.scrollTo(0, 0);
@@ -1159,7 +1149,6 @@
                     html2canvas: {
                         scale:       2,
                         width:       PDF_WIDTH,
-                        height:      captureEl.offsetHeight,
                         useCORS:     true,
                         logging:     false,
                         windowWidth: PDF_WIDTH,
@@ -1167,24 +1156,6 @@
                         scrollY:     0,
                         allowTaint:  true,
                         onclone:     (doc) => {
-                            // Reset viewport and styles inside the cloned document to A4 width
-                            const clonedHtml = doc.documentElement;
-                            const clonedBody = doc.body;
-                            const clonedContentWrap = doc.getElementById('content-wrap');
-                            const clonedScaledCont = doc.querySelector('.scaled-container');
-
-                            if (clonedHtml) {
-                                clonedHtml.style.cssText = `width: ${PDF_WIDTH}px !important; min-width: ${PDF_WIDTH}px !important; overflow: visible !important;`;
-                            }
-                            if (clonedBody) {
-                                clonedBody.style.cssText = `width: ${PDF_WIDTH}px !important; min-width: ${PDF_WIDTH}px !important; overflow: visible !important;`;
-                            }
-                            if (clonedContentWrap) {
-                                clonedContentWrap.style.cssText = `width: ${PDF_WIDTH}px !important; max-width: ${PDF_WIDTH}px !important; overflow: visible !important; box-sizing: border-box !important;`;
-                            }
-                            if (clonedScaledCont) {
-                                clonedScaledCont.style.cssText = `width: ${PDF_WIDTH}px !important; max-width: ${PDF_WIDTH}px !important; margin: 0 !important; padding: 0 !important; display: block !important; overflow: visible !important; box-sizing: border-box !important; transform: none !important; -webkit-transform: none !important;`;
-                            }
 
                             const ov = doc.querySelector('[style*="z-index:999999"]');
                             if (ov) ov.remove();
