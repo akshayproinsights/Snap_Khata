@@ -880,14 +880,21 @@
 
             .inv-table tr { page-break-inside: avoid; }
             .inv-doc { page-break-inside: auto; }
+            .inv-footer,
+            .inv-upi-section,
+            .inv-summary-grid,
+            .inv-terms,
+            .inv-sign-block {
+                page-break-inside: avoid !important;
+            }
         }
 
 
         /* ── PDF Export Styles (Mirrors Print Styles for Sharing) ── */
         body.pdf-export { background: #fff !important; }
-        .pdf-export .scaled-container { padding: 0 !important; width: 800px !important; margin: 0 auto !important; }
-        .pdf-export .inv-page { padding: 0 !important; width: 100% !important; }
-        .pdf-export .inv-doc { box-shadow: none !important; border: 1.2px solid #000000 !important; margin: 0 !important; }
+        .pdf-export .scaled-container { padding: 0 !important; width: 794px !important; margin: 0 auto !important; box-sizing: border-box !important; }
+        .pdf-export .inv-page { padding: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
+        .pdf-export .inv-doc { box-shadow: none !important; border: 1.2px solid #000000 !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
         .pdf-export .inv-header-bar { border-bottom: 1.2px solid #000000 !important; }
         .pdf-export .inv-meta-strip { border-bottom: 1.2px solid #000000 !important; }
         .pdf-export .inv-bill-to { border-right: 1.2px solid #000000 !important; }
@@ -905,6 +912,26 @@
         .pdf-export .inv-logo, .pdf-export .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
         .pdf-export .fab-print { display: none !important; }
         .pdf-export .inv-table tr { page-break-inside: avoid !important; }
+        .pdf-export .inv-footer,
+        .pdf-export .inv-upi-section,
+        .pdf-export .inv-summary-grid,
+        .pdf-export .inv-terms,
+        .pdf-export .inv-sign-block {
+            page-break-inside: avoid !important;
+        }
+
+        /* ── Compact layout adjustments for PDF export to fit single page ── */
+        .pdf-export .inv-header-bar { padding: 14px 20px !important; }
+        .pdf-export .inv-meta-strip { padding: 10px 20px !important; }
+        .pdf-export .inv-table th, 
+        .pdf-export .inv-table td { padding: 8px 10px !important; }
+        .pdf-export .inv-summary-grid { padding: 0 !important; }
+        .pdf-export .inv-upi-section { padding: 12px 20px !important; gap: 16px !important; }
+        .pdf-export .inv-upi-qr canvas, 
+        .pdf-export .inv-upi-qr img { width: 80px !important; height: 80px !important; }
+        .pdf-export .inv-terms { padding: 10px 20px !important; }
+        .pdf-export .inv-footer { padding: 12px 20px !important; }
+        .pdf-export .inv-sign-block { padding-top: 36px !important; }
 
         /* ── Auto Print Overlay ── */
         .print-overlay-wrap {
