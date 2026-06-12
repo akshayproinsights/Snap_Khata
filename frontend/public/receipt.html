@@ -1104,8 +1104,22 @@
             `;
             btn.disabled = true;
 
-            // Off-screen wrapper used for clone-based capture
-            let offscreenWrap = null;
+            // Track what we need to clean up
+            let overlay = null;
+            const savedStyles = [];
+
+            function saveAndSet(el, newCss) {
+                if (!el) return;
+                savedStyles.push({ el, css: el.style.cssText });
+                el.style.cssText = newCss;
+            }
+
+            function restoreAll() {
+                savedStyles.forEach(({ el, css }) => { el.style.cssText = css; });
+                savedStyles.length = 0;
+                document.body.classList.remove('pdf-export');
+                if (overlay) { overlay.remove(); overlay = null; }
+            }
 
             try {
                 if (typeof html2pdf === 'undefined') {
@@ -1113,71 +1127,69 @@
                 }
 
                 if (!document.getElementById('spin-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'spin-style';
-                    style.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
-                    document.head.appendChild(style);
+                    const s = document.createElement('style');
+                    s.id = 'spin-style';
+                    s.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
+                    document.head.appendChild(s);
                 }
 
                 const filename = (window._pdfFilename || 'receipt') + '.pdf';
 
-                // ── The key fix for mobile: physically render the invoice at A4 width ──
-                // html2canvas windowWidth alone does NOT reflow the mobile DOM.
-                // We must clone the .inv-doc into a hidden 794px-wide container so
-                // the browser actually lays out the content at the correct width before capture.
-                const PDF_WIDTH = 794; // A4 at 96dpi
+                // ── WHY THIS APPROACH ──────────────────────────────────────────────
+                // html2canvas uses getBoundingClientRect() to determine the capture
+                // area. Off-screen clones (position:fixed; left:-9999px) fall outside
+                // the viewport and get silently clipped. The ONLY reliable fix is to
+                // directly modify the real DOM elements to the correct width, capture,
+                // then restore. A white overlay hides the brief visual change.
+                // ──────────────────────────────────────────────────────────────────
 
-                // Find the source invoice element
-                const source = document.querySelector('.inv-doc') || document.querySelector('.scaled-container') || document.getElementById('content-wrap');
-
-                // Build an off-screen container at exactly PDF_WIDTH px
-                offscreenWrap = document.createElement('div');
-                offscreenWrap.style.cssText = [
-                    'position: fixed',
-                    'top: 0',
-                    'left: -9999px',
-                    `width: ${PDF_WIDTH}px`,
-                    'background: #ffffff',
-                    'z-index: -9999',
-                    'overflow: visible',
-                    'box-sizing: border-box',
+                // Show full-screen white overlay so the user sees a loading screen
+                // instead of the layout shifting to 794px
+                overlay = document.createElement('div');
+                overlay.style.cssText = [
+                    'position:fixed', 'inset:0', 'background:#ffffff',
+                    'z-index:999999', 'display:flex', 'align-items:center',
+                    'justify-content:center', 'flex-direction:column',
+                    'font-family:Inter,sans-serif', 'gap:16px'
                 ].join(';');
-                document.body.appendChild(offscreenWrap);
+                overlay.innerHTML = `
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14,2 14,8 20,8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10,9 9,9 8,9"/>
+                    </svg>
+                    <div style="font-size:15px;font-weight:600;color:#1e293b">Generating PDF…</div>
+                    <div style="font-size:13px;color:#64748b">Please wait a moment</div>
+                `;
+                document.body.appendChild(overlay);
+                // Let the overlay paint before we start modifying layout
+                await new Promise(r => setTimeout(r, 80));
 
-                // Deep-clone the invoice into the off-screen container
-                const clone = source.cloneNode(true);
-                clone.style.cssText = [
-                    `width: ${PDF_WIDTH}px`,
-                    'max-width: none',
-                    'box-shadow: none',
-                    'border: 1.2px solid #000000',
-                    'border-radius: 0',
-                    'margin: 0',
-                    'box-sizing: border-box',
-                    'overflow: visible',
-                    'background: #ffffff',
-                ].join(';');
+                // ── Force real DOM elements to A4 width (794px at 96dpi) ──
+                const PDF_WIDTH = 794;
+                const contentWrap    = document.getElementById('content-wrap');
+                const scaledCont     = document.querySelector('.scaled-container');
+                const invPage        = document.querySelector('.inv-page');
+                const invDoc         = document.querySelector('.inv-doc');
+                const invDocInner    = document.querySelector('.inv-doc-inner');
 
-                // Apply pdf-export class so all print-friendly overrides kick in
-                clone.classList.add('pdf-export-clone');
-                offscreenWrap.appendChild(clone);
+                document.body.classList.add('pdf-export');
 
-                // Inject a style that makes pdf-export-clone children match pdf-export rules
-                if (!document.getElementById('pdf-clone-style')) {
-                    const cloneStyle = document.createElement('style');
-                    cloneStyle.id = 'pdf-clone-style';
-                    cloneStyle.innerHTML = `
-                        .pdf-export-clone .fab-print { display: none !important; }
-                        .pdf-export-clone .inv-logo,
-                        .pdf-export-clone .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
-                        .pdf-export-clone * { box-sizing: border-box !important; }
-                        .pdf-export-clone table { width: 100% !important; table-layout: fixed !important; }
-                    `;
-                    document.head.appendChild(cloneStyle);
-                }
+                // Constrain the wrapping containers
+                saveAndSet(contentWrap, `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;overflow:visible;box-sizing:border-box;`);
+                saveAndSet(scaledCont,  `width:${PDF_WIDTH}px;max-width:${PDF_WIDTH}px;margin:0;padding:0;display:block;overflow:visible;box-sizing:border-box;justify-content:flex-start;`);
+                saveAndSet(invPage,     `width:100%;max-width:100%;padding:0;overflow:visible;box-sizing:border-box;`);
+                saveAndSet(invDoc,      `width:100%;max-width:100%;box-shadow:none;border:1.2px solid #000;border-radius:0;margin:0;overflow:visible;box-sizing:border-box;background:#fff;`);
+                if (invDocInner) saveAndSet(invDocInner, `width:100%;box-sizing:border-box;overflow:visible;`);
 
-                // Wait two frames for the browser to fully lay out the clone at PDF_WIDTH
-                await new Promise(r => setTimeout(r, 200));
+                window.scrollTo(0, 0);
+                // Wait for browser to fully reflow at PDF_WIDTH before capture
+                await new Promise(r => setTimeout(r, 300));
+
+                // Capture the invoice element that is now physically 794px wide
+                const captureEl = invDoc || scaledCont || contentWrap;
 
                 const opt = {
                     margin:      [6, 8, 6, 8],
@@ -1187,20 +1199,25 @@
                         scale:       2,
                         useCORS:     true,
                         logging:     false,
-                        width:       PDF_WIDTH,
                         windowWidth: PDF_WIDTH,
                         scrollX:     0,
                         scrollY:     0,
-                        allowTaint:  true
+                        allowTaint:  true,
+                        onclone:     (doc) => {
+                            // Remove the overlay from the captured document clone
+                            const ov = doc.querySelector('[style*="z-index:999999"]');
+                            if (ov) ov.remove();
+                            const fab = doc.querySelector('.fab-print');
+                            if (fab) fab.style.display = 'none';
+                        }
                     },
                     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
                 };
 
-                const pdfBlob = await html2pdf().from(clone).set(opt).outputPdf('blob');
+                const pdfBlob = await html2pdf().from(captureEl).set(opt).outputPdf('blob');
 
-                // Cleanup off-screen clone immediately
-                offscreenWrap.remove();
-                offscreenWrap = null;
+                // Restore DOM before sharing (user may cancel share dialog)
+                restoreAll();
 
                 const file = new File([pdfBlob], filename, { type: 'application/pdf' });
 
@@ -1222,14 +1239,14 @@
                 }
             } catch (err) {
                 console.error('Failed to share PDF:', err);
-                if (offscreenWrap) { offscreenWrap.remove(); offscreenWrap = null; }
-                document.body.classList.remove('pdf-export');
+                restoreAll();
                 alert('Could not generate PDF. Please try Print instead.');
             } finally {
                 btn.innerHTML = originalContent;
                 btn.disabled = false;
             }
         }
+
 
         // ── helpers ──────────────────────────────────────────────────────────
 
