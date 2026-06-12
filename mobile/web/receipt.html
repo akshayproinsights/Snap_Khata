@@ -387,7 +387,7 @@
         }
 
         .inv-table tbody tr:nth-child(even) {
-            background: #f8fafc;
+            background: transparent;
         }
 
         .inv-table tbody tr:hover {
@@ -466,9 +466,9 @@
         }
 
         .inv-totals-row.grand {
-            background: #f1f5f9;
-            border-top: 2px solid #cbd5e1;
-            border-bottom: 1px solid #e2e8f0;
+            background: transparent;
+            border-top: 2px solid var(--border-strong);
+            border-bottom: 1px solid var(--border);
             padding: 14px 20px;
         }
 
@@ -485,9 +485,9 @@
             letter-spacing: -0.5px;
         }
 
-        /* Balance Due row — prominent red highlight */
+        /* Balance Due row — prominent highlight */
         .inv-totals-row.balance-due-row {
-            background: #fff5f5;
+            background: transparent;
             border-top: 1px solid #fca5a5;
             border-bottom: 1px solid #fca5a5;
             padding: 12px 20px;
@@ -507,7 +507,7 @@
 
         /* Fully paid — balance due row turns green */
         .inv-totals-row.balance-due-row.fully-paid {
-            background: #f0fdf4;
+            background: transparent;
             border-top-color: #86efac;
             border-bottom-color: #86efac;
         }
@@ -692,19 +692,24 @@
 
         .fab-print button {
             border: none;
-            padding: 12px 20px;
+            padding: 16px 32px;
             border-radius: 999px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
             color: #fff;
-            font-size: 13.5px;
-            font-weight: 600;
-            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+            font-size: 16px;
+            font-weight: 700;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
             cursor: pointer;
             font-family: 'Inter', sans-serif;
             transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fab-print button svg {
+            width: 22px;
+            height: 22px;
         }
 
         .fab-print button:hover {
@@ -771,22 +776,30 @@
 
         @page {
             size: A4;
-            margin: 10mm 8mm;
+            margin: 0;
         }
 
         @media print {
-            body { background: #fff; }
+            @page { size: A4; margin: 0; }
+            body { 
+                background: #fff; 
+                margin: 0 !important;
+                padding: 10mm 12mm !important; 
+                box-sizing: border-box !important;
+            }
 
             /* Ensure backgrounds, gradients and images print correctly */
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                box-sizing: border-box !important;
             }
 
             .scaled-container {
                 padding: 0 !important;
                 width: 100% !important;
-                margin: 0 !important;
+                margin: 0 auto !important;
+                max-width: 100% !important;
             }
 
             .inv-page {
@@ -1263,6 +1276,8 @@
                     image:       { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
                         scale:       2,
+                        width:       PDF_WIDTH,
+                        height:      captureEl.offsetHeight,
                         useCORS:     true,
                         logging:     false,
                         windowWidth: PDF_WIDTH,
@@ -1301,7 +1316,7 @@
 
                 const pdfBlob = await html2pdf().from(captureEl).set(opt).outputPdf('blob');
 
-                // Restore DOM before sharing
+                // Restore DOM before sharing (user may cancel share dialog)
                 restoreAll();
 
                 const file = new File([pdfBlob], filename, { type: 'application/pdf' });
@@ -1332,7 +1347,9 @@
             }
         }
 
+
         // ── helpers ──────────────────────────────────────────────────────────
+
         const $ = id => document.getElementById(id);
         const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
         const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
@@ -1501,10 +1518,10 @@
                 <span class="val">${fmtMoney(grandTotal)}</span>
             </div>`;
 
-            // 2. Amount Paid — only when a payment has been made
-            if (receivedAmount !== null && receivedAmount > 0) {
+            // 2. Received — always show if not null (even if 0)
+            if (receivedAmount !== null) {
                 html += `<div class="inv-totals-row paid-row">
-                    <span class="lbl">Amount Paid</span>
+                    <span class="lbl">Received</span>
                     <span class="val">&minus; ${fmtMoney(receivedAmount)}</span>
                 </div>`;
             }
@@ -1529,7 +1546,7 @@
             // Overall ledger outstanding balance box
             if (ledgerBalanceDue !== undefined && ledgerBalanceDue !== null && (ledgerTxCount === undefined || ledgerTxCount === null || ledgerTxCount > 1)) {
                 const isLgCleared = ledgerBalanceDue <= 0;
-                html += `<div class="inv-totals-row" style="margin: 8px 12px; border: 1.5px dashed ${isLgCleared ? '#86efac' : '#fca5a5'}; background: ${isLgCleared ? '#f0fdf4' : '#fffbeb'}; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                html += `<div class="inv-totals-row" style="margin: 8px 12px; border: 1.5px dashed ${isLgCleared ? '#86efac' : '#fca5a5'}; background: transparent; padding: 10px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
                     <span style="font-weight: 700; color: ${isLgCleared ? '#15803d' : '#b91c1c'}; font-size: 13px;">Total Outstanding Balance</span>
                     <span style="font-weight: 800; font-size: 15px; color: ${isLgCleared ? '#15803d' : '#b91c1c'};">${fmtMoney(ledgerBalanceDue)}</span>
                 </div>`;
@@ -1868,21 +1885,7 @@
                                     <div class="inv-meta-label">Order Details</div>
                                     <div class="inv-detail-row"><strong>No.</strong> #${data.id || '—'}</div>
                                     <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(data.created_at)}</div>
-                                    ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
-                                    ${(effectivePaid !== null && effectivePaid > 0) ? `
-                                    <div class="inv-detail-row" style="margin-top:6px;">
-                                        <strong style="color:#334155;">Gross</strong>
-                                        <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
-                                    </div>
-                                    <div class="inv-detail-row">
-                                        <strong style="color:#15803d;">Paid</strong>
-                                        <span style="font-weight:600;color:#15803d;">${fmtMoney(effectivePaid)}</span>
-                                    </div>
-                                    ${balanceDue > 0 ? `<div class="inv-detail-row">
-                                        <strong style="color:#991b1b;">Due</strong>
-                                        <span style="font-weight:700;color:#991b1b;">${fmtMoney(balanceDue)}</span>
-                                    </div>` : '<div class="inv-detail-row"><strong style="color:#15803d;">Due</strong><span style="font-weight:700;color:#15803d;">₹ 0</span></div>'}
-                                    ` : ''}
+
                                     ${buildStatusBadge(displayStatus)}
                                 </div>
                             </div>
@@ -2093,22 +2096,7 @@
                                     <div class="inv-meta-label">Invoice Details</div>
                                     <div class="inv-detail-row"><strong>No.</strong> #${data.id || '—'}</div>
                                     <div class="inv-detail-row"><strong>Date</strong> ${fmtDate(data.created_at)}</div>
-                                    ${data.shop_gst ? `<div class="inv-detail-row"><strong>GSTIN</strong> ${data.shop_gst}</div>` : ''}
                                     <div class="inv-detail-row"><strong>GST</strong> 18% ${gstMode === 'included' ? '(incl.)' : '(excl.)'}</div>
-                                    ${(gstEffectivePaid !== null && gstEffectivePaid > 0) ? `
-                                    <div class="inv-detail-row" style="margin-top:6px;">
-                                        <strong style="color:#334155;">Gross</strong>
-                                        <span style="font-weight:600;color:#1e293b;">${fmtMoney(grandTotal)}</span>
-                                    </div>
-                                    <div class="inv-detail-row">
-                                        <strong style="color:#15803d;">Paid</strong>
-                                        <span style="font-weight:600;color:#15803d;">${fmtMoney(gstEffectivePaid)}</span>
-                                    </div>
-                                    ${balanceDue > 0 ? `<div class="inv-detail-row">
-                                        <strong style="color:#991b1b;">Due</strong>
-                                        <span style="font-weight:700;color:#991b1b;">${fmtMoney(balanceDue)}</span>
-                                    </div>` : '<div class="inv-detail-row"><strong style="color:#15803d;">Due</strong><span style="font-weight:700;color:#15803d;">₹ 0</span></div>'}
-                                    ` : ''}
                                     ${buildStatusBadge(displayStatus)}
                                 </div>
                             </div>
@@ -2277,12 +2265,10 @@
                                         <span class="val">${fmtMoney(totalBilled)}</span>
                                     </div>
                                     ` : ''}
-                                    ${totalPaid !== null && totalPaid > 0 ? `
                                     <div class="inv-totals-row paid-row">
-                                        <span class="lbl">✅ Amount Paid</span>
+                                        <span class="lbl">✅ Received</span>
                                         <span class="val">− ${fmtMoney(totalPaid)}</span>
                                     </div>
-                                    ` : ''}
                                     <div class="inv-totals-row balance-due-row ${grandTotal <= 0 ? 'fully-paid' : ''}">
                                         <span class="lbl">${grandTotal <= 0 ? '✓ Net Balance' : '⚡ Net Balance'}</span>
                                         <span class="val">${fmtMoney(Math.abs(grandTotal))}</span>
