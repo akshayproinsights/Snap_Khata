@@ -656,6 +656,7 @@
 
         /* ── PAID / PARTIAL watermark stamp ── */
         .inv-watermark {
+            display: none !important; /* Disabled for clean premium SaaS aesthetic */
             position: absolute;
             top: 50%;
             left: 50%;
@@ -1103,6 +1104,9 @@
             `;
             btn.disabled = true;
 
+            // Off-screen wrapper used for clone-based capture
+            let offscreenWrap = null;
+
             try {
                 if (typeof html2pdf === 'undefined') {
                     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
@@ -1115,28 +1119,88 @@
                     document.head.appendChild(style);
                 }
 
-                document.body.classList.add('pdf-export');
-                // Scroll to top so html2canvas captures from position 0
-                window.scrollTo(0, 0);
-                await new Promise(r => setTimeout(r, 150));
-
-                // Capture the invoice document directly for pixel-perfect rendering
-                const element = document.querySelector('.inv-doc') || document.querySelector('.scaled-container') || document.getElementById('content-wrap');
                 const filename = (window._pdfFilename || 'receipt') + '.pdf';
 
-                // A4 at 96dpi = 794px wide; margins [top, right, bottom, left] in mm
-                // Usable width = 210mm - 8mm - 8mm = 194mm ≈ 735px — larger than invoice, no clipping
+                // ── The key fix for mobile: physically render the invoice at A4 width ──
+                // html2canvas windowWidth alone does NOT reflow the mobile DOM.
+                // We must clone the .inv-doc into a hidden 794px-wide container so
+                // the browser actually lays out the content at the correct width before capture.
+                const PDF_WIDTH = 794; // A4 at 96dpi
+
+                // Find the source invoice element
+                const source = document.querySelector('.inv-doc') || document.querySelector('.scaled-container') || document.getElementById('content-wrap');
+
+                // Build an off-screen container at exactly PDF_WIDTH px
+                offscreenWrap = document.createElement('div');
+                offscreenWrap.style.cssText = [
+                    'position: fixed',
+                    'top: 0',
+                    'left: -9999px',
+                    `width: ${PDF_WIDTH}px`,
+                    'background: #ffffff',
+                    'z-index: -9999',
+                    'overflow: visible',
+                    'box-sizing: border-box',
+                ].join(';');
+                document.body.appendChild(offscreenWrap);
+
+                // Deep-clone the invoice into the off-screen container
+                const clone = source.cloneNode(true);
+                clone.style.cssText = [
+                    `width: ${PDF_WIDTH}px`,
+                    'max-width: none',
+                    'box-shadow: none',
+                    'border: 1.2px solid #000000',
+                    'border-radius: 0',
+                    'margin: 0',
+                    'box-sizing: border-box',
+                    'overflow: visible',
+                    'background: #ffffff',
+                ].join(';');
+
+                // Apply pdf-export class so all print-friendly overrides kick in
+                clone.classList.add('pdf-export-clone');
+                offscreenWrap.appendChild(clone);
+
+                // Inject a style that makes pdf-export-clone children match pdf-export rules
+                if (!document.getElementById('pdf-clone-style')) {
+                    const cloneStyle = document.createElement('style');
+                    cloneStyle.id = 'pdf-clone-style';
+                    cloneStyle.innerHTML = `
+                        .pdf-export-clone .fab-print { display: none !important; }
+                        .pdf-export-clone .inv-logo,
+                        .pdf-export-clone .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
+                        .pdf-export-clone * { box-sizing: border-box !important; }
+                        .pdf-export-clone table { width: 100% !important; table-layout: fixed !important; }
+                    `;
+                    document.head.appendChild(cloneStyle);
+                }
+
+                // Wait two frames for the browser to fully lay out the clone at PDF_WIDTH
+                await new Promise(r => setTimeout(r, 200));
+
                 const opt = {
-                    margin:       [6, 8, 6, 8],
-                    filename:     filename,
-                    image:        { type: 'jpeg', quality: 0.98 },
-                    html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 794, scrollX: 0, scrollY: 0, allowTaint: true },
-                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
+                    margin:      [6, 8, 6, 8],
+                    filename:    filename,
+                    image:       { type: 'jpeg', quality: 0.98 },
+                    html2canvas: {
+                        scale:       2,
+                        useCORS:     true,
+                        logging:     false,
+                        width:       PDF_WIDTH,
+                        windowWidth: PDF_WIDTH,
+                        scrollX:     0,
+                        scrollY:     0,
+                        allowTaint:  true
+                    },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
                 };
 
-                const pdfBlob = await html2pdf().from(element).set(opt).outputPdf('blob');
-                
-                document.body.classList.remove('pdf-export');
+                const pdfBlob = await html2pdf().from(clone).set(opt).outputPdf('blob');
+
+                // Cleanup off-screen clone immediately
+                offscreenWrap.remove();
+                offscreenWrap = null;
 
                 const file = new File([pdfBlob], filename, { type: 'application/pdf' });
 
@@ -1144,7 +1208,7 @@
                     await navigator.share({
                         files: [file],
                         title: window._pdfFilename || 'Receipt',
-                        text: 'Sharing Receipt PDF'
+                        text:  'Order Summary from SnapKhata'
                     });
                 } else {
                     const objUrl = URL.createObjectURL(pdfBlob);
@@ -1158,6 +1222,7 @@
                 }
             } catch (err) {
                 console.error('Failed to share PDF:', err);
+                if (offscreenWrap) { offscreenWrap.remove(); offscreenWrap = null; }
                 document.body.classList.remove('pdf-export');
                 alert('Could not generate PDF. Please try Print instead.');
             } finally {
@@ -1167,6 +1232,7 @@
         }
 
         // ── helpers ──────────────────────────────────────────────────────────
+
         const $ = id => document.getElementById(id);
         const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
         const show = id => { const el = $(id); if (el) el.style.display = 'block'; };
