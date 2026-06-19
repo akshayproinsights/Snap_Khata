@@ -515,6 +515,49 @@ async def run_sync_verified_logic_supabase(username: str, progress_callback=None
         dates_data = get_verification_dates(username)
         amounts_data = get_verification_amounts(username)
         await keepalive("All data loaded, analyzing records...")
+
+        # ── SMB Friction-Free: Auto-accept all pending records ────────────────
+        # When Save & Finish is triggered, the SMB's intent is "I'm done — accept
+        # everything." Any items still in 'pending' status are auto-promoted to
+        # 'done' so they flow through to verified_invoices. This prevents the bell
+        # badge from staying lit after the user explicitly pressed Save & Finish.
+        db = get_database_client()
+        now_str = datetime.utcnow().isoformat()
+
+        pending_amounts = [
+            r for r in (amounts_data or [])
+            if str(r.get('verification_status', '')).strip().lower() == 'pending'
+        ]
+        if pending_amounts:
+            logger.info(f"🔄 Auto-accepting {len(pending_amounts)} pending amount records for {username}")
+            for r in pending_amounts:
+                row_id = r.get('row_id')
+                if row_id and not str(row_id).startswith('_'):
+                    try:
+                        db.client.table('verification_amounts').update(
+                            {'verification_status': 'done', 'updated_at': now_str}
+                        ).eq('username', username).eq('row_id', row_id).execute()
+                        r['verification_status'] = 'done'  # patch in-memory too
+                    except Exception as _e:
+                        logger.warning(f"Could not auto-accept amount row_id={row_id}: {_e}")
+
+        pending_dates = [
+            r for r in (dates_data or [])
+            if str(r.get('verification_status', '')).strip().lower() == 'pending'
+        ]
+        if pending_dates:
+            logger.info(f"🔄 Auto-accepting {len(pending_dates)} pending date records for {username}")
+            for r in pending_dates:
+                row_id = r.get('row_id')
+                if row_id and not str(row_id).startswith('_'):
+                    try:
+                        db.client.table('verification_dates').update(
+                            {'verification_status': 'done', 'updated_at': now_str}
+                        ).eq('username', username).eq('row_id', row_id).execute()
+                        r['verification_status'] = 'done'  # patch in-memory too
+                    except Exception as _e:
+                        logger.warning(f"Could not auto-accept date row_id={row_id}: {_e}")
+        # ── End auto-accept ───────────────────────────────────────────────────
         
         if not invoices_data:
             logger.warning(f"No invoices found for user: {username}")

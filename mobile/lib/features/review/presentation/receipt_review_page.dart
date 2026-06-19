@@ -857,8 +857,9 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
 
     final sortedLineItems = List<ReviewRecord>.from(group.lineItems);
     sortedLineItems.sort((a, b) {
-      if (a.hasError && !b.hasError) return -1;
-      if (!a.hasError && b.hasError) return 1;
+      // Sort purely by receipt image position (top-to-bottom) so the user can
+      // tally items directly against the physical receipt.
+      // Items without bbox fall to the end, sorted by sortIndex.
       final yA = (a.lineItemBbox != null && a.lineItemBbox!.length > 1)
           ? a.lineItemBbox![1]
           : double.infinity;

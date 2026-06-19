@@ -933,13 +933,15 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
             ? double.tryParse(response.data['new_balance'].toString())
             : null;
 
-        // Trigger data refresh in background
+        // Trigger data refresh in background — PERF FIX: use fetchLedgersSilent so the
+        // heavy sync on /ledgers does NOT block the post-save navigation.
+        // PartyDetailPage._loadTransactions() is the authoritative refresh for the detail view.
         unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
         ref.read(itemCatalogueProvider.notifier).fetchCatalogue();
         if (_partyType == 'customer') {
-          ref.read(udharProvider.notifier).fetchLedgers();
+          unawaited(ref.read(udharProvider.notifier).fetchLedgersSilent());
         } else {
-          ref.read(vendorLedgerProvider.notifier).fetchLedgers();
+          unawaited(ref.read(vendorLedgerProvider.notifier).fetchLedgers());
         }
 
         // Extract the ledger id returned by the backend so we can navigate

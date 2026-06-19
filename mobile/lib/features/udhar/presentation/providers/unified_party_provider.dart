@@ -76,9 +76,12 @@ final unifiedPartiesProvider = Provider<List<UnifiedParty>>((ref) {
   final now = DateTime.now();
   unifiedList.sort((a, b) {
     DateTime effectiveDate(UnifiedParty p) {
+      // Only use actual transaction-based dates for sorting.
+      // updatedAt is excluded because it gets stamped to server-now on every
+      // balance recalculation, which would wrongly move unrelated customers to
+      // the top after a Sync & Finish for a different customer's receipt.
       final candidates = [
         p.latestUploadDate,
-        p.updatedAt,
         p.lastTransactionDate,
       ]
           .whereType<DateTime>()

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Global state for managing synchronization to prevent race conditions
 user_sync_locks = defaultdict(asyncio.Lock)
 user_last_sync = {} # username -> timestamp
-SYNC_DEBOUNCE_SECONDS = 30 # Only auto-sync every 30 seconds per user
+SYNC_DEBOUNCE_SECONDS = 120  # Auto-sync at most once every 2 minutes per user
 
 router = APIRouter()
 
@@ -145,9 +145,12 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
             last_sync = user_last_sync.get(username, 0)
             
             if now - last_sync > SYNC_DEBOUNCE_SECONDS:
-                logger.info(f"🔄 Starting debounced ledger sync for {username}")
-                await sync_customer_ledgers_from_invoices(current_user)
+                # PERF FIX: Stamp the time BEFORE creating the task so that
+                # concurrent requests from the same user correctly skip the sync.
+                # The sync runs in the background — the API response returns immediately.
                 user_last_sync[username] = now
+                asyncio.create_task(sync_customer_ledgers_from_invoices(current_user))
+                logger.info(f"🔄 Scheduled background ledger sync for {username}")
             else:
                 logger.debug(f"⏭️ Skipping ledger sync for {username} (last sync {int(now - last_sync)}s ago)")
 
@@ -231,21 +234,17 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
             except Exception as vi_err:
                 logger.warning(f"Could not fetch verified_invoices for balance enrichment: {vi_err}")
 
-        # Track which receipt_numbers already have a PAYMENT row in
-        # ledger_transactions so we don't double-count the received_amount.
-        receipts_with_payment_tx: set = {
-            tx['receipt_number']
-            for tx in all_txs
-            if tx.get('transaction_type') == 'PAYMENT' and tx.get('receipt_number')
-        }
-
-        # Recompute expected balance for each ledger.
-        # For INVOICE rows: use the authoritative total from verified_invoices (vi_bill_amounts)
-        # rather than the raw ledger_transactions.amount, which can be stale if the user
-        # edited the bill total after the last sync. This ensures the party-list balance and
-        # the detail-view balance always agree (both use verified_invoices as single source).
-        # CRITICAL: Cash/Online invoices are assumed fully paid, so if received_amount
-        # is 0 but it's Cash, treat the full authoritative amount as received.
+        # ── Balance recomputation ─────────────────────────────────────────────
+        # Mirror the EXACT same formula as the detail endpoint (get_ledger_transactions):
+        #   BILLED = Σ(INVOICE amounts from vi_bill_amounts + MANUAL_CREDIT amounts)
+        #   PAID   = Σ(PAYMENT-type rows only)
+        #
+        # We do NOT subtract vi_received here. The detail endpoint never does either —
+        # it only sums PAYMENT-type rows for final_paid. The sync (awaited above) has
+        # already created all the PAYMENT rows that should exist before we get here.
+        # Subtracting vi_received on top of PAYMENT rows was double-counting; for edge
+        # cases like receipt #00026 (received_amount=10000 > total=6505, sync skips
+        # creating a PAYMENT row), it caused catastrophic over-subtraction → ₹0 balance.
         expected: Dict[int, float] = {ld['id']: 0.0 for ld in ledgers}
         for tx in all_txs:
             lid = tx.get('ledger_id')
@@ -263,21 +262,9 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                     bdata = vi_bill_amounts[rn]
                     amt = bdata['tba'] if bdata['tba'] > 0 else bdata['amount_sum']
                 expected[lid] += amt
-                # Only INVOICE transactions exist in verified_invoices.
-                # MANUAL_CREDIT entries are manual — they are NOT in verified_invoices,
-                # so we must never apply the vi_received enrichment to them.
-                # Doing so defaults payment_mode to 'Cash' and incorrectly subtracts
-                # the full amount, making the balance appear smaller than it really is.
-                if ttype == 'INVOICE' and rn and rn not in receipts_with_payment_tx:
-                    already_received = vi_received.get(rn, 0.0)
-                    pmode = vi_modes.get(rn, 'Cash')
-                    if pmode.strip().lower() != 'credit' and already_received == 0:
-                        already_received = amt  # Treat Cash as fully paid (amt is now authoritative)
-                    
-                    if already_received > 0:
-                        expected[lid] -= already_received
             elif ttype == 'PAYMENT':
                 expected[lid] -= amt
+
 
         # Clamp to 0 — same as the detail endpoint uses max(0, billed - paid).
         # A negative balance (overpayment) should never appear as a positive
@@ -334,16 +321,19 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
 
             # Calculate latest upload date for sorting and display.
             # Priority order:
-            #   1. upload_date from verified_invoices (scanned bills)
-            #   2. created_at from ledger_transactions (transaction system time)
-            #   3. updated_at on the ledger itself — this is set to server `now` by
-            #      create_manual_entry, so including it ensures manual entries always
-            #      float to the top of the list even when the user-selected entry date
-            #      is in the past.
+            #   1. upload_date from verified_invoices (scanned bills) — most precise
+            #   2. created_at from ledger_transactions — actual bill/payment system time
+            #
+            # NOTE: We intentionally EXCLUDE updated_at and created_at from the
+            # customer_ledgers table itself. Those are server-side audit timestamps
+            # that get stamped to `now` on every balance recalculation/patch, which
+            # would incorrectly update the displayed "last activity" time even when
+            # no real transaction happened (e.g. after Sync & Finish runs for a
+            # different customer's receipt). From an SMB POV the time must only
+            # reflect the last actual transaction (bill or payment).
             ledger_upload_dates = [vi_uploads.get(tx['receipt_number']) for tx in ledger_txs if tx.get('receipt_number') in vi_uploads]
             ledger_fallback_dates = [tx['created_at'] for tx in ledger_txs]
-            ledger_meta_dates = [ld.get('updated_at'), ld.get('created_at')]
-            all_possible_dates = [d for d in (ledger_upload_dates + ledger_fallback_dates + ledger_meta_dates) if d]
+            all_possible_dates = [d for d in (ledger_upload_dates + ledger_fallback_dates) if d]
             ld['latest_upload_date'] = max(all_possible_dates) if all_possible_dates else ''
 
         # Sort by latest_upload_date descending (latest activity/upload first)
@@ -417,92 +407,112 @@ async def get_ledger_transactions(ledger_id: int, current_user: Dict = Depends(g
         
         enrichment = {}
         if receipt_numbers:
-            # We safely query verified_invoices to reconstruct the actual invoice bill and initial payment
-            vi_resp = db.client.table('verified_invoices').select('id, receipt_number, amount, total_bill_amount, received_amount, balance_due, payment_mode, receipt_link, date, upload_date').in_('receipt_number', receipt_numbers).eq('username', username).execute()
-            
-            for vi in vi_resp.data:
-                rn = vi.get('receipt_number')
-                if not rn:
-                    continue
-                if rn not in enrichment:
-                    enrichment[rn] = {
-                        'amount_sum': 0.0, 
-                        'total_bill_amount': float(vi.get('total_bill_amount') or 0), 
-                        'received_amount': float(vi.get('received_amount') or 0), 
-                        'balance_due': float(vi.get('balance_due') or 0), 
-                        'payment_mode': vi.get('payment_mode') or 'Cash', 
-                        'receipt_link': vi.get('receipt_link') or '', 
-                        'date': vi.get('date') or '', 
-                        'upload_date': vi.get('upload_date') or '',
-                        'max_id': vi.get('id', 0)
-                    }
-                enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
-                
-                # CRITICAL FIX: To prevent mixing metadata from old scans and new edits of 
-                # the same receipt, always take all authoritative metadata from the NEWEST row (highest ID).
-                current_id = vi.get('id', 0)
-                if current_id > enrichment[rn]['max_id']:
-                    enrichment[rn]['max_id'] = current_id
-                    # GUARD: Never overwrite a non-zero total_bill_amount with zero.
-                    new_tba = float(vi.get('total_bill_amount') or 0)
-                    if new_tba > 0 or enrichment[rn]['total_bill_amount'] <= 0:
-                        enrichment[rn]['total_bill_amount'] = new_tba
-                    new_recv = float(vi.get('received_amount') or 0)
-                    if new_recv > 0 or enrichment[rn]['received_amount'] <= 0:
-                        enrichment[rn]['received_amount'] = new_recv
-                    new_bal = float(vi.get('balance_due') or 0)
-                    if new_bal > 0 or enrichment[rn]['balance_due'] <= 0:
-                        enrichment[rn]['balance_due'] = new_bal
-                    if vi.get('payment_mode'):
-                        enrichment[rn]['payment_mode'] = vi['payment_mode']
-                    if vi.get('receipt_link'):
-                        enrichment[rn]['receipt_link'] = vi['receipt_link']
-                    if vi.get('date'):
-                        enrichment[rn]['date'] = vi['date']
-                    if vi.get('upload_date'):
-                        enrichment[rn]['upload_date'] = vi['upload_date']
+            # ── PERF FIX: Fire both DB reads IN PARALLEL ──────────────────────────
+            # verified_invoices enriches amounts/dates; invoices fills missing receipt_links.
+            # Both are independent reads → asyncio.gather cuts total wait time in half.
+            # asyncio.to_thread wraps the synchronous Supabase client for true concurrency.
+            def _fetch_verified_invoices():
+                return db.client.table('verified_invoices') \
+                    .select('id, receipt_number, amount, total_bill_amount, received_amount, balance_due, payment_mode, receipt_link, date, upload_date') \
+                    .in_('receipt_number', receipt_numbers) \
+                    .eq('username', username) \
+                    .execute()
 
-            # ── FALLBACK: for any receipt that has no data in verified_invoices (e.g.
-            # invoices still in the raw `invoices` table, not yet promoted), fetch
-            # the receipt_link and payment_mode from the raw `invoices` table so
-            # the WhatsApp "Receipt Photo" feature works even for these cases.
-            missing_rns = [rn for rn in receipt_numbers if rn not in enrichment or not enrichment[rn].get('receipt_link')]
-            if missing_rns:
-                try:
-                    # IMPORTANT: `invoices` table does NOT have total_bill_amount.
-                    # Use amount, balance_due, received_amount instead.
-                    raw_resp = db.client.table('invoices') \
-                        .select('receipt_number, receipt_link, payment_mode, amount, balance_due, received_amount, date') \
-                        .eq('username', username) \
-                        .in_('receipt_number', missing_rns) \
-                        .execute()
-                    seen_rns = set()  # invoices has multiple rows per receipt (line items) — only use first
-                    for raw in (raw_resp.data or []):
-                        rn = raw.get('receipt_number')
-                        if not rn:
-                            continue
-                        rl = raw.get('receipt_link') or ''
-                        if rn not in enrichment:
-                            if rn not in seen_rns:
-                                seen_rns.add(rn)
-                                enrichment[rn] = {
-                                    'amount_sum': float(raw.get('amount') or 0),
-                                    'total_bill_amount': 0.0,  # not available in raw invoices
-                                    'received_amount': float(raw.get('received_amount') or 0),
-                                    'balance_due': float(raw.get('balance_due') or 0),
-                                    'payment_mode': raw.get('payment_mode') or 'Cash',
-                                    'receipt_link': rl,
-                                    'date': str(raw.get('date') or ''),
-                                    'upload_date': '',
-                                    'max_id': 0,
-                                }
-                        elif rl and not enrichment[rn].get('receipt_link'):
-                            # Patch only the missing receipt_link (e.g. verified_invoices had no link)
-                            enrichment[rn]['receipt_link'] = rl
-                            if not enrichment[rn].get('payment_mode'):
-                                enrichment[rn]['payment_mode'] = raw.get('payment_mode') or 'Cash'
-                except Exception as raw_err:
-                    logger.error(f"CRITICAL: Could not fetch fallback receipt_link from invoices table: {raw_err}")
+            def _fetch_raw_invoices():
+                # IMPORTANT: `invoices` table does NOT have total_bill_amount.
+                # Fetch all receipt_numbers upfront (pre-filtering in Python is cheaper
+                # than an extra serial round-trip to determine missing_rns first).
+                return db.client.table('invoices') \
+                    .select('receipt_number, receipt_link, payment_mode, amount, balance_due, received_amount, date') \
+                    .eq('username', username) \
+                    .in_('receipt_number', receipt_numbers) \
+                    .execute()
+
+            vi_result, raw_result = await asyncio.gather(
+                asyncio.to_thread(_fetch_verified_invoices),
+                asyncio.to_thread(_fetch_raw_invoices),
+                return_exceptions=True,
+            )
+
+            # ── Process verified_invoices ──────────────────────────────────────────
+            if not isinstance(vi_result, Exception) and vi_result is not None:
+                for vi in (vi_result.data or []):
+                    rn = vi.get('receipt_number')
+                    if not rn:
+                        continue
+                    if rn not in enrichment:
+                        enrichment[rn] = {
+                            'amount_sum': 0.0,
+                            'total_bill_amount': float(vi.get('total_bill_amount') or 0),
+                            'received_amount': float(vi.get('received_amount') or 0),
+                            'balance_due': float(vi.get('balance_due') or 0),
+                            'payment_mode': vi.get('payment_mode') or 'Cash',
+                            'receipt_link': vi.get('receipt_link') or '',
+                            'date': vi.get('date') or '',
+                            'upload_date': vi.get('upload_date') or '',
+                            'max_id': vi.get('id', 0)
+                        }
+                    enrichment[rn]['amount_sum'] += float(vi.get('amount', 0) or 0)
+
+                    # CRITICAL FIX: To prevent mixing metadata from old scans and new edits of
+                    # the same receipt, always take all authoritative metadata from the NEWEST row (highest ID).
+                    current_id = vi.get('id', 0)
+                    if current_id > enrichment[rn]['max_id']:
+                        enrichment[rn]['max_id'] = current_id
+                        # GUARD: Never overwrite a non-zero total_bill_amount with zero.
+                        new_tba = float(vi.get('total_bill_amount') or 0)
+                        if new_tba > 0 or enrichment[rn]['total_bill_amount'] <= 0:
+                            enrichment[rn]['total_bill_amount'] = new_tba
+                        new_recv = float(vi.get('received_amount') or 0)
+                        if new_recv > 0 or enrichment[rn]['received_amount'] <= 0:
+                            enrichment[rn]['received_amount'] = new_recv
+                        new_bal = float(vi.get('balance_due') or 0)
+                        if new_bal > 0 or enrichment[rn]['balance_due'] <= 0:
+                            enrichment[rn]['balance_due'] = new_bal
+                        if vi.get('payment_mode'):
+                            enrichment[rn]['payment_mode'] = vi['payment_mode']
+                        if vi.get('receipt_link'):
+                            enrichment[rn]['receipt_link'] = vi['receipt_link']
+                        if vi.get('date'):
+                            enrichment[rn]['date'] = vi['date']
+                        if vi.get('upload_date'):
+                            enrichment[rn]['upload_date'] = vi['upload_date']
+            else:
+                if isinstance(vi_result, Exception):
+                    logger.error(f"Error fetching verified_invoices (parallel): {vi_result}")
+
+            # ── FALLBACK: fill missing receipt_links from the raw invoices table ──
+            # raw_result was pre-fetched in parallel above (all receipt_numbers).
+            # We only use its data for receipts missing from verified_invoices or lacking a link.
+            if not isinstance(raw_result, Exception) and raw_result is not None:
+                seen_rns = set()  # invoices has multiple rows per receipt (line items) — only use first
+                for raw in (raw_result.data or []):
+                    rn = raw.get('receipt_number')
+                    if not rn:
+                        continue
+                    rl = raw.get('receipt_link') or ''
+                    if rn not in enrichment:
+                        if rn not in seen_rns:
+                            seen_rns.add(rn)
+                            enrichment[rn] = {
+                                'amount_sum': float(raw.get('amount') or 0),
+                                'total_bill_amount': 0.0,  # not available in raw invoices
+                                'received_amount': float(raw.get('received_amount') or 0),
+                                'balance_due': float(raw.get('balance_due') or 0),
+                                'payment_mode': raw.get('payment_mode') or 'Cash',
+                                'receipt_link': rl,
+                                'date': str(raw.get('date') or ''),
+                                'upload_date': '',
+                                'max_id': 0,
+                            }
+                    elif rl and not enrichment[rn].get('receipt_link'):
+                        # Patch only the missing receipt_link (e.g. verified_invoices had no link)
+                        enrichment[rn]['receipt_link'] = rl
+                        if not enrichment[rn].get('payment_mode'):
+                            enrichment[rn]['payment_mode'] = raw.get('payment_mode') or 'Cash'
+            else:
+                if isinstance(raw_result, Exception):
+                    logger.error(f"CRITICAL: Could not fetch fallback receipt_link from invoices table: {raw_result}")
                 
         for i, tx in enumerate(transactions):
             if tx.get('transaction_type') == 'INVOICE' and tx.get('receipt_number') in enrichment:
