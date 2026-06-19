@@ -450,9 +450,17 @@ class UploadNotifier extends Notifier<UploadState> {
 
     // ── Layer 3: Backend check — ultimate source of truth ──────────
     // Even if local persistence was lost, ask the backend if there's
-    // an active task for this user. This covers every edge case.
+    // an active task for this user. This covers every edge case (e.g.
+    // app crash before SharedPreferences.setString completed).
+    //
+    // Hard 5-second timeout: if backend is slow, isRestoringState would
+    // stay true (blocking the camera) for up to the TCP timeout (~30s).
+    // We treat a timeout as "no active task" — safe for 99% of users.
     try {
-      final recentTask = await _repository.getRecentTask();
+      final recentTask = await _repository.getRecentTask().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => <String, dynamic>{}, // treat timeout as "no active task"
+      );
       final taskStatus = recentTask['status'] as String? ?? '';
       final taskId = recentTask['task_id'] as String? ?? '';
 
@@ -761,28 +769,29 @@ class UploadNotifier extends Notifier<UploadState> {
       );
       return;
     }
-    // ── END DUPLICATE DETECTION ───────────────────────────────────────────
+    // ── Normal completion (no duplicates) ────────────────────────────────
+    // Clear fileItems immediately before navigating. This is critical:
+    // router.go('/review') disposes the UploadPage, so the ref.listen in its
+    // build() that would call clearFiles() never fires. Without this, fileItems
+    // remain in 'done' status → allDone=true persists → next camera open
+    // triggers needsBackendCheck=true → camera blocked for 1-5s (the bug!).
+    // The "done" success view is never seen anyway since navigation is
+    // synchronous in the same call. lastCompletedStatus is preserved.
+    _backgroundTask.clearTask(); // clear processing banner
+    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
 
-    final done = state.fileItems.map((item) {
-      if (item.status == UploadFileStatus.processing) {
-        return item.copyWith(status: UploadFileStatus.done);
-      }
-      return item;
-    }).toList();
     state = state.copyWith(
-      fileItems: done,
-      isUploading: false, // Explicitly clear
+      fileItems: [], // ← clear immediately; allDone becomes false
+      isUploading: false,
       isProcessing: false,
       clearActiveTaskId: true,
       lastCompletedStatus: completedStatus,
     );
-    unawaited(ref.read(dashboardTotalsProvider.notifier).refresh());
 
     // ⚡ Auto-launch: navigate directly to the first receipt for review.
     // We go to '/review' with autoLaunchReview=true so PendingReceiptsPage
     // fetches groups and immediately pushes the first ReceiptReviewPage.
     // This eliminates the extra "tap to review" step after processing.
-    _backgroundTask.clearTask(); // clear processing banner
     AppRouter.router.go('/review', extra: {
       'skippedCount': 0,
       'autoLaunchReview': true,

@@ -3044,6 +3044,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                             (tx.amount -
                                 (tx.balanceDue ?? (tx.isPaid ? 0 : tx.amount))),
                       ),
+                      valueColor: context.successColor,
                     ),
                     _buildClarityItem(
                       'Balance',

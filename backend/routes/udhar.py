@@ -189,10 +189,15 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         vi_received: Dict[str, float] = {}
         vi_modes: Dict[str, str] = {}
         vi_uploads: Dict[str, str] = {}
+        # BUG FIX: Track authoritative bill amount per receipt so the party-list card
+        # ("BILL TOTAL: ₹X") always shows the user-edited total_bill_amount, not the
+        # raw ledger_transactions.amount which may be stale before the next sync runs.
+        # Structure: receipt_number → {'tba': total_bill_amount, 'amount_sum': Σ line-item amounts}
+        vi_bill_amounts: Dict[str, dict] = {}
         if invoice_receipt_numbers:
             try:
                 vi_resp = db.client.table('verified_invoices') \
-                    .select('receipt_number, received_amount, payment_mode, upload_date') \
+                    .select('receipt_number, received_amount, payment_mode, upload_date, total_bill_amount, amount') \
                     .eq('username', username) \
                     .in_('receipt_number', invoice_receipt_numbers) \
                     .execute()
@@ -211,6 +216,18 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                         vi_modes[rn] = vi['payment_mode']
                     if vi.get('upload_date'):
                         vi_uploads[rn] = vi['upload_date']
+                    # Accumulate authoritative bill amount.
+                    # total_bill_amount is set only on the header row (user-edited grand total);
+                    # other rows (line items) have total_bill_amount = 0 and carry the item amount.
+                    tba = float(vi.get('total_bill_amount') or 0)
+                    line_amt = float(vi.get('amount') or 0)
+                    if rn not in vi_bill_amounts:
+                        vi_bill_amounts[rn] = {'tba': tba, 'amount_sum': line_amt}
+                    else:
+                        vi_bill_amounts[rn]['amount_sum'] += line_amt
+                        # Guard: never overwrite a valid tba with zero from a line-item row
+                        if tba > 0 and vi_bill_amounts[rn]['tba'] <= 0:
+                            vi_bill_amounts[rn]['tba'] = tba
             except Exception as vi_err:
                 logger.warning(f"Could not fetch verified_invoices for balance enrichment: {vi_err}")
 
@@ -223,11 +240,12 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
         }
 
         # Recompute expected balance for each ledger.
-        # For INVOICE rows: if no matching PAYMENT tx exists yet (race condition
-        # before sync creates it), subtract the received_amount directly from
-        # verified_invoices so the balance matches the authoritative detail view.
+        # For INVOICE rows: use the authoritative total from verified_invoices (vi_bill_amounts)
+        # rather than the raw ledger_transactions.amount, which can be stale if the user
+        # edited the bill total after the last sync. This ensures the party-list balance and
+        # the detail-view balance always agree (both use verified_invoices as single source).
         # CRITICAL: Cash/Online invoices are assumed fully paid, so if received_amount
-        # is 0 but it's Cash, treat the full amt as received.
+        # is 0 but it's Cash, treat the full authoritative amount as received.
         expected: Dict[int, float] = {ld['id']: 0.0 for ld in ledgers}
         for tx in all_txs:
             lid = tx.get('ledger_id')
@@ -237,6 +255,13 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
             ttype = tx.get('transaction_type')
             rn = tx.get('receipt_number')
             if ttype in ('INVOICE', 'MANUAL_CREDIT'):
+                # BUG FIX: For INVOICE rows, prefer the authoritative bill amount from
+                # verified_invoices (total_bill_amount if user-edited, else Σ line items).
+                # MANUAL_CREDIT rows are manual entries — ledger_transactions.amount is
+                # always correct for them; they have no verified_invoices row.
+                if ttype == 'INVOICE' and rn and rn in vi_bill_amounts:
+                    bdata = vi_bill_amounts[rn]
+                    amt = bdata['tba'] if bdata['tba'] > 0 else bdata['amount_sum']
                 expected[lid] += amt
                 # Only INVOICE transactions exist in verified_invoices.
                 # MANUAL_CREDIT entries are manual — they are NOT in verified_invoices,
@@ -247,7 +272,7 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
                     already_received = vi_received.get(rn, 0.0)
                     pmode = vi_modes.get(rn, 'Cash')
                     if pmode.strip().lower() != 'credit' and already_received == 0:
-                        already_received = amt  # Treat Cash as fully paid
+                        already_received = amt  # Treat Cash as fully paid (amt is now authoritative)
                     
                     if already_received > 0:
                         expected[lid] -= already_received
@@ -286,11 +311,21 @@ async def get_customer_ledgers(current_user: Dict = Depends(get_current_user)):
             
             ld['party_type'] = 'CUSTOMER'
             if latest_invoice:
-                ld['latest_bill_number'] = latest_invoice.get('receipt_number')
-                ld['latest_bill_amount'] = latest_invoice.get('amount')
+                inv_rn = latest_invoice.get('receipt_number')
+                ld['latest_bill_number'] = inv_rn
+                # BUG FIX: Use authoritative total from verified_invoices (total_bill_amount if
+                # user-edited, else sum of line-item amounts) instead of the raw
+                # ledger_transactions.amount column which can be stale between syncs.
+                if inv_rn and inv_rn in vi_bill_amounts:
+                    bdata = vi_bill_amounts[inv_rn]
+                    ld['latest_bill_amount'] = bdata['tba'] if bdata['tba'] > 0 else bdata['amount_sum']
+                else:
+                    # Manual entries (MANUAL_CREDIT) have no verified_invoices row;
+                    # their ledger_transactions.amount is always authoritative.
+                    ld['latest_bill_amount'] = latest_invoice.get('amount')
                 ld['latest_bill_date'] = latest_invoice.get('created_at')
             else:
-                # Fallback to latest transaction if no invoice
+                # Fallback to latest transaction if no invoice (e.g. only MANUAL_CREDIT)
                 latest_tx = ledger_txs[0] if ledger_txs else None
                 if latest_tx:
                     ld['latest_bill_number'] = latest_tx.get('receipt_number') or "N/A"

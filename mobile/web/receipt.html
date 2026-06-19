@@ -829,6 +829,9 @@
         .pdf-export .inv-doc { border: 1px solid var(--border) !important; box-shadow: none !important; border-radius: 4px !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow: visible !important; }
         .pdf-export .inv-logo, .pdf-export .inv-logo-initials { display: block !important; visibility: visible !important; opacity: 1 !important; }
         .pdf-export .fab-print, .pdf-export #fabPrint { display: none !important; }
+        /* Hide FAB entirely on photo-view pages */
+        body.photo-view .fab-print,
+        body.photo-view #fabPrint { display: none !important; }
         .pdf-export .inv-doc-title { display: none !important; }
         .pdf-export .inv-table tr { page-break-inside: avoid !important; }
         .pdf-export .inv-footer,
@@ -1525,6 +1528,8 @@
                 </div>
             </div>`;
 
+            // Mark body so CSS permanently suppresses the fab
+            document.body.classList.add('photo-view');
             hide('loader');
             hide('fabPrint');
             const wrap = $('content-wrap');
@@ -2175,8 +2180,9 @@
                 if (overlay) {
                     overlay.style.display = 'none';
                 }
-            } else {
+            } else if (searchParams.get('view') !== 'photo') {
                 // Pre-fetch PDF blob to avoid Web Share API timeouts due to network latency
+                // (skip for photo view — no PDF needed there)
                 startPrefetchPdf();
             }
         }

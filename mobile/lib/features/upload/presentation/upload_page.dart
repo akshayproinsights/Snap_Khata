@@ -61,9 +61,12 @@ class _UploadPageState extends ConsumerState<UploadPage>
       // (no active task, no stuck files, not restoring). This eliminates the
       // 500ms–2s camera delay on the 2nd+ scan of the same session.
       final currentState = ref.read(uploadProvider);
+      // NOTE: allDone is intentionally excluded here.
+      // _handleCompleted() now clears fileItems immediately before navigating
+      // to /review, so allDone is never true when the camera page next opens.
+      // Including allDone was the root cause of the camera blocking bug.
       final needsBackendCheck = currentState.isActive ||
           currentState.isRestoringState ||
-          currentState.allDone ||
           currentState.fileItems.any(
               (f) => f.status == UploadFileStatus.uploading);
 
@@ -114,10 +117,16 @@ class _UploadPageState extends ConsumerState<UploadPage>
   /// processing/queued/uploading task. If yes, forces the provider into
   /// the processing state so the overlay shows. If no, clears the guard.
   /// This is completely independent of SharedPreferences or in-memory state.
+  ///
+  /// A hard 5-second timeout ensures the camera is NEVER blocked indefinitely
+  /// by a slow or unreachable backend (fixes: scan bill gets stuck).
   Future<void> _checkBackendForActiveTask() async {
     try {
       final repo = ref.read(uploadRepositoryProvider);
-      final recentTask = await repo.getRecentTask();
+      final recentTask = await repo.getRecentTask().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => <String, dynamic>{}, // treat timeout as "no active task"
+      );
 
       if (!mounted) return;
 
@@ -140,7 +149,7 @@ class _UploadPageState extends ConsumerState<UploadPage>
           notifier.forceIntoProcessingState(taskId, total);
         }
       } else {
-        // Backend says NO active task.
+        // Backend says NO active task (or timed out).
         // If the provider still thinks it's "done" from a previous session,
         // clear it now so the camera shows up.
         final currentState = ref.read(uploadProvider);
@@ -396,7 +405,9 @@ class _UploadPageState extends ConsumerState<UploadPage>
   Widget _buildCameraBody(UploadState state) {
     final camAsync = ref.watch(cameraControllerProvider);
     final reviewState = ref.watch(reviewProvider);
-    final pendingReviewCount = reviewState.groups.where((g) => g.status == 'Pending').length;
+    // Count ALL groups in review regardless of status — the banner should reflect
+    // every receipt awaiting review, not just those with status == 'Pending'.
+    final pendingReviewCount = reviewState.groups.length;
 
     return camAsync.when(
       loading: () => const Center(

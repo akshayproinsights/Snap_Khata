@@ -144,6 +144,15 @@ class HomeDashboardPage extends ConsumerWidget {
             ref.read(dashboardTotalsProvider.notifier).refreshSilent();
             ref.read(udharProvider.notifier).fetchLedgersSilent();
             ref.read(vendorLedgerProvider.notifier).fetchLedgersSilent();
+            // Populate review groups silently when home becomes visible —
+            // ensures the bell badge count is correct without waiting for
+            // the user to navigate to /review first.
+            // Only fetch when groups are empty to avoid clearing data while
+            // ReceiptReviewPage is still mounted (the known blank-screen race).
+            final currentReview = ref.read(reviewProvider);
+            if (currentReview.groups.isEmpty && !currentReview.isLoading) {
+              ref.read(reviewProvider.notifier).fetchReviewData();
+            }
           }
         },
         child: SafeArea(
