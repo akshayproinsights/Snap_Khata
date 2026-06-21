@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:mobile/core/theme/app_theme.dart';
 import 'package:mobile/shared/widgets/mobile_dialog.dart';
@@ -68,6 +70,10 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
   bool _isZoomedIn = false;
   bool _isSharing = false;
 
+  // Pre-fetched image bytes keyed by URL — eliminates the async gap on share
+  // so iOS Safari honours the user gesture context for navigator.share().
+  final Map<String, Uint8List> _prefetchedBytes = {};
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +81,10 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
     _initPageKeys();
+    // Eagerly prefetch the initial image on web so share is instant on tap.
+    if (kIsWeb && !widget.isFileBased && _currentImages.isNotEmpty) {
+      _prefetchImage(_currentImages[_currentIndex]);
+    }
   }
 
   void _initPageKeys() {
@@ -82,6 +92,23 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
       _currentImages.length,
       (_) => GlobalKey<_InteractiveImagePageState>(),
     );
+  }
+
+  /// Prefetch bytes for a network image URL in the background.
+  /// Silently swallowed on any error — share will fall back gracefully.
+  Future<void> _prefetchImage(String url) async {
+    if (url.isEmpty || _prefetchedBytes.containsKey(url)) return;
+    try {
+      final response = await Dio().get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (response.data != null && mounted) {
+        _prefetchedBytes[url] = Uint8List.fromList(response.data!);
+      }
+    } catch (_) {
+      // Ignore — _handleShare will re-download if bytes are missing
+    }
   }
 
   @override
@@ -124,25 +151,59 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
     try {
       final currentUrl = _currentImages[_currentIndex];
       if (widget.isFileBased) {
+        // Native file path (local file) — share directly
         await SharePlus.instance.share(
           ShareParams(
             files: [XFile(currentUrl)],
             text: widget.title ?? 'Invoice',
           ),
         );
+      } else if (kIsWeb) {
+        // ── WEB / PWA PATH (Android Chrome + iOS Safari) ──────────────────
+        // Use pre-warmed bytes if available (prefetched in initState / onPageChanged).
+        // iOS Safari strictly requires navigator.share() to be called synchronously
+        // within a user gesture — any await before the call kills the gesture context.
+        // By pre-fetching bytes eagerly, we avoid an async gap here.
+        Uint8List? bytes = _prefetchedBytes[currentUrl];
+        if (bytes == null) {
+          // Bytes not ready yet (slow connection) — fetch now with a loading indicator.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Preparing bill photo to share...'),
+                duration: Duration(milliseconds: 30000),
+              ),
+            );
+          }
+          final response = await Dio().get<List<int>>(
+            currentUrl,
+            options: Options(responseType: ResponseType.bytes),
+          );
+          if (response.data == null) throw Exception('Failed to load image bytes');
+          bytes = Uint8List.fromList(response.data!);
+          if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        }
+        final fileName = 'bill_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile.fromData(bytes, mimeType: 'image/jpeg', name: fileName)],
+            text: widget.title ?? 'Invoice',
+          ),
+        );
       } else {
+        // ── NATIVE (Android / iOS) PATH ──────────────────────────────────
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Preparing bill photo to share...'),
             duration: Duration(milliseconds: 800),
           ),
         );
-        // Download file to temp directory for direct file sharing
         final tempDir = await getTemporaryDirectory();
         final fileName = 'bill_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final tempFilePath = '${tempDir.path}/$fileName';
 
         await Dio().download(currentUrl, tempFilePath);
+        if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
         await SharePlus.instance.share(
           ShareParams(
@@ -153,6 +214,7 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to share image: $e')),
         );
@@ -212,6 +274,10 @@ class _InteractiveImageGalleryState extends State<InteractiveImageGallery> {
                   _currentIndex = index;
                   _isZoomedIn = false;
                 });
+                // Prefetch bytes for the new page so share is instant on iOS Safari.
+                if (kIsWeb && !widget.isFileBased && index < _currentImages.length) {
+                  _prefetchImage(_currentImages[index]);
+                }
               },
               itemBuilder: (context, index) {
                 return InteractiveImagePage(
