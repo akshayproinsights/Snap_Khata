@@ -23,6 +23,7 @@ import 'package:mobile/features/udhar/presentation/providers/udhar_provider.dart
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_to_text.dart' show SpeechListenOptions;
 import 'package:mobile/shared/widgets/phone_numpad_sheet.dart';
+import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 
 class ReceiptReviewPage extends ConsumerStatefulWidget {
   final InvoiceReviewGroup group;
@@ -484,27 +485,12 @@ class _ReceiptReviewPageState extends ConsumerState<ReceiptReviewPage> {
   }
 
   void _showFullImage(String imageUrl) {
-    Navigator.push(
+    InteractiveImageGallery.show(
       context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: const Text('Receipt Image'),
-          ),
-          body: InteractiveViewer(
-            child: Center(
-              child: RobustReceiptImageFullScreen(
-                imageUrl: imageUrl,
-                heroTag: 'receipt_image_${widget.group.receiptNumber}',
-                maxRetries: 3,
-              ),
-            ),
-          ),
-        ),
-      ),
+      imageUrls: [imageUrl],
+      title: widget.group.receiptNumber.isNotEmpty
+          ? 'Invoice #${widget.group.receiptNumber}'
+          : 'Receipt Image',
     );
   }
 

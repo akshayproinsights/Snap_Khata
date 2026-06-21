@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 import config
 
@@ -204,6 +204,109 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy():
+    """Privacy Policy endpoint"""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - SnapKhata</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 40px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 2.25rem;
+            margin-top: 0;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+        h2 {
+            color: #1e3a8a;
+            font-size: 1.5rem;
+            margin-top: 32px;
+        }
+        p, li {
+            font-size: 1rem;
+            color: #334155;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .footer {
+            margin-top: 40px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+            font-size: 0.875rem;
+            color: #64748b;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Privacy Policy</h1>
+        <p><strong>Effective Date: June 21, 2026</strong></p>
+        <p>SnapKhata ("we", "our", or "us") operates the SnapKhata mobile application. This Privacy Policy informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.</p>
+        
+        <h2>1. Information Collection and Use</h2>
+        <p>We collect several different types of information for various purposes to provide and improve our Service to you.</p>
+        
+        <h3>Types of Data Collected:</h3>
+        <ul>
+            <li><strong>Personal Data:</strong> While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you, including your name, email address, and billing information.</li>
+            <li><strong>Voice and Audio Data:</strong> The application requests access to the device microphone to enable speech-to-text recording functionality. Voice and audio inputs are transiently processed to translate speech into ledger text entries.</li>
+            <li><strong>Files and Images (Camera/Storage):</strong> We request camera and storage permissions to upload invoice images and documents for Optical Character Recognition (OCR) invoice parsing.</li>
+        </ul>
+
+        <h2>2. Use of Data</h2>
+        <p>SnapKhata uses the collected data for various purposes:</p>
+        <ul>
+            <li>To provide and maintain our Service.</li>
+            <li>To notify you about changes to our Service.</li>
+            <li>To allow you to participate in interactive features of our Service when you choose to do so.</li>
+            <li>To provide customer support.</li>
+            <li>To gather analysis or valuable information so that we can improve our Service.</li>
+            <li>To monitor the usage of our Service and detect, prevent, and address technical issues.</li>
+        </ul>
+
+        <h2>3. Data Transfer and Security</h2>
+        <p>Your information, including Personal Data, is processed securely. We adopt appropriate security and encryption measures to prevent unauthorized access, alteration, disclosure, or destruction of your personal information.</p>
+
+        <h2>4. Contact Us</h2>
+        <p>If you have any questions about this Privacy Policy, please contact us:</p>
+        <ul>
+            <li>By email: support@snapkhata.com</li>
+        </ul>
+        
+        <div class="footer">
+            &copy; 2026 SnapKhata. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>
+"""
 
 
 @app.get("/api/db-check")

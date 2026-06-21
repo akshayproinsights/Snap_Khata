@@ -12,7 +12,6 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import '../../verified/presentation/providers/verified_provider.dart';
 import '../domain/models/udhar_models.dart';
 import 'providers/udhar_provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile/core/utils/whatsapp_utils.dart';
 import 'package:mobile/features/settings/presentation/providers/shop_provider.dart';
 import 'package:mobile/features/auth/presentation/providers/auth_provider.dart';
@@ -22,6 +21,7 @@ import 'package:shimmer/shimmer.dart';
 import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -1076,138 +1076,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
   }
 
   void _showReceiptPhotoDialog(LedgerTransaction tx) async {
-    if (tx.receiptNumber == null && tx.receiptLink == null) return;
+    if (tx.receiptLink == null ||
+        tx.receiptLink!.isEmpty ||
+        tx.receiptLink == 'null') {
+      return;
+    }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      LucideIcons.receipt,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Invoice #${tx.receiptNumber ?? "N/A"}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.x, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: Colors.white12),
-              Expanded(
-                child:
-                    tx.receiptLink != null &&
-                        tx.receiptLink!.isNotEmpty &&
-                        tx.receiptLink != 'null'
-                    ? _buildImageWidget(tx.receiptLink!, scrollController)
-                    : Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              LucideIcons.imageOff,
-                              color: Colors.white.withValues(alpha: 0.2),
-                              size: 64,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No receipt photo available',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageWidget(String url, ScrollController scrollController) {
-    return SingleChildScrollView(
-      controller: scrollController,
-      padding: const EdgeInsets.all(16),
-      child: InteractiveViewer(
-        maxScale: 5.0,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: CachedNetworkImage(
-            imageUrl: url,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            placeholder: (context, url) => Container(
-              height: 400,
-              color: Colors.white.withValues(alpha: 0.05),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              height: 200,
-              color: Colors.white.withValues(alpha: 0.05),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.alertTriangle,
-                    color: Colors.orange,
-                    size: 48,
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'Could not load image',
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    InteractiveImageGallery.show(
+      context,
+      imageUrls: [tx.receiptLink!],
+      title: 'Invoice #${tx.receiptNumber ?? "N/A"}',
     );
   }
 

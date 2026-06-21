@@ -139,13 +139,33 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                             // Google Sign-In Button (Official GSI button for web)
                             // On web, authenticate() is NOT supported.
-                            // renderGoogleSignInButton() renders Google's own button which
-                            // handles the popup and emits events via
-                            // authenticationEvents stream (handled in initState).
+                            // On mobile, custom button triggers GoogleSignIn.instance.signIn().
                             SizedBox(
                               width: double.infinity,
                               height: 50,
-                              child: renderGoogleSignInButton(),
+                              child: renderGoogleSignInButton(
+                                onPressed: () async {
+                                  try {
+                                    final googleUser = await GoogleSignIn.instance.authenticate();
+                                    await ref
+                                        .read(authProvider.notifier)
+                                        .handleGoogleSignInAccount(googleUser);
+                                  } catch (e) {
+                                    if (e is GoogleSignInException &&
+                                        e.code == GoogleSignInExceptionCode.canceled) {
+                                      // User canceled the sign-in flow, ignore.
+                                      return;
+                                    }
+                                    if (context.mounted) {
+                                      AppToast.showError(
+                                        context,
+                                        'Google Sign-In failed: $e',
+                                        title: 'Authentication Error',
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
                             ),
                             const SizedBox(height: 16),
                             

@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'package:mobile/features/inventory/domain/models/inventory_models.dart';
 import 'package:mobile/features/inventory/presentation/inventory_review_page.dart';
-import 'package:mobile/shared/widgets/robust_receipt_image.dart';
+import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile/features/inventory/domain/models/vendor_ledger_models.dart';
@@ -160,27 +160,12 @@ class _VendorDeliveryDetailPageState extends ConsumerState<VendorDeliveryDetailP
   void _showReceiptDialog(BuildContext context) {
     if (bundle.receiptLink.isEmpty || bundle.receiptLink == 'null') return;
     
-    Navigator.push(
+    InteractiveImageGallery.show(
       context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: const Text('Invoice Image'),
-          ),
-          body: InteractiveViewer(
-            maxScale: 5.0,
-            child: Center(
-              child: RobustReceiptImageFullScreen(
-                imageUrl: bundle.receiptLink,
-                maxRetries: 3,
-              ),
-            ),
-          ),
-        ),
-      ),
+      imageUrls: [bundle.receiptLink],
+      title: bundle.invoiceNumber.isNotEmpty
+          ? 'Invoice #${bundle.invoiceNumber}'
+          : 'Invoice Image',
     );
   }
 

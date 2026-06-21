@@ -362,7 +362,29 @@ class _RegistrationPageState extends ConsumerState<RegistrationPage> {
                       SizedBox(
                         width: double.infinity,
                         height: 56,
-                        child: renderGoogleSignInButton(),
+                        child: renderGoogleSignInButton(
+                          onPressed: () async {
+                            try {
+                              final googleUser = await GoogleSignIn.instance.authenticate();
+                              await ref
+                                  .read(authProvider.notifier)
+                                  .handleGoogleSignInAccount(googleUser);
+                            } catch (e) {
+                              if (e is GoogleSignInException &&
+                                  e.code == GoogleSignInExceptionCode.canceled) {
+                                // User canceled the sign-in flow, ignore.
+                                return;
+                              }
+                              if (context.mounted) {
+                                AppToast.showError(
+                                  context,
+                                  'Google Sign-In failed: $e',
+                                  title: 'Authentication Error',
+                                );
+                              }
+                            }
+                          },
+                        ),
                       ),
                     ],
                   ),
