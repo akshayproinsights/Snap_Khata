@@ -324,12 +324,17 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _creditDetailsController = TextEditingController(text: widget.group.customerDetails ?? '');
 
     itemCtrls = widget.group.items.map((item) {
+      // If rate is 0 but amount & quantity are both non-zero, derive the unit rate
+      // so the edit fields are pre-filled correctly (avoids a blank/zero rate).
+      final effectiveRate = (item.rate == 0 && item.quantity > 0 && item.amount > 0)
+          ? item.amount / item.quantity
+          : item.rate;
       return ItemDetailCtrl(
         rowId: item.rowId,
         descCtrl: TextEditingController(text: item.description),
         typeCtrl: TextEditingController(text: item.type),
         qtyCtrl: TextEditingController(text: _formatInput(item.quantity)),
-        rateCtrl: TextEditingController(text: _formatInput(item.rate)),
+        rateCtrl: TextEditingController(text: _formatInput(effectiveRate)),
         amtCtrl: TextEditingController(text: _formatInput(item.amount)),
       );
     }).toList();
@@ -1588,6 +1593,12 @@ class _ItemRow extends StatelessWidget {
         ? item.quantity.toInt().toString()
         : item.quantity.toStringAsFixed(1);
 
+    // If rate is 0 but amount & quantity are present, derive the unit rate
+    // so users see the correct per-unit price instead of ₹0.
+    final displayRate = (item.rate == 0 && item.quantity > 0 && item.amount > 0)
+        ? item.amount / item.quantity
+        : item.rate;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1616,7 +1627,7 @@ class _ItemRow extends StatelessWidget {
                     ),
                   const SizedBox(width: 8),
                   Text(
-                    '$qtyStr  x  ${CurrencyFormatter.format(item.rate)}',
+                    '$qtyStr  x  ${CurrencyFormatter.format(displayRate)}',
                     style: TextStyle(
                         color: context.textSecondaryColor,
                         fontSize: 13,

@@ -21,7 +21,8 @@ pm2 logs
 
 ## 🛑 Management Commands
 - **Stop all services:** `pm2 stop all`
-- **Restart all services:** `pm2 restart all`
+- **Restart all services:** `
+`
 - **Delete/Clear all traces:** `pm2 delete all`
 - **Save current state (for auto-start on reboot):** `pm2 save`
 

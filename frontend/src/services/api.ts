@@ -38,6 +38,19 @@ export const authAPI = {
         await apiClient.post('/api/auth/logout');
         localStorage.removeItem('auth_token');
     },
+
+    changePassword: async (
+        username: string,
+        currentPassword: string,
+        newPassword: string
+    ): Promise<{ message: string }> => {
+        const response = await apiClient.post('/api/auth/change-password', {
+            username,
+            current_password: currentPassword,
+            new_password: newPassword,
+        });
+        return response.data;
+    },
 };
 
 export interface UploadHistoryResponse {
