@@ -101,4 +101,24 @@ class AuthRepository {
       throw Exception('Google Sign-In failed on the server. Please try again.');
     }
   }
+
+  Future<void> changePassword(
+      String username, String currentPassword, String newPassword) async {
+    try {
+      final normalizedUsername = username.trim().replaceAll(" ", "_").toLowerCase();
+      await _dio.post('/api/auth/change-password', data: {
+        'username': normalizedUsername,
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      });
+    } on DioException catch (e) {
+      if (e.response != null && e.response?.data != null) {
+        final data = e.response!.data;
+        if (data is Map<String, dynamic> && data['detail'] != null) {
+          throw Exception(data['detail']);
+        }
+      }
+      throw Exception('Failed to change password. Please check your credentials.');
+    }
+  }
 }

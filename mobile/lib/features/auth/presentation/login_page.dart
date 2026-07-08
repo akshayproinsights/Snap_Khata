@@ -256,15 +256,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                             const SizedBox(height: 8),
 
-                            Align(
+                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
                                 onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Please contact 9146514132 to reset your password.'),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
+                                  showDialog(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (context) => const ChangePasswordDialog(),
                                   );
                                 },
                                 style: TextButton.styleFrom(
@@ -346,6 +345,215 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class ChangePasswordDialog extends ConsumerStatefulWidget {
+  const ChangePasswordDialog({super.key});
+
+  @override
+  ConsumerState<ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  String _username = '';
+  String _currentPassword = '';
+  String _newPassword = '';
+  String _confirmPassword = '';
+  bool _isLoading = false;
+  bool _showCurrent = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+
+  void _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+
+    if (_newPassword != _confirmPassword) {
+      AppToast.showError(context, 'New passwords do not match.', title: 'Validation Error');
+      return;
+    }
+
+    if (_newPassword.length < 6) {
+      AppToast.showError(context, 'Password must be at least 6 characters.', title: 'Validation Error');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await ref.read(authProvider.notifier).changePassword(
+        _username,
+        _currentPassword,
+        _newPassword,
+      );
+      if (mounted) {
+        AppToast.showSuccess(context, 'Password updated successfully!', title: 'Success');
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.showError(context, e.toString(), title: 'Error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Change Password',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: context.textColor,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'User Name',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textColor),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    decoration: InputDecoration(
+                      hintText: 'Enter your User Name',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+                    onSaved: (val) => _username = val ?? '',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Current Password',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textColor),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    obscureText: !_showCurrent,
+                    decoration: InputDecoration(
+                      hintText: 'Enter current password',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      suffixIcon: IconButton(
+                        icon: Icon(_showCurrent ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _showCurrent = !_showCurrent),
+                      ),
+                    ),
+                    validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                    onSaved: (val) => _currentPassword = val ?? '',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'New Password',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textColor),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    obscureText: !_showNew,
+                    decoration: InputDecoration(
+                      hintText: 'Enter new password',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      suffixIcon: IconButton(
+                        icon: Icon(_showNew ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _showNew = !_showNew),
+                      ),
+                    ),
+                    validator: (val) => val == null || val.length < 6 ? 'Password must be >= 6 characters' : null,
+                    onSaved: (val) => _newPassword = val ?? '',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Confirm New Password',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: context.textColor),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    obscureText: !_showConfirm,
+                    decoration: InputDecoration(
+                      hintText: 'Re-enter new password',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      suffixIcon: IconButton(
+                        icon: Icon(_showConfirm ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _showConfirm = !_showConfirm),
+                      ),
+                    ),
+                    validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                    onSaved: (val) => _confirmPassword = val ?? '',
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _handleSubmit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.primaryColor,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Text('Update', style: TextStyle(color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

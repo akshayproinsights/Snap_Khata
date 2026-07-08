@@ -228,6 +228,21 @@ class AuthNotifier extends Notifier<AuthState> {
       state = AuthState(); // reset to default
     }
   }
+
+  Future<void> changePassword(
+      String username, String currentPassword, String newPassword) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repository.changePassword(username, currentPassword, newPassword);
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
+      rethrow;
+    }
+  }
 }
 
 // The global provider for authentication state
