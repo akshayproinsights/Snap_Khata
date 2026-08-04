@@ -22,6 +22,7 @@ import 'widgets/add_party_entry_sheet.dart';
 import 'pages/item_catalogue_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile/shared/widgets/interactive_image_gallery.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class PartyDetailPage extends ConsumerStatefulWidget {
   final CustomerLedger ledger;
@@ -529,16 +530,16 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
                                 Navigator.pop(context);
                                 _loadTransactions();
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Payment recorded! 🎉'),
+                                  SnackBar(
+                                    content: Text(AppLocalizations.of(context)?.paymentRecorded ?? 'Payment save झाली! 🎉'),
                                   ),
                                 );
                               } else {
                                 setModalState(() => isSubmitting = false);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Failed to save payment.'),
+                                    SnackBar(
+                                      content: Text(AppLocalizations.of(context)?.failedToSavePayment ?? 'Payment save झाली नाही'),
                                     ),
                                   );
                                 }
@@ -1007,7 +1008,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
 
       if (records.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not find order details.')),
+          const SnackBar(content: Text('Order details सापडले नाही.')),
         );
         return;
       }
@@ -2497,7 +2498,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
         // Show success snackbar
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Transaction deleted successfully'),
+            content: Text(AppLocalizations.of(context)?.transactionDeleted ?? 'Transaction delete झाली'),
             backgroundColor: context.successColor,
             behavior: SnackBarBehavior.floating,
           ),
@@ -2507,7 +2508,7 @@ class _PartyDetailPageState extends ConsumerState<PartyDetailPage> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to delete transaction'),
+            content: Text(AppLocalizations.of(context)?.failedToDeleteTransaction ?? 'Transaction delete झाली नाही'),
             backgroundColor: context.errorColor,
             behavior: SnackBarBehavior.floating,
           ),

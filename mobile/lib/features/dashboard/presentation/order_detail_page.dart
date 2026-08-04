@@ -21,6 +21,7 @@ import 'package:mobile/features/dashboard/presentation/providers/dashboard_provi
 import 'package:mobile/features/udhar/domain/models/udhar_models.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:mobile/features/review/presentation/widgets/customer_autocomplete_field.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class OrderDetailPage extends ConsumerStatefulWidget {
   final InvoiceGroup group;
@@ -542,7 +543,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       backgroundColor: context.surfaceColor,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Order Details',
+        title: Text(AppLocalizations.of(context)?.orderDetails ?? 'Order Details',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -565,7 +566,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           else if (isEditing)
             TextButton(
               onPressed: _saveChanges,
-              child: Text('Save',
+              child: Text(AppLocalizations.of(context)?.save ?? 'Save करा',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -632,8 +633,8 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                       if (shareUrl == null) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Could not generate receipt link.')));
+                            SnackBar(
+                                content: Text(AppLocalizations.of(context)?.couldNotGenerateLink ?? 'Secure receipt link मिळवता आला नाही. पुन्हा प्रयत्न करा.')));
                         return;
                       }
 
@@ -731,7 +732,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Total Bill Amount', 
+            Text(AppLocalizations.of(context)?.totalBillAmount ?? 'एकूण Bill Amount', 
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             const SizedBox(height: 4),
             Text(CurrencyFormatter.format(grandTotal),
@@ -740,7 +741,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                   const Text('Balance Due: ', style: TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
+                   Text(AppLocalizations.of(context)?.balanceDue ?? 'Balance बाकी: ', style: const TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600)),
                    Text(CurrencyFormatter.format(grandTotal - _receivedAmount), style: TextStyle(color: context.errorColor, fontSize: 14, fontWeight: FontWeight.bold)),
                 ],
               )
@@ -779,7 +780,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Payment Type',
+            Text(AppLocalizations.of(context)?.paymentType ?? 'Payment Type',
                 style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 14,
@@ -829,7 +830,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         const SizedBox(height: 20),
         Row(
           children: [
-            const Text('Total Amount',
+            Text(AppLocalizations.of(context)?.totalAmount ?? 'एकूण Amount',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const Spacer(),
             const Text('₹ ',
@@ -932,7 +933,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Balance Due',
+              Text(AppLocalizations.of(context)?.balanceDue ?? 'Balance बाकी',
                   style: TextStyle(
                       color: AppTheme.error,
                       fontSize: 16,
@@ -990,7 +991,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Receipt Number',
+                Text(AppLocalizations.of(context)?.receiptNumber ?? 'Receipt Number',
                     style: TextStyle(
                         color: context.textSecondaryColor,
                         fontSize: 12,
@@ -1022,7 +1023,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Date',
+                Text(AppLocalizations.of(context)?.date ?? 'दिनांक',
                     style: TextStyle(
                         color: context.textSecondaryColor,
                         fontSize: 12,
@@ -1062,7 +1063,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Customer Details',
+          Text(AppLocalizations.of(context)?.customerDetails ?? 'Customer Details',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -1093,7 +1094,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ── Customer Name (always shown) ──
-                      Text('Customer Name',
+                      Text(AppLocalizations.of(context)?.customerName ?? 'Customer चे नाव',
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1130,7 +1131,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                             overflow: TextOverflow.ellipsis),
 
                       const SizedBox(height: 12),
-                      Text('Mobile Number',
+                      Text(AppLocalizations.of(context)?.mobileNumber ?? 'Mobile Number',
                           style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1399,7 +1400,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
             Padding(
               padding: const EdgeInsets.all(32),
               child: Center(
-                  child: Text('No items found',
+                  child: Text(AppLocalizations.of(context)?.noItemsFound ?? 'कोणतेही Items सापडले नाही',
                       style: TextStyle(color: context.textSecondaryColor))),
             ),
         ],
@@ -1422,7 +1423,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
         children: [
            Icon(LucideIcons.shoppingBag, color: Colors.white, size: 18),
           const SizedBox(width: 8),
-          Text('Ordered Items',
+          Text(AppLocalizations.of(context)?.orderedItems ?? 'Order केलेले Items',
               style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -1530,7 +1531,7 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
                 errorBuilder: (_, __, ___) => Container(
                   padding: const EdgeInsets.all(32),
                   color: Theme.of(context).colorScheme.surface,
-                  child: Text('Failed to load receipt image.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                  child: Text(AppLocalizations.of(context)?.failedToLoadImage ?? 'Receipt image load झाली नाही.', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                 ),
               ),
             ),
@@ -1916,8 +1917,8 @@ class _CreditBookButton extends ConsumerWidget {
         if (match == null) {
           // No match found — navigate home and show a helpful message.
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No credit book entry found for this customer yet.'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)?.noCreditBookEntry ?? 'या Customer साठी अजून Credit Book entry नाही.'),
               duration: Duration(seconds: 3),
             ),
           );

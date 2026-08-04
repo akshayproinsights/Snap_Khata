@@ -13,6 +13,7 @@ import 'package:mobile/features/dashboard/domain/models/dashboard_models.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class GallaDashboardPage extends ConsumerStatefulWidget {
   const GallaDashboardPage({super.key});
@@ -43,7 +44,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
 
       if (records.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not find order details.')),
+          const SnackBar(content: Text('Order details सापडले नाही.')),
         );
         return;
       }
@@ -343,7 +344,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
     return Scaffold(
       backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: Text(AppLocalizations.of(context)?.dashboard ?? 'Dashboard'),
         backgroundColor: context.surfaceColor,
         elevation: 0,
       ),
@@ -460,7 +461,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
             backgroundColor: context.errorColor,
             onPressed: () => _showAddTransactionDialog(context, ref, 'MONEY_OUT'),
             icon: const Icon(LucideIcons.minus),
-            label: const Text('OUT', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(AppLocalizations.of(context)?.outLabel ?? 'OUT', style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 16),
           FloatingActionButton.extended(
@@ -468,7 +469,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
             backgroundColor: context.successColor,
             onPressed: () => _showAddTransactionDialog(context, ref, 'MONEY_IN'),
             icon: const Icon(LucideIcons.plus),
-            label: const Text('IN', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(AppLocalizations.of(context)?.inLabel ?? 'IN', style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -749,7 +750,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                     if (success && context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Transaction added')),
+                        const SnackBar(content: Text('Transaction जोडली')),
                       );
                     }
                   },
@@ -757,7 +758,7 @@ class _GallaDashboardPageState extends ConsumerState<GallaDashboardPage> {
                     backgroundColor: isMoneyIn ? context.successColor : context.errorColor,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: const Text('Save Transaction', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(AppLocalizations.of(context)?.saveTransaction ?? 'Transaction Save करा', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 24),

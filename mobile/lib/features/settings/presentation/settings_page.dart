@@ -104,7 +104,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Choose Logo Source',
+              AppLocalizations.of(context)?.chooseLogoSource ?? 'Logo Source निवडा',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -114,7 +114,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             const SizedBox(height: 16),
             ListTile(
               leading: Icon(LucideIcons.image, color: context.primaryColor),
-              title: Text('Choose from Gallery',
+              title: Text(AppLocalizations.of(context)?.chooseFromGallery ?? 'Gallery मधून निवडा',
                   style: TextStyle(color: context.textColor)),
               onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               shape: RoundedRectangleBorder(
@@ -122,7 +122,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             ListTile(
               leading: Icon(LucideIcons.camera, color: context.primaryColor),
-              title: Text('Take a Photo',
+              title: Text(AppLocalizations.of(context)?.takeAPhoto ?? 'Photo काढा',
                   style: TextStyle(color: context.textColor)),
               onTap: () => Navigator.pop(ctx, ImageSource.camera),
               shape: RoundedRectangleBorder(
@@ -310,7 +310,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Scan Receipt / Business Card',
+                AppLocalizations.of(context)?.scanReceiptCard ?? 'Receipt / Business Card Scan करा',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -320,7 +320,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               const SizedBox(height: 16),
               ListTile(
                 leading: Icon(LucideIcons.image, color: context.primaryColor),
-                title: Text('Choose from Gallery',
+                title: Text(AppLocalizations.of(context)?.chooseFromGallery ?? 'Gallery मधून निवडा',
                     style: TextStyle(color: context.textColor)),
                 onTap: () => Navigator.pop(ctx, ImageSource.gallery),
                 shape: RoundedRectangleBorder(
@@ -328,7 +328,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
               ListTile(
                 leading: Icon(LucideIcons.camera, color: context.primaryColor),
-                title: Text('Take a Photo',
+                title: Text(AppLocalizations.of(context)?.takeAPhoto ?? 'Photo काढा',
                     style: TextStyle(color: context.textColor)),
                 onTap: () => Navigator.pop(ctx, ImageSource.camera),
                 shape: RoundedRectangleBorder(
@@ -415,13 +415,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Shop Details',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                Text(
+                  AppLocalizations.of(context)?.shopDetails ?? 'दुकान Details',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: context.textColor),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'This info appears on your invoices & syncs across devices',
+                  AppLocalizations.of(context)?.shopDetailsInfo ?? 'ही माहिती तुमच्या invoices वर दिसते आणि सर्व devices वर sync होते',
                   style: TextStyle(
                       color: context.textSecondaryColor,
                       fontSize: 13),
@@ -452,7 +452,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'AI extracting shop details...',
+                          AppLocalizations.of(context)?.aiExtractingDetails ?? 'AI दुकान details काढत आहे...',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -482,7 +482,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           Icon(LucideIcons.sparkles, color: context.primaryColor, size: 18),
                           const SizedBox(width: 8),
                           Text(
-                            'Autofill from Receipt / Card (AI Scan)',
+                            AppLocalizations.of(context)?.autofillFromReceipt ?? 'Receipt / Card मधून Autofill करा (AI Scan)',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -500,7 +500,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       children: [
                         MobileTextField(
                           initialValue: tempName,
-                          placeholder: 'Shop Name',
+                          placeholder: AppLocalizations.of(context)?.shopName ?? 'दुकानाचे नाव',
                           onSave: (val) {
                             setSheetState(() => tempName = val);
                           },
@@ -508,30 +508,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 12),
                         MobileTextField(
                           initialValue: tempAddress,
-                          placeholder: 'Complete Address',
+                          placeholder: AppLocalizations.of(context)?.completeAddress ?? 'पूर्ण Address',
                           onSave: (val) => tempAddress = val,
                         ),
                         const SizedBox(height: 12),
                         MobileTextField(
                           initialValue: tempPhone,
-                          placeholder: 'Phone Number',
+                          placeholder: AppLocalizations.of(context)?.phoneNumber ?? 'Phone Number',
                           onSave: (val) => tempPhone = val,
                         ),
                         const SizedBox(height: 12),
                         MobileTextField(
                           initialValue: tempGst,
-                          placeholder: 'GSTIN (Optional)',
+                          placeholder: AppLocalizations.of(context)?.gstinOptional ?? 'GSTIN (Optional)',
                           onSave: (val) => tempGst = val,
                         ),
                         const SizedBox(height: 12),
                         MobileTextField(
                           initialValue: tempUpiId,
-                          placeholder: 'UPI ID (Optional)',
+                          placeholder: AppLocalizations.of(context)?.upiIdOptional ?? 'UPI ID (Optional)',
                           onSave: (val) => tempUpiId = val,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'UPI ID is shown as Scan-to-Pay QR on your invoice',
+                          AppLocalizations.of(context)?.upiQrNote ?? 'UPI ID invoice वर Scan-to-Pay QR म्हणून दिसते',
                           style: TextStyle(
                             fontSize: 11,
                             color: context.textSecondaryColor,
@@ -540,7 +540,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 16),
                         // ── Shop Logo ─────────────────────────────────────────
                         Text(
-                          'Shop Logo',
+                          AppLocalizations.of(context)?.shopLogo ?? 'दुकानाचा Logo',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -633,7 +633,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                       _logoActionButton(
                                         context: context,
                                         icon: LucideIcons.image,
-                                        label: 'Choose from Gallery',
+                                        label: AppLocalizations.of(context)?.chooseFromGallery ?? 'Gallery मधून निवडा',
                                         enabled: !_isUploadingLogo,
                                         onTap: () async {
                                           final url =
@@ -652,7 +652,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                       _logoActionButton(
                                         context: context,
                                         icon: LucideIcons.camera,
-                                        label: 'Take a Photo',
+                                        label: AppLocalizations.of(context)?.takeAPhoto ?? 'Photo काढा',
                                         enabled: !_isUploadingLogo,
                                         onTap: () async {
                                           final url =
@@ -677,7 +677,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                                 () => tempLogoUrl = '');
                                           },
                                           child: Text(
-                                            'Remove logo',
+                                            AppLocalizations.of(context)?.removeLogo ?? 'Logo काढा',
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: context.errorColor,
@@ -696,7 +696,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 16),
                         // ── Custom Terms ─────────────────────────────────────
                         Text(
-                          'Terms & Conditions on Invoice',
+                          AppLocalizations.of(context)?.termsAndConditions ?? 'Invoice वरील Terms & Conditions',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -733,7 +733,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'WhatsApp Bill/Reminder Note',
+                          AppLocalizations.of(context)?.whatsappNote ?? 'WhatsApp Bill/Reminder Note',
                           style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -766,7 +766,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 16),
                         // ── Shop Type Selector ────────────────────────────────
                         Text(
-                          'Shop Type',
+                          AppLocalizations.of(context)?.shopType ?? 'दुकानाचा प्रकार',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -894,7 +894,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       Navigator.pop(context);
                       if (mounted) {
                         AppToast.showSuccess(
-                            context, 'Shop details saved & synced');
+                            context, AppLocalizations.of(context)?.shopDetailsSaved ?? 'दुकान details save & sync झाले');
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -904,7 +904,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: const Text('Save & Sync',
+                    child: Text(AppLocalizations.of(context)?.saveAndSync ?? 'Save & Sync',
                         style:
                             TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
@@ -1090,14 +1090,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           _buildSettingsTile(
             icon: LucideIcons.store,
-            title: AppLocalizations.of(context)?.shopDetails ?? 'Shop Details',
-            subtitle: _shopName.isNotEmpty ? _shopName : 'Tap to set up',
+            title: AppLocalizations.of(context)?.shopDetails ?? 'दुकान Details',
+            subtitle: _shopName.isNotEmpty ? _shopName : AppLocalizations.of(context)?.tapToSetUp ?? 'Setup करण्यासाठी tap करा',
             onTap: _showShopDetailsSheet,
           ),
           _buildSettingsTile(
             icon: LucideIcons.tag,
-            title: 'My Item Catalogue',
-            subtitle: 'Manage items and prices',
+            title: AppLocalizations.of(context)?.myItemCatalogue ?? 'My Item Catalogue',
+            subtitle: AppLocalizations.of(context)?.manageItemsAndPrices ?? 'Items आणि Prices manage करा',
             onTap: () {
               context.push('/item-catalogue');
             },
@@ -1116,15 +1116,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _buildSettingsTile(
             icon: LucideIcons.barChart2,
             title: AppLocalizations.of(context)?.ordersProcessed ?? 'Orders Processed',
-            subtitle: 'View real usage metrics',
+            subtitle: AppLocalizations.of(context)?.viewUsageMetrics ?? 'Real Usage Metrics पहा',
             onTap: () {
               context.push('/usage-stats');
             },
           ),
           _buildSettingsTile(
             icon: LucideIcons.lineChart,
-            title: 'Dashboard Analytics',
-            subtitle: 'View sales and purchases',
+            title: AppLocalizations.of(context)?.dashboardAnalytics ?? 'Dashboard Analytics',
+            subtitle: AppLocalizations.of(context)?.viewSalesAndPurchases ?? 'Sales आणि Purchases पहा',
             onTap: () {
               context.push('/analytics');
             },
@@ -1161,7 +1161,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _buildSettingsTile(
             icon: LucideIcons.info,
             titleWidget: const BrandWordmark(fontSize: 18),
-            subtitle: 'Version 1.0.0 · Built for Indian SMBs',
+            subtitle: AppLocalizations.of(context)?.versionInfo ?? 'Version 1.0.0 · Indian SMBs साठी',
             onTap: null,
             trailing: const SizedBox.shrink(),
           ),

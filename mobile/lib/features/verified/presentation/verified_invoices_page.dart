@@ -14,6 +14,7 @@ import 'package:mobile/shared/widgets/app_toast.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mobile/core/utils/file_download_helper.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 // ─── Group-by options ────────────────────────────────────────────────────────
 
@@ -173,15 +174,13 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
         builder: (context) => AlertDialog(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
-              title: const Text('Delete Selected?',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              content: Text(
-                  'Are you sure you want to delete ${_selectedIds.length} verified records? This action cannot be undone.'),
+              title: Text(AppLocalizations.of(context)?.deleteSelected ?? 'Delete Selected?'),
+              content: Text(AppLocalizations.of(context)?.deleteSelectedConfirm ?? 'निवडलेले रेकॉर्ड्स डिलीट करायचे?'),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel',
-                        style: TextStyle(color: Colors.grey))),
+                    child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel',
+                        style: const TextStyle(color: Colors.grey))),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.error,
@@ -322,7 +321,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Text('TOTAL RECEIPTS',
+                                    Text(AppLocalizations.of(context)?.totalReceipts ?? 'एकूण Receipts',
                                         style: TextStyle(
                                             color: Colors.white70,
                                             fontSize: 10,
@@ -343,7 +342,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Text('TOTAL AMOUNT',
+                                    Text(AppLocalizations.of(context)?.totalAmountLabel ?? 'एकूण AMOUNT',
                                         style: TextStyle(
                                             color: Colors.white70,
                                             fontSize: 10,
@@ -439,13 +438,13 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                             size: 64, color: AppTheme.primary),
                       ),
                       const SizedBox(height: 24),
-                      const Text('No Invoices Found',
+                      Text(AppLocalizations.of(context)?.noInvoicesFound ?? 'कोणतेही Invoices सापडले नाही',
                           style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.textPrimary)),
                       const SizedBox(height: 8),
-                      const Text('Adjust your filters or sync new invoices.',
+                      Text(AppLocalizations.of(context)?.adjustFilters ?? 'Filters बदला किंवा नवीन Invoices Sync करा.',
                           style: TextStyle(color: AppTheme.textSecondary)),
                       const SizedBox(height: 24),
                       if (state.records.isEmpty &&
@@ -455,7 +454,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                         OutlinedButton.icon(
                           onPressed: _clearFilters,
                           icon: const Icon(LucideIcons.xCircle),
-                          label: const Text('Clear Filters'),
+                          label: Text(AppLocalizations.of(context)?.clearFilters ?? 'Filters Clear करा'),
                           style: OutlinedButton.styleFrom(
                               foregroundColor: AppTheme.primary),
                         )
@@ -509,7 +508,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Advanced Filters',
+              Text(AppLocalizations.of(context)?.advancedFilters ?? 'Advanced Filters',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               TextButton(
                   onPressed: _clearFilters,
@@ -517,7 +516,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                       foregroundColor: AppTheme.error,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0)),
-                  child: const Text('Clear All')),
+                  child: Text(AppLocalizations.of(context)?.clearAll ?? 'सर्व Clear करा')),
             ],
           ),
           const SizedBox(height: 16),
@@ -595,10 +594,10 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('GROUP VIEW BY',
-                style: TextStyle(
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(AppLocalizations.of(context)?.groupViewBy ?? 'GROUP VIEW BY',
+                style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: Colors.grey,
@@ -698,8 +697,8 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                               fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Selected',
-                        style: TextStyle(
+                    Text('${_selectedIds.length} ${AppLocalizations.of(context)?.selected ?? 'निवडले'}',
+                        style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppTheme.primary)),
                   ],
@@ -710,7 +709,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 16)),
                     onPressed: _handleBulkDelete,
                     icon: const Icon(LucideIcons.trash2, size: 18),
-                    label: const Text('Delete Selected',
+                    label: Text(AppLocalizations.of(context)?.deleteSelected ?? 'निवडलेले Delete करा',
                         style: TextStyle(fontWeight: FontWeight.bold)))
               ],
             ),
@@ -726,7 +725,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     activeColor: AppTheme.primary,
                     onChanged: (_) => _handleSelectAll(items)),
               ),
-              const Text('Select All',
+              Text(AppLocalizations.of(context)?.selectAll ?? 'सर्व निवडा',
                   style: TextStyle(
                       color: AppTheme.textSecondary,
                       fontWeight: FontWeight.w600)),
@@ -976,7 +975,7 @@ class _VerifiedInvoicesPageState extends ConsumerState<VerifiedInvoicesPage> {
                     color: Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: Colors.orange.shade200)),
-                child: Text('INCLUDED IN ITEM PRICES',
+                child: Text(AppLocalizations.of(context)?.includedInItemPrices ?? 'ITEM PRICES मध्ये INCLUDED',
                     style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.bold,

@@ -15,6 +15,7 @@ import 'package:mobile/core/utils/currency_formatter.dart';
 import 'package:mobile/features/dashboard/presentation/order_detail_page.dart';
 import 'package:mobile/core/utils/receipt_share_link_utils.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class PartyLedgerPage extends ConsumerStatefulWidget {
   final String customerName;
@@ -291,23 +292,22 @@ class _InvoiceGroupTile extends ConsumerWidget {
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('Delete Order Record?'),
-                content: const Text(
-                    'Are you sure you want to permanently delete this order and all its items? This action cannot be undone.'),
+                title: Text(AppLocalizations.of(context)?.deleteOrder ?? 'Order Record Delete करायचा?'),
+                content: const Text('हा Record delete केल्यावर उलट येणार नाही.'),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancel'),
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
                   ),
                   TextButton(
                     onPressed: () {
-                      Navigator.pop(ctx);
+                      Navigator.pop(ctx, true);
                       final rowIds = group.items.map((i) => i.rowId).toList();
                       if (rowIds.isNotEmpty) {
                         ref.read(verifiedProvider.notifier).deleteBulk(rowIds);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Order deleted successfully.'),
+                          SnackBar(
+                            content: Text(AppLocalizations.of(context)?.orderDeleted ?? 'Order delete झाला'),
                           ),
                         );
                       }
@@ -411,8 +411,8 @@ class _InvoiceGroupTile extends ConsumerWidget {
                     if (link == null) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Could not generate secure receipt link. Please try again.'),
+                          SnackBar(
+                            content: Text(AppLocalizations.of(context)?.couldNotGenerateLink ?? 'Secure receipt link मिळवता आला नाही. पुन्हा प्रयत्न करा.'),
                           ),
                         );
                       }

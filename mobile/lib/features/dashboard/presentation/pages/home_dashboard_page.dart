@@ -81,7 +81,7 @@ class HomeDashboardPage extends ConsumerWidget {
                 onPressed: () =>
                     ref.read(selectedPartiesProvider.notifier).clear(),
               ),
-              title: Text('${selectedParties.length} Selected'),
+              title: Text('${selectedParties.length} ${AppLocalizations.of(context)?.selected ?? 'Selected'}'),
               actions: [
                 IconButton(
                   icon: Icon(LucideIcons.trash2, color: context.errorColor),
@@ -89,19 +89,19 @@ class HomeDashboardPage extends ConsumerWidget {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Delete Parties'),
+                        title: Text(AppLocalizations.of(context)?.deleteParties ?? 'Parties Delete करा'),
                         content: Text(
-                          'Are you sure you want to delete ${selectedParties.length} parties?',
+                          '${selectedParties.length} ${AppLocalizations.of(context)?.deletePartiesConfirm(selectedParties.length) ?? 'parties delete करायच्या आहेत का?'}',
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
+                            child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, true),
                             child: Text(
-                              'Delete',
+                              AppLocalizations.of(context)?.deleteAction ?? 'Delete करा',
                               style: TextStyle(color: context.errorColor),
                             ),
                           ),
@@ -220,7 +220,7 @@ class HomeDashboardPage extends ConsumerWidget {
                             ),
                             if (parties.isNotEmpty)
                               Text(
-                                '${parties.length} TOTAL',
+                                '${parties.length} ${(AppLocalizations.of(context)?.total ?? 'TOTAL').toUpperCase()}',
                                 style: TextStyle(
                                   color: context.textSecondaryColor,
                                   fontSize: 10,
@@ -271,7 +271,7 @@ class HomeDashboardPage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'No parties found',
+                            AppLocalizations.of(context)?.noPartiesFound ?? 'कोणतेही Parties सापडले नाही',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -280,7 +280,7 @@ class HomeDashboardPage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Add customers or suppliers to track Khata.',
+                            AppLocalizations.of(context)?.addCustomerOrSupplier ?? 'Khata track करण्यासाठी Customer किंवा Supplier जोडा.',
                             style: TextStyle(
                               fontSize: 16,
                               color: context.textSecondaryColor,
@@ -363,9 +363,10 @@ class HomeDashboardPage extends ConsumerWidget {
     final customerPending = ref.watch(pendingCustomerReviewsProvider);
 
     final hour = DateTime.now().hour;
-    String greeting = 'GOOD MORNING';
-    if (hour >= 12 && hour < 17) greeting = 'GOOD AFTERNOON';
-    if (hour >= 17) greeting = 'GOOD EVENING';
+    final l10n = AppLocalizations.of(context);
+    String greeting = l10n?.goodMorning ?? 'शुभ सकाळ,';
+    if (hour >= 12 && hour < 17) greeting = l10n?.goodAfternoon ?? 'शुभ दुपार,';
+    if (hour >= 17) greeting = l10n?.goodEvening ?? 'शुभ संध्याकाळ,';
 
     int pendingCount = supplierPending + customerPending;
 
@@ -413,7 +414,7 @@ class HomeDashboardPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${greeting[0]}${greeting.substring(1).toLowerCase()},',
+                  greeting,
                   style: TextStyle(
                     color: context.textSecondaryColor,
                     fontSize: 12,
@@ -465,7 +466,7 @@ class HomeDashboardPage extends ConsumerWidget {
               _showReviewSelectionDialog(context);
             },
             color: context.textColor,
-            tooltip: 'Review pending invoices',
+            tooltip: AppLocalizations.of(context)?.reviewPendingInvoices ?? 'Pending invoices तपासा',
           ),
         ),
       ],
@@ -567,7 +568,7 @@ class HomeDashboardPage extends ConsumerWidget {
             ref.read(udharSearchQueryProvider.notifier).setQuery(value),
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         decoration: InputDecoration(
-          hintText: 'Search customers or vendors...',
+          hintText: AppLocalizations.of(context)?.searchCustomersVendors ?? 'Customer किंवा Supplier शोधा...',
           hintStyle: TextStyle(
             color: context.textSecondaryColor.withValues(alpha: 0.6),
             fontWeight: FontWeight.w500,
@@ -612,7 +613,7 @@ class HomeDashboardPage extends ConsumerWidget {
       children: [
         Expanded(
           child: _FilterChip(
-            label: 'All',
+            label: AppLocalizations.of(context)?.allParties ?? 'सर्व',
             isSelected: currentFilter == HomePartyFilter.all,
             onTap: () => ref
                 .read(homePartyFilterProvider.notifier)
@@ -623,7 +624,7 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Pending',
+            label: AppLocalizations.of(context)?.pendingParties ?? 'Pending',
             isSelected: currentFilter == HomePartyFilter.pending,
             onTap: () => ref
                 .read(homePartyFilterProvider.notifier)
@@ -635,7 +636,7 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Customers',
+            label: AppLocalizations.of(context)?.customers ?? 'Customers',
             isSelected: currentFilter == HomePartyFilter.customers,
             onTap: () => ref
                 .read(homePartyFilterProvider.notifier)
@@ -646,7 +647,7 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Suppliers',
+            label: AppLocalizations.of(context)?.suppliers ?? 'Suppliers',
             isSelected: currentFilter == HomePartyFilter.suppliers,
             onTap: () => ref
                 .read(homePartyFilterProvider.notifier)
@@ -657,7 +658,7 @@ class HomeDashboardPage extends ConsumerWidget {
         Expanded(
           flex: 2,
           child: _FilterChip(
-            label: 'Dashboard',
+            label: AppLocalizations.of(context)?.gallaCounter ?? 'Galla',
             isSelected: currentFilter == HomePartyFilter.counter,
             onTap: () {
               // Direct Navigation to Galla Page

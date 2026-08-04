@@ -311,24 +311,7 @@ class _BillTypeSelectionSheetState extends ConsumerState<BillTypeSelectionSheet>
                       letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : badgeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: isSelected ? Colors.white : badgeColor,
-                      ),
-                    ),
-                  ),
+
                 ],
               ),
             ),

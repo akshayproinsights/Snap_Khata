@@ -119,6 +119,12 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
   Timer? _itemVoiceTimer;
   double _itemMicPulse = 1.0;
 
+  // ── Inline "New Item" form ────────────────────────────────────────────────
+  bool _showInlineNewItem = false;
+  final _inlineItemNameController = TextEditingController();
+  final _inlineItemRateController = TextEditingController();
+  double _inlineItemQty = 1.0;
+
   // ─────────────────────────────────────────────────────────────────────────
 
 
@@ -227,6 +233,8 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
     _voicePulseTimer?.cancel();
     _itemVoiceTimer?.cancel();
     _speech.stop();
+    _inlineItemNameController.dispose();
+    _inlineItemRateController.dispose();
     super.dispose();
   }
 
@@ -825,6 +833,203 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
       });
       _bumpTotal();
     }
+  }
+
+  Widget _buildInlineNewItemForm(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.primaryColor.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: context.primaryColor.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Item Name
+          TextField(
+            controller: _inlineItemNameController,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Item Name',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(
+                  color: context.borderColor,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: context.primaryColor),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Qty + Rate row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Qty stepper
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Qty',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  EditableQtyStepper(
+                    qty: _inlineItemQty,
+                    btnSize: 36.0,
+                    boxWidth: 48.0,
+                    boxHeight: 44.0,
+                    isDecimal: false,
+                    showTrashAtOne: false,
+                    itemName: _inlineItemNameController.text.trim().isEmpty
+                        ? 'Item'
+                        : _inlineItemNameController.text.trim(),
+                    rate: double.tryParse(
+                          _inlineItemRateController.text.trim(),
+                        ) ??
+                        0.0,
+                    unit: '',
+                    onChanged: (newQty) {
+                      setState(() {
+                        _inlineItemQty = newQty.toDouble();
+                      });
+                    },
+                    onDecrement: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        if (_inlineItemQty > 1) _inlineItemQty -= 1;
+                      });
+                    },
+                    onIncrement: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _inlineItemQty += 1;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              // Rate
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Rate (₹)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: context.textSecondaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 44,
+                      child: TextField(
+                        controller: _inlineItemRateController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '0',
+                          prefixText: '₹',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: context.borderColor),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide:
+                                BorderSide(color: context.primaryColor),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                final name = _inlineItemNameController.text.trim();
+                if (name.isEmpty) {
+                  AppToast.showError(context, 'Please enter item name');
+                  return;
+                }
+                final rate =
+                    double.tryParse(_inlineItemRateController.text.trim()) ??
+                        0.0;
+                setState(() {
+                  _items.add(
+                    _ManualItem(
+                      name: name,
+                      quantity: _inlineItemQty,
+                      rate: rate,
+                      isNew: true,
+                    ),
+                  );
+                  _showInlineNewItem = false;
+                  _inlineItemNameController.clear();
+                  _inlineItemRateController.clear();
+                  _inlineItemQty = 1.0;
+                });
+                _bumpTotal();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   double get _computedTotal {
@@ -1646,7 +1851,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                         if (_showSuggestions)
                           Container(
                             margin: const EdgeInsets.only(top: 8),
-                            constraints: const BoxConstraints(maxHeight: 220),
+                            constraints: const BoxConstraints(maxHeight: 270),
                             decoration: BoxDecoration(
                               color: context.surfaceColor,
                               borderRadius: BorderRadius.circular(16),
@@ -1663,8 +1868,118 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                   Flexible(
                                     child: ListView.builder(
                                       shrinkWrap: true,
-                                      itemCount: partySuggestions.length,
+                                      // +1 for the "Add as new" row at the bottom
+                                      itemCount: partySuggestions.length + 1,
                                       itemBuilder: (ctx, idx) {
+                                        // ── "Add as new" button (always last row) ──
+                                        if (idx == partySuggestions.length) {
+                                          final typedName = _partySearchController.text.trim();
+                                          // Check if the typed name exactly matches any suggestion
+                                          final bool exactMatchExists = partySuggestions.any((p) {
+                                            final name = _partyType == 'customer'
+                                                ? (p as CustomerLedger).customerName
+                                                : (p as VendorLedger).vendorName;
+                                            return name.toLowerCase() == typedName.toLowerCase();
+                                          });
+                                          // Hide the button if the typed text exactly matches a result
+                                          if (exactMatchExists || typedName.isEmpty) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          final partyLabel = _partyType == 'customer'
+                                              ? 'customer'
+                                              : 'supplier';
+                                          return InkWell(
+                                            borderRadius: const BorderRadius.vertical(
+                                              bottom: Radius.circular(16),
+                                            ),
+                                            onTap: () {
+                                              HapticFeedback.selectionClick();
+                                              setState(() {
+                                                // Clear any selected party — this will be a brand-new entry
+                                                _selectedCustomer = null;
+                                                _selectedVendor = null;
+                                                _heardText = '';
+                                                _showSuggestions = false;
+                                              });
+                                              _partySearchFocusNode.unfocus();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: context.primaryColor.withValues(alpha: 0.07),
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    color: context.borderColor,
+                                                    width: 0.5,
+                                                  ),
+                                                ),
+                                                borderRadius: const BorderRadius.vertical(
+                                                  bottom: Radius.circular(16),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: context.primaryColor.withValues(alpha: 0.12),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Icon(
+                                                      LucideIcons.userPlus,
+                                                      size: 15,
+                                                      color: context.primaryColor,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: RichText(
+                                                      text: TextSpan(
+                                                        style: TextStyle(
+                                                          fontSize: 13,
+                                                          color: context.textColor,
+                                                        ),
+                                                        children: [
+                                                          TextSpan(
+                                                            text: 'Add ',
+                                                            style: TextStyle(
+                                                              fontWeight: FontWeight.w500,
+                                                              color: context.textSecondaryColor,
+                                                            ),
+                                                          ),
+                                                          TextSpan(
+                                                            text: '"$typedName"',
+                                                            style: TextStyle(
+                                                              fontWeight: FontWeight.w800,
+                                                              color: context.primaryColor,
+                                                            ),
+                                                          ),
+                                                          TextSpan(
+                                                            text: ' as new $partyLabel',
+                                                            style: TextStyle(
+                                                              fontWeight: FontWeight.w500,
+                                                              color: context.textSecondaryColor,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    LucideIcons.chevronRight,
+                                                    size: 14,
+                                                    color: context.primaryColor,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }
+
+                                        // ── Existing suggestion row ──
                                         final p = partySuggestions[idx];
                                         final String name = _partyType == 'customer'
                                             ? (p as CustomerLedger).customerName
@@ -1752,27 +2067,76 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                                     ),
                                   )
                                 else
-                                  // No matches — show create new hint
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          LucideIcons.userPlus,
-                                          size: 16,
-                                          color: context.primaryColor,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            'No existing customer found. A new one will be created.',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: context.textSecondaryColor,
+                                  // No matches — tappable "Add as new" button
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _selectedCustomer = null;
+                                        _selectedVendor = null;
+                                        _heardText = '';
+                                        _showSuggestions = false;
+                                      });
+                                      _partySearchFocusNode.unfocus();
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: context.primaryColor.withValues(alpha: 0.12),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              LucideIcons.userPlus,
+                                              size: 15,
+                                              color: context.primaryColor,
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: RichText(
+                                              text: TextSpan(
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: context.textColor,
+                                                ),
+                                                children: [
+                                                  TextSpan(
+                                                    text: 'Add ',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w500,
+                                                      color: context.textSecondaryColor,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: '"${_partySearchController.text.trim()}"',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w800,
+                                                      color: context.primaryColor,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: ' as new ${_partyType == 'customer' ? 'customer' : 'supplier'}',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w500,
+                                                      color: context.textSecondaryColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          Icon(
+                                            LucideIcons.chevronRight,
+                                            size: 14,
+                                            color: context.primaryColor,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                               ],
@@ -2033,66 +2397,53 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // ── Add items row: button + mic ──────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: _openQuickBill,
-                          icon: const Icon(LucideIcons.plusCircle, size: 16),
-                          label: const Text('Add Line Items'),
+                    // ── New Item button + inline form ─────────────────────────
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showInlineNewItem = !_showInlineNewItem;
+                          if (_showInlineNewItem) {
+                            _inlineItemNameController.clear();
+                            _inlineItemRateController.clear();
+                            _inlineItemQty = 1.0;
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
                         ),
-                        if (_speechAvailable) ...[
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () => _isItemListening
-                                ? _stopItemListening()
-                                : _startItemListening(catalogueState.items),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _isItemListening
-                                    ? const Color(0xFFFF5722).withValues(alpha: 0.15)
-                                    : context.primaryColor.withValues(alpha: 0.08),
-                                border: Border.all(
-                                  color: _isItemListening
-                                      ? const Color(0xFFFF5722)
-                                      : context.primaryColor.withValues(alpha: 0.4),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Transform.scale(
-                                scale: _isItemListening ? _itemMicPulse : 1.0,
-                                child: Icon(
-                                  _isItemListening
-                                      ? LucideIcons.micOff
-                                      : LucideIcons.mic,
-                                  size: 18,
-                                  color: _isItemListening
-                                      ? const Color(0xFFFF5722)
-                                      : context.primaryColor,
-                                ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: context.primaryColor.withValues(alpha: 0.08),
+                          border: Border.all(
+                            color: context.primaryColor.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _showInlineNewItem ? LucideIcons.x : LucideIcons.plus,
+                              size: 15,
+                              color: context.primaryColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _showInlineNewItem ? 'Cancel' : 'New Item',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: context.primaryColor,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isItemListening ? 'Listening...' : 'or speak items',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _isItemListening
-                                  ? const Color(0xFFFF5722)
-                                  : context.textSecondaryColor,
-                              fontWeight: _isItemListening
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ],
+                          ],
+                        ),
+                      ),
                     ),
+                    if (_showInlineNewItem) _buildInlineNewItemForm(context),
                   ] else ...[
                     // ── Items header row with Add buttons ──────────────
                     Padding(
@@ -2691,104 +3042,53 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
                       },
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Add item button at bottom of list
-                        GestureDetector(
-                          onTap: _openQuickBill,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: context.primaryColor.withValues(alpha: 0.08),
-                              border: Border.all(
-                                color: context.primaryColor.withValues(alpha: 0.4),
-                                width: 1.2,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  LucideIcons.plus,
-                                  size: 14,
-                                  color: context.primaryColor,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Add Item',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: context.primaryColor,
-                                  ),
-                                ),
-                              ],
-                            ),
+                    // ── New Item button + inline form (below existing items) ──
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showInlineNewItem = !_showInlineNewItem;
+                          if (_showInlineNewItem) {
+                            _inlineItemNameController.clear();
+                            _inlineItemRateController.clear();
+                            _inlineItemQty = 1.0;
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: context.primaryColor.withValues(alpha: 0.08),
+                          border: Border.all(
+                            color: context.primaryColor.withValues(alpha: 0.4),
+                            width: 1.2,
                           ),
                         ),
-                        if (_speechAvailable) ...[
-                          const SizedBox(width: 12),
-                          // Voice mic button at bottom of list
-                          GestureDetector(
-                            onTap: () => _isItemListening
-                                ? _stopItemListening()
-                                : _startItemListening(catalogueState.items),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: _isItemListening
-                                    ? const Color(0xFFFF5722).withValues(alpha: 0.12)
-                                    : context.primaryColor.withValues(alpha: 0.08),
-                                border: Border.all(
-                                  color: _isItemListening
-                                      ? const Color(0xFFFF5722)
-                                      : context.primaryColor.withValues(alpha: 0.4),
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Transform.scale(
-                                    scale: _isItemListening ? _itemMicPulse : 1.0,
-                                    child: Icon(
-                                      _isItemListening
-                                          ? LucideIcons.micOff
-                                          : LucideIcons.mic,
-                                      size: 14,
-                                      color: _isItemListening
-                                          ? const Color(0xFFFF5722)
-                                          : context.primaryColor,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _isItemListening ? 'Stop' : 'Add by voice',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: _isItemListening
-                                          ? const Color(0xFFFF5722)
-                                          : context.primaryColor,
-                                    ),
-                                  ),
-                                ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _showInlineNewItem ? LucideIcons.x : LucideIcons.plus,
+                              size: 14,
+                              color: context.primaryColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _showInlineNewItem ? 'Cancel' : 'New Item',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: context.primaryColor,
                               ),
                             ),
-                          ),
-                        ],
-                      ],
+                          ],
+                        ),
+                      ),
                     ),
+                    if (_showInlineNewItem) _buildInlineNewItemForm(context),
                   ],
                   const SizedBox(height: 20),
 
