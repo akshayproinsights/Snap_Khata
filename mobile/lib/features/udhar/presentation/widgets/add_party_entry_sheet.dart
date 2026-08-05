@@ -447,6 +447,7 @@ class _AddPartyEntrySheetState extends ConsumerState<AddPartyEntrySheet>
 
   // ── Item list voice methods ───────────────────────────────────────────────
 
+  // ignore: unused_element
   Future<void> _startItemListening(List<CatalogueItem> catalogue) async {
     final ok = await _ensureSpeechInitialized();
     if (!ok) return;
